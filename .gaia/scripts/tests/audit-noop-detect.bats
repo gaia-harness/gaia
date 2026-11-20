@@ -14,6 +14,22 @@ assert_contains() {
   grep -qF -- "$1" <<<"$output"
 }
 
+# _noop_expect <status> <output|""> <helper args...>: run the helper once and
+# require its exit status and, when given, its stdout. Every check ends in an
+# explicit `|| return 1` so a failing row fails the whole test; the failing
+# row's arguments are printed first.
+_noop_expect() {
+  local want_status="$1" want_output="$2"
+  shift 2
+  run "$SCRIPT" "$@"
+  if [ "$status" -ne "$want_status" ] || { [ -n "$want_output" ] && [ "$output" != "$want_output" ]; }; then
+    printf 'case failed: %s\n  want status=%s output=%s, got status=%s output=%s\n' \
+      "$*" "$want_status" "${want_output:-<any>}" "$status" "$output"
+    return 1
+  fi
+  return 0
+}
+
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   # shellcheck source=.gaia/tests/helpers/path.sh
@@ -25,51 +41,29 @@ setup() {
 
 # Usage errors (exit 2)
 
-@test "usage error: unknown --shape exits 2" {
-  run "$SCRIPT" --shape not-a-real-shape --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
-  [ "$status" -eq 2 ]
-}
-
-@test "usage error: missing --path exits 2" {
-  run "$SCRIPT" --shape cra-refuter
-  [ "$status" -eq 2 ]
-}
-
-@test "usage error: missing --shape exits 2" {
-  run "$SCRIPT" --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
-  [ "$status" -eq 2 ]
-}
-
 # bats test_tags=whole-tree
-@test "usage error: no arguments exits 2" {
-  run "$SCRIPT"
-  [ "$status" -eq 2 ]
+@test "usage error: bad shape or path arguments exit 2" {
+  # case: unknown --shape
+  _noop_expect 2 "" --shape not-a-real-shape --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
+  # case: missing --path
+  _noop_expect 2 "" --shape cra-refuter
+  # case: missing --shape
+  _noop_expect 2 "" --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
+  # case: no arguments
+  _noop_expect 2 ""
 }
 
 # cra-specialist (return-conformance)
 
-@test "cra-specialist: exact 'No violations found.' sentinel is REAL (a legit clean result, never a no-op)" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/clean.txt"
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "cra-specialist: markdown-bold backticked Location finding block is REAL (keys on the backtick token, not a bare 'Location:' substring)" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/finding-block.txt"
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "cra-specialist: prose with neither sentinel nor finding token is NO-OP" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/malformed.txt"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "cra-specialist: harness-reminder-echo return is NO-OP" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
+@test "cra-specialist: classification by sentinel and finding token" {
+  # case: exact 'No violations found.' sentinel
+  _noop_expect 0 real --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/clean.txt"
+  # case: markdown-bold backticked Location finding block
+  _noop_expect 0 real --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/finding-block.txt"
+  # case: prose with neither sentinel nor finding token
+  _noop_expect 1 noop --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/malformed.txt"
+  # case: harness-reminder-echo return
+  _noop_expect 1 noop --shape cra-specialist --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
 }
 
 @test "cra-specialist: large (>64KB) finding block with an early Location token is still REAL, not a pipefail/SIGPIPE misclassification" {
@@ -98,61 +92,25 @@ setup() {
 # number of files the dispatcher handed it, so a short or missing coverage line
 # is that partial return.
 
-@test "cra-specialist: --expect-count with a matching coverage line after the clean sentinel is REAL" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/clean-with-coverage.txt" \
-    --expect-count 3
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "cra-specialist: --expect-count with a matching coverage line after a finding block is REAL" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/finding-block-with-coverage.txt" \
-    --expect-count 3
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "cra-specialist: --expect-count with a finding block that ends on a next-step note is NO-OP (partial return)" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/partial-next-step.txt" \
-    --expect-count 3
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "cra-specialist: --expect-count with a SHORT coverage line is NO-OP" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/finding-block-short-coverage.txt" \
-    --expect-count 3
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "cra-specialist: --expect-count with a bare clean sentinel and no coverage line is NO-OP" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/clean.txt" \
-    --expect-count 3
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "cra-specialist: --expect-count accepts a coverage line wrapped in backticks, as the template shows it" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/finding-block-backticked-coverage.txt" \
-    --expect-count 3
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "cra-specialist: --expect-count accepts a bolded coverage line after the clean sentinel" {
-  run "$SCRIPT" --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/clean-bold-coverage.txt" \
-    --expect-count 3
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "cra-specialist: --expect-count does not rescue a reminder echo that happens to carry a coverage line" {
+@test "cra-specialist: --expect-count against the coverage line" {
   echo_with_coverage_path="$BATS_TEST_TMPDIR/echo-with-coverage.txt"
   { cat "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"; printf 'Files reviewed: 3\n'; } > "$echo_with_coverage_path"
-  run "$SCRIPT" --shape cra-specialist --path "$echo_with_coverage_path" --expect-count 3
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
+  # case: matching coverage line after the clean sentinel
+  _noop_expect 0 real --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/clean-with-coverage.txt" --expect-count 3
+  # case: matching coverage line after a finding block
+  _noop_expect 0 real --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/finding-block-with-coverage.txt" --expect-count 3
+  # case: finding block ending on a next-step note (partial return)
+  _noop_expect 1 noop --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/partial-next-step.txt" --expect-count 3
+  # case: SHORT coverage line
+  _noop_expect 1 noop --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/finding-block-short-coverage.txt" --expect-count 3
+  # case: bare clean sentinel and no coverage line
+  _noop_expect 1 noop --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/clean.txt" --expect-count 3
+  # case: coverage line wrapped in backticks, as the template shows it
+  _noop_expect 0 real --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/finding-block-backticked-coverage.txt" --expect-count 3
+  # case: bolded coverage line after the clean sentinel
+  _noop_expect 0 real --shape cra-specialist --path "$FIXTURES_DIRECTORY/cra-specialist/clean-bold-coverage.txt" --expect-count 3
+  # case: reminder echo that happens to carry a coverage line
+  _noop_expect 1 noop --shape cra-specialist --path "$echo_with_coverage_path" --expect-count 3
 }
 
 @test "cra-specialist: without a count, a coverage line does not change the classification" {
@@ -163,22 +121,13 @@ setup() {
 
 # cra-refuter (return-conformance)
 
-@test "cra-refuter: STANDS is REAL" {
-  run "$SCRIPT" --shape cra-refuter --path "$FIXTURES_DIRECTORY/cra-refuter/stands.txt"
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "cra-refuter: prose with no verdict token is NO-OP" {
-  run "$SCRIPT" --shape cra-refuter --path "$FIXTURES_DIRECTORY/cra-refuter/malformed.txt"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "cra-refuter: harness-reminder-echo return is NO-OP" {
-  run "$SCRIPT" --shape cra-refuter --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
+@test "cra-refuter: classification by verdict token" {
+  # case: STANDS
+  _noop_expect 0 real --shape cra-refuter --path "$FIXTURES_DIRECTORY/cra-refuter/stands.txt"
+  # case: prose with no verdict token
+  _noop_expect 1 noop --shape cra-refuter --path "$FIXTURES_DIRECTORY/cra-refuter/malformed.txt"
+  # case: harness-reminder-echo return
+  _noop_expect 1 noop --shape cra-refuter --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
 }
 
 @test "cra-refuter: large (>64KB) content with an early verdict token is still REAL, not a pipefail/SIGPIPE misclassification" {
@@ -204,7 +153,8 @@ setup() {
 # --path content. Marker EXISTENCE alone no longer suffices: the body must be a
 # writer-shaped earned clearance whose `digest` equals the filename key (an
 # empty or legacy body falls through, covered below).
-@test "audit-team-member: writer-produced EARNED --marker is REAL regardless of --path content" {
+@test "audit-team-member: an earned marker is REAL" {
+  # case: audit-team-member: writer-produced EARNED --marker is REAL regardless of --path content
   marker="$BATS_TEST_TMPDIR/marker.ok"
   # Filename key is "marker" (stem up to the first dot), so the body digest
   # must equal it for clearance_acceptable.
@@ -212,29 +162,50 @@ setup() {
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-}
-
-@test "audit-team-member: no marker, backticked Location finding is REAL" {
-  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/audit-team-member/finding-block.txt" --marker "$BATS_TEST_TMPDIR/does-not-exist.ok"
+  # case: audit-team-member: writer-produced EARNED marker + token-free text is REAL
+  digest="$(_noop_digest)"
+  marker="$BATS_TEST_TMPDIR/${digest}.ok"
+  _noop_write_clearance "$marker" "$digest" earned
+  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-}
-
-@test "audit-team-member: no marker, terse LOCAL return-contract preamble is REAL" {
-  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/audit-team-member/terse-return.txt" --marker "$BATS_TEST_TMPDIR/does-not-exist.ok"
+  # case: audit-team-member: writer-produced EARNED specialist marker (<digest>.<member>.ok) is REAL
+  digest="$(_noop_digest)"
+  marker="$BATS_TEST_TMPDIR/${digest}.code-audit-maintainer-shell.ok"
+  printf '{"version":"1.6.1","schema":3,"member":"code-audit-maintainer-shell","provenance":"earned","digest":"%s","tree":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","sha":"deadbeef","audited_at":"2026-01-01T00:00:00Z","sidecar":false}\n' "$digest" > "$marker"
+  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
 }
 
 # bats test_tags=protected
-@test "audit-team-member: no marker, harness-reminder-echo return is NO-OP" {
+@test "audit-team-member: no marker, classification by return text" {
+  # case: audit-team-member: no marker, backticked Location finding is REAL
+  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/audit-team-member/finding-block.txt" --marker "$BATS_TEST_TMPDIR/does-not-exist.ok"
+  [ "$status" -eq 0 ]
+  [ "$output" = "real" ]
+  # case: audit-team-member: no marker, terse LOCAL return-contract preamble is REAL
+  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/audit-team-member/terse-return.txt" --marker "$BATS_TEST_TMPDIR/does-not-exist.ok"
+  [ "$status" -eq 0 ]
+  [ "$output" = "real" ]
+  # case: audit-team-member: no marker, harness-reminder-echo return is NO-OP
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
-}
-
-@test "audit-team-member: no marker, absent --path is NO-OP" {
+  # case: audit-team-member: no marker, absent --path is NO-OP
   run "$SCRIPT" --shape audit-team-member --path "$BATS_TEST_TMPDIR/does-not-exist.txt" --marker "$BATS_TEST_TMPDIR/also-does-not-exist.ok"
+  [ "$status" -eq 1 ]
+  [ "$output" = "noop" ]
+  # case: audit-team-member: no marker at all + token-free text is NO-OP (unregressed)
+  digest="$(_noop_digest)"
+  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.ok"
+  [ "$status" -eq 1 ]
+  [ "$output" = "noop" ]
+  # case: audit-team-member: legacy-bodied marker + token-free text is NO-OP (existence no longer authorizes real)
+  digest="$(_noop_digest)"
+  marker="$BATS_TEST_TMPDIR/${digest}.ok"
+  printf '{"sha":"deadbeef","tree":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","audited_at":"2026-01-01T00:00:00Z"}\n' > "$marker"
+  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
 }
@@ -262,25 +233,8 @@ _noop_write_clearance() {
     "$provenance" "$digest" > "$path"
 }
 
-@test "audit-team-member: writer-produced EARNED marker + token-free text is REAL" {
-  digest="$(_noop_digest)"
-  marker="$BATS_TEST_TMPDIR/${digest}.ok"
-  _noop_write_clearance "$marker" "$digest" earned
-  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "audit-team-member: writer-produced EARNED specialist marker (<digest>.<member>.ok) is REAL" {
-  digest="$(_noop_digest)"
-  marker="$BATS_TEST_TMPDIR/${digest}.code-audit-maintainer-shell.ok"
-  printf '{"version":"1.6.1","schema":3,"member":"code-audit-maintainer-shell","provenance":"earned","digest":"%s","tree":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","sha":"deadbeef","audited_at":"2026-01-01T00:00:00Z","sidecar":false}\n' "$digest" > "$marker"
-  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "audit-team-member: a REFUSED marker (no earned .ok) + token-free text is REFUSED, not NO-OP" {
+@test "audit-team-member: a refusal settles the run as REFUSED" {
+  # case: audit-team-member: a REFUSED marker (no earned .ok) + token-free text is REFUSED, not NO-OP
   digest="$(_noop_digest)"
   # Only the refusal artifact exists; the agent's .ok marker path is absent,
   # which is exactly what a member that reviewed fully and withheld clearance
@@ -291,12 +245,34 @@ _noop_write_clearance() {
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.ok"
   [ "$status" -eq 0 ]
   [ "$output" = "refused" ]
-}
-
-@test "audit-team-member: a specialist's REFUSED marker (<digest>.<member>.refused) is REFUSED" {
+  # case: audit-team-member: a specialist's REFUSED marker (<digest>.<member>.refused) is REFUSED
   digest="$(_noop_digest)"
   printf '{"version":"1.6.1","schema":3,"member":"code-audit-maintainer-shell","provenance":"refused","digest":"%s","tree":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","sha":"deadbeef","audited_at":"2026-01-01T00:00:00Z","sidecar":true}\n' "$digest" > "$BATS_TEST_TMPDIR/${digest}.code-audit-maintainer-shell.refused"
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.code-audit-maintainer-shell.ok"
+  [ "$status" -eq 0 ]
+  [ "$output" = "refused" ]
+  # case: audit-team-member: a REFUSED marker with NO findings sidecar is still REFUSED, never retried as a no-op
+  digest="$(_noop_digest)"
+  # The lost-report gate deliberately does not apply to a refusal. Re-dispatching
+  # a refusing member returns the identical empty hand, and that loop is the
+  # failure this arm exists to end.
+  _noop_write_clearance "$BATS_TEST_TMPDIR/${digest}.refused" "$digest" refused
+  root="$BATS_TEST_TMPDIR/refused-no-sidecar"
+  _noop_resolve_repo "$root"
+  stamp="$BATS_TEST_TMPDIR/refused-no-sidecar.stamp"
+  : > "$stamp"
+  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" \
+    --marker "$BATS_TEST_TMPDIR/${digest}.ok" \
+    --findings-root "$root" --findings-since "$stamp"
+  [ "$status" -eq 0 ]
+  [ "$output" = "refused" ]
+  # case: audit-team-member: a refusal beside a same-digest earned marker classifies REFUSED (refusal-first precedence)
+  digest="$(_noop_digest)"
+  # The crash window in the supersede path leaves both markers on disk. The
+  # merge gate checks the refusal family first; this classifier agrees.
+  _noop_write_clearance "$BATS_TEST_TMPDIR/${digest}.ok" "$digest" earned
+  _noop_write_clearance "$BATS_TEST_TMPDIR/${digest}.refused" "$digest" refused
+  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.ok"
   [ "$status" -eq 0 ]
   [ "$output" = "refused" ]
 }
@@ -320,50 +296,6 @@ _noop_write_clearance() {
   # matching what the earned arm already demands of a legacy marker.
   printf '{"sha":"deadbeef","tree":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","audited_at":"2026-01-01T00:00:00Z"}\n' > "$BATS_TEST_TMPDIR/${digest}.refused"
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.ok"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "audit-team-member: a REFUSED marker with NO findings sidecar is still REFUSED, never retried as a no-op" {
-  digest="$(_noop_digest)"
-  # The lost-report gate deliberately does not apply to a refusal. Re-dispatching
-  # a refusing member returns the identical empty hand, and that loop is the
-  # failure this arm exists to end.
-  _noop_write_clearance "$BATS_TEST_TMPDIR/${digest}.refused" "$digest" refused
-  root="$BATS_TEST_TMPDIR/refused-no-sidecar"
-  _noop_resolve_repo "$root"
-  stamp="$BATS_TEST_TMPDIR/refused-no-sidecar.stamp"
-  : > "$stamp"
-  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" \
-    --marker "$BATS_TEST_TMPDIR/${digest}.ok" \
-    --findings-root "$root" --findings-since "$stamp"
-  [ "$status" -eq 0 ]
-  [ "$output" = "refused" ]
-}
-
-@test "audit-team-member: a refusal beside a same-digest earned marker classifies REFUSED (refusal-first precedence)" {
-  digest="$(_noop_digest)"
-  # The crash window in the supersede path leaves both markers on disk. The
-  # merge gate checks the refusal family first; this classifier agrees.
-  _noop_write_clearance "$BATS_TEST_TMPDIR/${digest}.ok" "$digest" earned
-  _noop_write_clearance "$BATS_TEST_TMPDIR/${digest}.refused" "$digest" refused
-  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.ok"
-  [ "$status" -eq 0 ]
-  [ "$output" = "refused" ]
-}
-
-@test "audit-team-member: no marker at all + token-free text is NO-OP (unregressed)" {
-  digest="$(_noop_digest)"
-  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$BATS_TEST_TMPDIR/${digest}.ok"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "audit-team-member: legacy-bodied marker + token-free text is NO-OP (existence no longer authorizes real)" {
-  digest="$(_noop_digest)"
-  marker="$BATS_TEST_TMPDIR/${digest}.ok"
-  printf '{"sha":"deadbeef","tree":"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef","audited_at":"2026-01-01T00:00:00Z"}\n' > "$marker"
-  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
 }
@@ -418,7 +350,8 @@ _noop_write_clearance() {
 # marker-only short-circuit and the text-alone arm for a run whose base or
 # branch did not resolve, which writes no sidecar at all.
 
-@test "audit-team-member: passing the retired --findings flag is a usage error naming its replacement" {
+@test "usage error: the retired --findings flag is rejected" {
+  # case: audit-team-member: passing the retired --findings flag is a usage error naming its replacement
   digest="$(_noop_digest)"
   marker="$BATS_TEST_TMPDIR/${digest}.ok"
   findings="$BATS_TEST_TMPDIR/base.code-audit-frontend.findings.json"
@@ -429,9 +362,7 @@ _noop_write_clearance() {
   [ "$status" -eq 2 ]
   assert_contains "--findings-root"
   assert_contains "--findings-since"
-}
-
-@test "usage error: --findings is rejected for every shape, naming --findings-root" {
+  # case: usage error: --findings is rejected for every shape, naming --findings-root
   local shape
   for shape in cra-specialist cra-refuter agent-report-file; do
     run "$SCRIPT" --shape "$shape" --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" \
@@ -442,7 +373,8 @@ _noop_write_clearance() {
   return 0
 }
 
-@test "audit-team-member: a sidecar carrying entry_id and resolutions is still REAL" {
+@test "audit-team-member: findings sidecar shape gates REAL" {
+  # case: audit-team-member: a sidecar carrying entry_id and resolutions is still REAL
   root="$BATS_TEST_TMPDIR/resolve-extra-fields"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -458,9 +390,7 @@ _noop_write_clearance() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-}
-
-@test "audit-team-member: EARNED marker + malformed findings sidecar is NO-OP" {
+  # case: audit-team-member: EARNED marker + malformed findings sidecar is NO-OP
   root="$BATS_TEST_TMPDIR/resolve-malformed"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -476,18 +406,7 @@ _noop_write_clearance() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
-}
-
-@test "audit-team-member: BACK-COMPAT, omitting the resolve pair keeps the marker-only short-circuit" {
-  digest="$(_noop_digest)"
-  marker="$BATS_TEST_TMPDIR/${digest}.ok"
-  _noop_write_clearance "$marker" "$digest" earned
-  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "audit-team-member: a findings sidecar with no member attribution is NO-OP" {
+  # case: audit-team-member: a findings sidecar with no member attribution is NO-OP
   # The wrong-member case is pinned by the identity test below; a sidecar that
   # carries no attribution at all is equally unacceptable, so the member bind
   # cannot be satisfied by the field's absence.
@@ -505,6 +424,15 @@ _noop_write_clearance() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
+}
+
+@test "audit-team-member: BACK-COMPAT, omitting the resolve pair keeps the marker-only short-circuit" {
+  digest="$(_noop_digest)"
+  marker="$BATS_TEST_TMPDIR/${digest}.ok"
+  _noop_write_clearance "$marker" "$digest" earned
+  run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" --marker "$marker"
+  [ "$status" -eq 0 ]
+  [ "$output" = "real" ]
 }
 
 @test "audit-team-member: jq absent, the findings gate degrades to existence, not to blanket acceptance" {
@@ -624,7 +552,8 @@ _noop_resolve_marker() {
   [ "$output" = "real" ]
 }
 
-@test "audit-team-member resolve arm: only a PREVIOUS round's sidecar is NO-OP" {
+@test "audit-team-member resolve arm: only the member own current sidecar answers" {
+  # case: audit-team-member resolve arm: only a PREVIOUS round's sidecar is NO-OP
   root="$BATS_TEST_TMPDIR/resolve-stale"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -654,9 +583,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-}
-
-@test "audit-team-member resolve arm: resolving nothing is a lost report, not an absent request" {
+  # case: audit-team-member resolve arm: resolving nothing is a lost report, not an absent request
   root="$BATS_TEST_TMPDIR/resolve-empty"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -670,9 +597,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 1 ]
   [ "$output" = "noop" ]
-}
-
-@test "audit-team-member resolve arm: another member's and another branch's sidecars do not answer" {
+  # case: audit-team-member resolve arm: another member's and another branch's sidecars do not answer
   root="$BATS_TEST_TMPDIR/resolve-identity"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -720,9 +645,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-}
-
-@test "audit-team-member resolve arm: a sibling's NEWER sidecar does not shadow this member's own" {
+  # case: audit-team-member resolve arm: a sibling's NEWER sidecar does not shadow this member's own
   # The identity binding is two-layered, and this pins the outer one. If the
   # glob's member half were a wildcard, the newest-wins walk would select the
   # sibling's file, the `.member` check inside would reject it, and the round
@@ -862,7 +785,8 @@ _noop_resolve_marker() {
 # the marker-only short-circuit. Either way, a report-shaped return still
 # classifies real on its own.
 
-@test "audit-team-member: a fresh own sidecar plus a terse return is REAL with no marker" {
+@test "audit-team-member: a fresh own sidecar is REAL with no marker" {
+  # case: audit-team-member: a fresh own sidecar plus a terse return is REAL with no marker
   # A DIRTY= withhold writes the sidecar but no marker and no .refused; the
   # return text classifies real on its own.
   root="$BATS_TEST_TMPDIR/withhold-terse"
@@ -879,9 +803,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-}
-
-@test "audit-team-member: a fresh own sidecar plus a finding block is REAL with no marker" {
+  # case: audit-team-member: a fresh own sidecar plus a finding block is REAL with no marker
   root="$BATS_TEST_TMPDIR/withhold-block"
   _noop_resolve_repo "$root"
   digest="$(_noop_digest)"
@@ -896,9 +818,7 @@ _noop_resolve_marker() {
     --findings-root "$root" --findings-since "$stamp"
   [ "$status" -eq 0 ]
   [ "$output" = "real" ]
-}
-
-@test "audit-team-member: an earned marker plus a finding block is REAL with no sidecar" {
+  # case: audit-team-member: an earned marker plus a finding block is REAL with no sidecar
   # The report reached the orchestrator in the return, so the lost-report gate
   # has nothing to catch. Without --path the same setup is the lost-report
   # NO-OP pinned by the resolve-arm test above.
@@ -965,145 +885,71 @@ _noop_resolve_marker() {
 # parses fine and reads as a real result. Only the caller knows its own
 # denominator, so only the caller can assert it.
 
-@test "agent-report-file: top-level array is REAL" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json"
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
+@test "agent-report-file: array shapes are REAL" {
+  # case: top-level array
+  _noop_expect 0 real --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json"
+  # case: EMPTY top-level array (an empty answer is a real result)
+  _noop_expect 0 real --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-empty-array.json"
+  # case: --report-key names the container holding the array
+  _noop_expect 0 real --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-keyed.json" --report-key verdicts
+  # case: EMPTY --report-key array
+  _noop_expect 0 real --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-keyed-empty.json" --report-key verdicts
 }
 
-@test "agent-report-file: EMPTY top-level array is REAL (an empty answer is a real result)" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-empty-array.json"
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "agent-report-file: --report-key names the container holding the array" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-keyed.json" \
-    --report-key verdicts
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "agent-report-file: EMPTY --report-key array is REAL" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-keyed-empty.json" \
-    --report-key verdicts
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "agent-report-file: absent path is NO-OP" {
-  run "$SCRIPT" --shape agent-report-file --path "$BATS_TEST_TMPDIR/never-written.json"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "agent-report-file: malformed JSON is NO-OP" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/malformed.json"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "agent-report-file: a parsing scalar is NO-OP (parses, but is not a report container)" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/scalar.json"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "agent-report-file: an object without the named key is NO-OP" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/wrong-key.json" \
-    --report-key verdicts
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "agent-report-file: an object with no --report-key is NO-OP (the top level must be the array)" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-keyed.json"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "agent-report-file: harness-reminder-echo return is NO-OP" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
+@test "agent-report-file: unusable reports are NO-OP" {
+  # case: absent path
+  _noop_expect 1 noop --shape agent-report-file --path "$BATS_TEST_TMPDIR/never-written.json"
+  # case: malformed JSON
+  _noop_expect 1 noop --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/malformed.json"
+  # case: a parsing scalar (parses, but is not a report container)
+  _noop_expect 1 noop --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/scalar.json"
+  # case: an object without the named key
+  _noop_expect 1 noop --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/wrong-key.json" --report-key verdicts
+  # case: an object with no --report-key (the top level must be the array)
+  _noop_expect 1 noop --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-keyed.json"
+  # case: harness-reminder-echo return
+  _noop_expect 1 noop --shape agent-report-file --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt"
 }
 
 # --expect-count / --min-count: the caller's own denominator
 
-@test "agent-report-file: --expect-count matching the array length is REAL" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --expect-count 3
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "agent-report-file: a SHORT report under --expect-count is NO-OP (a truncated write parses fine)" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --expect-count 18
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "agent-report-file: a LONG report over --expect-count is NO-OP (exact means exact)" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --expect-count 2
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
-}
-
-@test "agent-report-file: --expect-count 0 accepts a deliberate empty answer" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-empty-array.json" \
-    --expect-count 0
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "agent-report-file: --expect-count applies through --report-key" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-keyed.json" \
-    --report-key verdicts --expect-count 3
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "agent-report-file: --min-count met is REAL" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --min-count 3
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "agent-report-file: --min-count exceeded is REAL (a floor is not a ceiling)" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --min-count 1
-  [ "$status" -eq 0 ]
-  [ "$output" = "real" ]
-}
-
-@test "agent-report-file: --min-count unmet is NO-OP" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-empty-array.json" \
-    --min-count 1
-  [ "$status" -eq 1 ]
-  [ "$output" = "noop" ]
+@test "agent-report-file: count gates" {
+  # case: --expect-count matching the array length
+  _noop_expect 0 real --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --expect-count 3
+  # case: a SHORT report under --expect-count (a truncated write parses fine)
+  _noop_expect 1 noop --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --expect-count 18
+  # case: a LONG report over --expect-count (exact means exact)
+  _noop_expect 1 noop --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --expect-count 2
+  # case: --expect-count 0 accepts a deliberate empty answer
+  _noop_expect 0 real --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-empty-array.json" --expect-count 0
+  # case: --expect-count applies through --report-key
+  _noop_expect 0 real --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-keyed.json" --report-key verdicts --expect-count 3
+  # case: --min-count met
+  _noop_expect 0 real --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --min-count 3
+  # case: --min-count exceeded (a floor is not a ceiling)
+  _noop_expect 0 real --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --min-count 1
+  # case: --min-count unmet
+  _noop_expect 1 noop --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-empty-array.json" --min-count 1
 }
 
 # Usage errors specific to the count assertions
 
-@test "usage error: --expect-count and --min-count together exits 2" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --expect-count 3 --min-count 1
-  [ "$status" -eq 2 ]
-}
-
-@test "usage error: a non-integer --expect-count exits 2, never a silent permanent no-op" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --expect-count three
-  [ "$status" -eq 2 ]
-}
-
-@test "usage error: a negative --min-count exits 2" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --min-count -1
-  [ "$status" -eq 2 ]
+@test "usage error: count flag misuse exits 2" {
+  # case: both count flags
+  _noop_expect 2 "" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --expect-count 3 --min-count 1
+  # case: non-integer --expect-count
+  _noop_expect 2 "" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --expect-count three
+  # case: negative --min-count
+  _noop_expect 2 "" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --min-count -1
+  # case: EMPTY --min-count
+  _noop_expect 2 "" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --min-count ""
+  # case: trailing --expect-count with no value
+  _noop_expect 2 "" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --expect-count
+  # case: EMPTY --expect-count (named below)
+  _noop_expect 2 "" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --expect-count ""
+  assert_contains "--expect-count must be a non-negative integer" || return 1
+  # case: both count flags EMPTY
+  _noop_expect 2 "" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" --expect-count "" --min-count ""
 }
 
 @test "agent-report-file: the count flags are ignored for other shapes (no crash, no false gate)" {
@@ -1119,32 +965,3 @@ _noop_resolve_marker() {
 # collapses back to existence-plus-parses and a truncated report classifies
 # REAL, which is precisely what the flag exists to prevent. It is the fail-open
 # direction, so it is pinned in both flags and against a short report.
-
-@test "usage error: an EMPTY --min-count exits 2, never a silently dropped assertion" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --min-count ""
-  [ "$status" -eq 2 ]
-}
-
-@test "usage error: a trailing --expect-count with no value exits 2" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --expect-count
-  [ "$status" -eq 2 ]
-}
-
-@test "usage error: an EMPTY count is rejected by name, not by a generic fallthrough" {
-  # The 3-element fixture satisfies no honest denominator of 18, so an empty
-  # count must not launder it into a REAL. Asserting the message names the
-  # offending flag is what separates this from the pre-existing
-  # unrecognized-argument path, which also exits 2.
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --expect-count ""
-  [ "$status" -eq 2 ]
-  assert_contains "--expect-count must be a non-negative integer"
-}
-
-@test "usage error: both count flags passed EMPTY still trip mutual exclusion" {
-  run "$SCRIPT" --shape agent-report-file --path "$FIXTURES_DIRECTORY/agent-report/real-array.json" \
-    --expect-count "" --min-count ""
-  [ "$status" -eq 2 ]
-}
