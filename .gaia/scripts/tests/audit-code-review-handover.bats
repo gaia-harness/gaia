@@ -93,6 +93,14 @@ reconcile() {
   record reconcile --root "$ALF_ROOT" --run-folder "$RUN" "$@"
 }
 
+# reset_review: clear the run folder and the members' sidecars between the rows
+# of a merged case table, so each row starts from the state its own test once had.
+reset_review() {
+  rm -rf "$RUN"
+  mkdir -p "$RUN"
+  rm -f "$ALF_ROOT"/.gaia/local/audit/*.findings.json
+}
+
 sum_holds() {
   jq -e '(.findings | length) == ([.findings[] | select(.state == "kept")] | length)
     + ([.findings[] | select(.state == "dropped")] | length)
@@ -138,7 +146,8 @@ sum_holds() {
 
 # reconcile
 
-@test "reconcile: an id in neither list is unaccounted and names its member once, then not again" {
+@test "reconcile: each member answer's effect on finding state and the hand-over (unaccounted, foreign claim, stale sidecar, later overwrite, merged, all accounted closes)" {
+  # row: an id in neither list is unaccounted and names its member once, then not again
   save_findings tool.sh tool.sh notes.txt
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false],\"cr-2\":[\"$SHELL_MEMBER\",false],\"cr-3\":[\"$FRONTEND_MEMBER\",true]}"
   delivered "$SHELL_MEMBER" 10
@@ -157,9 +166,8 @@ sum_holds() {
   [ "$(jq -r .handover "$RECORD")" = closed ]
   [ "$(finding_field cr-2 .state)" = unaccounted ]
   sum_holds
-}
-
-@test "reconcile: a claim by a member the id was not assigned to is unaccounted" {
+  # row: a claim by a member the id was not assigned to is unaccounted
+  reset_review
   save_findings tool.sh
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false]}"
   delivered "$SHELL_MEMBER" 10
@@ -167,9 +175,8 @@ sum_holds() {
   run reconcile --member "$SHELL_MEMBER" --member "$FRONTEND_MEMBER"
   [ "$status" -eq 0 ]
   [ "$(finding_field cr-1 .state)" = unaccounted ]
-}
-
-@test "reconcile: a sidecar from before the delivery counts for nothing" {
+  # row: a sidecar from before the delivery counts for nothing
+  reset_review
   save_findings tool.sh
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false]}"
   sidecar "$SHELL_MEMBER" 5 '[{"review_ids":["cr-1"]}]'
@@ -177,9 +184,8 @@ sum_holds() {
   run reconcile --member "$SHELL_MEMBER"
   [ "$status" -eq 0 ]
   [ "$(finding_field cr-1 .state)" = unaccounted ]
-}
-
-@test "reconcile: a later sidecar overwrite changes neither kept nor dropped" {
+  # row: a later sidecar overwrite changes neither kept nor dropped
+  reset_review
   save_findings tool.sh tool.sh notes.txt
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false],\"cr-2\":[\"$SHELL_MEMBER\",false],\"cr-3\":[\"$SHELL_MEMBER\",false]}"
   delivered "$SHELL_MEMBER" 10
@@ -194,9 +200,8 @@ sum_holds() {
   [ "$(finding_field cr-2 .state)" = dropped ]
   [ "$(finding_field cr-3 .state)" = kept ]
   sum_holds
-}
-
-@test "reconcile: a merged id counts as kept and as merged, and a kept id reads open" {
+  # row: a merged id counts as kept and as merged, and a kept id reads open
+  reset_review
   save_findings tool.sh tool.sh
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false],\"cr-2\":[\"$SHELL_MEMBER\",false]}"
   delivered "$SHELL_MEMBER" 10
@@ -206,9 +211,8 @@ sum_holds() {
   [ "$(finding_field cr-1 .merged)" = true ]
   [ "$(finding_field cr-2 .merged)" = false ]
   [ "$(finding_field cr-1 .final_disposition)" = open ]
-}
-
-@test "reconcile: everything accounted on the first pass closes the hand-over" {
+  # row: everything accounted on the first pass closes the hand-over
+  reset_review
   save_findings tool.sh tool.sh
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false],\"cr-2\":[\"$SHELL_MEMBER\",false]}"
   delivered "$SHELL_MEMBER" 10
@@ -280,7 +284,8 @@ round_end() {
   record round-end --root "$ALF_ROOT" --run-folder "$RUN" --round "$1" --commit "$2"
 }
 
-@test "round-end: a fix that did not commit is not fixed" {
+@test "round-end: fixed and final disposition per fixer result and commit (uncommitted fix, committed fix, waiver, moved line, overwritten sidecar, merged ids)" {
+  # row: a fix that did not commit is not fixed
   save_findings tool.sh
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false]}"
   kept_ids cr-1
@@ -289,9 +294,8 @@ round_end() {
   round_end 1 none
   [ "$(finding_field cr-1 .fixed)" = false ]
   [ "$(finding_field cr-1 .final_disposition)" = open ]
-}
-
-@test "round-end: a committed fix is fixed, and a waiver reads waived without fixing" {
+  # row: a committed fix is fixed, and a waiver reads waived without fixing
+  reset_review
   save_findings tool.sh tool.sh
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false],\"cr-2\":[\"$SHELL_MEMBER\",false]}"
   kept_ids cr-1
@@ -306,9 +310,8 @@ round_end() {
   round_end 2 abc1234
   [ "$(finding_field cr-2 .fixed)" = false ]
   [ "$(finding_field cr-2 .final_disposition)" = waived ]
-}
-
-@test "round-end: a fix whose line moved on a later round, or whose sidecar was overwritten, still reads fixed" {
+  # row: a fix whose line moved on a later round, or whose sidecar was overwritten, still reads fixed
+  reset_review
   save_findings tool.sh
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false]}"
   kept_ids cr-1
@@ -322,9 +325,8 @@ round_end() {
   sidecar "$SHELL_MEMBER" 40 '[]'
   round_end 3 none
   [ "$(finding_field cr-1 .fixed)" = true ]
-}
-
-@test "round-end: two ids merged onto one identity key stay two" {
+  # row: two ids merged onto one identity key stay two
+  reset_review
   save_findings tool.sh tool.sh
   assign_by_hand "{\"cr-1\":[\"$SHELL_MEMBER\",false],\"cr-2\":[\"$SHELL_MEMBER\",false]}"
   kept_ids cr-1 cr-2
