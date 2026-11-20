@@ -156,7 +156,7 @@
 # either: the designated owner emits them wherever it finds them, so a malformed
 # pragma is seen exactly once across that owner's own scan surface. That surface
 # is not every surface this library serves: the composite actions under
-# `.github/actions/` reach the sibling gates through the `workflows` set below
+# `.github/actions/` reach the sibling gates through guard-discovery-lib.sh's `workflows` set
 # and reach the owner through nothing, so a malformed pragma written in one is
 # reported by no gate. The UNUSED-pragma error is
 # bats-scoped, because outside `*.bats` nothing can consume a pragma and the
@@ -248,8 +248,8 @@ set +e
 # shellcheck disable=SC1091
 [ -f "$_gaia_guard_awk_library_directory/awk-interp-lib.sh" ] && . "$_gaia_guard_awk_library_directory/awk-interp-lib.sh" 2>/dev/null
 # The bash discovery surface lives in guard-discovery-lib.sh beside this file,
-# loaded inside the same bracket. A consumer's own check for those functions is
-# what reports the file missing.
+# loaded inside the same bracket. A consumer's own `type gaia_guard_*_files`
+# check catches the file missing, though its message names guard-awk-lib.sh.
 # shellcheck source=.gaia/scripts/guard-discovery-lib.sh
 [ -f "$_gaia_guard_awk_library_directory/guard-discovery-lib.sh" ] && . "$_gaia_guard_awk_library_directory/guard-discovery-lib.sh"
 if [ "$_gaia_guard_awk_errexit_was" = 1 ]; then set -e; fi

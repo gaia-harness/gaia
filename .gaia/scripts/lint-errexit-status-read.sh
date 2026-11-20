@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# SC2016 is intentional file-wide: the awk programs below are single-quoted
-# precisely so that `$?`, `$(`, and every awk field reference reach awk as
-# literal program text. An expansion the shell performed here would delete the
-# detector rather than help it.
+# SC2016 is intentional file-wide: the awk program below is single-quoted so
+# every awk field reference reaches awk as literal program text.
 # shellcheck disable=SC2016
 #
 # lint-errexit-status-read.sh: flag every read of `$?` that follows a bare
@@ -316,7 +314,7 @@ case "$GAIA_AWK_STATUS" in
     ;;
 esac
 
-# Shared detector, concatenated into both scan programs below so the matcher is
+# Shared detector, concatenated ahead of each per-surface scan program so the matcher is
 # written once and the two surfaces cannot drift apart. Single-quoted, and every
 # literal quote inside is spelled as an escape (`\047` for `'`), so the shell
 # passes the program through untouched.

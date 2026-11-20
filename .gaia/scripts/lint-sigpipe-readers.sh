@@ -100,8 +100,8 @@
 # `changed=$(set -o pipefail; ...)` arms its own subshell and nothing outside
 # it, so a file whose only arming is that idiom is not a seed. The two arms
 # share one arming test rather than two that agree by inspection
-# (`arms_at_depth_zero` below); gaia-react/gaia#1941 is the round where the
-# script arm got it. What that costs is stated with the depth test itself.
+# (`arms_at_depth_zero` in lint-sigpipe-readers-detect.sh). What that costs is
+# stated with the depth test itself.
 #
 # An edge resolves by BASENAME against the tracked set, because a load names its
 # target through a variable far more often than not

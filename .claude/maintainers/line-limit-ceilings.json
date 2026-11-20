@@ -56,7 +56,7 @@
     ".gaia/scripts/file-tech-debt.sh": 806,
     ".gaia/scripts/guard-awk-lib.sh": 788,
     ".gaia/scripts/kept-worktrees.sh": 432,
-    ".gaia/scripts/lint-errexit-status-read.sh": 466,
+    ".gaia/scripts/lint-errexit-status-read.sh": 464,
     ".gaia/scripts/lint-hook-cwd-relative-loads.sh": 422,
     ".gaia/scripts/lint-sigpipe-readers.sh": 697,
     ".gaia/scripts/notebook/move.sh": 579,

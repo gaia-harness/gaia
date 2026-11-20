@@ -102,10 +102,10 @@
 .gaia/scripts/lint-sigpipe-readers-detect.sh
 # The awk-source library the bats-arming shell guards source; every one of those guards is itself withheld above, so nothing on an adopter clone sources it.
 .gaia/scripts/guard-awk-lib.sh
-# The scan-surface discovery that library sources beside it, withheld with it.
-.gaia/scripts/guard-discovery-lib.sh
 # The GAIA_AWK interpreter resolver, sourced by guard-awk-lib.sh just above. Withheld on the absent consumer, a stronger ground than the absent-runner reasoning most of the lints above rest on: every file that sources this library, through guard-awk-lib.sh, is itself withheld, so an adopter clone has nothing that would ever source it. What is NOT claimed: the resolver is generic over any awk call site in the tree, not only the surface it currently serves, so shipping it later to widen GAIA_AWK's governed surface would be a re-decision rather than a correction. The consumer set is not counted here, because `git grep -l guard-awk-lib` reads it out of the tree, and a hand-kept cardinal beside it is a second copy that nothing holds to the tree.
 .gaia/scripts/awk-interp-lib.sh
+# The scan-surface discovery guard-awk-lib.sh sources beside it, withheld with it.
+.gaia/scripts/guard-discovery-lib.sh
 # The shipped-tree leak assertion: it proves no release-excluded path survived
 # into the tree that becomes the tarball. Withheld on the absent caller: its one
 # caller is release.yml (category 9), and an adopter clone never stages a GAIA

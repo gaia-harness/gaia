@@ -109,9 +109,8 @@
 # unchanged character for character from its former inline form, because
 # concatenation requires a variable rather than a literal awk argument.
 # Single-quoted so every `$`, `$(` and awk field reference reaches awk as literal
-# program text; the disable is targeted rather than file-wide, matching the two
-# beside lint-git-path-quoting.sh's fix hints, so a genuine SC2016 anywhere else
-# here still fires.
+# program text; the disable is targeted rather than file-wide, so a genuine
+# SC2016 anywhere else here still fires.
 # shellcheck disable=SC2016
 readonly OWN_AWK='
     # option_walk(window): walk the option region following a call, setting

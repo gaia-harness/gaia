@@ -110,7 +110,7 @@
 # executed. A glob is an enumeration, and an enumeration goes one page short the
 # same way a list of option spellings does; fence state is a closed property of
 # the text. An illustrative mention of a path-listing command is idiomatically a
-# code span, which the `inspan` rule below already treats as prose, so the two
+# code span, which the `inspan` rule in lint-git-path-quoting-detect.sh already treats as prose, so the two
 # rules partition markdown between them: outside a fence nothing is scanned at
 # all, and inside one nothing is prose. Swept across every tracked markdown page
 # in this repository, that partition reported the live defects and nothing else,
@@ -136,7 +136,7 @@
 # `diff` half reads its option region rather than a fixed string, so an OPTION
 # written between `diff` and `--name-only` -- `--cached`, `--staged`, or any
 # other -- no longer hides the call. A positional REVISION in that position
-# still does, and that limit is stated with the other blind spots below rather
+# still does, and that limit is stated with the other blind spots in lint-git-path-quoting-detect.sh rather
 # than left to be read out of this sentence.
 #
 # The sibling plumbing commands come along with that, and the reason is worth

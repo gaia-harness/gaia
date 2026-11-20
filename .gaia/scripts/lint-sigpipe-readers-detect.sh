@@ -131,7 +131,7 @@ function carries_pipe(current_line,   tail) {
 
 # The command-substitution nesting depth at character `upto` of `text`, starting
 # from the carried-in `substitution_depth` and clamped at zero. Clamped, not merely
-# bounded: the header states why that direction is the safe one. Both arms carry
+# bounded: lint-sigpipe-readers.sh's header states why that direction is the safe one. Both arms carry
 # `substitution_depth` from one line to the next through carry_at below, and each resets
 # it where its own unit of arming begins: the workflow arm at every run: key,
 # the shell arm never, since that arm is handed one file per awk invocation and
@@ -164,7 +164,7 @@ function strip_single_quoted(text,   stripped_text, open_quote_position, rest, c
 
 # The depth this line hands the next one: the LOWER of the raw count and the
 # count over the stripped copy, both walked from the same carried-in depth. The
-# stripped count alone can rise above the raw one; the header states why only
+# stripped count alone can rise above the raw one; lint-sigpipe-readers.sh's header states why only
 # the lower of the two keeps the carry from disarming anything the raw count
 # arms.
 function carry_at(current_line,   raw_depth, stripped_text, stripped_depth) {

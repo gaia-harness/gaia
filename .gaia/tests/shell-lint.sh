@@ -23,7 +23,7 @@
 # the tracked files the given NUL-delimited list names; a pass whose set comes
 # back empty is skipped, not failed. It narrows lint-errexit-status-read,
 # lint-git-path-quoting and lint-sigpipe-readers the same way, through
-# GAIA_GUARD_DELTA_FILE (.gaia/scripts/guard-awk-lib.sh), unless the delta
+# GAIA_GUARD_DELTA_FILE (.gaia/scripts/guard-discovery-lib.sh), unless the delta
 # changes that guard's own sources. The other folded guards scan the whole tree.
 # `verify-harness.sh round` passes the
 # round's delta here; branch mode and CI lint the whole tree.
