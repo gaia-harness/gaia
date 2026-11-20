@@ -72,7 +72,7 @@ type KeylessUnit = {
   unit_start_line: number;
 };
 
-export const DEFAULT_PREDICATES: AttributionPredicates = {
+const DEFAULT_PREDICATES: AttributionPredicates = {
   canonAccept: CANON_ACCEPT,
   canonWaive: CANON_WAIVE,
   keyPattern: KEY_PATTERN,
@@ -217,7 +217,7 @@ const canonicalDisposition = (
  * Attributes one pull-request body against the supplied recognizer
  * predicates. `attributeBody` is this with the defaults.
  */
-export const attributeBodyWith = (
+const attributeBodyWith = (
   body: string,
   predicates: AttributionPredicates
 ): AttributionResult => {

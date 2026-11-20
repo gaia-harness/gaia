@@ -130,46 +130,61 @@ describe('collectCommits', () => {
 });
 
 describe('groupCommits', () => {
-  test('routes feat → Added, fix → Fixed, refactor/perf/docs → Changed', () => {
-    const grouped = groupCommits([
-      {body: '', subject: 'feat: shiny'},
-      {body: '', subject: 'fix: leak'},
-      {body: '', subject: 'refactor: clean'},
-      {body: '', subject: 'perf: tighten'},
-      {body: '', subject: 'docs: update'},
-      {body: '', subject: 'chore: bump'}, // omitted
-      {body: '', subject: 'random commit'}, // omitted
-    ]);
-    expect(grouped.Added).toEqual(['shiny']);
-    expect(grouped.Fixed).toEqual(['leak']);
-    expect(grouped.Changed).toEqual(['clean', 'tighten', 'update']);
-  });
-
-  test('strips scope from subject', () => {
-    const grouped = groupCommits([
-      {body: '', subject: 'feat(auth): rotate tokens'},
-    ]);
-    expect(grouped.Added).toEqual(['rotate tokens']);
+  test.each<{
+    commits: {body: string; subject: string}[];
+    expected: {Added?: string[]; Changed?: string[]; Fixed?: string[]};
+    name: string;
+  }>([
+    {
+      commits: [
+        {body: '', subject: 'feat: shiny'},
+        {body: '', subject: 'fix: leak'},
+        {body: '', subject: 'refactor: clean'},
+        {body: '', subject: 'perf: tighten'},
+        {body: '', subject: 'docs: update'},
+        {body: '', subject: 'chore: bump'}, // omitted
+        {body: '', subject: 'random commit'}, // omitted
+      ],
+      expected: {
+        Added: ['shiny'],
+        Changed: ['clean', 'tighten', 'update'],
+        Fixed: ['leak'],
+      },
+      name: 'routes feat → Added, fix → Fixed, refactor/perf/docs → Changed',
+    },
+    {
+      commits: [{body: '', subject: 'feat(auth): rotate tokens'}],
+      expected: {Added: ['rotate tokens']},
+      name: 'strips scope from subject',
+    },
+  ])('$name', ({commits, expected}) => {
+    expect(groupCommits(commits)).toMatchObject(expected);
   });
 });
 
 describe('renderBlock', () => {
-  test('omits empty sections', () => {
-    const block = renderBlock({Added: ['a', 'b'], Changed: [], Fixed: []});
-    expect(block).toContain('### Added');
-    expect(block).toContain('- a');
-    expect(block).toContain('- b');
-    expect(block).not.toContain('### Changed');
-    expect(block).not.toContain('### Fixed');
-  });
-
-  test('orders Added → Changed → Fixed', () => {
-    const block = renderBlock({Added: ['a'], Changed: ['c'], Fixed: ['f']});
-    const addedIndex = block.indexOf('### Added');
-    const changedIndex = block.indexOf('### Changed');
-    const fixedIndex = block.indexOf('### Fixed');
-    expect(addedIndex).toBeLessThan(changedIndex);
-    expect(changedIndex).toBeLessThan(fixedIndex);
+  test.each<{
+    absent: RegExp[];
+    name: string;
+    present: RegExp[];
+    sections: {Added: string[]; Changed: string[]; Fixed: string[]};
+  }>([
+    {
+      absent: [/### Changed/u, /### Fixed/u],
+      name: 'omits empty sections',
+      present: [/### Added/u, /- a/u, /- b/u],
+      sections: {Added: ['a', 'b'], Changed: [], Fixed: []},
+    },
+    {
+      absent: [],
+      name: 'orders Added → Changed → Fixed',
+      present: [/### Added.*### Changed.*### Fixed/su],
+      sections: {Added: ['a'], Changed: ['c'], Fixed: ['f']},
+    },
+  ])('$name', ({absent, present, sections}) => {
+    const block = renderBlock(sections);
+    for (const pattern of present) expect(block).toMatch(pattern);
+    for (const pattern of absent) expect(block).not.toMatch(pattern);
   });
 });
 
@@ -221,50 +236,65 @@ describe('graduateChangelog', () => {
     expect(released.match(/^### Changed$/gmu)).toHaveLength(1);
   });
 
-  test('returns empty-unreleased when the section has no entries', () => {
-    const outcome = graduateChangelog({
-      current: EMPTY_UNRELEASED,
-      newVersion: '1.1.0',
-      today: '2026-05-07',
-    });
-    expect(outcome.kind).toBe('empty-unreleased');
-  });
-
-  test('returns empty-unreleased when only the link block follows', () => {
-    const linksOnly = `# Changelog
+  const LINKS_ONLY = `# Changelog
 
 ## [Unreleased]
 
 [Unreleased]: https://github.com/gaia-react/gaia/compare/v0.9.0...HEAD
 `;
-    const outcome = graduateChangelog({
-      current: linksOnly,
-      newVersion: '1.0.0',
-      today: '2026-05-07',
-    });
-    expect(outcome.kind).toBe('empty-unreleased');
-  });
-
-  test('returns empty-unreleased for a link definition with no space', () => {
-    const tight = `# Changelog
+  const TIGHT_LINK = `# Changelog
 
 ## [Unreleased]
 
 [Unreleased]:https://github.com/gaia-react/gaia/compare/v0.9.0...HEAD
 `;
-    const outcome = graduateChangelog({
-      current: tight,
+
+  test.each<{
+    current: string;
+    kind: string;
+    name: string;
+    newVersion: string;
+  }>([
+    {
+      current: EMPTY_UNRELEASED,
+      kind: 'empty-unreleased',
+      name: 'returns empty-unreleased when the section has no entries',
+      newVersion: '1.1.0',
+    },
+    {
+      current: LINKS_ONLY,
+      kind: 'empty-unreleased',
+      name: 'returns empty-unreleased when only the link block follows',
       newVersion: '1.0.0',
+    },
+    {
+      current: TIGHT_LINK,
+      kind: 'empty-unreleased',
+      name: 'returns empty-unreleased for a link definition with no space',
+      newVersion: '1.0.0',
+    },
+    {
+      current: TEMPLATE,
+      kind: 'duplicate',
+      name: 'returns duplicate when version already present',
+      newVersion: '1.0.0',
+    },
+    {
+      current: '# Changelog\n\n## [1.0.0] - 2026-01-01\n',
+      kind: 'no-unreleased',
+      name: 'returns no-unreleased when heading missing',
+      newVersion: '1.1.0',
+    },
+  ])('$name', ({current, kind, newVersion}) => {
+    const outcome = graduateChangelog({
+      current,
+      newVersion,
       today: '2026-05-07',
     });
-    expect(outcome.kind).toBe('empty-unreleased');
+    expect(outcome.kind).toBe(kind);
   });
 
-  // The positive direction of the same rule: the link block ends the body, it
-  // does not veto entries that precede it. Without this, widening
-  // LINK_DEFINITION could start refusing real releases with the suite green.
-  test('graduates entries that sit directly above the link block', () => {
-    const firstRelease = `# Changelog
+  const FIRST_RELEASE = `# Changelog
 
 ## [Unreleased]
 
@@ -274,75 +304,63 @@ describe('graduateChangelog', () => {
 
 [Unreleased]: https://github.com/gaia-react/gaia/compare/v0.9.0...HEAD
 `;
-    const outcome = graduateChangelog({
-      current: firstRelease,
-      newVersion: '1.0.0',
-      today: '2026-05-07',
-    });
-    assertOk(outcome);
-
-    expect(outcome.updated).toContain('## [1.0.0] - 2026-05-07');
-    expect(outcome.updated).toContain('- initial thing');
-    expect(outcome.updated).toContain(
-      '[1.0.0]: https://github.com/gaia-react/gaia/releases/tag/v1.0.0'
-    );
-  });
-
-  test('returns duplicate when version already present', () => {
-    const outcome = graduateChangelog({
-      current: TEMPLATE,
-      newVersion: '1.0.0',
-      today: '2026-05-07',
-    });
-    expect(outcome.kind).toBe('duplicate');
-  });
-
-  test('returns no-unreleased when heading missing', () => {
-    const minimal = '# Changelog\n\n## [1.0.0] - 2026-01-01\n';
-    const outcome = graduateChangelog({
-      current: minimal,
-      newVersion: '1.1.0',
-      today: '2026-05-07',
-    });
-    expect(outcome.kind).toBe('no-unreleased');
-  });
-
-  test('maintains the reference-link block when one is present', () => {
-    const withLinks = `${TEMPLATE}
+  const WITH_LINKS = `${TEMPLATE}
 [Unreleased]: https://github.com/gaia-react/gaia/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/gaia-react/gaia/releases/tag/v1.0.0
 `;
-    const outcome = graduateChangelog({
-      current: withLinks,
+
+  // The positive direction of the empty-section rule: the link block ends the
+  // body, it does not veto entries that precede it. Without the first row,
+  // widening LINK_DEFINITION could start refusing real releases with the suite
+  // green.
+  test.each<{
+    absent: string[];
+    current: string;
+    name: string;
+    newVersion: string;
+    present: string[];
+  }>([
+    {
+      absent: [],
+      current: FIRST_RELEASE,
+      name: 'graduates entries that sit directly above the link block',
+      newVersion: '1.0.0',
+      present: [
+        '## [1.0.0] - 2026-05-07',
+        '- initial thing',
+        '[1.0.0]: https://github.com/gaia-react/gaia/releases/tag/v1.0.0',
+      ],
+    },
+    {
+      // [Unreleased] compare link repointed at the just-released version, the
+      // new release-tag definition inserted, prior definitions preserved.
+      absent: ['compare/v1.0.0...HEAD'],
+      current: WITH_LINKS,
+      name: 'maintains the reference-link block when one is present',
       newVersion: '1.1.0',
-      today: '2026-05-07',
-    });
-    assertOk(outcome);
-
-    // [Unreleased] compare link repointed at the just-released version.
-    expect(outcome.updated).toContain(
-      '[Unreleased]: https://github.com/gaia-react/gaia/compare/v1.1.0...HEAD'
-    );
-    expect(outcome.updated).not.toContain('compare/v1.0.0...HEAD');
-    // New release-tag definition inserted; prior definitions preserved.
-    expect(outcome.updated).toContain(
-      '[1.1.0]: https://github.com/gaia-react/gaia/releases/tag/v1.1.0'
-    );
-    expect(outcome.updated).toContain(
-      '[1.0.0]: https://github.com/gaia-react/gaia/releases/tag/v1.0.0'
-    );
-  });
-
-  test('leaves the output link-free when the file has no link block', () => {
-    const outcome = graduateChangelog({
+      present: [
+        '[Unreleased]: https://github.com/gaia-react/gaia/compare/v1.1.0...HEAD',
+        '[1.1.0]: https://github.com/gaia-react/gaia/releases/tag/v1.1.0',
+        '[1.0.0]: https://github.com/gaia-react/gaia/releases/tag/v1.0.0',
+      ],
+    },
+    {
+      absent: ['releases/tag/', '[Unreleased]:'],
       current: TEMPLATE,
+      name: 'leaves the output link-free when the file has no link block',
       newVersion: '1.1.0',
+      present: [],
+    },
+  ])('$name', ({absent, current, newVersion, present}) => {
+    const outcome = graduateChangelog({
+      current,
+      newVersion,
       today: '2026-05-07',
     });
     assertOk(outcome);
 
-    expect(outcome.updated).not.toContain('releases/tag/');
-    expect(outcome.updated).not.toContain('[Unreleased]:');
+    for (const text of present) expect(outcome.updated).toContain(text);
+    for (const text of absent) expect(outcome.updated).not.toContain(text);
   });
 });
 
@@ -350,6 +368,9 @@ type Sandbox = {
   cleanup: () => void;
   root: string;
 };
+
+const SANDBOX_CHANGELOG =
+  '# Changelog\n\n## [Unreleased]\n\n### Changed\n\n- hand-written entry\n\n## [1.0.0] - 2026-01-01\n\n- old\n';
 
 const setupSandbox = (currentVersion: string): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-release-changelog-'));
@@ -359,11 +380,7 @@ const setupSandbox = (currentVersion: string): Sandbox => {
     `${JSON.stringify({name: 'gaia', version: currentVersion}, null, 2)}\n`,
     'utf8'
   );
-  writeFileSync(
-    path.join(root, 'CHANGELOG.md'),
-    '# Changelog\n\n## [Unreleased]\n\n### Changed\n\n- hand-written entry\n\n## [1.0.0] - 2026-01-01\n\n- old\n',
-    'utf8'
-  );
+  writeFileSync(path.join(root, 'CHANGELOG.md'), SANDBOX_CHANGELOG, 'utf8');
 
   return {
     cleanup: () => {
@@ -419,31 +436,74 @@ describe('release changelog CLI', () => {
     vi.restoreAllMocks();
   });
 
-  test('--draft prints rendered block to stdout', () => {
-    sandbox = setupSandbox('1.1.0');
-    const runner = buildRunner([
-      {subject: 'feat: a'},
-      {subject: 'fix: b'},
-      {subject: 'docs: c'},
-    ]);
+  test.each<{
+    args: string[];
+    changelogAbsent: string[];
+    changelogPresent: string[];
+    commits: {subject: string}[];
+    name: string;
+    outContains: string[];
+    version: string;
+  }>([
+    {
+      args: ['--draft'],
+      changelogAbsent: ['## [1.1.0]'],
+      changelogPresent: [],
+      commits: [
+        {subject: 'feat: a'},
+        {subject: 'fix: b'},
+        {subject: 'docs: c'},
+      ],
+      name: '--draft prints rendered block to stdout',
+      outContains: [
+        '### Added',
+        '- a',
+        '### Fixed',
+        '- b',
+        '### Changed',
+        '- c',
+      ],
+      version: '1.1.0',
+    },
+    {
+      args: ['--version', '2.0.0'],
+      changelogAbsent: [],
+      changelogPresent: ['## [2.0.0] - 2026-05-07'],
+      commits: [{subject: 'feat: shiny'}],
+      name: '--version overrides package.json version',
+      outContains: [],
+      version: '1.0.0',
+    },
+  ])(
+    '$name',
+    ({
+      args,
+      changelogAbsent,
+      changelogPresent,
+      commits,
+      outContains,
+      version,
+    }) => {
+      sandbox = setupSandbox(version);
 
-    const exit = run(['--draft'], {cwd: sandbox.root, runner});
-    expect(exit).toBe(0);
-    const out = stdio.outputs.join('');
-    expect(out).toContain('### Added');
-    expect(out).toContain('- a');
-    expect(out).toContain('### Fixed');
-    expect(out).toContain('- b');
-    expect(out).toContain('### Changed');
-    expect(out).toContain('- c');
+      const exit = run(args, {
+        cwd: sandbox.root,
+        runner: buildRunner(commits),
+        today: '2026-05-07',
+      });
+      expect(exit).toBe(0);
 
-    // Did NOT modify CHANGELOG
-    const changelog = readFileSync(
-      path.join(sandbox.root, 'CHANGELOG.md'),
-      'utf8'
-    );
-    expect(changelog).not.toContain('## [1.1.0]');
-  });
+      for (const text of outContains) {
+        expect(stdio.outputs.join('')).toContain(text);
+      }
+      const changelog = readFileSync(
+        path.join(sandbox.root, 'CHANGELOG.md'),
+        'utf8'
+      );
+      for (const text of changelogPresent) expect(changelog).toContain(text);
+      for (const text of changelogAbsent) expect(changelog).not.toContain(text);
+    }
+  );
 
   test('without --draft graduates the hand-written block and nothing generated', () => {
     sandbox = setupSandbox('1.1.0');
@@ -468,26 +528,6 @@ describe('release changelog CLI', () => {
     expect(changelog).not.toContain('- shiny');
   });
 
-  test('exits 1 when the Unreleased section is empty', () => {
-    sandbox = setupSandbox('1.1.0');
-    writeFileSync(
-      path.join(sandbox.root, 'CHANGELOG.md'),
-      EMPTY_UNRELEASED,
-      'utf8'
-    );
-    const runner = buildRunner([{subject: 'feat: shiny'}]);
-
-    const exit = run([], {cwd: sandbox.root, runner, today: '2026-05-07'});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('empty_unreleased_section');
-
-    const changelog = readFileSync(
-      path.join(sandbox.root, 'CHANGELOG.md'),
-      'utf8'
-    );
-    expect(changelog).not.toContain('## [1.1.0]');
-  });
-
   test('idempotent: re-running with the same version is a no-op', () => {
     sandbox = setupSandbox('1.1.0');
     const runner = buildRunner([{subject: 'feat: shiny'}]);
@@ -508,41 +548,47 @@ describe('release changelog CLI', () => {
     expect(afterSecond).toBe(afterFirst);
   });
 
-  test('exits 1 when no Unreleased heading present', () => {
+  const unreleasedRunner = buildRunner([{subject: 'feat: shiny'}]);
+
+  test.each<{
+    args: string[];
+    changelog: string;
+    message: string;
+    name: string;
+    runner?: CommandRunner;
+  }>([
+    {
+      args: [],
+      changelog: EMPTY_UNRELEASED,
+      message: 'empty_unreleased_section',
+      name: 'exits 1 when the Unreleased section is empty',
+      runner: unreleasedRunner,
+    },
+    {
+      args: [],
+      changelog: '# Changelog\n\n## [1.0.0] - 2026-01-01\n',
+      message: 'no_unreleased_section',
+      name: 'exits 1 when no Unreleased heading present',
+      runner: unreleasedRunner,
+    },
+    {
+      args: ['--bogus'],
+      changelog: SANDBOX_CHANGELOG,
+      message: 'unknown flag',
+      name: 'rejects unknown flags',
+    },
+  ])('$name', ({args, changelog: seeded, message, runner}) => {
     sandbox = setupSandbox('1.1.0');
-    writeFileSync(
-      path.join(sandbox.root, 'CHANGELOG.md'),
-      '# Changelog\n\n## [1.0.0] - 2026-01-01\n',
-      'utf8'
-    );
-    const runner = buildRunner([{subject: 'feat: shiny'}]);
+    writeFileSync(path.join(sandbox.root, 'CHANGELOG.md'), seeded, 'utf8');
 
-    const exit = run([], {cwd: sandbox.root, runner, today: '2026-05-07'});
+    const exit = run(args, {cwd: sandbox.root, runner, today: '2026-05-07'});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('no_unreleased_section');
-  });
+    expect(stdio.errors.join('')).toContain(message);
 
-  test('rejects unknown flags', () => {
-    sandbox = setupSandbox('1.1.0');
-    const exit = run(['--bogus'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
-  });
-
-  test('--version overrides package.json version', () => {
-    sandbox = setupSandbox('1.0.0');
-    const runner = buildRunner([{subject: 'feat: shiny'}]);
-
-    const exit = run(['--version', '2.0.0'], {
-      cwd: sandbox.root,
-      runner,
-      today: '2026-05-07',
-    });
-    expect(exit).toBe(0);
     const changelog = readFileSync(
       path.join(sandbox.root, 'CHANGELOG.md'),
       'utf8'
     );
-    expect(changelog).toContain('## [2.0.0] - 2026-05-07');
+    expect(changelog).not.toContain('## [1.1.0]');
   });
 });

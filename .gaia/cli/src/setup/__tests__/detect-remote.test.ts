@@ -71,7 +71,29 @@ describe('setup detect-remote', () => {
     expect(parsed.repo).toBe('bar');
   });
 
-  test('returns found: false when origin is missing', () => {
+  const addOrigin = (remote: string | undefined): void => {
+    if (remote !== undefined) {
+      execFileSync('git', ['remote', 'add', 'origin', remote], {
+        cwd: sandbox.root,
+      });
+    }
+  };
+
+  test.each([
+    {
+      name: 'returns found: false when origin is missing',
+      remote: undefined,
+      url: null,
+    },
+    {
+      name: 'returns found: false when remote URL is unparseable',
+      remote: 'https://gitlab.com/foo/bar/baz.git',
+      // The URL itself is preserved for diagnostics.
+      url: 'https://gitlab.com/foo/bar/baz.git',
+    },
+  ])('$name', ({remote, url}) => {
+    addOrigin(remote);
+
     const exit = run(['--json'], {cwd: sandbox.root});
     expect(exit).toBe(0);
 
@@ -80,27 +102,8 @@ describe('setup detect-remote', () => {
       unknown
     >;
     expect(parsed.found).toBe(false);
-    expect(parsed.url).toBeNull();
+    expect(parsed.url).toBe(url);
     expect(parsed.host).toBeNull();
-  });
-
-  test('returns found: false when remote URL is unparseable', () => {
-    execFileSync(
-      'git',
-      ['remote', 'add', 'origin', 'https://gitlab.com/foo/bar/baz.git'],
-      {cwd: sandbox.root}
-    );
-
-    const exit = run(['--json'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-
-    const parsed = JSON.parse(stdio.out.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(parsed.found).toBe(false);
-    // The URL itself is preserved for diagnostics.
-    expect(parsed.url).toBe('https://gitlab.com/foo/bar/baz.git');
   });
 
   test('emits a human report without --json', () => {
@@ -115,15 +118,25 @@ describe('setup detect-remote', () => {
     expect(stdio.out.join('')).toContain('host: github.com');
   });
 
-  test('rejects unknown flags', () => {
-    const exit = run(['--bogus'], {cwd: sandbox.root});
-    expect(exit).not.toBe(0);
-    expect(stdio.err.join('')).toContain('unknown flag');
-  });
+  test.each([
+    {
+      args: ['--bogus'],
+      name: 'rejects unknown flags',
+      stream: 'err',
+      succeeds: false,
+      text: 'unknown flag',
+    },
+    {
+      args: ['--help'],
+      name: '--help exits 0',
+      stream: 'out',
+      succeeds: true,
+      text: 'Usage:',
+    },
+  ] as const)('$name', ({args, stream, succeeds, text}) => {
+    const exit = run([...args], {cwd: sandbox.root});
 
-  test('--help exits 0', () => {
-    const exit = run(['--help'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-    expect(stdio.out.join('')).toContain('Usage:');
+    expect(exit === 0).toBe(succeeds);
+    expect(stdio[stream].join('')).toContain(text);
   });
 });

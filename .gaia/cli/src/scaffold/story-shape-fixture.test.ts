@@ -24,42 +24,62 @@ Open.test('shows the panel', async ({canvas}) => {
 });
 `;
 
-describe('story shape check', () => {
-  test('accepts a CSF Next story whose play only drives the UI', () => {
-    expect(csf4Violations(GOOD)).toEqual([]);
-    expect(countTestCalls(GOOD)).toBe(1);
-    expect(expectsInsidePlays(GOOD)).toEqual([]);
-  });
+const WITH_DEEP_EXPECT = GOOD.replace(
+  "await userEvent.click(canvas.getByRole('button'));",
+  "await userEvent.click(canvas.getByRole('button'));\n    if (true) {\n      await expect(canvas.getByRole('region')).toBeVisible();\n    }"
+);
 
-  test('reports an expect( inside a play, however deep', () => {
-    const bad = GOOD.replace(
-      "await userEvent.click(canvas.getByRole('button'));",
-      "await userEvent.click(canvas.getByRole('button'));\n    if (true) {\n      await expect(canvas.getByRole('region')).toBeVisible();\n    }"
-    );
+const WITH_COMMENT = GOOD.replace(
+  'export const Open',
+  '// play: await expect(x) is described here\nexport const Open'
+);
 
-    expect(expectsInsidePlays(bad)).toHaveLength(1);
-    expect(csf4Violations(bad).join('\n')).toContain('expect inside a play');
-  });
-
-  test('ignores an expect( that sits in a .test( body or a comment', () => {
-    const withComment = GOOD.replace(
-      'export const Open',
-      '// play: await expect(x) is described here\nexport const Open'
-    );
-
-    expect(expectsInsidePlays(withComment)).toEqual([]);
-  });
-
-  test('reports the CSF3 shape', () => {
-    const csf3 = `import type {Meta, StoryFn} from '@storybook/react-vite';
+const CSF3 = `import type {Meta, StoryFn} from '@storybook/react-vite';
 const meta: Meta = {title: 'X'};
 export default meta;
 export const Default: StoryFn = () => <div />;
 `;
-    const found = csf4Violations(csf3).join('\n');
 
-    expect(found).toContain('not csf4: classified csf3');
-    expect(found).toContain('old-format reference: StoryFn');
-    expect(found).toContain('no .test( call');
+describe('story shape check accepts a CSF Next story and reports each violation', () => {
+  test.each([
+    {
+      name: 'accepts a CSF Next story whose play only drives the UI',
+      playExpects: 0,
+      source: GOOD,
+      testCalls: 1,
+      violations: [/^$/u],
+    },
+    {
+      name: 'reports an expect( inside a play, however deep',
+      playExpects: 1,
+      source: WITH_DEEP_EXPECT,
+      testCalls: 1,
+      violations: [/expect inside a play/u],
+    },
+    {
+      name: 'ignores an expect( that sits in a .test( body or a comment',
+      playExpects: 0,
+      source: WITH_COMMENT,
+      testCalls: 1,
+      violations: [/^$/u],
+    },
+    {
+      name: 'reports the CSF3 shape',
+      playExpects: 0,
+      source: CSF3,
+      testCalls: 0,
+      violations: [
+        /not csf4: classified csf3/u,
+        /old-format reference: StoryFn/u,
+        /no \.test\( call/u,
+      ],
+    },
+  ])('$name', ({playExpects, source, testCalls, violations}) => {
+    expect(expectsInsidePlays(source)).toHaveLength(playExpects);
+    expect(countTestCalls(source)).toBe(testCalls);
+
+    for (const pattern of violations) {
+      expect(csf4Violations(source).join('\n')).toMatch(pattern);
+    }
   });
 });

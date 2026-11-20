@@ -45,59 +45,71 @@ const baseInputs = (
 });
 
 describe('deriveExcludedRefTokens', () => {
-  test('keeps tracked excluded paths and drops untracked, root-level, and workflow entries', () => {
-    const {paths} = deriveExcludedRefTokens(baseInputs());
+  type Tokens = ReturnType<typeof deriveExcludedRefTokens>;
 
-    expect(paths).toEqual(
-      expect.arrayContaining([
-        '.gaia/cli/src',
-        '.gaia/tests',
-        '.gaia/scripts/lint-hook-jq-availability.sh',
-      ])
-    );
-    // Untracked local state, a root governance file, and a workflow the
-    // excluded-workflow-ref check owns.
-    expect(paths).not.toContain('.gaia/local');
-    expect(paths).not.toContain('README.md');
-    expect(paths).not.toContain('.github/workflows/release.yml');
-  });
+  // `expected` is a partial match on the derived tokens; `absent` lists values
+  // a field must not carry.
+  test.each<{
+    absent: Partial<Record<keyof Tokens, string[]>>;
+    expected: Record<string, unknown>;
+    name: string;
+    overrides?: Partial<ExcludedRefInputs>;
+  }>([
+    {
+      // Untracked local state, a root governance file, and a workflow the
+      // excluded-workflow-ref check owns.
+      absent: {
+        paths: ['.gaia/local', 'README.md', '.github/workflows/release.yml'],
+      },
+      expected: {
+        paths: expect.arrayContaining([
+          '.gaia/cli/src',
+          '.gaia/tests',
+          '.gaia/scripts/lint-hook-jq-availability.sh',
+        ]),
+      },
+      name: 'keeps tracked excluded paths and drops untracked, root-level, and workflow entries',
+    },
+    {
+      absent: {},
+      expected: {commands: ['gaia-release', 'release-notes']},
+      name: 'derives slash commands from excluded commands and skills',
+    },
+    {
+      absent: {},
+      expected: {agents: ['code-audit-maintainer-node']},
+      name: 'derives agent names from excluded agent files',
+    },
+    {
+      // `index.ts` is shared with a shipped file; `usage.jsonl` is a data
+      // fixture adopters also generate.
+      absent: {basenames: ['index.ts', 'usage.jsonl']},
+      expected: {
+        basenames: expect.arrayContaining([
+          'chain.ts',
+          'gaia-maintainer',
+          'lint-hook-jq-availability.sh',
+          'run-all.sh',
+        ]),
+      },
+      name: 'derives basenames only for unshared code files and executables',
+    },
+    {
+      absent: {paths: ['.github/CODEOWNERS']},
+      expected: {unusedOptOut: ['.github/no-such-path']},
+      name: 'subtracts opt-out tokens by exact equality and reports the unused ones',
+      overrides: {optOut: ['.github/CODEOWNERS', '.github/no-such-path']},
+    },
+  ])('$name', ({absent, expected, overrides}) => {
+    const tokens = deriveExcludedRefTokens(baseInputs(overrides));
 
-  test('derives slash commands from excluded commands and skills', () => {
-    expect(deriveExcludedRefTokens(baseInputs()).commands).toEqual([
-      'gaia-release',
-      'release-notes',
-    ]);
-  });
+    expect(tokens).toMatchObject(expected);
 
-  test('derives agent names from excluded agent files', () => {
-    expect(deriveExcludedRefTokens(baseInputs()).agents).toEqual([
-      'code-audit-maintainer-node',
-    ]);
-  });
-
-  test('derives basenames only for unshared code files and executables', () => {
-    const {basenames} = deriveExcludedRefTokens(baseInputs());
-
-    expect(basenames).toEqual(
-      expect.arrayContaining([
-        'chain.ts',
-        'gaia-maintainer',
-        'lint-hook-jq-availability.sh',
-        'run-all.sh',
-      ])
-    );
-    // A shipped file shares it, and a data fixture adopters also generate.
-    expect(basenames).not.toContain('index.ts');
-    expect(basenames).not.toContain('usage.jsonl');
-  });
-
-  test('subtracts opt-out tokens by exact equality and reports the unused ones', () => {
-    const tokens = deriveExcludedRefTokens(
-      baseInputs({optOut: ['.github/CODEOWNERS', '.github/no-such-path']})
-    );
-
-    expect(tokens.paths).not.toContain('.github/CODEOWNERS');
-    expect(tokens.unusedOptOut).toEqual(['.github/no-such-path']);
+    for (const [field, values] of Object.entries(absent)) {
+      for (const value of values) {
+        expect(tokens[field as keyof Tokens]).not.toContain(value);
+      }
+    }
   });
 });
 
@@ -105,61 +117,111 @@ describe('compileExcludedRefMatcher', () => {
   const matcher = compileExcludedRefMatcher(
     deriveExcludedRefTokens(baseInputs())
   );
+  const emptyMatcher = compileExcludedRefMatcher(
+    deriveExcludedRefTokens(baseInputs({excludeLines: []}))
+  );
+  const BASENAME_LINE =
+    'the record comes from `chain.ts` and `gaia-maintainer`';
 
-  test.each<[string, string, string[]]>([
-    ['a path prefix', 'see `.gaia/tests/run-all.sh` for it', ['.gaia/tests']],
-    ['a bare directory', 'find .gaia/tests -name x', ['.gaia/tests']],
-    ['a dot-slash path', 'run ./.gaia/cli/src/x.ts', ['.gaia/cli/src']],
-    ['a slash command', 'Before `/gaia-release` runs', ['/gaia-release']],
-    [
-      'an agent name',
-      'spawn code-audit-maintainer-node now',
-      ['code-audit-maintainer-node'],
-    ],
-    [
-      'an excluded file path',
-      'the `.gaia/scripts/lint-hook-jq-availability.sh` lint',
-      ['.gaia/scripts/lint-hook-jq-availability.sh'],
-    ],
-  ])('flags %s', (_label, line, expected) => {
-    expect(matcher(line, {markdown: false})).toEqual(expected);
-  });
-
-  test.each<[string, string]>([
-    ['a longer path sharing the prefix', '.gaia/testsuite/foo.sh'],
-    ['a path nested under another tree', 'vendor/.gaia/tests/x'],
-    ['a command inside a path', '.claude/skills/x/gaia-release-notes'],
-    ['a command as a URL segment', 'github.com/org/gaia-release'],
-    ['a longer command', 'run /gaia-releases'],
-  ])('does not flag %s', (_label, line) => {
-    expect(matcher(line, {markdown: true})).toEqual([]);
-  });
-
-  test('matches basenames in Markdown only', () => {
-    const line = 'the record comes from `chain.ts` and `gaia-maintainer`';
-
-    expect(matcher(line, {markdown: true})).toEqual([
-      'chain.ts',
-      'gaia-maintainer',
-    ]);
-    expect(matcher(line, {markdown: false})).toEqual([]);
-  });
-
-  test('reports a full path once, not again as its basename', () => {
-    expect(
-      matcher('see .gaia/scripts/lint-hook-jq-availability.sh', {
-        markdown: true,
-      })
-    ).toEqual(['.gaia/scripts/lint-hook-jq-availability.sh']);
-  });
-
-  test('matches nothing when nothing is derived', () => {
-    const empty = compileExcludedRefMatcher(
-      deriveExcludedRefTokens(baseInputs({excludeLines: []}))
-    );
-
-    expect(empty('.gaia/tests and /gaia-release', {markdown: true})).toEqual(
-      []
-    );
+  test.each<{
+    expected: string[];
+    line: string;
+    markdown: boolean;
+    matches?: typeof matcher;
+    name: string;
+  }>([
+    {
+      expected: ['.gaia/tests'],
+      line: 'see `.gaia/tests/run-all.sh` for it',
+      markdown: false,
+      name: 'flags a path prefix',
+    },
+    {
+      expected: ['.gaia/tests'],
+      line: 'find .gaia/tests -name x',
+      markdown: false,
+      name: 'flags a bare directory',
+    },
+    {
+      expected: ['.gaia/cli/src'],
+      line: 'run ./.gaia/cli/src/x.ts',
+      markdown: false,
+      name: 'flags a dot-slash path',
+    },
+    {
+      expected: ['/gaia-release'],
+      line: 'Before `/gaia-release` runs',
+      markdown: false,
+      name: 'flags a slash command',
+    },
+    {
+      expected: ['code-audit-maintainer-node'],
+      line: 'spawn code-audit-maintainer-node now',
+      markdown: false,
+      name: 'flags an agent name',
+    },
+    {
+      expected: ['.gaia/scripts/lint-hook-jq-availability.sh'],
+      line: 'the `.gaia/scripts/lint-hook-jq-availability.sh` lint',
+      markdown: false,
+      name: 'flags an excluded file path',
+    },
+    {
+      expected: [],
+      line: '.gaia/testsuite/foo.sh',
+      markdown: true,
+      name: 'does not flag a longer path sharing the prefix',
+    },
+    {
+      expected: [],
+      line: 'vendor/.gaia/tests/x',
+      markdown: true,
+      name: 'does not flag a path nested under another tree',
+    },
+    {
+      expected: [],
+      line: '.claude/skills/x/gaia-release-notes',
+      markdown: true,
+      name: 'does not flag a command inside a path',
+    },
+    {
+      expected: [],
+      line: 'github.com/org/gaia-release',
+      markdown: true,
+      name: 'does not flag a command as a URL segment',
+    },
+    {
+      expected: [],
+      line: 'run /gaia-releases',
+      markdown: true,
+      name: 'does not flag a longer command',
+    },
+    {
+      expected: ['chain.ts', 'gaia-maintainer'],
+      line: BASENAME_LINE,
+      markdown: true,
+      name: 'matches basenames in Markdown only',
+    },
+    {
+      expected: [],
+      line: BASENAME_LINE,
+      markdown: false,
+      name: 'matches basenames in Markdown only (code files stay silent)',
+    },
+    {
+      expected: ['.gaia/scripts/lint-hook-jq-availability.sh'],
+      line: 'see .gaia/scripts/lint-hook-jq-availability.sh',
+      markdown: true,
+      name: 'reports a full path once, not again as its basename',
+    },
+    {
+      expected: [],
+      line: '.gaia/tests and /gaia-release',
+      markdown: true,
+      matches: emptyMatcher,
+      name: 'matches nothing when nothing is derived',
+    },
+  ])('$name', ({expected, line, markdown, matches = matcher}) => {
+    expect(matches(line, {markdown})).toEqual(expected);
   });
 });

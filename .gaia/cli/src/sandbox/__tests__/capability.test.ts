@@ -1,87 +1,89 @@
 import {describe, expect, test} from 'vitest';
 import {classifyCapability} from '../capability.js';
 
+const aptInstall = 'sudo apt-get install bubblewrap socat';
+
 describe('classifyCapability', () => {
-  test('darwin is always ready', () => {
-    const result = classifyCapability({platform: 'darwin'});
+  test.each([
+    {
+      capability: 'ready',
+      input: {platform: 'darwin'},
+      installCommand: undefined,
+      name: 'darwin is always ready',
+      reasonIncludes: [],
+    },
+    {
+      capability: 'ready',
+      input: {hasBwrap: true, hasSocat: true, platform: 'linux'},
+      installCommand: undefined,
+      name: 'linux with bwrap and socat is ready',
+      reasonIncludes: [],
+    },
+    {
+      capability: 'needs-deps',
+      input: {hasBwrap: false, hasSocat: true, platform: 'linux'},
+      installCommand: aptInstall,
+      name: 'linux missing bwrap is needs-deps with the pinned apt install command and a Fedora mention',
+      reasonIncludes: ['sudo dnf install bubblewrap socat'],
+    },
+    {
+      capability: 'needs-deps',
+      input: {hasBwrap: true, hasSocat: false, platform: 'linux'},
+      installCommand: aptInstall,
+      name: 'linux missing socat is needs-deps with the pinned apt install command',
+      reasonIncludes: [],
+    },
+    {
+      capability: 'needs-deps',
+      input: {platform: 'linux'},
+      installCommand: aptInstall,
+      name: 'linux missing both deps is needs-deps',
+      reasonIncludes: [],
+    },
+    {
+      capability: 'needs-deps',
+      input: {
+        hasBwrap: false,
+        hasSocat: false,
+        platform: 'linux',
+        wsl: 'wsl2',
+      },
+      installCommand: aptInstall,
+      name: 'wsl2 missing deps is needs-deps (linux path applies under WSL2)',
+      reasonIncludes: [],
+    },
+    {
+      capability: 'ready',
+      input: {hasBwrap: true, hasSocat: true, platform: 'linux', wsl: 'wsl2'},
+      installCommand: undefined,
+      name: 'wsl2 with deps present is ready',
+      reasonIncludes: [],
+    },
+    {
+      capability: 'unsupported',
+      input: {platform: 'win32'},
+      installCommand: undefined,
+      name: 'win32 is unsupported and names WSL2 as the path',
+      reasonIncludes: ['WSL2'],
+    },
+    {
+      capability: 'unsupported',
+      input: {platform: 'linux', wsl: 'wsl1'},
+      installCommand: undefined,
+      name: 'wsl1 is unsupported and names WSL2 as the path',
+      reasonIncludes: ['WSL2'],
+    },
+  ] as const)(
+    '$name',
+    ({capability, input, installCommand, reasonIncludes}) => {
+      const result = classifyCapability(input);
 
-    expect(result.capability).toBe('ready');
-    expect(result.installCommand).toBeUndefined();
-  });
+      expect(result.capability).toBe(capability);
+      expect(result.installCommand).toBe(installCommand);
 
-  test('linux with bwrap and socat is ready', () => {
-    const result = classifyCapability({
-      hasBwrap: true,
-      hasSocat: true,
-      platform: 'linux',
-    });
-
-    expect(result.capability).toBe('ready');
-  });
-
-  test('linux missing bwrap is needs-deps with the pinned apt install command and a Fedora mention', () => {
-    const result = classifyCapability({
-      hasBwrap: false,
-      hasSocat: true,
-      platform: 'linux',
-    });
-
-    expect(result.capability).toBe('needs-deps');
-    expect(result.installCommand).toBe('sudo apt-get install bubblewrap socat');
-    expect(result.reason).toContain('sudo dnf install bubblewrap socat');
-  });
-
-  test('linux missing socat is needs-deps with the pinned apt install command', () => {
-    const result = classifyCapability({
-      hasBwrap: true,
-      hasSocat: false,
-      platform: 'linux',
-    });
-
-    expect(result.capability).toBe('needs-deps');
-    expect(result.installCommand).toBe('sudo apt-get install bubblewrap socat');
-  });
-
-  test('linux missing both deps is needs-deps', () => {
-    const result = classifyCapability({platform: 'linux'});
-
-    expect(result.capability).toBe('needs-deps');
-  });
-
-  test('wsl2 missing deps is needs-deps (linux path applies under WSL2)', () => {
-    const result = classifyCapability({
-      hasBwrap: false,
-      hasSocat: false,
-      platform: 'linux',
-      wsl: 'wsl2',
-    });
-
-    expect(result.capability).toBe('needs-deps');
-  });
-
-  test('wsl2 with deps present is ready', () => {
-    const result = classifyCapability({
-      hasBwrap: true,
-      hasSocat: true,
-      platform: 'linux',
-      wsl: 'wsl2',
-    });
-
-    expect(result.capability).toBe('ready');
-  });
-
-  test('win32 is unsupported and names WSL2 as the path', () => {
-    const result = classifyCapability({platform: 'win32'});
-
-    expect(result.capability).toBe('unsupported');
-    expect(result.installCommand).toBeUndefined();
-    expect(result.reason).toContain('WSL2');
-  });
-
-  test('wsl1 is unsupported and names WSL2 as the path', () => {
-    const result = classifyCapability({platform: 'linux', wsl: 'wsl1'});
-
-    expect(result.capability).toBe('unsupported');
-    expect(result.reason).toContain('WSL2');
-  });
+      for (const fragment of reasonIncludes) {
+        expect(result.reason).toContain(fragment);
+      }
+    }
+  );
 });

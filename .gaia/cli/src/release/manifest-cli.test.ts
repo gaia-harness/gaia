@@ -255,19 +255,6 @@ describe('run (answer gate)', () => {
     return readBoundaryAndManifest();
   };
 
-  test('refuses by default while a newly-shipping file is unanswered', () => {
-    const before = seedWithUnanswered({
-      '.gaia/statusline/example.sh': '#!/bin/sh\n',
-    });
-
-    expect(runGate([])).toBe(1);
-    expect(readBoundaryAndManifest()).toEqual(before);
-
-    const errors = stdio.errors.join('');
-    expect(errors).toContain('unanswered_paths');
-    expect(errors).toContain('.gaia/statusline/example.sh');
-  });
-
   test('--ship answers a path and the rewritten manifest lists it', () => {
     const before = seedWithUnanswered({'app/new.ts': 'export {};\n'});
 
@@ -308,26 +295,6 @@ describe('run (answer gate)', () => {
     expect(readManifestFiles()['.gaia/statusline/example.sh']).toBeUndefined();
   });
 
-  test('a bare directory is rejected by membership, not by metacharacters', () => {
-    const before = seedWithUnanswered(
-      {'wiki/decisions/Foo.md': '# foo\n'},
-      {'wiki/decisions/Bar.md': '# bar\n'}
-    );
-
-    expect(
-      runGate([
-        '--withhold',
-        'wiki/decisions',
-        '--category',
-        '2',
-        '--reason',
-        'internal',
-      ])
-    ).not.toBe(0);
-    expect(readBoundaryAndManifest()).toEqual(before);
-    expect(stdio.errors.join('')).toContain('answer_not_missing');
-  });
-
   // Every wiki/ decision page carries spaces in its title, so refusing an
   // interior space made a whole category of maintainer-only page impossible to
   // withhold through the only writer of the boundary file.
@@ -346,21 +313,86 @@ describe('run (answer gate)', () => {
     expect(readManifestFiles()[page]).toBeUndefined();
   });
 
-  test('a withhold path carrying a regex metacharacter is rejected', () => {
-    const before = seedWithUnanswered({'docs/notes[1].md': '# notes\n'});
-
-    expect(
-      runGate([
+  test.each<{
+    argv: string[];
+    baseExtra?: Record<string, string>;
+    code: string;
+    name: string;
+    paths?: string[];
+    unanswered: Record<string, string>;
+  }>([
+    {
+      argv: [],
+      code: 'unanswered_paths',
+      name: 'refuses by default while a newly-shipping file is unanswered',
+      paths: ['.gaia/statusline/example.sh'],
+      unanswered: {'.gaia/statusline/example.sh': '#!/bin/sh\n'},
+    },
+    {
+      argv: [
+        '--withhold',
+        'wiki/decisions',
+        '--category',
+        '2',
+        '--reason',
+        'internal',
+      ],
+      baseExtra: {'wiki/decisions/Bar.md': '# bar\n'},
+      code: 'answer_not_missing',
+      name: 'a bare directory is rejected by membership, not by metacharacters',
+      unanswered: {'wiki/decisions/Foo.md': '# foo\n'},
+    },
+    {
+      argv: [
         '--withhold',
         'docs/notes[1].md',
         '--category',
         '1',
         '--reason',
         'x',
-      ])
-    ).not.toBe(0);
+      ],
+      code: 'withhold_metacharacter',
+      name: 'a withhold path carrying a regex metacharacter is rejected',
+      unanswered: {'docs/notes[1].md': '# notes\n'},
+    },
+    {
+      // Validate-before-write: the withhold is fine on its own, but
+      // `app/b.ts` has no answer, so the whole set is refused and neither
+      // file moves.
+      argv: ['--withhold', 'app/a.ts', '--category', '1', '--reason', 'r'],
+      code: 'unanswered_paths',
+      name: 'an individually-valid withhold is not written while another file is unanswered',
+      unanswered: {
+        'app/a.ts': 'export {};\n',
+        'app/b.ts': 'export {};\n',
+      },
+    },
+    {
+      argv: ['--withdraw', 'app/ghost.ts', '--category', '1', '--reason', 'r'],
+      baseExtra: {'app/old.ts': 'export {};\n'},
+      code: 'withdraw_not_shipped',
+      name: '--withdraw refuses a path the manifest does not ship and writes nothing',
+      unanswered: {},
+    },
+    {
+      argv: ['--withhold', 'app/old.ts', '--category', '1', '--reason', 'r'],
+      baseExtra: {'app/old.ts': 'export {};\n'},
+      code: 'answer_not_missing',
+      name: '--withhold still refuses an already-shipped path',
+      unanswered: {},
+    },
+  ])('$name', ({argv, baseExtra, code, paths, unanswered}) => {
+    const before = seedWithUnanswered(unanswered, baseExtra);
+
+    expect(runGate(argv)).toBe(1);
     expect(readBoundaryAndManifest()).toEqual(before);
-    expect(stdio.errors.join('')).toContain('withhold_metacharacter');
+
+    const errors = stdio.errors.join('');
+    expect(errors).toContain(code);
+
+    for (const unansweredPath of paths ?? []) {
+      expect(errors).toContain(unansweredPath);
+    }
   });
 
   test('the refusal gates --stdout and --out, not just the default write', () => {
@@ -408,21 +440,6 @@ describe('run (answer gate)', () => {
 
     const report = JSON.parse(stdio.outputs.join('')) as ManifestDriftJson;
     expect(report.missing).toEqual([]);
-  });
-
-  test('an individually-valid withhold is not written while another file is unanswered', () => {
-    const before = seedWithUnanswered({
-      'app/a.ts': 'export {};\n',
-      'app/b.ts': 'export {};\n',
-    });
-
-    // Validate-before-write: the withhold is fine on its own, but `app/b.ts`
-    // has no answer, so the whole set is refused and neither file moves.
-    expect(
-      runGate(['--withhold', 'app/a.ts', '--category', '1', '--reason', 'r'])
-    ).not.toBe(0);
-    expect(readBoundaryAndManifest()).toEqual(before);
-    expect(stdio.errors.join('')).toContain('unanswered_paths');
   });
 
   test('--allow-undecided ships every unanswered file', () => {
@@ -504,32 +521,5 @@ describe('run (answer gate)', () => {
     stdio.outputs.length = 0;
     expect(runGate(['--check'])).toBe(0);
     expect(stdio.outputs.join('')).toContain('clean');
-  });
-
-  test('--withdraw refuses a path the manifest does not ship and writes nothing', () => {
-    const before = seedWithUnanswered({}, {'app/old.ts': 'export {};\n'});
-
-    expect(
-      runGate([
-        '--withdraw',
-        'app/ghost.ts',
-        '--category',
-        '1',
-        '--reason',
-        'r',
-      ])
-    ).toBe(1);
-    expect(readBoundaryAndManifest()).toEqual(before);
-    expect(stdio.errors.join('')).toContain('withdraw_not_shipped');
-  });
-
-  test('--withhold still refuses an already-shipped path', () => {
-    const before = seedWithUnanswered({}, {'app/old.ts': 'export {};\n'});
-
-    expect(
-      runGate(['--withhold', 'app/old.ts', '--category', '1', '--reason', 'r'])
-    ).toBe(1);
-    expect(readBoundaryAndManifest()).toEqual(before);
-    expect(stdio.errors.join('')).toContain('answer_not_missing');
   });
 });

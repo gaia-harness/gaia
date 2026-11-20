@@ -226,47 +226,56 @@ describe('assertWorkflowPrefixInvariant', () => {
     expect(() => assertWorkflowPrefixInvariant(fixture!.root)).not.toThrow();
   });
 
-  test('refuses an excluded workflow missing the prefix', () => {
+  test.each<{
+    mutate: (target: Fixture) => void;
+    name: string;
+    pattern: RegExp;
+  }>([
+    {
+      mutate: (target) => {
+        target.writeWorkflow('shell-lint.yml', workflowYaml('Shell Lint'));
+      },
+      name: 'refuses an excluded workflow missing the prefix',
+      pattern: /\.github\/workflows\/shell-lint\.yml/,
+    },
+    {
+      mutate: (target) => {
+        target.writeWorkflow('tests.yml', workflowYaml("'GAIA: Tests'"));
+      },
+      name: 'refuses a shipped workflow carrying the prefix',
+      pattern: /\.github\/workflows\/tests\.yml/,
+    },
+    {
+      mutate: (target) => {
+        target.writeWorkflow(
+          'release.yml',
+          workflowYaml('GAIA: Release', 'push')
+        );
+      },
+      name: 'refuses an unquoted prefix (YAML parse error)',
+      pattern: /\.github\/workflows\/release\.yml/,
+    },
+    {
+      mutate: (target) => {
+        target.writeReleaseExclude([
+          ...BASE_RELEASE_EXCLUDE,
+          '.github/workflows/gone.yml',
+        ]);
+      },
+      name: 'refuses an excluded path with no file on disk',
+      pattern: /\.github\/workflows\/gone\.yml/,
+    },
+    {
+      mutate: (target) => {
+        target.writeReleaseExclude([]);
+      },
+      name: 'refuses an empty derived set',
+      pattern: /empty maintainer-only workflow set/,
+    },
+  ])('$name', ({mutate, pattern}) => {
     fixture = setupFixture();
-    fixture.writeWorkflow('shell-lint.yml', workflowYaml('Shell Lint'));
-    expect(() => assertWorkflowPrefixInvariant(fixture!.root)).toThrow(
-      /\.github\/workflows\/shell-lint\.yml/
-    );
-  });
-
-  test('refuses a shipped workflow carrying the prefix', () => {
-    fixture = setupFixture();
-    fixture.writeWorkflow('tests.yml', workflowYaml("'GAIA: Tests'"));
-    expect(() => assertWorkflowPrefixInvariant(fixture!.root)).toThrow(
-      /\.github\/workflows\/tests\.yml/
-    );
-  });
-
-  test('refuses an unquoted prefix (YAML parse error)', () => {
-    fixture = setupFixture();
-    fixture.writeWorkflow('release.yml', workflowYaml('GAIA: Release', 'push'));
-    expect(() => assertWorkflowPrefixInvariant(fixture!.root)).toThrow(
-      /\.github\/workflows\/release\.yml/
-    );
-  });
-
-  test('refuses an excluded path with no file on disk', () => {
-    fixture = setupFixture();
-    fixture.writeReleaseExclude([
-      ...BASE_RELEASE_EXCLUDE,
-      '.github/workflows/gone.yml',
-    ]);
-    expect(() => assertWorkflowPrefixInvariant(fixture!.root)).toThrow(
-      /\.github\/workflows\/gone\.yml/
-    );
-  });
-
-  test('refuses an empty derived set', () => {
-    fixture = setupFixture();
-    fixture.writeReleaseExclude([]);
-    expect(() => assertWorkflowPrefixInvariant(fixture!.root)).toThrow(
-      /empty maintainer-only workflow set/
-    );
+    mutate(fixture);
+    expect(() => assertWorkflowPrefixInvariant(fixture!.root)).toThrow(pattern);
   });
 
   test('accepts a new maintainer-only workflow added correctly', () => {

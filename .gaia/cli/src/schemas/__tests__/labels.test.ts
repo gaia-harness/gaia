@@ -62,22 +62,21 @@ describe('schemas/labels', () => {
     expect(result.success).toBe(false);
   });
 
-  test('a description of 101 characters is rejected', () => {
-    const result = LabelEntrySchema.safeParse({
-      ...baseEntry,
+  test.each([
+    {
       description: 'a'.repeat(101),
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  test('a description of 100 characters is accepted', () => {
-    const result = LabelEntrySchema.safeParse({
-      ...baseEntry,
+      name: 'a description of 101 characters is rejected',
+      success: false,
+    },
+    {
       description: 'a'.repeat(100),
-    });
+      name: 'a description of 100 characters is accepted',
+      success: true,
+    },
+  ])('$name', ({description, success}) => {
+    const result = LabelEntrySchema.safeParse({...baseEntry, description});
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(success);
   });
 
   test.each<[string, string, boolean]>([
@@ -91,121 +90,85 @@ describe('schemas/labels', () => {
     expect(result.success).toBe(success);
   });
 
-  test('two entries sharing a color are rejected, and the message names the color', () => {
-    const result = LabelRegistrySchema.safeParse({
-      description: 'test registry',
+  test.each([
+    {
       labels: [
         {...baseEntry, color: 'abcdef', name: 'one'},
         {...baseEntry, color: 'abcdef', name: 'two'},
       ],
-      version: 1,
-    });
-
-    expect(result.success).toBe(false);
-    assert.ok(!result.success);
-    expect(
-      result.error.issues.some((issue) => issue.message.includes('abcdef'))
-    ).toBe(true);
-  });
-
-  test('two entries sharing a name are rejected', () => {
-    const result = LabelRegistrySchema.safeParse({
-      description: 'test registry',
+      message: 'abcdef',
+      name: 'two entries sharing a color are rejected, and the message names the color',
+    },
+    {
       labels: [
         {...baseEntry, color: 'abcdef', name: 'dup'},
         {...baseEntry, color: 'fedcba', name: 'dup'},
       ],
-      version: 1,
-    });
-
-    expect(result.success).toBe(false);
-    assert.ok(!result.success);
-    expect(
-      result.error.issues.some((issue) => issue.message.includes('dup'))
-    ).toBe(true);
-  });
-
-  test('a description containing an em dash is rejected, and the message names the character', () => {
-    const result = LabelRegistrySchema.safeParse({
-      description: 'test registry',
+      message: 'dup',
+      name: 'two entries sharing a name are rejected',
+    },
+    {
       labels: [{...baseEntry, description: 'has an em dash — in it'}],
-      version: 1,
-    });
-
-    expect(result.success).toBe(false);
-    assert.ok(!result.success);
-    expect(
-      result.error.issues.some((issue) => issue.message.includes('—'))
-    ).toBe(true);
-  });
-
-  test('a description containing an en dash is rejected, and the message names the character', () => {
+      message: '—',
+      name: 'a description containing an em dash is rejected, and the message names the character',
+    },
+    {
+      labels: [{...baseEntry, description: 'has an en dash – in it'}],
+      message: '–',
+      name: 'a description containing an en dash is rejected, and the message names the character',
+    },
+  ])('$name', ({labels, message}) => {
     const result = LabelRegistrySchema.safeParse({
       description: 'test registry',
-      labels: [{...baseEntry, description: 'has an en dash – in it'}],
+      labels,
       version: 1,
     });
 
     expect(result.success).toBe(false);
     assert.ok(!result.success);
     expect(
-      result.error.issues.some((issue) => issue.message.includes('–'))
+      result.error.issues.some((issue) => issue.message.includes(message))
     ).toBe(true);
   });
 
-  test('a blocked entry with a non-null color is rejected', () => {
-    const result = LabelEntrySchema.safeParse({
-      ...baseEntry,
-      blocked: true,
-      color: 'abcdef',
-      managed: false,
-      reason: 'blocked reason',
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  test('a blocked entry with managed: true is rejected', () => {
-    const result = LabelEntrySchema.safeParse({
-      ...baseEntry,
-      blocked: true,
-      color: null,
-      managed: true,
-      reason: 'blocked reason',
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  test('a blocked entry with reason: null is rejected', () => {
-    const result = LabelEntrySchema.safeParse({
-      ...baseEntry,
-      blocked: true,
-      color: null,
-      managed: false,
-      reason: null,
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  test('a non-blocked entry with reason set to a string is rejected', () => {
-    const result = LabelEntrySchema.safeParse({
-      ...baseEntry,
-      blocked: false,
-      reason: 'should be null',
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  test('a non-blocked entry with a null color is rejected', () => {
-    const result = LabelEntrySchema.safeParse({
-      ...baseEntry,
-      blocked: false,
-      color: null,
-      reason: null,
-    });
+  test.each([
+    {
+      name: 'a blocked entry with a non-null color is rejected',
+      overrides: {
+        blocked: true,
+        color: 'abcdef',
+        managed: false,
+        reason: 'blocked reason',
+      },
+    },
+    {
+      name: 'a blocked entry with managed: true is rejected',
+      overrides: {
+        blocked: true,
+        color: null,
+        managed: true,
+        reason: 'blocked reason',
+      },
+    },
+    {
+      name: 'a blocked entry with reason: null is rejected',
+      overrides: {
+        blocked: true,
+        color: null,
+        managed: false,
+        reason: null,
+      },
+    },
+    {
+      name: 'a non-blocked entry with reason set to a string is rejected',
+      overrides: {blocked: false, reason: 'should be null'},
+    },
+    {
+      name: 'a non-blocked entry with a null color is rejected',
+      overrides: {blocked: false, color: null, reason: null},
+    },
+  ])('$name', ({overrides}) => {
+    const result = LabelEntrySchema.safeParse({...baseEntry, ...overrides});
 
     expect(result.success).toBe(false);
   });
@@ -220,62 +183,77 @@ describe('schemas/labels', () => {
       managed: true,
     };
 
-    test('managed: false is never creatable', () => {
-      expect(
-        isCreatable({...managedAdopterAlways, managed: false}, 'adopter', [])
-      ).toBe(false);
-    });
+    const dependabotFeatures: LabelEntry = {
+      ...managedAdopterAlways,
+      features: ['tech-debt', 'dependabot'],
+    };
 
-    test('deprecated: true is never creatable', () => {
-      expect(
-        isCreatable({...managedAdopterAlways, deprecated: true}, 'adopter', [])
-      ).toBe(false);
-    });
-
-    test('blocked: true is never creatable', () => {
-      expect(
-        isCreatable(
-          {...managedAdopterAlways, blocked: true, color: null, reason: 'x'},
-          'adopter',
-          []
-        )
-      ).toBe(false);
-    });
-
-    test('the maintainer audience is owed an adopter entry', () => {
-      expect(isCreatable(managedAdopterAlways, 'maintainer', [])).toBe(true);
-    });
-
-    test('the adopter audience is never owed a maintainer entry', () => {
-      expect(
-        isCreatable(
-          {...managedAdopterAlways, audience: 'maintainer'},
-          'adopter',
-          []
-        )
-      ).toBe(false);
-    });
-
-    test('features: [] is creatable with zero features enabled', () => {
-      expect(isCreatable(managedAdopterAlways, 'adopter', [])).toBe(true);
-    });
-
-    test('features: ["tech-debt", "dependabot"] is creatable when only dependabot is on', () => {
-      const entry: LabelEntry = {
-        ...managedAdopterAlways,
-        features: ['tech-debt', 'dependabot'],
-      };
-
-      expect(isCreatable(entry, 'adopter', ['dependabot'])).toBe(true);
-    });
-
-    test('features: ["tech-debt", "dependabot"] is not creatable when neither is on', () => {
-      const entry: LabelEntry = {
-        ...managedAdopterAlways,
-        features: ['tech-debt', 'dependabot'],
-      };
-
-      expect(isCreatable(entry, 'adopter', ['forensics'])).toBe(false);
+    test.each([
+      {
+        audience: 'adopter',
+        enabled: [],
+        entry: {...managedAdopterAlways, managed: false},
+        expected: false,
+        name: 'managed: false is never creatable',
+      },
+      {
+        audience: 'adopter',
+        enabled: [],
+        entry: {...managedAdopterAlways, deprecated: true},
+        expected: false,
+        name: 'deprecated: true is never creatable',
+      },
+      {
+        audience: 'adopter',
+        enabled: [],
+        entry: {
+          ...managedAdopterAlways,
+          blocked: true,
+          color: null,
+          reason: 'x',
+        },
+        expected: false,
+        name: 'blocked: true is never creatable',
+      },
+      {
+        audience: 'maintainer',
+        enabled: [],
+        entry: managedAdopterAlways,
+        expected: true,
+        name: 'the maintainer audience is owed an adopter entry',
+      },
+      {
+        audience: 'adopter',
+        enabled: [],
+        entry: {...managedAdopterAlways, audience: 'maintainer'},
+        expected: false,
+        name: 'the adopter audience is never owed a maintainer entry',
+      },
+      {
+        audience: 'adopter',
+        enabled: [],
+        entry: managedAdopterAlways,
+        expected: true,
+        name: 'features: [] is creatable with zero features enabled',
+      },
+      {
+        audience: 'adopter',
+        enabled: ['dependabot'],
+        entry: dependabotFeatures,
+        expected: true,
+        name: 'features: ["tech-debt", "dependabot"] is creatable when only dependabot is on',
+      },
+      {
+        audience: 'adopter',
+        enabled: ['forensics'],
+        entry: dependabotFeatures,
+        expected: false,
+        name: 'features: ["tech-debt", "dependabot"] is not creatable when neither is on',
+      },
+    ] as const)('$name', ({audience, enabled, entry, expected}) => {
+      expect(isCreatable(entry as LabelEntry, audience, [...enabled])).toBe(
+        expected
+      );
     });
   });
 });

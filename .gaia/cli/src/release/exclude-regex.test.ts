@@ -109,9 +109,20 @@ describe('release exclude-regex CLI', () => {
     expect(stdio.errors.join('')).toBe('');
   });
 
-  test('fail-closed / UAT-006: a `*` metacharacter line exits 1, names the offending line, and prints no stdout', () => {
+  test.each([
+    {
+      contents: 'wiki/hot.md\nsrc/*.tmp\n',
+      name: 'fail-closed / UAT-006: a `*` metacharacter line exits 1, names the offending line, and prints no stdout',
+      offending: 'src/*.tmp',
+    },
+    {
+      contents: 'wiki/hot.md\n  indented-path\n',
+      name: 'fail-closed / UAT-006: a leading-indentation line exits 1, names the offending line, and prints no stdout',
+      offending: 'indented-path',
+    },
+  ])('$name', ({contents, offending}) => {
     sandbox = setupSandbox();
-    const excludePath = sandbox.writeExclude('wiki/hot.md\nsrc/*.tmp\n');
+    const excludePath = sandbox.writeExclude(contents);
 
     const exit = run(['--exclude-file', excludePath], {cwd: sandbox.root});
 
@@ -119,20 +130,7 @@ describe('release exclude-regex CLI', () => {
     expect(stdio.outputs.join('')).toBe('');
     const stderr = stdio.errors.join('');
     expect(stderr).toContain('exclude_compile_failed');
-    expect(stderr).toContain('src/*.tmp');
-  });
-
-  test('fail-closed / UAT-006: a leading-indentation line exits 1, names the offending line, and prints no stdout', () => {
-    sandbox = setupSandbox();
-    const excludePath = sandbox.writeExclude('wiki/hot.md\n  indented-path\n');
-
-    const exit = run(['--exclude-file', excludePath], {cwd: sandbox.root});
-
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toBe('');
-    const stderr = stdio.errors.join('');
-    expect(stderr).toContain('exclude_compile_failed');
-    expect(stderr).toContain('indented-path');
+    expect(stderr).toContain(offending);
   });
 
   test('read failure: nonexistent --exclude-file exits 2 with a structured exclude_read_failed error', () => {
@@ -158,19 +156,19 @@ describe('release exclude-regex CLI', () => {
     expect(stdio.errors.join('')).toBe('');
   });
 
-  test('--exclude-file with a missing value exits 1 with invalid_arguments', () => {
+  test.each([
+    {
+      args: ['--exclude-file'],
+      name: '--exclude-file with a missing value exits 1 with invalid_arguments',
+    },
+    {
+      args: ['--bogus'],
+      name: 'an unknown flag exits 1 with invalid_arguments',
+    },
+  ])('$name', ({args}) => {
     sandbox = setupSandbox();
 
-    const exit = run(['--exclude-file'], {cwd: sandbox.root});
-
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('invalid_arguments');
-  });
-
-  test('an unknown flag exits 1 with invalid_arguments', () => {
-    sandbox = setupSandbox();
-
-    const exit = run(['--bogus'], {cwd: sandbox.root});
+    const exit = run(args, {cwd: sandbox.root});
 
     expect(exit).toBe(1);
     expect(stdio.errors.join('')).toContain('invalid_arguments');
