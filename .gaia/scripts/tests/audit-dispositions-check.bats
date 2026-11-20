@@ -257,7 +257,7 @@ vetoes() {
   true
 }
 
-@test "undisposed: each omitted finding kind (branch Critical, security, Minor, vetoed key, out-of-branch Major and Critical) fails, and an entry clears the Major, vetoed key, Critical and Minor (case table)" {
+@test "undisposed: each omitted finding kind fails, and an entry clears the kinds an entry may clear (case table)" {
   printf 'case: %s\n' 'omitted branch-authored Critical, then security finding' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.line != 1)')"
   run_check 1
@@ -1463,7 +1463,6 @@ veto_unsatisfied_red() {
   run_check 2
   red undisposed "$(key_json c/imp f.txt 3)" || return 1
   alf_state_edit '.history.rounds[1].members = ["code-audit-frontend"]'
-  # the veto binds from round 3: round 2's waiver already sits on the fixed tree, so only counting round 1's fix could satisfy it
   vetoes 3 c/imp f.txt 3
   next_tree_round 3 "$(without_veto_key)"
   veto_unsatisfied_red 3 "$(without_veto_key)" || { echo "fix before the veto, the round it binds"; return 1; }

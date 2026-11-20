@@ -702,7 +702,7 @@ scrub_maintainer_only() {
   clearance_member_refused "$ROOT" "$digest" "$member"
 }
 
-@test "supersede: --supersede-refusal with --provenance refused, or with an empty or blank reason, exits 2 and writes nothing" {
+@test "supersede: --supersede-refusal with --provenance refused, or with an empty or blank reason, exits 2" {
   member="code-audit-maintainer-shell"
   digest="$(member_digest "$ROOT" "$member")"
   run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused \

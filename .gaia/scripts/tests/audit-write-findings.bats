@@ -381,7 +381,7 @@ write_with_review_base() {
   [ "$(jq -e 'has("review_base")' "$EXPECTED")" = "false" ]
 }
 
-# security / cross_remit: optional booleans (SPEC-093 C3). Present and
+# security / cross_remit: optional booleans. Present and
 # non-boolean is a usage error naming the index; absent is accepted and the
 # writer invents nothing.
 #

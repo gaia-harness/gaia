@@ -350,7 +350,7 @@ _noop_write_clearance() {
 # branch did not resolve, which writes no sidecar at all.
 
 @test "usage error: the retired --findings flag is rejected" {
-  # case: audit-team-member names its replacement
+  # case: audit-team-member names --findings-root and --findings-since
   digest="$(_noop_digest)"
   marker="$BATS_TEST_TMPDIR/${digest}.ok"
   findings="$BATS_TEST_TMPDIR/base.code-audit-frontend.findings.json"
