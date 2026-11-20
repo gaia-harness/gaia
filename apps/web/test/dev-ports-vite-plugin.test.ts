@@ -30,18 +30,6 @@ vi.mock('../dev-ports', async (importOriginal) => ({
   resolveDevPorts: resolveDevPortsMock,
 }));
 
-const hasIpv6 = async (): Promise<boolean> => {
-  try {
-    await closeServer(await listenOn(0, '::1'));
-
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const isIpv6Available = await hasIpv6();
-
 const heldServers: net.Server[] = [];
 
 beforeEach(() => {
@@ -139,19 +127,18 @@ describe('configureServer refusals', () => {
     await expect(failure).rejects.toThrow(PORTS_HINT);
   });
 
-  test.skipIf(!isIpv6Available)(
-    'a port taken on ::1 only rejects the same way',
-    async () => {
-      const port = await findFreePort();
-      heldServers.push(await listenOn(port, '::1'));
-      resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
-      const plugin = await loadPlugin();
+  // Runs unconditionally: a host without ::1 fails the listen loudly rather
+  // than skipping the IPv6-only refusal.
+  test('a port taken on ::1 only rejects the same way', async () => {
+    const port = await findFreePort();
+    heldServers.push(await listenOn(port, '::1'));
+    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
+    const plugin = await loadPlugin();
 
-      await expect(plugin.configureServer(makeServer())).rejects.toThrow(
-        `port ${port}`
-      );
-    }
-  );
+    await expect(plugin.configureServer(makeServer())).rejects.toThrow(
+      `port ${port}`
+    );
+  });
 
   test.each(
     [
