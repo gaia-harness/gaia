@@ -254,21 +254,48 @@ b.md"
 
 # --- refusals -------------------------------------------------------------
 
-@test "a refusal newer than the full anchor, recorded at another version, routes full refusal-newer" {
+@test "a refusal the anchor walk did not take routes full refusal-newer: another version after the full anchor, at HEAD, at HEAD on the merge-base path, another version in range on the merge-base path, a carry-forward ledger after a squash" {
+  local merge_base
   lsb_from_template cleared-frontend
   lsb_commit apps/web/app/notes.md "attempt"
   lsb_marker_json "$FRONTEND" refused "" "$LSB_TREE" "0.0.0-stale" >/dev/null
   lsb_commit_lines apps/web/app/notes.md 5 fix
   lsb_route "$FRONTEND"
-  expect_route full refusal-newer
-}
-
-@test "a refusal at HEAD routes full refusal-newer" {
+  expect_route full refusal-newer || { printf 'case failed: another version after the full anchor\n' >&2; return 1; }
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
   lsb_from_template cleared-frontend
   lsb_commit apps/web/app/notes.md "attempt"
   lsb_marker_json "$FRONTEND" refused "" "$LSB_TREE" "$(version_literal)" >/dev/null
   lsb_route "$FRONTEND"
-  expect_route full refusal-newer
+  expect_route full refusal-newer || { printf 'case failed: at HEAD\n' >&2; return 1; }
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
+  lsb_init
+  refuse_notes "$(lsb_finding apps/web/app/notes.md 2 major false)"
+  lsb_route "$FRONTEND"
+  { expect_route full refusal-newer && assert_merge_base_anchor "$FRONTEND"; } \
+    || { printf 'case failed: at HEAD on the merge-base path\n' >&2; return 1; }
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
+  mb_component_base
+  mb_line "$MB_COMPONENT" replace 10 '      Hello there'
+  lsb_marker_json "$FRONTEND" refused "" "$LSB_TREE" "0.0.0-stale" >/dev/null
+  mb_line "$MB_COMPONENT" replace 26 '      Submit'
+  lsb_route "$FRONTEND"
+  { expect_route full refusal-newer && [ "$(record_value "$FRONTEND" '.anchor_kind')" = '"merge-base"' ]; } \
+    || { printf 'case failed: another version in range on the merge-base path\n' >&2; return 1; }
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
+  mb_component_base
+  merge_base="$(lsb_git merge-base refs/remotes/origin/main HEAD)"
+  mb_line "$MB_COMPONENT" replace 10 '      Hello there'
+  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding "$MB_COMPONENT" 10 major false)]"
+  mb_line "$MB_COMPONENT" replace 26 '      Submit'
+  lsb_git reset -q --soft "$merge_base"
+  lsb_git commit -q -m squashed
+  lsb_route "$FRONTEND"
+  { expect_route full refusal-newer && [ "$(record_value "$FRONTEND" '.anchor_kind')" = '"merge-base"' ]; } \
+    || { printf 'case failed: carry-forward ledger after a squash\n' >&2; return 1; }
+  rm -f "$LSB_ROOT"/.gaia/local/audit/*."$LSB_SLUG".rerun.json
+  lsb_route "$FRONTEND"
+  expect_route light quick-eligible
 }
 
 @test "twin: a refusal older than the full anchor does not block light" {
@@ -364,14 +391,6 @@ refuse_notes() {
   expect_route full hard-full
 }
 
-@test "a refusal at HEAD with nothing earlier to anchor on routes full refusal-newer on the merge-base path" {
-  lsb_init
-  refuse_notes "$(lsb_finding apps/web/app/notes.md 2 major false)"
-  lsb_route "$FRONTEND"
-  expect_route full refusal-newer
-  assert_merge_base_anchor "$FRONTEND"
-}
-
 @test "a refusal does not anchor a member that is not opted in" {
   lsb_init
   lsb_commit .github/workflows/sandbox.yml "name: sandbox"
@@ -395,47 +414,34 @@ refuse_notes() {
   expect_route full rules-reset-global
 }
 
-@test "the live roster routes an enforcement script edit full hard-full for the shell member" {
-  local path
-  for path in .gaia/scripts/audit-fix-verify.sh .gaia/scripts/audit-dispositions-check.sh .gaia/scripts/audit-pr-sections-lib.sh .gaia/scripts/audit-recorded-decision-lib.sh .gaia/scripts/filing-outcomes-lib.sh .gaia/scripts/audit-veto-lib.sh .gaia/scripts/audit-triage-lib.sh .gaia/scripts/audit-gate-owed.sh; do
-    lsb_init
+@test "each enforcement script routes the shell member full hard-full naming its roster glob, and the same edits route light with the globs gone" {
+  local path base_sha
+  local paths=(.gaia/scripts/audit-fix-verify.sh .gaia/scripts/audit-dispositions-check.sh .gaia/scripts/audit-pr-sections-lib.sh .gaia/scripts/audit-recorded-decision-lib.sh .gaia/scripts/filing-outcomes-lib.sh .gaia/scripts/audit-veto-lib.sh .gaia/scripts/audit-triage-lib.sh .gaia/scripts/audit-gate-owed.sh)
+  lsb_init
+  base_sha="$LSB_HEAD"
+  for path in "${paths[@]}"; do
     lsb_full_clearance "$SHELL_MEMBER"
     printf '# touched\n' >>"$LSB_ROOT/$path"
     lsb_git add -A && lsb_git commit -q -m enforcement
     lsb_route "$SHELL_MEMBER"
     expect_route full hard-full || { printf 'not hard-full: %s\n' "$path" >&2; return 1; }
-    [ "$(jq -r .hard_full_rule "$(route_record_for "$SHELL_MEMBER")")" = "$path" ] || return 1
-    rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
+    [ "$(jq -r .hard_full_rule "$(route_record_for "$SHELL_MEMBER")")" = "$path" ] || { printf 'wrong glob named: %s\n' "$path" >&2; return 1; }
+    reset_sandbox_to "$base_sha" || return 1
   done
-}
-
-@test "twin: the same enforcement script edit routes light once the roster glob is gone" {
-  lsb_init
-  grep -vF -- '- ".gaia/scripts/audit-fix-verify.sh"' "$LSB_ROOT/.gaia/audit-ci.yml" >"$LSB_ROOT/.gaia/audit-ci.yml.new"
-  cmp -s "$LSB_ROOT/.gaia/audit-ci.yml" "$LSB_ROOT/.gaia/audit-ci.yml.new" && return 1
-  mv "$LSB_ROOT/.gaia/audit-ci.yml.new" "$LSB_ROOT/.gaia/audit-ci.yml"
-  lsb_git add -A && lsb_git commit -q -m "drop the glob"
-  lsb_full_clearance "$SHELL_MEMBER"
-  printf '# touched\n' >>"$LSB_ROOT/.gaia/scripts/audit-fix-verify.sh"
-  lsb_git add -A && lsb_git commit -q -m enforcement
-  lsb_route "$SHELL_MEMBER"
-  expect_route light light-eligible
-}
-
-@test "twin: an edit to each moved disposition library routes light once its roster glob is gone" {
-  local path
-  for path in .gaia/scripts/audit-pr-sections-lib.sh .gaia/scripts/audit-recorded-decision-lib.sh .gaia/scripts/filing-outcomes-lib.sh .gaia/scripts/audit-veto-lib.sh .gaia/scripts/audit-triage-lib.sh .gaia/scripts/audit-gate-owed.sh; do
-    lsb_init
+  for path in "${paths[@]}"; do
     grep -vF -- "- \"$path\"" "$LSB_ROOT/.gaia/audit-ci.yml" >"$LSB_ROOT/.gaia/audit-ci.yml.new"
-    cmp -s "$LSB_ROOT/.gaia/audit-ci.yml" "$LSB_ROOT/.gaia/audit-ci.yml.new" && return 1
+    cmp -s "$LSB_ROOT/.gaia/audit-ci.yml" "$LSB_ROOT/.gaia/audit-ci.yml.new" && { printf 'glob not in the roster: %s\n' "$path" >&2; return 1; }
     mv "$LSB_ROOT/.gaia/audit-ci.yml.new" "$LSB_ROOT/.gaia/audit-ci.yml"
-    lsb_git add -A && lsb_git commit -q -m "drop the glob"
+  done
+  lsb_git add -A && lsb_git commit -q -m "drop the globs"
+  base_sha="$(lsb_git rev-parse HEAD)"
+  for path in "${paths[@]}"; do
     lsb_full_clearance "$SHELL_MEMBER"
     printf '# touched\n' >>"$LSB_ROOT/$path"
     lsb_git add -A && lsb_git commit -q -m enforcement
     lsb_route "$SHELL_MEMBER"
     expect_route light light-eligible || { printf 'not light: %s\n' "$path" >&2; return 1; }
-    rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
+    reset_sandbox_to "$base_sha" || return 1
   done
 }
 
@@ -629,7 +635,7 @@ refuse_notes() {
 
 # --- special rows and renames ---------------------------------------------
 
-@test "a special row at an owned path routes full special-file: symlink, binary, mode change, gitlink" {
+@test "a special row at an owned path routes full special-file: symlink, binary, mode change and gitlink on the clearance path, mode change and symlink on the merge-base path" {
   local base_sha label
   lsb_from_template cleared-frontend
   base_sha="$LSB_HEAD"
@@ -653,6 +659,22 @@ refuse_notes() {
     expect_route full special-file || { printf 'case failed: %s\n' "$label" >&2; return 1; }
     mb_reset_to "$base_sha" || return 1
   done
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
+  mb_component_base
+  base_sha="$LSB_HEAD"
+  chmod +x "$LSB_ROOT/$MB_COMPONENT"
+  lsb_git -c core.fileMode=true add -A && lsb_git commit -q -m mode
+  [ "$(lsb_git ls-files -s "$MB_COMPONENT" | cut -c1-6)" = "100755" ] || return 1
+  lsb_route "$FRONTEND"
+  { expect_route full special-file && assert_merge_base_anchor "$FRONTEND"; } \
+    || { printf 'case failed: merge-base mode change\n' >&2; return 1; }
+  mb_reset_to "$base_sha" || return 1
+  rm -f "$LSB_ROOT/$MB_COMPONENT"
+  ln -s ../ui/chip.tsx "$LSB_ROOT/$MB_COMPONENT"
+  lsb_git add -A && lsb_git commit -q -m symlink
+  lsb_route "$FRONTEND"
+  expect_route full special-file || { printf 'case failed: merge-base symlink\n' >&2; return 1; }
+  assert_merge_base_anchor "$FRONTEND"
 }
 
 @test "twin: the same owned path as a small regular file routes light" {
@@ -775,32 +797,25 @@ refuse_notes() {
   [ "$status" -eq 2 ]
 }
 
-@test "an exported override variable has no effect on a Full case" {
+@test "no CI environment variable changes the route: GAIA_LIGHT_ROUTE, GITHUB_ACTIONS with GITHUB_BASE_REF, CI with a stacked base" {
   lsb_init
   lsb_commit apps/web/app/notes.md "one line"
   GAIA_LIGHT_ROUTE=light run bash "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" --root "$LSB_ROOT" --member "$FRONTEND"
-  expect_route full quick-path
-}
-
-@test "the Actions base ref cannot force light without a full clearance" {
-  lsb_init
-  lsb_commit apps/web/app/notes.md "one line"
+  expect_route full quick-path || { printf 'case failed: GAIA_LIGHT_ROUTE\n' >&2; return 1; }
   GITHUB_ACTIONS=true GITHUB_BASE_REF=main run bash "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" --root "$LSB_ROOT" --member "$FRONTEND"
-  expect_route full quick-path
-}
-
-@test "the Actions environment changes nothing: a base ref past the anchor still routes light" {
+  expect_route full quick-path || { printf 'case failed: GITHUB_BASE_REF without a full clearance\n' >&2; return 1; }
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
   lsb_from_template cleared-frontend
   lsb_commit apps/web/app/stacked.md "stacked base"
   lsb_git push -q origin "HEAD:refs/heads/stacked" 2>/dev/null
   lsb_git fetch -q origin
   lsb_commit apps/web/app/notes.md "one line"
   lsb_route "$FRONTEND"
-  expect_route light light-eligible
+  expect_route light light-eligible || { printf 'case failed: plain route\n' >&2; return 1; }
   local plain_output="$output"
   CI=true GITHUB_ACTIONS=true GITHUB_BASE_REF=stacked run bash "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" --root "$LSB_ROOT" --member "$FRONTEND"
-  expect_route light light-eligible
-  [ "$output" = "$plain_output" ]
+  expect_route light light-eligible || { printf 'case failed: stacked base\n' >&2; return 1; }
+  [ "$output" = "$plain_output" ] || return 1
   CI=true GITHUB_ACTIONS=true GITHUB_BASE_REF=main run bash "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" --root "$LSB_ROOT" --member "$FRONTEND" --check
   [ "$output" = "$plain_output" ]
 }
@@ -812,18 +827,12 @@ refuse_notes() {
   [ "$status" -eq 1 ]
 }
 
-@test "a dirty tracked tree routes full dirty-tree" {
+@test "tracked changes route full dirty-tree: unstaged, staged-only" {
   lsb_from_template cleared-frontend
   lsb_commit apps/web/app/notes.md "one line"
   printf 'uncommitted\n' >>"$LSB_ROOT/apps/web/app/notes.md"
   lsb_route "$FRONTEND"
-  expect_route full dirty-tree
-}
-
-@test "a staged-only change routes full dirty-tree" {
-  lsb_from_template cleared-frontend
-  lsb_commit apps/web/app/notes.md "one line"
-  printf 'staged\n' >>"$LSB_ROOT/apps/web/app/notes.md"
+  expect_route full dirty-tree || { printf 'case failed: unstaged\n' >&2; return 1; }
   lsb_git add apps/web/app/notes.md
   lsb_route "$FRONTEND"
   expect_route full dirty-tree
@@ -1039,27 +1048,10 @@ assert_branch_content_raises() {
   expect_route full "$1"
 }
 
-@test "paired: the same global-rules content committed on the branch routes full rules-reset-global" {
-  assert_branch_content_raises rules-reset-global
-}
-
-@test "base-only hard-full content after a clean catch-up leaves a small branch commit light" {
-  assert_base_content_is_not_the_branchs hard-full
-}
-
-@test "paired: the same hard-full content committed on the branch routes full hard-full" {
-  assert_branch_content_raises hard-full
-}
-
-@test "base-only lines past the cap after a clean catch-up leave a small branch commit light" {
-  assert_base_content_is_not_the_branchs over-cap
-}
-
-@test "paired: the same lines past the cap committed on the branch route full over-cap" {
-  assert_branch_content_raises over-cap
-}
-
-@test "a base-only path holding a newline after a clean catch-up leaves a small branch commit light" {
+# assert_base_only_newline_path_is_not_the_branchs: the base alone brought a
+# path holding a newline; the branch's own small commit still routes light, and
+# a router reading the whole range cannot classify the path.
+assert_base_only_newline_path_is_not_the_branchs() {
   local record range_copy
   lsb_init
   lsb_catchup_init
@@ -1068,13 +1060,33 @@ assert_branch_content_raises() {
   lsb_catch_up
   lsb_catchup_branch_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   lsb_route "$FRONTEND"
-  expect_route light light-eligible
+  expect_route light light-eligible || return 1
   record="$(route_record_for "$FRONTEND")"
-  [ "$(jq -r .lines "$record")" = "3" ]
-  [ "$(jq -c '[.files[].path]' "$record")" = '["apps/web/app/notes.md"]' ]
-  range_copy="$(scoped_route_copy)"
+  [ "$(jq -r .lines "$record")" = "3" ] || return 1
+  [ "$(jq -c '[.files[].path]' "$record")" = '["apps/web/app/notes.md"]' ] || return 1
+  range_copy="$(scoped_route_copy)" || return 1
   run bash "$range_copy" --root "$LSB_ROOT" --member "$FRONTEND" --check
   expect_route full unclassifiable-path
+}
+
+# fresh_catchup_sandbox: drop the sandbox and its catch-up siblings so the next
+# case of a table builds from nothing.
+fresh_catchup_sandbox() {
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git" \
+    "$BATS_TEST_TMPDIR/lsb-repo.catchup-base" "$BATS_TEST_TMPDIR/lsb-repo.catchup-origin.git"
+}
+
+@test "content only the base brought raises no reason (hard-full, over-cap, a newline path), and the same content on the branch does (rules-reset-global, hard-full, over-cap)" {
+  local reason
+  for reason in hard-full over-cap; do
+    assert_base_content_is_not_the_branchs "$reason" || { printf 'case failed: base-only %s\n' "$reason" >&2; return 1; }
+    fresh_catchup_sandbox
+  done
+  for reason in rules-reset-global hard-full over-cap; do
+    assert_branch_content_raises "$reason" || { printf 'case failed: branch-own %s\n' "$reason" >&2; return 1; }
+    fresh_catchup_sandbox
+  done
+  assert_base_only_newline_path_is_not_the_branchs || { printf 'case failed: base-only newline path\n' >&2; return 1; }
 }
 
 @test "a catch-up that only moves the base leaves the delta empty: full no-delta" {
@@ -1259,14 +1271,23 @@ EOF
 
 # --- persistence, --check and telemetry -----------------------------------
 
-@test "--check prints the decision and writes nothing" {
+@test "--check prints the decision and writes nothing, on the clearance and merge-base paths" {
   lsb_init --maintainer
   lsb_full_clearance "$FRONTEND"
   lsb_commit apps/web/app/notes.md "one line"
   lsb_route "$FRONTEND" --check
-  expect_route light light-eligible
+  expect_route light light-eligible || { printf 'case failed: clearance path\n' >&2; return 1; }
   [ -e "$(light_directory)" ] && return 1
   [ -e "$(telemetry_log)" ] && return 1
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
+  mb_component_base
+  mb_line "$MB_COMPONENT" replace 26 '      Submit'
+  lsb_route "$FRONTEND" --check
+  expect_route light quick-eligible || { printf 'case failed: merge-base path\n' >&2; return 1; }
+  local first="$output"
+  lsb_route "$FRONTEND" --check
+  [ "$output" = "$first" ] || return 1
+  [ -e "$(light_directory)" ] && return 1
   true
 }
 
@@ -1625,18 +1646,6 @@ cap_set_branch() {
   [ "$(record_value "$FRONTEND" '.anchor_kind')" = '"full"' ]
 }
 
-@test "--check on a merge-base first dispatch prints the same line twice and writes no record" {
-  mb_component_base
-  mb_line "$MB_COMPONENT" replace 26 '      Submit'
-  lsb_route "$FRONTEND" --check
-  expect_route light quick-eligible
-  local first="$output"
-  lsb_route "$FRONTEND" --check
-  [ "$output" = "$first" ]
-  [ -e "$(light_directory)" ] && return 1
-  true
-}
-
 # --- router-owned reasons on the merge-base path
 
 # The digest needs the base reference and the merge base before any decision is
@@ -1669,37 +1678,10 @@ git_shim_failing_walk() {
   expect_route light quick-eligible
 }
 
-@test "merge-base refusal-newer: a refusal at another version on an in-range commit tree routes full" {
-  mb_component_base
-  mb_line "$MB_COMPONENT" replace 10 '      Hello there'
-  lsb_marker_json "$FRONTEND" refused "" "$LSB_TREE" "0.0.0-stale" >/dev/null
-  mb_line "$MB_COMPONENT" replace 26 '      Submit'
-  lsb_route "$FRONTEND"
-  expect_route full refusal-newer
-  [ "$(record_value "$FRONTEND" '.anchor_kind')" = '"merge-base"' ]
-}
-
 @test "twin: merge-base refusal-newer needs the refusal, the same branch without it routes light quick-eligible" {
   mb_component_base
   mb_line "$MB_COMPONENT" replace 10 '      Hello there'
   mb_line "$MB_COMPONENT" replace 26 '      Submit'
-  lsb_route "$FRONTEND"
-  expect_route light quick-eligible
-}
-
-@test "merge-base refusal-newer: a refusal on a tree no longer in range is still named by its carry-forward ledger" {
-  mb_component_base
-  local merge_base
-  merge_base="$(lsb_git merge-base refs/remotes/origin/main HEAD)"
-  mb_line "$MB_COMPONENT" replace 10 '      Hello there'
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding "$MB_COMPONENT" 10 major false)]"
-  mb_line "$MB_COMPONENT" replace 26 '      Submit'
-  lsb_git reset -q --soft "$merge_base"
-  lsb_git commit -q -m squashed
-  lsb_route "$FRONTEND"
-  expect_route full refusal-newer
-  [ "$(record_value "$FRONTEND" '.anchor_kind')" = '"merge-base"' ]
-  rm -f "$LSB_ROOT"/.gaia/local/audit/*."$LSB_SLUG".rerun.json
   lsb_route "$FRONTEND"
   expect_route light quick-eligible
 }
@@ -1723,26 +1705,6 @@ git_shim_failing_walk() {
   mb_line "$MB_COMPONENT" replace 26 '      Submit'
   lsb_route "$FRONTEND"
   expect_route light quick-eligible
-}
-
-@test "merge-base special-file: a mode change from 100644 to 100755 routes full" {
-  mb_component_base
-  chmod +x "$LSB_ROOT/$MB_COMPONENT"
-  lsb_git -c core.fileMode=true add -A && lsb_git commit -q -m mode
-  [ "$(lsb_git ls-files -s "$MB_COMPONENT" | cut -c1-6)" = "100755" ]
-  lsb_route "$FRONTEND"
-  expect_route full special-file
-  assert_merge_base_anchor "$FRONTEND"
-}
-
-@test "merge-base special-file: a component turned into a symlink routes full" {
-  mb_component_base
-  rm -f "$LSB_ROOT/$MB_COMPONENT"
-  ln -s ../ui/chip.tsx "$LSB_ROOT/$MB_COMPONENT"
-  lsb_git add -A && lsb_git commit -q -m symlink
-  lsb_route "$FRONTEND"
-  expect_route full special-file
-  assert_merge_base_anchor "$FRONTEND"
 }
 
 @test "twin: the same component as a regular file with a text edit routes light quick-eligible" {
@@ -1802,45 +1764,39 @@ git_shim_failing_walk() {
   assert_merge_base_anchor "$FRONTEND"
 }
 
-@test "merge-base over-cap: the quick cap is 40 with the roster cap left at 50" {
+@test "merge-base over-cap: the quick cap is min(40, roster cap): 40 light and 41 full at the roster's 50, 30 light and 31 full at a roster cap of 30" {
+  local base_sha
   cap_set_base 10
-  [ "$(roster_value "$FRONTEND" light_line_cap)" = "50" ]
+  [ "$(roster_value "$FRONTEND" light_line_cap)" = "50" ] || return 1
+  base_sha="$LSB_HEAD"
   cap_set_branch 10
   lsb_route "$FRONTEND"
-  expect_route light quick-eligible
-  [ "$(record_value "$FRONTEND" '[.cap, .lines]')" = '[40,40]' ] || return 1
-}
-
-@test "merge-base over-cap: the same set at 41 lines routes full" {
-  cap_set_base 10
-  [ "$(roster_value "$FRONTEND" light_line_cap)" = "50" ]
+  { expect_route light quick-eligible \
+    && [ "$(record_value "$FRONTEND" '[.cap, .lines]')" = '[40,40]' ]; } \
+    || { printf 'case failed: 40 lines at the roster cap of 50\n' >&2; return 1; }
+  reset_sandbox_to "$base_sha" || return 1
   cap_set_branch 10 extra
   lsb_route "$FRONTEND"
-  expect_route full over-cap
-  [ "$(record_value "$FRONTEND" '[.cap, .lines]')" = '[40,41]' ] || return 1
-  assert_merge_base_anchor "$FRONTEND"
-}
-
-@test "merge-base over-cap: a roster cap of 30 lowers the quick cap, and the roster edit is not in the counted lines" {
+  { expect_route full over-cap \
+    && [ "$(record_value "$FRONTEND" '[.cap, .lines]')" = '[40,41]' ] \
+    && assert_merge_base_anchor "$FRONTEND"; } \
+    || { printf 'case failed: 41 lines at the roster cap of 50\n' >&2; return 1; }
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
   mb_start
   lsb_commit "$MB_COMPONENT" "$(cap_component 15 old)"
   set_roster_member_key "$FRONTEND" light_line_cap 30
   mb_cut
+  base_sha="$LSB_HEAD"
   lsb_commit "$MB_COMPONENT" "$(cap_component 15 new extra)"
   lsb_route "$FRONTEND"
-  expect_route full over-cap
-  [ "$(record_value "$FRONTEND" '[.cap, .lines, (.files | length)]')" = '[30,31,1]' ] || return 1
-}
-
-@test "twin: merge-base over-cap at a roster cap of 30 routes the 30-line set light quick-eligible" {
-  mb_start
-  lsb_commit "$MB_COMPONENT" "$(cap_component 15 old)"
-  set_roster_member_key "$FRONTEND" light_line_cap 30
-  mb_cut
+  { expect_route full over-cap \
+    && [ "$(record_value "$FRONTEND" '[.cap, .lines, (.files | length)]')" = '[30,31,1]' ]; } \
+    || { printf 'case failed: 31 lines at a roster cap of 30\n' >&2; return 1; }
+  reset_sandbox_to "$base_sha" || return 1
   lsb_commit "$MB_COMPONENT" "$(cap_component 15 new)"
   lsb_route "$FRONTEND"
-  expect_route light quick-eligible
-  [ "$(record_value "$FRONTEND" '[.cap, .lines]')" = '[30,30]' ] || return 1
+  expect_route light quick-eligible || { printf 'case failed: 30 lines at a roster cap of 30\n' >&2; return 1; }
+  [ "$(record_value "$FRONTEND" '[.cap, .lines]')" = '[30,30]' ]
 }
 
 @test "merge-base fence-collision: a quick-eligible delta holding the fence nonce routes full" {
@@ -1899,19 +1855,18 @@ git_shim_failing_walk() {
   done
 }
 
-@test "merge-base quick-file-status: an added component routes full" {
-  mb_start && mb_cut
+@test "merge-base quick-file-status: an added or a deleted component routes full" {
+  local base_sha
+  mb_component_base
+  base_sha="$LSB_HEAD"
   lsb_commit apps/web/app/components/badge/index.tsx 'const Badge = () => <div className="p-1">Hi</div>;'
   lsb_route "$FRONTEND"
-  expect_route full quick-file-status
-  assert_merge_base_anchor "$FRONTEND"
-}
-
-@test "merge-base quick-file-status: a deleted component routes full" {
-  mb_component_base
+  { expect_route full quick-file-status && assert_merge_base_anchor "$FRONTEND"; } \
+    || { printf 'case failed: added component\n' >&2; return 1; }
+  reset_sandbox_to "$base_sha" || return 1
   lsb_remove "$MB_COMPONENT"
   lsb_route "$FRONTEND"
-  expect_route full quick-file-status
+  expect_route full quick-file-status || { printf 'case failed: deleted component\n' >&2; return 1; }
   assert_merge_base_anchor "$FRONTEND"
 }
 
@@ -1952,26 +1907,24 @@ mb_signal_case() {
 
 # --- the own-story carve-out
 
-@test "a component's own story alone, after a full clearance, routes full hard-full naming the story glob" {
+@test "a component's own story change after a full clearance routes full hard-full naming the story glob: an args line, an assertion line" {
+  local base_sha
   lsb_init
   lsb_commit "$MB_COMPONENT" "$(mb_component_text)"
   lsb_commit "$MB_STORY" "$(mb_story_text)"
+  base_sha="$LSB_HEAD"
   lsb_full_clearance "$FRONTEND"
   mb_line "$MB_STORY" replace 17 "  args: {label: 'Run'},"
   lsb_route "$FRONTEND"
-  expect_route full hard-full
-  [ "$(record_value "$FRONTEND" '[.hard_full_rule, .anchor_kind]')" = '["**/tests/**","full"]' ] || return 1
-}
-
-@test "a story assertion line alone, after a full clearance, routes full hard-full" {
-  lsb_init
-  lsb_commit "$MB_COMPONENT" "$(mb_component_text)"
-  lsb_commit "$MB_STORY" "$(mb_story_text)"
+  { expect_route full hard-full \
+    && [ "$(record_value "$FRONTEND" '[.hard_full_rule, .anchor_kind]')" = '["**/tests/**","full"]' ]; } \
+    || { printf 'case failed: args line\n' >&2; return 1; }
+  reset_sandbox_to "$base_sha" || return 1
   lsb_full_clearance "$FRONTEND"
   mb_line "$MB_STORY" replace 23 "    await expect(canvas.getByText('Run')).toBeVisible();"
   lsb_route "$FRONTEND"
-  expect_route full hard-full
-  [ "$(record_value "$FRONTEND" '[.hard_full_rule, .anchor_kind]')" = '["**/tests/**","full"]' ] || return 1
+  expect_route full hard-full || { printf 'case failed: assertion line\n' >&2; return 1; }
+  [ "$(record_value "$FRONTEND" '[.hard_full_rule, .anchor_kind]')" = '["**/tests/**","full"]' ]
 }
 
 @test "a story plus its component, after a refusal, routes full hard-full: the carve-out is merge-base only" {

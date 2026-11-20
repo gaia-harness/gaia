@@ -221,35 +221,6 @@ EOF
   [ "$(jq -c . "$log")" = '{"tool":"Read","path":".env.local"}' ]
 }
 
-# bats test_tags=protected
-@test "the guard denies and logs a git command that reads outside the review root" {
-  local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh" root="/work/tree" command_text
-  for command_text in 'git diff /dev/null .env' "git -C $root diff /dev/null ~/.aws/credentials" 'git blame --contents .env HEAD' \
-    'git diff ../outside.txt HEAD' "git diff --no-index$root /etc/hosts"; do
-    : >"$log"
-    run bash "$guard" "$log" "$root" < <(jq -nc --arg command "$command_text" '{tool_name: "Bash", tool_input: {command: $command}}')
-    [ "$status" -eq 0 ]
-    [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
-    [ "$(jq -r '.tool' "$log")" = Bash ]
-  done
-}
-
-@test "the guard's reason for a dollar-sign token names the Read alternative" {
-  local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh"
-  run bash "$guard" "$log" /work/tree < <(jq -nc --arg command "git log -1 -- 'app/routes/\$id.tsx'" '{tool_name: "Bash", tool_input: {command: $command}}')
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
-  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'Read tool'* ]]
-}
-
-@test "the guard's reason for a reflog range names the two-revision form" {
-  local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh"
-  run bash "$guard" "$log" /work/tree < <(jq -nc --arg command 'git log HEAD@{1}..HEAD' '{tool_name: "Bash", tool_input: {command: $command}}')
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
-  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'git diff HEAD@{1} HEAD'* ]]
-}
-
 # guard_decides <command>: the guard's decision on one Bash command under the
 # review root, `deny` or `pass`, with a denial required to reach the log.
 guard_decides() {
@@ -262,73 +233,64 @@ guard_decides() {
   if [ "$decision" = deny ] && [ -s "$log" ]; then printf 'deny\n'; else printf 'pass\n'; fi
 }
 
-@test "the guard denies blame's -S revs file, alone and in a short-option cluster" {
-  [ "$(guard_decides 'git blame -S .env README')" = deny ]
-  [ "$(guard_decides 'git blame -wS.env README')" = deny ]
+# expect_guard <deny|pass> <command>: the guard's decision on one Bash command,
+# failing the test when it differs from <deny|pass>.
+expect_guard() {
+  [ "$(guard_decides "$2")" = "$1" ] || return 1
 }
 
-@test "the guard denies blame's --ignore-revs-file family" {
-  [ "$(guard_decides 'git blame --ignore-revs-f=.env README')" = deny ]
-}
+# bats test_tags=protected
+@test "the guard's Bash token rule: each denied form denies and logs, two name their alternative; each ordinary in-root read passes" {
+  local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh" root="/work/tree" command_text
+  for command_text in 'git diff /dev/null .env' "git -C $root diff /dev/null ~/.aws/credentials" 'git blame --contents .env HEAD' \
+    'git diff ../outside.txt HEAD' "git diff --no-index$root /etc/hosts"; do
+    : >"$log"
+    run bash "$guard" "$log" "$root" < <(jq -nc --arg command "$command_text" '{tool_name: "Bash", tool_input: {command: $command}}')
+    [ "$status" -eq 0 ]
+    [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
+    [ "$(jq -r '.tool' "$log")" = Bash ]
+  done
 
-@test "the guard denies every abbreviation of --contents" {
-  [ "$(guard_decides 'git blame --cont .env README')" = deny ]
-}
+  run bash "$guard" "$log" /work/tree < <(jq -nc --arg command "git log -1 -- 'app/routes/\$id.tsx'" '{tool_name: "Bash", tool_input: {command: $command}}')
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
+  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'Read tool'* ]] || return 1
 
-@test "the guard denies --no-index" {
-  [ "$(guard_decides 'git diff --no-index README .env')" = deny ]
-}
+  run bash "$guard" "$log" /work/tree < <(jq -nc --arg command 'git log HEAD@{1}..HEAD' '{tool_name: "Bash", tool_input: {command: $command}}')
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
+  [[ "$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")" == *'git diff HEAD@{1} HEAD'* ]] || return 1
 
-@test "the guard reads a token as the shell will, with backslashes removed, in the verb and an argument" {
-  [ "$(guard_decides 'git b\lame -S .env README')" = deny ]
-  [ "$(guard_decides 'git diff \/dev/null .env')" = deny ]
-}
+  expect_guard deny 'git blame -S .env README'
+  expect_guard deny 'git blame -wS.env README'
+  expect_guard deny 'git blame --ignore-revs-f=.env README'
+  expect_guard deny 'git blame --cont .env README'
+  expect_guard deny 'git diff --no-index README .env'
+  expect_guard deny 'git b\lame -S .env README'
+  expect_guard deny 'git diff \/dev/null .env'
+  expect_guard deny 'git blame {-S,.env} README'
+  expect_guard deny 'git diff {/dev/null,.env}'
+  expect_guard deny 'git show `echo HEAD`'
+  expect_guard deny 'git diff --no-ind${x}ex README .env'
+  expect_guard deny 'git diff --no-$(echo)index README .env'
+  expect_guard deny 'git show HEAD$(cat${IFS}$HOME/.aws/credentials)'
+  expect_guard deny 'git diff --no-ind$x README .env'
+  expect_guard deny 'git diff --no-ind$"e"x README .env'
+  expect_guard deny 'git blame --co$"n"tents .env README'
+  expect_guard deny 'git show .$"."/outside.txt'
+  expect_guard deny "git show \"HEAD:x'\$(id)'\""
+  expect_guard deny "git show HEAD:x\\'\$(id)\\'"
+  expect_guard deny "git log -1 -- 'app/routes/\$id.tsx'"
+  expect_guard deny 'git diff <(cat notes.txt) README'
+  expect_guard deny 'git show HEAD >(tee out)'
+  expect_guard pass 'git log -S hunter2 -1'
+  expect_guard pass 'git log -p -1 README'
+  expect_guard pass 'git diff HEAD README'
+  expect_guard pass 'git log HEAD@{1} -1'
+  expect_guard pass 'git rev-parse @{upstream}'
+  expect_guard pass 'git diff HEAD@{1} HEAD'
+  expect_guard pass 'git log HEAD ^HEAD@{1}'
 
-@test "the guard denies a brace expansion that would assemble a denied form" {
-  [ "$(guard_decides 'git blame {-S,.env} README')" = deny ]
-  [ "$(guard_decides 'git diff {/dev/null,.env}')" = deny ]
-}
-
-@test "the guard denies a backtick command substitution" {
-  [ "$(guard_decides 'git show `echo HEAD`')" = deny ]
-}
-
-@test "the guard denies a parameter or command expansion inside a token" {
-  [ "$(guard_decides 'git diff --no-ind${x}ex README .env')" = deny ]
-  [ "$(guard_decides 'git diff --no-$(echo)index README .env')" = deny ]
-  [ "$(guard_decides 'git show HEAD$(cat${IFS}$HOME/.aws/credentials)')" = deny ]
-  [ "$(guard_decides 'git diff --no-ind$x README .env')" = deny ]
-}
-
-@test "the guard denies bash locale quoting that assembles a denied form" {
-  [ "$(guard_decides 'git diff --no-ind$"e"x README .env')" = deny ]
-  [ "$(guard_decides 'git blame --co$"n"tents .env README')" = deny ]
-  [ "$(guard_decides 'git show .$"."/outside.txt')" = deny ]
-}
-
-@test "the guard denies a dollar sign whatever quotes surround it" {
-  [ "$(guard_decides "git show \"HEAD:x'\$(id)'\"")" = deny ]
-  [ "$(guard_decides "git show HEAD:x\\'\$(id)\\'")" = deny ]
-  [ "$(guard_decides "git log -1 -- 'app/routes/\$id.tsx'")" = deny ]
-}
-
-@test "the guard denies process substitution" {
-  [ "$(guard_decides 'git diff <(cat notes.txt) README')" = deny ]
-  [ "$(guard_decides 'git show HEAD >(tee out)')" = deny ]
-}
-
-@test "the guard passes ordinary review reads, reflog and upstream braces included" {
-  [ "$(guard_decides 'git log -S hunter2 -1')" = pass ]
-  [ "$(guard_decides 'git log -p -1 README')" = pass ]
-  [ "$(guard_decides 'git diff HEAD README')" = pass ]
-  [ "$(guard_decides 'git log HEAD@{1} -1')" = pass ]
-  [ "$(guard_decides 'git rev-parse @{upstream}')" = pass ]
-  [ "$(guard_decides 'git diff HEAD@{1} HEAD')" = pass ]
-  [ "$(guard_decides 'git log HEAD ^HEAD@{1}')" = pass ]
-}
-
-@test "the guard lets an in-root git command through without a denial" {
-  local log="$BATS_TEST_TMPDIR/guard.jsonl" guard="$SHIPPED/audit-code-review-guard.sh" root="/work/tree"
   : >"$log"
   run bash "$guard" "$log" "$root" < <(jq -nc --arg command "git -C $root diff main...HEAD -- src/a.ts" '{tool_name: "Bash", tool_input: {command: $command}}')
   [ "$status" -eq 0 ]
@@ -339,32 +301,37 @@ guard_decides() {
 # expect_moved_tree: the shared refusal of every tree-moving stand-in.
 expect_moved_tree() {
   run_review
-  [ "$status" -eq 3 ]
-  [ "$(spawn_count)" = 1 ]
-  [ "$(record_field .outcome)" = 'not run' ]
-  [ "$(record_field .reason)" = 'review moved the tree' ]
-  [ "$(record_field '.attempts | length')" = 1 ]
-  [ "${lines[${#lines[@]} - 1]}" = 'code-review exit 3' ]
+  [ "$status" -eq 3 ] || return 1
+  [ "$(spawn_count)" = 1 ] || return 1
+  [ "$(record_field .outcome)" = 'not run' ] || return 1
+  [ "$(record_field .reason)" = 'review moved the tree' ] || return 1
+  [ "$(record_field '.attempts | length')" = 1 ] || return 1
+  [ "${lines[${#lines[@]} - 1]}" = 'code-review exit 3' ] || return 1
 }
 
-@test "a child that edits a tracked file moved the tree" {
-  printf 'printf x >>src.txt\n' >>"$BEHAVIOR"
-  expect_moved_tree
+# after_moved_tree: put the fixture back after a tree-moving stand-in, so the next
+# case meets the tree the first one did.
+after_moved_tree() {
+  alf_git switch -q -f feat/review || return 1
+  alf_git reset -q --hard "$1" || return 1
+  alf_git clean -fdq -- fresh || return 1
+  alf_git branch -q -D elsewhere 2>/dev/null || true
+  rm -rf "$RUN"/code-review-attempt-* "$RECORD" "$STAND_IN/log"
+  mkdir -p "$STAND_IN/log"
 }
 
-@test "a child that creates an untracked file moved the tree" {
-  printf 'mkdir -p fresh/deep; printf x >fresh/deep/new.txt\n' >>"$BEHAVIOR"
-  expect_moved_tree
-}
-
-@test "a child that switches branch moved the tree" {
-  printf 'git switch -q -c elsewhere\n' >>"$BEHAVIOR"
-  expect_moved_tree
-}
-
-@test "a child that commits moved the tree" {
-  printf 'git -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false commit -q --allow-empty -m moved\n' >>"$BEHAVIOR"
-  expect_moved_tree
+@test "a child that moves the tree (edits a tracked file, creates an untracked file, switches branch, commits) stops with exit 3 and records review moved the tree" {
+  local start_head moving_step
+  start_head="$(alf_git rev-parse HEAD)"
+  for moving_step in \
+    'printf x >>src.txt' \
+    'mkdir -p fresh/deep; printf x >fresh/deep/new.txt' \
+    'git switch -q -c elsewhere' \
+    'git -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false commit -q --allow-empty -m moved'; do
+    printf '%s\n' "$moving_step" >"$BEHAVIOR"
+    expect_moved_tree
+    after_moved_tree "$start_head"
+  done
 }
 
 @test "the deadline kills the whole group, even one ignoring TERM, then retries once and records" {
@@ -605,9 +572,9 @@ outcome_seed() {
     rounds: null, members_dispatched: null, convergence: null}' | jq "$1" >"$RECORD"
 }
 
-@test "outcome refuses an unknown reason, leaving the record untouched" {
-  outcome_seed '.outcome = "pending"'
+@test "outcome refuses each kind and leaves the record as found (unknown reason or missing reason or missing pr: 2, live process group or script.pid: 4, unreadable record: 5), then proceeds once the attempt is gone" {
   local before
+  outcome_seed '.outcome = "pending"'
   before="$(cat "$RECORD")"
   run record_script outcome --run-folder "$RUN" --pr 7 --outcome 'not run' --reason 'free text from a review'
   [ "$status" -eq 2 ]
@@ -617,11 +584,8 @@ outcome_seed() {
   run record_script outcome --run-folder "$RUN" --outcome 'ran, clean'
   [ "$status" -eq 2 ]
   [ "$(cat "$RECORD")" = "$before" ]
-}
 
-@test "outcome refuses while an open attempt's group or script is alive, and proceeds once gone" {
   outcome_seed '.outcome = "pending" | .attempts = [{n: 1, opened_at: "t", closed_at: null, exit: null, cost: "unknown", reason: null}]'
-  local before
   before="$(cat "$RECORD")"
   mkdir -p "$RUN/code-review-attempt-1"
 
@@ -648,6 +612,11 @@ outcome_seed() {
   [ "$status" -eq 0 ]
   [ "$(record_field '.attempts[0].reason')" = interrupted ]
   [ "$(record_field .cost)" = unknown ]
+
+  printf 'garbage' >"$RECORD"
+  run record_script outcome --run-folder "$RUN" --pr 7 --outcome 'not run' --reason interrupted
+  [ "$status" -eq 5 ]
+  [ "$(cat "$RECORD")" = garbage ]
 }
 
 @test "outcome creates a record carrying its pull request when there is none" {
@@ -657,13 +626,6 @@ outcome_seed() {
   [ "$(record_field .version)" = 1 ]
   [ "$(record_field .cost)" = none ]
   [ "$(find "$RUN" -name '.code-review.json.*' | wc -l | tr -d ' ')" = 0 ]
-}
-
-@test "outcome leaves an unreadable record as found" {
-  printf 'garbage' >"$RECORD"
-  run record_script outcome --run-folder "$RUN" --pr 7 --outcome 'not run' --reason interrupted
-  [ "$status" -eq 5 ]
-  [ "$(cat "$RECORD")" = garbage ]
 }
 
 @test "every reason literal the review scripts can emit is on the closed list" {
@@ -732,99 +694,105 @@ add_rounds() {
 
 FINDINGS_SEED='.handover = "open" | .findings = [{id: "cr-1", state: null}, {id: "cr-2", state: "kept"}]'
 
-@test "decide: an unreadable record writes nothing and prints none" {
+# decide_case_reset: one case's start, with no record and no loop state, so the
+# cases below share one fixture.
+decide_case_reset() {
+  rm -f "$RECORD" "$ALF_STATE"
+}
+
+@test "decide: the printed action and any write for each record and loop state (currency, pending, hand-over, release signal, audit under way, routes and usage)" {
+  local before
+  # an unreadable record writes nothing and prints none
+  decide_case_reset
   printf 'garbage' >"$RECORD"
   decide
   [ "$output" = none ]
   [ "$(cat "$RECORD")" = garbage ]
-}
 
-@test "decide: an unknown version writes nothing and prints none" {
+  # an unknown version writes nothing and prints none
+  decide_case_reset
   outcome_seed '.version = 2 | .outcome = "pending"'
-  local before
   before="$(record_mark)"
   decide
   [ "$output" = none ]
   [ "$(record_mark)" = "$before" ]
-}
 
-@test "decide: a pull request mismatch reads as no record" {
+  # a pull request mismatch reads as no record
+  decide_case_reset
   outcome_seed '.pr = 8'
   decide
   [ "$output" = run ]
-}
 
-@test "decide: a head that is not an ancestor reads as no record" {
+  # a head that is not an ancestor reads as no record
+  decide_case_reset
   outcome_seed '.head = "1111111111111111111111111111111111111111"'
   decide
   [ "$output" = run ]
-}
 
-@test "decide: a base past the fork point reads as no record" {
+  # a base past the fork point reads as no record
+  decide_case_reset
   outcome_seed '.base = "1111111111111111111111111111111111111111"'
   decide
   [ "$output" = run ]
-}
 
-@test "decide: a stale record with rounds on the loop reads as no record and records under way" {
+  # a stale record with rounds on the loop reads as no record and records under way
+  decide_case_reset
   outcome_seed '.pr = 8'
   alf_add_round '[]'
   decide
   [ "$output" = none ]
   [ "$(record_field .pr)" = 7 ]
   [ "$(record_field .reason)" = 'audit already under way' ]
-}
 
-@test "decide: pending with one attempt prints run and writes nothing" {
+  # pending with one attempt prints run and writes nothing
+  decide_case_reset
   outcome_seed '.outcome = "pending" | .attempts = [{n: 1, closed_at: "t", cost: 1, reason: "timed out"}]'
-  local before
   before="$(record_mark)"
   decide
   [ "$output" = run ]
   [ "$(record_mark)" = "$before" ]
-}
 
-@test "decide: pending with two attempts writes interrupted" {
+  # pending with two attempts writes interrupted
+  decide_case_reset
   outcome_seed '.outcome = "pending" | .attempts = [{n: 1, closed_at: "t", cost: 1, reason: "timed out"}, {n: 2, closed_at: "t", cost: 1, reason: "timed out"}]'
   decide
   [ "$output" = none ]
   [ "$(record_field .outcome)" = 'not run' ]
   [ "$(record_field .reason)" = interrupted ]
-}
 
-@test "decide: pending with a closing window writes interrupted" {
+  # pending with a closing window writes interrupted
+  decide_case_reset
   outcome_seed '.outcome = "pending"'
   alf_add_round '[]'
   add_closing_unit
   decide
   [ "$output" = none ]
   [ "$(record_field .reason)" = interrupted ]
-}
 
-@test "decide: pending at the cap writes interrupted" {
+  # pending at the cap writes interrupted
+  decide_case_reset
   outcome_seed '.outcome = "pending"'
   add_rounds 10
   decide
   [ "$output" = none ]
   [ "$(record_field .reason)" = interrupted ]
-}
 
-@test "decide: ran with the hand-over open and no assignment prints deliver" {
+  # ran with the hand-over open and no assignment prints deliver
+  decide_case_reset
   outcome_seed "$FINDINGS_SEED"
-  local before
   before="$(record_mark)"
   decide
   [ "$output" = deliver ]
   [ "$(record_mark)" = "$before" ]
-}
 
-@test "decide: not run with the hand-over open prints deliver" {
+  # not run with the hand-over open prints deliver
+  decide_case_reset
   outcome_seed "$FINDINGS_SEED"' | .outcome = "not run" | .reason = "timed out"'
   decide
   [ "$output" = deliver ]
-}
 
-@test "decide: closing force-closes, marking only null ids unaccounted" {
+  # closing force-closes, marking only null ids unaccounted
+  decide_case_reset
   outcome_seed "$FINDINGS_SEED"
   alf_add_round '[]'
   add_closing_unit
@@ -833,63 +801,93 @@ FINDINGS_SEED='.handover = "open" | .findings = [{id: "cr-1", state: null}, {id:
   [ "$(record_field .handover)" = closed ]
   [ "$(record_field '.findings[0].state')" = unaccounted ]
   [ "$(record_field '.findings[1].state')" = kept ]
-}
 
-@test "decide: at the cap force-closes" {
+  # at the cap force-closes
+  decide_case_reset
   outcome_seed "$FINDINGS_SEED"
   add_rounds 10
   decide
   [ "$output" = none ]
   [ "$(record_field .handover)" = closed ]
   [ "$(record_field '.findings[0].state')" = unaccounted ]
-}
 
-@test "decide: ran, closed, prints none and writes nothing" {
+  # ran, closed, prints none and writes nothing
+  decide_case_reset
   outcome_seed '.handover = "closed"'
-  local before
   before="$(record_mark)"
   decide
   [ "$output" = none ]
   [ "$(record_mark)" = "$before" ]
-}
 
-@test "decide: ran, clean and not run with no hand-over print none" {
+  # ran, clean and not run with no hand-over print none
+  decide_case_reset
   outcome_seed '.outcome = "ran, clean"'
   decide
   [ "$output" = none ]
   outcome_seed '.outcome = "not run" | .reason = "timed out"'
   decide
   [ "$output" = none ]
-}
 
-# release_branch: the branch changes .gaia/VERSION against a fork point that holds it.
-release_branch() {
-  alf_git checkout -q main
-  printf '.gaia/*\n!.gaia/VERSION\n' >"$ALF_ROOT/.gitignore"
-  printf '1.0.0\n' >"$ALF_ROOT/.gaia/VERSION"
-  alf_git add -A
-  alf_git commit -q -m version
-  alf_git push -q origin main 2>/dev/null
-  alf_git fetch -q origin
-  alf_git checkout -q -B feat/review
-  printf '1.0.1\n' >"$ALF_ROOT/.gaia/VERSION"
-  alf_commit bump
-}
-
-@test "decide: a release branch records not needed once and makes no write on a second wave" {
-  release_branch
+  # no record plus any round writes audit already under way
+  decide_case_reset
+  alf_add_round '[]'
   decide
   [ "$output" = none ]
-  [ "$(record_field .outcome)" = 'not needed' ]
-  [ "$(record_field .reason)" = 'release branch' ]
-  local before
-  before="$(record_mark)"
+  [ "$(record_field .outcome)" = 'not run' ]
+  [ "$(record_field .reason)" = 'audit already under way' ]
+  [ "$(record_field .pr)" = 7 ]
+
+  # not needed plus a round with members writes audit already under way
+  decide_case_reset
+  outcome_seed '.outcome = "not needed" | .reason = "quick review cleared"'
+  alf_add_round '["code-audit-frontend"]'
   decide
   [ "$output" = none ]
-  [ "$(record_mark)" = "$before" ]
-}
+  [ "$(record_field .reason)" = 'audit already under way' ]
 
-@test "decide: an unchanged .gaia/VERSION is no release signal" {
+  # not needed plus a closing round writes audit already under way
+  decide_case_reset
+  outcome_seed '.outcome = "not needed" | .reason = "quick review cleared"'
+  alf_add_round '[]' true
+  decide
+  [ "$output" = none ]
+  [ "$(record_field .reason)" = 'audit already under way' ]
+
+  # not needed plus a closing window writes audit already under way
+  decide_case_reset
+  outcome_seed '.outcome = "not needed" | .reason = "quick review cleared"'
+  alf_add_round '[]'
+  add_closing_unit
+  decide
+  [ "$output" = none ]
+  [ "$(record_field .reason)" = 'audit already under way' ]
+
+  # not needed plus only a memberless reopened round keeps its review
+  decide_case_reset
+  outcome_seed '.outcome = "not needed" | .reason = "quick review cleared"'
+  alf_add_round '[]'
+  alf_state_edit '.history.rounds[0].reopened = true'
+  decide mixed
+  [ "$output" = run ]
+  decide all-light
+  [ "$output" = quick-first ]
+
+  # no record prints quick-first on all-light and run on mixed, writing nothing
+  decide_case_reset
+  decide all-light
+  [ "$output" = quick-first ]
+  [ ! -e "$RECORD" ]
+  decide mixed
+  [ "$output" = run ]
+  [ ! -e "$RECORD" ]
+
+  # an unknown route is a usage error
+  decide_case_reset
+  run record_script decide --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --routes other
+  [ "$status" -eq 2 ]
+
+  # an unchanged .gaia/VERSION is no release signal
+  decide_case_reset
   alf_git checkout -q main
   printf '.gaia/*\n!.gaia/VERSION\n' >"$ALF_ROOT/.gitignore"
   printf '1.0.0\n' >"$ALF_ROOT/.gaia/VERSION"
@@ -903,64 +901,19 @@ release_branch() {
   decide
   [ "$output" = run ]
   [ ! -e "$RECORD" ]
-}
 
-@test "decide: no record plus any round writes audit already under way" {
-  alf_add_round '[]'
+  # a release branch records not needed once and makes no write on a second wave
+  decide_case_reset
+  printf '1.0.1\n' >"$ALF_ROOT/.gaia/VERSION"
+  alf_commit bump
   decide
   [ "$output" = none ]
-  [ "$(record_field .outcome)" = 'not run' ]
-  [ "$(record_field .reason)" = 'audit already under way' ]
-  [ "$(record_field .pr)" = 7 ]
-}
-
-@test "decide: not needed plus a round with members writes audit already under way" {
-  outcome_seed '.outcome = "not needed" | .reason = "quick review cleared"'
-  alf_add_round '["code-audit-frontend"]'
+  [ "$(record_field .outcome)" = 'not needed' ]
+  [ "$(record_field .reason)" = 'release branch' ]
+  before="$(record_mark)"
   decide
   [ "$output" = none ]
-  [ "$(record_field .reason)" = 'audit already under way' ]
-}
-
-@test "decide: not needed plus a closing round writes audit already under way" {
-  outcome_seed '.outcome = "not needed" | .reason = "quick review cleared"'
-  alf_add_round '[]' true
-  decide
-  [ "$output" = none ]
-  [ "$(record_field .reason)" = 'audit already under way' ]
-}
-
-@test "decide: not needed plus a closing window writes audit already under way" {
-  outcome_seed '.outcome = "not needed" | .reason = "quick review cleared"'
-  alf_add_round '[]'
-  add_closing_unit
-  decide
-  [ "$output" = none ]
-  [ "$(record_field .reason)" = 'audit already under way' ]
-}
-
-@test "decide: not needed plus only a memberless reopened round keeps its review" {
-  outcome_seed '.outcome = "not needed" | .reason = "quick review cleared"'
-  alf_add_round '[]'
-  alf_state_edit '.history.rounds[0].reopened = true'
-  decide mixed
-  [ "$output" = run ]
-  decide all-light
-  [ "$output" = quick-first ]
-}
-
-@test "decide: no record prints quick-first on all-light and run on mixed, writing nothing" {
-  decide all-light
-  [ "$output" = quick-first ]
-  [ ! -e "$RECORD" ]
-  decide mixed
-  [ "$output" = run ]
-  [ ! -e "$RECORD" ]
-}
-
-@test "decide: an unknown route is a usage error" {
-  run record_script decide --root "$ALF_ROOT" --run-folder "$RUN" --pr 7 --routes other
-  [ "$status" -eq 2 ]
+  [ "$(record_mark)" = "$before" ]
 }
 
 # Probe arm logic only, with a stand-in. Whether a real child behaves this way is

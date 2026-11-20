@@ -64,7 +64,7 @@ write() {
   grep -qF "usage: audit-write-findings.sh" <<<"$output"
 }
 
-@test "usage: each required flag is named when omitted" {
+@test "usage: missing or bad arguments exit 2" {
   run bash "$WRITER" --member "$MEMBER" --base "$BASE" --findings -
   [ "$status" -eq 2 ]
   grep -qF "root is required" <<<"$output"
@@ -80,15 +80,9 @@ write() {
   run bash "$WRITER" --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -eq 2 ]
   grep -qF "findings is required" <<<"$output"
-}
-
-@test "usage: an unrecognized flag exits 2" {
   run bash "$WRITER" --root "$ROOT" --member "$MEMBER" --base "$BASE" --findings - --bogus
   [ "$status" -eq 2 ]
   grep -qF "unrecognized argument" <<<"$output"
-}
-
-@test "usage: a --findings file that does not exist exits 2" {
   run bash "$WRITER" --root "$ROOT" --member "$MEMBER" --base "$BASE" --findings "$BATS_TEST_TMPDIR/nope.json"
   [ "$status" -eq 2 ]
   grep -qF "does not exist" <<<"$output"
@@ -124,19 +118,13 @@ write() {
   [ "$(jq -c '.findings' "$EXPECTED")" = "[]" ]
 }
 
-@test "area_tags defaults to the finding's own directory" {
+@test "area_tags defaults to the finding directory, and an explicit value is kept" {
   write "[$(complete_finding)]" >/dev/null
   [ "$(jq -r '.findings[0].area_tags[0]' "$EXPECTED")" = ".claude/hooks" ]
   [ "$(jq '.findings[0].area_tags | length' "$EXPECTED")" = "1" ]
-}
-
-@test "area_tags defaults to \".\" for a repo-root path with no directory" {
   entry="$(complete_finding | jq -c '.path = "CHANGELOG.md"')"
   write "[$entry]" >/dev/null
   [ "$(jq -r '.findings[0].area_tags[0]' "$EXPECTED")" = "." ]
-}
-
-@test "an explicit area_tags is preserved, never overwritten by the dirname default" {
   entry="$(complete_finding | jq -c '.area_tags = ["gate-machinery","secrets"]')"
   write "[$entry]" >/dev/null
   [ "$(jq -c '.findings[0].area_tags' "$EXPECTED")" = '["gate-machinery","secrets"]' ]
@@ -158,24 +146,18 @@ write() {
 }
 
 # The point of the writer: an entry that cannot brief a repair is REJECTED, and
-# nothing is written. One test per rule, each derived from the complete finding
+# nothing is written. Each case derives from the complete finding
 # so it can only fail for the reason it names.
 
-@test "rejects a finding with no path" {
+@test "rejects a finding that cannot brief a repair" {
   run write "[$(complete_finding | jq -c 'del(.path)')]"
   [ "$status" -eq 2 ]
   grep -qF "findings[0]: path must be" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "rejects a finding with no line" {
   run write "[$(complete_finding | jq -c 'del(.line)')]"
   [ "$status" -eq 2 ]
   grep -qF "findings[0]: line must be an integer" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "rejects a non-integer or out-of-range line" {
   run write "[$(complete_finding | jq -c '.line = 0')]"
   [ "$status" -eq 2 ]
   grep -qF "line must be an integer >= 1" <<<"$output"
@@ -188,36 +170,21 @@ write() {
   [ "$status" -eq 2 ]
   grep -qF "line must be an integer >= 1" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "rejects a finding with no failure_mode" {
   run write "[$(complete_finding | jq -c 'del(.failure_mode)')]"
   [ "$status" -eq 2 ]
   grep -qF "findings[0]: failure_mode must be" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "rejects a finding with no verified_by (how it was verified)" {
   run write "[$(complete_finding | jq -c 'del(.verified_by)')]"
   [ "$status" -eq 2 ]
   grep -qF "verified_by must be a non-empty string" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "rejects a finding with no suggested_fix (the recommended repair)" {
   run write "[$(complete_finding | jq -c 'del(.suggested_fix)')]"
   [ "$status" -eq 2 ]
   grep -qF "findings[0]: suggested_fix must be" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "rejects a finding with no title" {
   run write "[$(complete_finding | jq -c 'del(.title)')]"
   [ "$status" -eq 2 ]
   grep -qF "findings[0]: title must be" <<<"$output"
-}
-
-@test "rejects an empty string where a field is required" {
   run write "[$(complete_finding | jq -c '.suggested_fix = ""')]"
   [ "$status" -eq 2 ]
   grep -qF "suggested_fix must be" <<<"$output"
@@ -226,9 +193,6 @@ write() {
   [ "$status" -eq 2 ]
   grep -qF "path must be" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "rejects a finding_class that is absent or not a string" {
   run write "[$(complete_finding | jq -c 'del(.finding_class)')]"
   [ "$status" -eq 2 ]
   grep -qF "finding_class must be a non-empty string" <<<"$output"
@@ -236,25 +200,12 @@ write() {
   run write "[$(complete_finding | jq -c '.finding_class = 7')]"
   [ "$status" -eq 2 ]
   grep -qF "finding_class must be a non-empty string" <<<"$output"
-}
-
-@test "rejects a severity outside critical|major|minor" {
   # `warning`, `error` and `suggestion` are the retired tokens: a stale writer
   # must be refused, not silently accepted.
   run write "[$(complete_finding | jq -c '.severity = "warning"')]"
   [ "$status" -eq 2 ]
   grep -qF "severity must be one of critical|major|minor" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "accepts each of the three valid severities" {
-  for severity in critical major minor; do
-    write "[$(complete_finding | jq -c --arg severity "$severity" '.severity = $severity')]" >/dev/null
-    [ "$(jq -r '.findings[0].severity' "$EXPECTED")" = "$severity" ]
-  done
-}
-
-@test "rejects a malformed area_tags" {
   run write "[$(complete_finding | jq -c '.area_tags = [3]')]"
   [ "$status" -eq 2 ]
   grep -qF "area_tags, when present, must be an array of strings" <<<"$output"
@@ -262,24 +213,15 @@ write() {
   run write "[$(complete_finding | jq -c '.area_tags = "app"')]"
   [ "$status" -eq 2 ]
   grep -qF "area_tags, when present, must be an array of strings" <<<"$output"
-}
-
-@test "names the OFFENDING INDEX, not just the first entry" {
   first="$(complete_finding | jq -c '.')"
   bad="$(complete_finding | jq -c 'del(.verified_by)')"
   run write "[$first,$first,$bad]"
   [ "$status" -eq 2 ]
   grep -qF "findings[2]: verified_by" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "rejects a non-object entry" {
   run write '["a finding, as prose"]'
   [ "$status" -eq 2 ]
   grep -qF "findings[0]: not a JSON object" <<<"$output"
-}
-
-@test "rejects input that is not a JSON array" {
   run write '{"schema":1,"member":"m","findings":[]}'
   [ "$status" -eq 2 ]
   grep -qF "must hold a JSON array" <<<"$output"
@@ -288,6 +230,13 @@ write() {
   run write 'not json at all'
   [ "$status" -eq 2 ]
   grep -qF "must hold a JSON array" <<<"$output"
+}
+
+@test "accepts each of the three valid severities" {
+  for severity in critical major minor; do
+    write "[$(complete_finding | jq -c --arg severity "$severity" '.severity = $severity')]" >/dev/null
+    [ "$(jq -r '.findings[0].severity' "$EXPECTED")" = "$severity" ]
+  done
 }
 
 @test "a rejected write leaves the audit dir untouched: no file, no temp, no dir creation" {
@@ -326,16 +275,13 @@ STUB
 
 # Fail-open: an unresolvable key declines instead of inventing a path
 
-@test "detached HEAD: declines audit key unresolved, exit 0, writes nothing" {
+@test "declines audit key unresolved with exit 0 and writes nothing" {
   git -C "$ROOT" checkout --quiet --detach HEAD
   run write '[]'
   [ "$status" -eq 0 ]
   [ "$output" = "findings-sidecar: declined: audit key unresolved" ]
   [ -d "$AUDIT_DIRECTORY" ] && return 1
   [ ! -f "$EXPECTED" ]
-}
-
-@test "a non-git root: declines audit key unresolved, exit 0" {
   other="$BATS_TEST_TMPDIR/plain"
   mkdir -p "$other"
   run bash -c 'printf "[]" | bash "$1" --root "$2" --member "$3" --base "$4" --findings -' \
@@ -388,15 +334,18 @@ write_with_review_base() {
   [ "$(jq -e 'has("review_base")' "$EXPECTED")" = "false" ]
 }
 
-@test "review_base: both flags present and non-empty writes the additive key verbatim" {
+@test "review_base fields are stored verbatim" {
   write_with_review_base "[$(complete_finding)]" --review-base deadbeef --base-reason member-clearance >/dev/null
   [ "$(jq -r '.review_base.sha' "$EXPECTED")" = "deadbeef" ]
   [ "$(jq -r '.review_base.reason' "$EXPECTED")" = "member-clearance" ]
   [ "$(jq -e '.review_base | has("anchor_tree")' "$EXPECTED")" = "false" ]
-}
-
-@test "review_base: --anchor-tree present and non-empty carries its value" {
   write_with_review_base "[$(complete_finding)]" --review-base deadbeef --base-reason member-clearance --anchor-tree treesha >/dev/null
+  [ "$(jq -r '.review_base.anchor_tree' "$EXPECTED")" = "treesha" ]
+  write_with_review_base "[$(complete_finding)]" --review-base deadbeef --base-reason member-clearance --anchor-tree "" >/dev/null
+  [ "$(jq -e 'has("review_base")' "$EXPECTED")" = "true" ]
+  [ "$(jq -e '.review_base | has("anchor_tree")' "$EXPECTED")" = "false" ]
+  write_with_review_base "[$(complete_finding)]" --review-base deadbeef --base-reason member-refusal --anchor-tree treesha >/dev/null
+  [ "$(jq -r '.review_base.reason' "$EXPECTED")" = "member-refusal" ]
   [ "$(jq -r '.review_base.anchor_tree' "$EXPECTED")" = "treesha" ]
 }
 
@@ -432,39 +381,39 @@ write_with_review_base() {
   [ "$(jq -e 'has("review_base")' "$EXPECTED")" = "false" ]
 }
 
-@test "review_base: --anchor-tree present with an empty value omits anchor_tree but keeps review_base" {
-  write_with_review_base "[$(complete_finding)]" --review-base deadbeef --base-reason member-clearance --anchor-tree "" >/dev/null
-  [ "$(jq -e 'has("review_base")' "$EXPECTED")" = "true" ]
-  [ "$(jq -e '.review_base | has("anchor_tree")' "$EXPECTED")" = "false" ]
-}
-
-# security / cross_remit: optional booleans (SPEC-093 C3). Present and
+# security / cross_remit: optional booleans. Present and
 # non-boolean is a usage error naming the index; absent is accepted and the
 # writer invents nothing.
+#
+# triage / triage_reason: the maintainer members' below-threshold mark. The
+# writer checks shape only; whether the mark is honored is the dispositions
+# check's call.
+#
+# grade: the member's difficulty grade, which the audit loop unit carries into
+# the filing script as its `difficulty:` label. A bad value is refused here,
+# where the member can still fix it, instead of failing the filing later.
 
-@test "security: true and false both write and are preserved" {
+@test "optional boolean and enum fields are preserved when valid" {
   write "[$(complete_finding | jq -c '.security = true'),$(complete_finding | jq -c '.security = false')]" >/dev/null
   [ "$(jq -c '[.findings[].security]' "$EXPECTED")" = "[true,false]" ]
-}
-
-@test "cross_remit: true writes and is preserved" {
   write "[$(complete_finding | jq -c '.cross_remit = true')]" >/dev/null
   [ "$(jq -c '.findings[0].cross_remit' "$EXPECTED")" = "true" ]
+  write "[$(complete_finding)]" >/dev/null
+  [ "$(jq -c '.findings[0] | has("security") or has("cross_remit")' "$EXPECTED")" = "false" ]
+  write "[$(complete_finding | jq -c '.triage = true | .triage_reason = "below threshold"'),$(complete_finding | jq -c '.triage = false')]" >/dev/null
+  [ "$(jq -c '[.findings[] | [.triage, .triage_reason]]' "$EXPECTED")" = '[[true,"below threshold"],[false,null]]' ]
+  write "[$(complete_finding | jq -c '.grade = "easy"'),$(complete_finding | jq -c '.grade = "medium"'),$(complete_finding | jq -c '.grade = "hard"'),$(complete_finding)]" >/dev/null
+  [ "$(jq -c '[.findings[] | .grade]' "$EXPECTED")" = '["easy","medium","hard",null]' ]
+  [ "$(jq -c '.findings[3] | has("grade")' "$EXPECTED")" = "false" ]
+  write "[$(complete_finding | jq -c '.audience = "adopter"'),$(complete_finding | jq -c '.audience = "maintainer"'),$(complete_finding)]" >/dev/null
+  [ "$(jq -c '[.findings[] | .audience]' "$EXPECTED")" = '["adopter","maintainer",null]' ]
 }
 
-@test "cross_remit: a non-boolean is a usage error naming the index, and no sidecar is written" {
+@test "optional boolean and enum fields exit 2 naming the index when invalid" {
   run write "[$(complete_finding),$(complete_finding | jq -c '.cross_remit = "x"')]"
   [ "$status" -eq 2 ]
   grep -qF "findings[1]: cross_remit, when present, must be a boolean" <<<"$output"
   [ ! -f "$EXPECTED" ]
-}
-
-@test "security and cross_remit absent: writes, and the sidecar carries neither field" {
-  write "[$(complete_finding)]" >/dev/null
-  [ "$(jq -c '.findings[0] | has("security") or has("cross_remit")' "$EXPECTED")" = "false" ]
-}
-
-@test "security: a string, a number, and null each exit 2 naming the index and security, and write nothing" {
   for bad in '"yes"' '1' 'null'; do
     rm -f "$EXPECTED"
     run write "[$(complete_finding | jq -c ".security = $bad")]"
@@ -472,18 +421,6 @@ write_with_review_base() {
     grep -qF "findings[0]: security, when present, must be a boolean" <<<"$output"
     [ ! -f "$EXPECTED" ]
   done
-}
-
-# triage / triage_reason: the maintainer members' below-threshold mark. The
-# writer checks shape only; whether the mark is honored is the dispositions
-# check's call.
-
-@test "triage: true with a reason, and false without one, both write and are preserved" {
-  write "[$(complete_finding | jq -c '.triage = true | .triage_reason = "below threshold"'),$(complete_finding | jq -c '.triage = false')]" >/dev/null
-  [ "$(jq -c '[.findings[] | [.triage, .triage_reason]]' "$EXPECTED")" = '[[true,"below threshold"],[false,null]]' ]
-}
-
-@test "triage: a non-boolean exits 2 naming the offending index and writes nothing" {
   local bad
   for bad in '"true"' '1' 'null'; do
     rm -f "$EXPECTED"
@@ -492,9 +429,6 @@ write_with_review_base() {
     grep -qF "findings[1]: triage, when present, must be a boolean" <<<"$output" || { echo "$output"; return 1; }
     [ ! -f "$EXPECTED" ] || return 1
   done
-}
-
-@test "triage: true with a missing, empty, blank or non-string reason exits 2 and writes nothing" {
   local reason_filter
   for reason_filter in 'del(.triage_reason)' '.triage_reason = ""' '.triage_reason = "   "' '.triage_reason = 7'; do
     rm -f "$EXPECTED"
@@ -503,25 +437,9 @@ write_with_review_base() {
     grep -qF "findings[0]: triage_reason must be a non-empty string when triage is true" <<<"$output" || { echo "$output"; return 1; }
     [ ! -f "$EXPECTED" ] || return 1
   done
-}
-
-@test "triage_reason: a non-string without triage exits 2 naming the field" {
   run write "[$(complete_finding | jq -c '.triage_reason = 3')]"
   [ "$status" -eq 2 ] || return 1
   grep -qF "findings[0]: triage_reason, when present, must be a string" <<<"$output"
-}
-
-# grade: the member's difficulty grade, which the audit loop unit carries into
-# the filing script as its `difficulty:` label. A bad value is refused here,
-# where the member can still fix it, instead of failing the filing later.
-
-@test "grade: easy, medium and hard each write and are preserved; absent writes no grade key" {
-  write "[$(complete_finding | jq -c '.grade = "easy"'),$(complete_finding | jq -c '.grade = "medium"'),$(complete_finding | jq -c '.grade = "hard"'),$(complete_finding)]" >/dev/null
-  [ "$(jq -c '[.findings[] | .grade]' "$EXPECTED")" = '["easy","medium","hard",null]' ]
-  [ "$(jq -c '.findings[3] | has("grade")' "$EXPECTED")" = "false" ]
-}
-
-@test "grade: a value outside easy|medium|hard exits 2 naming the index and writes nothing" {
   local bad
   for bad in '"trivial"' '"Easy"' '""' '1' 'null' '["easy"]' '["trivial"]'; do
     rm -f "$EXPECTED"
@@ -530,14 +448,6 @@ write_with_review_base() {
     grep -qF "findings[1]: grade, when present, must be one of easy|medium|hard" <<<"$output" || { echo "$output"; return 1; }
     [ ! -f "$EXPECTED" ] || return 1
   done
-}
-
-@test "audience: adopter and maintainer each write and are preserved; absent writes no audience key" {
-  write "[$(complete_finding | jq -c '.audience = "adopter"'),$(complete_finding | jq -c '.audience = "maintainer"'),$(complete_finding)]" >/dev/null
-  [ "$(jq -c '[.findings[] | .audience]' "$EXPECTED")" = '["adopter","maintainer",null]' ]
-}
-
-@test "audience: a value outside adopter|maintainer exits 2 naming the index and writes nothing" {
   local bad
   for bad in '"both"' '"Adopter"' '""' '1' 'null' '["adopter"]' '["both"]'; do
     rm -f "$EXPECTED"
@@ -546,9 +456,6 @@ write_with_review_base() {
     grep -qF "findings[0]: audience, when present, must be one of adopter|maintainer" <<<"$output" || { echo "$output"; return 1; }
     [ ! -f "$EXPECTED" ] || return 1
   done
-}
-
-@test "grade: a difficulty key exits 2 naming grade as the field to use, with or without a grade" {
   local filter
   for filter in '.difficulty = "easy"' '.difficulty = "easy" | .grade = "easy"'; do
     rm -f "$EXPECTED"
@@ -621,7 +528,7 @@ no_findings_sidecar_written() {
   [ "$(jq -r '.findings[1] | has("entry_id")' "$EXPECTED")" = "false" ]
 }
 
-@test "entry_id: empty, numeric, and null each exit 2 naming the index and write no sidecar" {
+@test "entry_id and resolutions refusals exit 2 and write no sidecar" {
   for bad in '""' '7' 'null'; do
     entry="$(complete_finding | jq -c --argjson bad "$bad" '. + {entry_id: $bad}')"
     run write "[$(complete_finding),$entry]"
@@ -630,6 +537,23 @@ no_findings_sidecar_written() {
     grep -qF "entry_id" <<<"$output" || return 1
     no_findings_sidecar_written || return 1
   done
+  records='[{"entry_id":"r1-1","rationale":"fixed"},{"entry_id":"r1-2","rationale":"   "}]'
+  run write_with_resolutions "[$(complete_finding)]" "$records"
+  [ "$status" -eq 2 ]
+  grep -qF "resolutions[1]" <<<"$output"
+  no_findings_sidecar_written
+  run write_with_resolutions "[$(complete_finding)]" '[{"rationale":"fixed"}]'
+  [ "$status" -eq 2 ]
+  grep -qF "resolutions[0]" <<<"$output"
+  no_findings_sidecar_written
+  run write_with_resolutions "[$(complete_finding)]" '{"entry_id":"r1-1","rationale":"x"}'
+  [ "$status" -eq 2 ]
+  no_findings_sidecar_written
+  run bash -c 'printf "%s" "[]" | bash "$1" --root "$2" --member "$3" --base "$4" --findings - --resolutions -' \
+    _ "$WRITER" "$ROOT" "$MEMBER" "$BASE"
+  [ "$status" -eq 2 ]
+  grep -qF "cannot both read stdin" <<<"$output"
+  no_findings_sidecar_written
 }
 
 @test "resolutions: two valid records are written verbatim under resolutions" {
@@ -650,41 +574,6 @@ no_findings_sidecar_written() {
   [ "$(jq -r 'has("resolutions")' "$EXPECTED")" = "false" ]
 }
 
-@test "resolutions: a whitespace-only rationale exits 2 naming resolutions[1] and writes no sidecar" {
-  records='[{"entry_id":"r1-1","rationale":"fixed"},{"entry_id":"r1-2","rationale":"   "}]'
-  run write_with_resolutions "[$(complete_finding)]" "$records"
-  [ "$status" -eq 2 ]
-  grep -qF "resolutions[1]" <<<"$output"
-  no_findings_sidecar_written
-}
-
-@test "resolutions: a record missing entry_id exits 2 and writes no sidecar" {
-  run write_with_resolutions "[$(complete_finding)]" '[{"rationale":"fixed"}]'
-  [ "$status" -eq 2 ]
-  grep -qF "resolutions[0]" <<<"$output"
-  no_findings_sidecar_written
-}
-
-@test "resolutions: a non-array input exits 2 and writes no sidecar" {
-  run write_with_resolutions "[$(complete_finding)]" '{"entry_id":"r1-1","rationale":"x"}'
-  [ "$status" -eq 2 ]
-  no_findings_sidecar_written
-}
-
-@test "resolutions: --findings - together with --resolutions - exits 2 and writes no sidecar" {
-  run bash -c 'printf "%s" "[]" | bash "$1" --root "$2" --member "$3" --base "$4" --findings - --resolutions -' \
-    _ "$WRITER" "$ROOT" "$MEMBER" "$BASE"
-  [ "$status" -eq 2 ]
-  grep -qF "cannot both read stdin" <<<"$output"
-  no_findings_sidecar_written
-}
-
-@test "review_base: a member-refusal reason and the anchor tree are stored verbatim" {
-  write_with_review_base "[$(complete_finding)]" --review-base deadbeef --base-reason member-refusal --anchor-tree treesha >/dev/null
-  [ "$(jq -r '.review_base.reason' "$EXPECTED")" = "member-refusal" ]
-  [ "$(jq -r '.review_base.anchor_tree' "$EXPECTED")" = "treesha" ]
-}
-
 # review_ids, review_merged and --review-drops: the keys a member uses to account
 # for handed review findings. Absent, the writer's output is unchanged.
 
@@ -702,28 +591,19 @@ no_findings_sidecar_written() {
   [ "$(jq -r '.findings[0].review_merged' "$EXPECTED")" = "true" ]
 }
 
-@test "review ids: a non-array value exits 2 and writes no sidecar" {
+@test "review ids refusals exit 2 and write no sidecar" {
   run write "[$(complete_finding | jq -c '. + {review_ids: "cr-1"}')]"
   [ "$status" -eq 2 ]
   grep -qF "review_ids" <<<"$output"
   no_findings_sidecar_written
-}
-
-@test "review ids: an empty array exits 2 and writes no sidecar" {
   run write "[$(complete_finding | jq -c '. + {review_ids: []}')]"
   [ "$status" -eq 2 ]
   grep -qF "review_ids" <<<"$output"
   no_findings_sidecar_written
-}
-
-@test "review ids: a malformed id exits 2 and writes no sidecar" {
   run write "[$(complete_finding | jq -c '. + {review_ids: ["cr-1","finding-2"]}')]"
   [ "$status" -eq 2 ]
   grep -qF "review_ids" <<<"$output"
   no_findings_sidecar_written
-}
-
-@test "review ids: a non-boolean review_merged exits 2 and writes no sidecar" {
   run write "[$(complete_finding | jq -c '. + {review_ids: ["cr-1"], review_merged: "yes"}')]"
   [ "$status" -eq 2 ]
   grep -qF "review_merged" <<<"$output"
@@ -743,28 +623,19 @@ write_with_review_drops() {
   [ "$(jq -c '.review_drops' "$EXPECTED")" = "$drops" ]
 }
 
-@test "review drops: an empty or blank reason exits 2 and writes no sidecar" {
+@test "review drops refusals exit 2 and write no sidecar" {
   run write_with_review_drops "[]" '[{"id":"cr-2","reason":"   "}]'
   [ "$status" -eq 2 ]
   grep -qF "reason must be a non-empty string" <<<"$output"
   no_findings_sidecar_written
-}
-
-@test "review drops: a non-array input exits 2 and writes no sidecar" {
   run write_with_review_drops "[]" '{"id":"cr-2","reason":"x"}'
   [ "$status" -eq 2 ]
   grep -qF "must hold a JSON array" <<<"$output"
   no_findings_sidecar_written
-}
-
-@test "review drops: an entry that is not an object exits 2 and writes no sidecar" {
   run write_with_review_drops "[]" '["cr-2"]'
   [ "$status" -eq 2 ]
   grep -qF "not a JSON object" <<<"$output"
   no_findings_sidecar_written
-}
-
-@test "review drops: a malformed id exits 2 and writes no sidecar" {
   run write_with_review_drops "[]" '[{"id":"2","reason":"x"}]'
   [ "$status" -eq 2 ]
   no_findings_sidecar_written

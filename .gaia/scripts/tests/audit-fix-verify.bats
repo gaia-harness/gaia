@@ -141,6 +141,17 @@ do_check() {
 
 edit() { printf 'fixer edit\n' >>"$REPO/$1"; }
 
+# reset_case: return the fixture to its committed state between the rows of a
+# merged case table, so each row starts clean.
+reset_case() {
+  git -C "$REPO" reset -q --hard HEAD
+  git -C "$REPO" clean -fdq
+  rm -rf "$REPO/.gaia/local/audit" "$RUN_FOLDER"
+  mkdir -p "$RUN_FOLDER"
+  ATTEMPT=1
+  VERIFIER_OUTPUT_FILE="$RUN_FOLDER/verifier-1-1.json"
+}
+
 # prepare_with_dirty_record <path>: a baseline that records <path> as dirty
 # with its edited content. The real baseline subcommand refuses a dirty tree,
 # so this forges the record to keep the check's revert and further-edit
@@ -197,15 +208,15 @@ assert_fail_kind() {
   [ "$(jq -r '.errors | length' "$VERIFIER_OUTPUT_FILE")" = 0 ]
 }
 
-@test "UAT-002a: a result omitting one fix entry fails missing-disposition naming the key" {
+@test "missing-disposition: an omitted fix entry and an out-of-set disposition each fail naming the key" {
+  # row: a result omitting one fix entry (UAT-002a)
   prepare
   edit a.txt
   default_result | jq 'del(.results[1])' >"$RESULT_FILE"
   do_check
   assert_fail_kind missing-disposition "m c2 b.txt 5"
-}
-
-@test "UAT-002a: a result with a disposition outside the allowed set counts as missing" {
+  # row: a disposition outside the allowed set counts as missing (UAT-002a)
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -214,7 +225,8 @@ assert_fail_kind() {
   assert_fail_kind missing-disposition "m c1 a.txt 3"
 }
 
-@test "UAT-002b: an undeclared edit to a tracked file fails undeclared-path" {
+@test "declaration rule: undeclared edits, new files and reverts fail, declared ones pass (case table incl. a spaced path)" {
+  # row: an undeclared edit to a tracked file fails undeclared-path (UAT-002b)
   prepare
   edit a.txt
   edit b.txt
@@ -222,9 +234,8 @@ assert_fail_kind() {
   default_result >"$RESULT_FILE"
   do_check
   assert_fail_kind undeclared-path c.txt
-}
-
-@test "UAT-002c: a new undeclared untracked file fails undeclared-path" {
+  # row: a new undeclared untracked file fails undeclared-path (UAT-002c)
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -232,9 +243,8 @@ assert_fail_kind() {
   default_result >"$RESULT_FILE"
   do_check
   assert_fail_kind undeclared-path new.txt
-}
-
-@test "a declared new untracked file passes" {
+  # row: a declared new untracked file passes
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -242,9 +252,8 @@ assert_fail_kind() {
   default_result | jq '.changed_paths += ["new.txt"]' >"$RESULT_FILE"
   do_check
   [ "$status" -eq 0 ]
-}
-
-@test "UAT-002d, UAT-023: reverting a path the baseline records dirty, undeclared, fails undeclared-revert naming the path" {
+  # row: reverting a baseline-dirty path, undeclared, fails undeclared-revert (UAT-002d, UAT-023)
+  reset_case
   prepare_with_dirty_record stray.txt
   edit a.txt
   edit b.txt
@@ -252,9 +261,8 @@ assert_fail_kind() {
   default_result >"$RESULT_FILE"
   do_check
   assert_fail_kind undeclared-revert stray.txt
-}
-
-@test "a revert of a baseline-dirty path declared in reverted_paths passes" {
+  # row: a revert of a baseline-dirty path declared in reverted_paths passes
+  reset_case
   prepare_with_dirty_record stray.txt
   edit a.txt
   edit b.txt
@@ -262,9 +270,8 @@ assert_fail_kind() {
   default_result | jq '.reverted_paths = ["stray.txt"]' >"$RESULT_FILE"
   do_check
   [ "$status" -eq 0 ]
-}
-
-@test "UAT-002e: a further undeclared edit to a path the baseline records dirty fails undeclared-path" {
+  # row: a further undeclared edit to a baseline-dirty path fails undeclared-path (UAT-002e)
+  reset_case
   prepare_with_dirty_record stray.txt
   edit a.txt
   edit b.txt
@@ -272,6 +279,18 @@ assert_fail_kind() {
   default_result >"$RESULT_FILE"
   do_check
   assert_fail_kind undeclared-path stray.txt
+  # row: paths with spaces are hashed and compared correctly
+  reset_case
+  write_dispositions '[{"member":"m","finding_class":"c1","path":"with space.txt","line":1,"disposition":"fix"}]'
+  take_baseline
+  take_digests
+  edit "with space.txt"
+  printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"m","finding_class":"c1","path":"with space.txt","line":1,"disposition":"fixed","reason":"r","changed_paths":["with space.txt"]}],"changed_paths":["with space.txt"],"reverted_paths":[]}' >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 0 ]
+  printf 'x\n' >"$REPO/other space.txt"
+  do_check
+  assert_fail_kind undeclared-path "other space.txt"
 }
 
 @test "UAT-002f: HEAD moved by a commit fails head-moved" {
@@ -324,8 +343,65 @@ spec093_enforcement_paths() {
     '.gaia/statusline/setup-owed.sh'
 }
 
-@test "the enforcement set lists the local settings file" {
-  enforcement_paths | grep -Fxq '.claude/settings.local.json'
+@test "each named enforcement path is on the enforcement list, and an unallowed fixer edit to the moved libraries fails enforcement-path" {
+  local file_path listed entries_json
+  # row: the local settings file
+  enforcement_paths | grep -Fxq '.claude/settings.local.json' || {
+    echo ".claude/settings.local.json: not on the verifier's enforcement list"
+    return 1
+  }
+  # row: each moved library is listed
+  listed=0
+  while IFS= read -r file_path; do
+    listed=$((listed + 1))
+    enforcement_paths | grep -Fxq -- "$file_path" || {
+      echo "$file_path: not on the verifier's enforcement list"
+      return 1
+    }
+  done < <(moved_library_paths)
+  [ "$listed" -eq "$(moved_library_paths | wc -l | tr -d ' ')" ] || return 1
+  # row: each loop and statusline addition is listed (the all-paths refusal test below
+  # builds the repository and runs the check)
+  listed=0
+  while IFS= read -r file_path; do
+    listed=$((listed + 1))
+    enforcement_paths | grep -Fxq -- "$file_path" || {
+      echo "$file_path: not on the verifier's enforcement list"
+      return 1
+    }
+  done < <(spec093_enforcement_paths)
+  [ "$listed" -eq 10 ] || return 1
+  # row: a fixer edit to every moved library with no allowance fails
+  # enforcement-path, one repository and one check for all of them
+  while IFS= read -r file_path; do
+    mkdir -p "$REPO/$(dirname "$file_path")"
+    printf 'orig\n' >"$REPO/$file_path"
+  done < <(moved_library_paths)
+  git -C "$REPO" add -A
+  git -C "$REPO" commit -q -m moved-libraries
+  entries_json="$(moved_library_paths | jq -R . | jq -s 'map({member: "m", finding_class: "c1", path: ., line: 1, disposition: "fix"})')"
+  write_dispositions "$entries_json"
+  take_baseline
+  take_digests
+  while IFS= read -r file_path; do
+    edit "$file_path"
+  done < <(moved_library_paths)
+  jq -n --argjson entries "$entries_json" '{schema: 1, round: 1, attempt: 1,
+    results: ($entries | map({member, finding_class, path, line, disposition: "fixed", reason: "r", changed_paths: [.path]})),
+    changed_paths: ($entries | map(.path)), reverted_paths: []}' >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 1 ] || {
+    echo "the batch did not fail: $output"
+    return 1
+  }
+  while IFS= read -r file_path; do
+    jq -e --arg file_path "$file_path" \
+      '[.errors[] | select(.kind == "enforcement-path" and .detail == $file_path)] | length == 1' \
+      "$VERIFIER_OUTPUT_FILE" >/dev/null || {
+      echo "$file_path: no enforcement-path error naming it"
+      return 1
+    }
+  done < <(moved_library_paths)
 }
 
 # bats test_tags=protected
@@ -388,45 +464,6 @@ moved_library_paths() {
     '.gaia/scripts/audit-gate-owed.sh'
 }
 
-# declared_edit_check <script> <path>: a fix entry names <path>, the fixer edits it
-# and the check runs, with <script> as the verifier.
-declared_edit_check() {
-  local verifier="$1" file_path="$2"
-  mkdir -p "$REPO/$(dirname "$file_path")"
-  printf 'orig\n' >"$REPO/$file_path"
-  git -C "$REPO" add -A
-  git -C "$REPO" commit -q -m moved-library
-  write_dispositions '[{"member":"m","finding_class":"c1","path":"'"$file_path"'","line":1,"disposition":"fix"}]'
-  SCRIPT="$verifier" take_baseline
-  take_digests
-  edit "$file_path"
-  printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"m","finding_class":"c1","path":"'"$file_path"'","line":1,"disposition":"fixed","reason":"r","changed_paths":["'"$file_path"'"]}],"changed_paths":["'"$file_path"'"],"reverted_paths":[]}' >"$RESULT_FILE"
-  SCRIPT="$verifier" do_check
-}
-
-@test "each moved library is on the enforcement list" {
-  local file_path listed=0
-  while IFS= read -r file_path; do
-    listed=$((listed + 1))
-    enforcement_paths | grep -Fxq -- "$file_path" || {
-      echo "$file_path: not on the verifier's enforcement list"
-      return 1
-    }
-  done < <(moved_library_paths)
-  [ "$listed" -eq "$(moved_library_paths | wc -l | tr -d ' ')" ]
-}
-
-@test "a fixer edit to each moved library with no allowance fails enforcement-path" {
-  local file_path
-  while IFS= read -r file_path; do
-    rm -rf "$REPO"
-    make_repo "$REPO"
-    mkdir -p "$RUN_FOLDER"
-    declared_edit_check "$SCRIPT" "$file_path"
-    assert_fail_kind enforcement-path "$file_path"
-  done < <(moved_library_paths)
-}
-
 @test "a gate-repair result with no fix entries passes check, and an undeclared changed path still fails" {
   write_dispositions '[]'
   take_baseline
@@ -443,23 +480,8 @@ declared_edit_check() {
   [ "$status" -ne 0 ]
 }
 
-@test "UAT-032: an unlisted edit to each SPEC-093 enforcement path fails enforcement-path" {
-  local listed_paths file_path listed_count=0
-  # The one-repository test above builds the repository and runs the check; this
-  # asserts each path the SPEC-093 append added is on the verifier's list.
-  listed_paths="$(spec093_enforcement_paths)"
-  [ -n "$listed_paths" ]
-  while IFS= read -r file_path; do
-    listed_count=$((listed_count + 1))
-    enforcement_paths | grep -Fxq -- "$file_path" || {
-      echo "$file_path: not on the verifier's enforcement list"
-      return 1
-    }
-  done <<<"$listed_paths"
-  [ "$listed_count" -eq 10 ]
-}
-
-@test "a waive-out-of-scope entry carrying basis cross-remit passes the shape check" {
+@test "non-fix dispositions (waive-out-of-scope with cross-remit, divert) need no fixer result" {
+  # row: a waive-out-of-scope entry carrying basis cross-remit passes the shape check
   write_dispositions '[
     {"member":"m","finding_class":"c1","path":"a.txt","line":3,"disposition":"fix"},
     {"member":"m","finding_class":"c2","path":"b.txt","line":5,"disposition":"waive-out-of-scope","basis":"cross-remit","reason":"r"}]'
@@ -468,10 +490,12 @@ declared_edit_check() {
   edit a.txt
   printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"m","finding_class":"c1","path":"a.txt","line":3,"disposition":"fixed","reason":"r","changed_paths":["a.txt"]}],"changed_paths":["a.txt"],"reverted_paths":[]}' >"$RESULT_FILE"
   do_check
-  [ "$status" -eq 0 ]
-}
-
-@test "a divert entry passes the shape check and needs no fixer result" {
+  [ "$status" -eq 0 ] || {
+    echo "cross-remit: status $status: $output"
+    return 1
+  }
+  # row: a divert entry passes the shape check and needs no fixer result
+  reset_case
   write_dispositions '[
     {"member":"m","finding_class":"c1","path":"a.txt","line":3,"disposition":"fix"},
     {"member":"m","finding_class":"c2","path":"b.txt","line":5,"disposition":"divert","reason":"security class from outside the branch"}]'
@@ -480,10 +504,14 @@ declared_edit_check() {
   edit a.txt
   printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"m","finding_class":"c1","path":"a.txt","line":3,"disposition":"fixed","reason":"r","changed_paths":["a.txt"]}],"changed_paths":["a.txt"],"reverted_paths":[]}' >"$RESULT_FILE"
   do_check
-  [ "$status" -eq 0 ] || { echo "status $status: $output"; return 1; }
+  [ "$status" -eq 0 ] || {
+    echo "divert: status $status: $output"
+    return 1
+  }
 }
 
-@test "directive 3: an enforcement edit passes when allowed and a fix entry names it" {
+@test "enforcement allowance: an allowed path a fix entry names passes, an allowance no fix entry names fails bad-input" {
+  # row: directive 3, an enforcement edit passes when allowed and a fix entry names it
   local file_path='.gaia/scripts/audit-loop-eval.sh'
   mkdir -p "$REPO/.gaia/scripts"
   printf 'orig\n' >"$REPO/$file_path"
@@ -495,10 +523,12 @@ declared_edit_check() {
   edit "$file_path"
   printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"m","finding_class":"c1","path":"'"$file_path"'","line":1,"disposition":"fixed","reason":"r","changed_paths":["'"$file_path"'"]}],"changed_paths":["'"$file_path"'"],"reverted_paths":[]}' >"$RESULT_FILE"
   do_check
-  [ "$status" -eq 0 ]
-}
-
-@test "directive 3: an enforcement_paths_allowed entry no fix entry names fails bad-input" {
+  [ "$status" -eq 0 ] || {
+    echo "allowed edit: status $status: $output"
+    return 1
+  }
+  # row: directive 3, an enforcement_paths_allowed entry no fix entry names fails bad-input
+  reset_case
   write_dispositions "$(default_entries)" '[".gaia/scripts/audit-loop-eval.sh"]'
   take_baseline
   take_digests
@@ -510,7 +540,10 @@ declared_edit_check() {
 }
 
 # bats test_tags=protected
-@test "directive 2: a *.ok marker written under .gaia/local/audit after the baseline fails audit-artifact-written" {
+@test "marker/refusal ownership: case table over body tree, sha, file-name digest and digest resolvability" {
+  local body digest worktree_tree mine sibling
+  # Plain-repository rows first: the harness fixture below commits to the same repository.
+  # row: directive 2, a *.ok marker written under .gaia/local/audit after the baseline fails
   prepare
   edit a.txt
   edit b.txt
@@ -520,35 +553,30 @@ declared_edit_check() {
   default_result >"$RESULT_FILE"
   do_check
   assert_fail_kind audit-artifact-written x.ok
-}
-
-@test "directive 2: a *.findings.json sidecar written after the baseline fails audit-artifact-written" {
+  # row: when member digests cannot be resolved a foreign-tree marker counts
+  reset_case
+  prepare
+  edit a.txt
+  edit b.txt
+  forge foreign.ok "$(printf '{"tree":"%s","sha":"abc"}' "$(foreign_tree)")"
+  default_result >"$RESULT_FILE"
+  do_check
+  assert_fail_kind audit-artifact-written foreign.ok
+  # row: a marker carrying this root's HEAD tree fails
+  reset_case
   prepare
   edit a.txt
   edit b.txt
   mkdir -p "$REPO/.gaia/local/audit"
-  slug="$(git -C "$REPO" branch --show-current)"
-  printf '{}\n' >"$REPO/.gaia/local/audit/t.$slug.m.findings.json"
-  touch -t 203001010000 "$REPO/.gaia/local/audit/t.$slug.m.findings.json"
+  printf '{"tree":"%s","sha":"x"}\n' "$(git -C "$REPO" rev-parse 'HEAD^{tree}')" >"$REPO/.gaia/local/audit/own.ok"
+  touch -t 203001010000 "$REPO/.gaia/local/audit/own.ok"
   default_result >"$RESULT_FILE"
   do_check
-  assert_fail_kind audit-artifact-written findings.json
-}
-
-@test "a foreign branch's sidecar written after the baseline still passes" {
-  prepare
-  edit a.txt
-  edit b.txt
-  mkdir -p "$REPO/.gaia/local/audit"
-  printf '{}\n' >"$REPO/.gaia/local/audit/t.other-branch.m.findings.json"
-  touch -t 203001010000 "$REPO/.gaia/local/audit/t.other-branch.m.findings.json"
-  default_result >"$RESULT_FILE"
-  do_check
-  [ "$status" -eq 0 ]
-}
-
-@test "a foreign root's marker and refusal written after the baseline still pass" {
+  assert_fail_kind audit-artifact-written own.ok
+  # Harness rows share one fixture with a bare origin and a feature branch.
+  reset_case
   with_harness
+  # row: a foreign root's marker and refusal written after the baseline still pass
   prepare
   edit a.txt
   edit b.txt
@@ -557,11 +585,12 @@ declared_edit_check() {
   forge foreign.refused "$body"
   default_result >"$RESULT_FILE"
   do_check
-  [ "$status" -eq 0 ]
-}
-
-@test "a marker whose body has neither a tree nor a sha fails audit-artifact-written" {
-  with_harness
+  [ "$status" -eq 0 ] || {
+    echo "foreign root: status $status: $output"
+    return 1
+  }
+  # row: a marker whose body has neither a tree nor a sha fails
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -569,10 +598,8 @@ declared_edit_check() {
   default_result >"$RESULT_FILE"
   do_check
   assert_fail_kind audit-artifact-written
-}
-
-@test "a marker whose tree is not a well-formed object id fails audit-artifact-written" {
-  with_harness
+  # row: a marker whose tree is not a well-formed object id fails
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -580,10 +607,8 @@ declared_edit_check() {
   default_result >"$RESULT_FILE"
   do_check
   assert_fail_kind audit-artifact-written bad-tree.ok
-}
-
-@test "a foreign-tree marker named by one of this branch's branch-own digests fails audit-artifact-written" {
-  with_harness
+  # row: a foreign-tree marker named by one of this branch's branch-own digests fails
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -594,10 +619,8 @@ declared_edit_check() {
   default_result >"$RESULT_FILE"
   do_check
   assert_fail_kind audit-artifact-written "$digest"
-}
-
-@test "a foreign-tree marker named by a branch-own digest of the working content fails audit-artifact-written" {
-  with_harness
+  # row: a foreign-tree marker named by a branch-own digest of the working content fails
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -613,10 +636,8 @@ declared_edit_check() {
   mv "$RESULT_FILE.n" "$RESULT_FILE"
   do_check
   assert_fail_kind audit-artifact-written "$digest"
-}
-
-@test "a sibling branch's marker, named by its own branch-own digest, still passes" {
-  with_harness
+  # row: a sibling branch's marker, named by its own branch-own digest, still passes
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -629,11 +650,16 @@ declared_edit_check() {
   forge "$sibling.ok" "$(printf '{"digest":"%s","tree":"%s","sha":"%s"}' "$sibling" "$(foreign_tree)" "$(printf 'e%.0s' {1..40})")"
   default_result >"$RESULT_FILE"
   do_check
-  [ "$status" -eq 0 ]
-}
-
-@test "without an origin ref no digest resolves and every new marker is reported" {
+  [ "$status" -eq 0 ] || {
+    echo "sibling: status $status: $output"
+    return 1
+  }
+  # row: without an origin ref no digest resolves and every new marker is reported
+  # (a fresh repository, last: the stub gh it puts on PATH would reach the rows above)
+  rm -rf "$REPO"
+  make_repo "$REPO"
   with_harness_without_origin
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -645,29 +671,35 @@ declared_edit_check() {
   jq -e '[.errors[] | select(.kind == "audit-artifact-written")] | length == 2' "$VERIFIER_OUTPUT_FILE" >/dev/null
 }
 
-@test "when member digests cannot be resolved a foreign-tree marker counts" {
-  prepare
-  edit a.txt
-  edit b.txt
-  forge foreign.ok "$(printf '{"tree":"%s","sha":"abc"}' "$(foreign_tree)")"
-  default_result >"$RESULT_FILE"
-  do_check
-  assert_fail_kind audit-artifact-written foreign.ok
-}
-
-@test "a marker carrying this root's HEAD tree fails audit-artifact-written" {
+@test "sidecar audit artifacts: own-slug sidecar after baseline fails, foreign-slug passes, pre-baseline file passes" {
+  local slug
+  # row: directive 2, a *.findings.json sidecar written after the baseline fails
   prepare
   edit a.txt
   edit b.txt
   mkdir -p "$REPO/.gaia/local/audit"
-  printf '{"tree":"%s","sha":"x"}\n' "$(git -C "$REPO" rev-parse 'HEAD^{tree}')" >"$REPO/.gaia/local/audit/own.ok"
-  touch -t 203001010000 "$REPO/.gaia/local/audit/own.ok"
+  slug="$(git -C "$REPO" branch --show-current)"
+  printf '{}\n' >"$REPO/.gaia/local/audit/t.$slug.m.findings.json"
+  touch -t 203001010000 "$REPO/.gaia/local/audit/t.$slug.m.findings.json"
   default_result >"$RESULT_FILE"
   do_check
-  assert_fail_kind audit-artifact-written own.ok
-}
-
-@test "an audit file older than the baseline does not fail" {
+  assert_fail_kind audit-artifact-written findings.json
+  # row: a foreign branch's sidecar written after the baseline still passes
+  reset_case
+  prepare
+  edit a.txt
+  edit b.txt
+  mkdir -p "$REPO/.gaia/local/audit"
+  printf '{}\n' >"$REPO/.gaia/local/audit/t.other-branch.m.findings.json"
+  touch -t 203001010000 "$REPO/.gaia/local/audit/t.other-branch.m.findings.json"
+  default_result >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 0 ] || {
+    echo "foreign sidecar: status $status: $output"
+    return 1
+  }
+  # row: an audit file older than the baseline does not fail
+  reset_case
   mkdir -p "$REPO/.gaia/local/audit"
   printf 'ok\n' >"$REPO/.gaia/local/audit/old.ok"
   touch -t 200001010000 "$REPO/.gaia/local/audit/old.ok"
@@ -679,7 +711,8 @@ declared_edit_check() {
   [ "$status" -eq 0 ]
 }
 
-@test "COV-004: a dispositions file edited after its digest fails bad-input" {
+@test "COV-004: an input file edited after its digest fails bad-input; with fresh digests it is judged on merits" {
+  # row: a dispositions file edited after its digest fails bad-input
   prepare
   edit a.txt
   edit b.txt
@@ -688,9 +721,8 @@ declared_edit_check() {
   mv "$DISPOSITIONS_FILE.new" "$DISPOSITIONS_FILE"
   do_check
   assert_fail_kind bad-input "dispositions file digest"
-}
-
-@test "COV-004: a baseline file edited after its digest fails bad-input" {
+  # row: a baseline file edited after its digest fails bad-input
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -699,9 +731,8 @@ declared_edit_check() {
   mv "$BASELINE_FILE.new" "$BASELINE_FILE"
   do_check
   assert_fail_kind bad-input "baseline file digest"
-}
-
-@test "COV-004: with correct digests the edited inputs are judged on their merits" {
+  # row: with correct digests the edited inputs are judged on their merits
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -727,7 +758,8 @@ declared_edit_check() {
   [ "$(jq -r '.pass' "$VERIFIER_OUTPUT_FILE")" = true ]
 }
 
-@test "baseline refuses with exit 3 and writes nothing when the index has a staged change" {
+@test "baseline refusals: staged index exits 3, dirty tracked/untracked paths exit 4 naming each, ignored files pass" {
+  # row: a staged change exits 3 and writes nothing
   edit a.txt
   git -C "$REPO" add a.txt
   write_dispositions "$(default_entries)"
@@ -741,40 +773,36 @@ declared_edit_check() {
       return 1
       ;;
   esac
-}
-
-@test "UAT-007: baseline over a modified tracked file exits 4, prints member-wave-dirty and a dirty line, writes nothing" {
+  # row: UAT-007, a modified tracked file exits 4, prints member-wave-dirty and a dirty line, writes nothing
+  reset_case
   edit a.txt
   write_dispositions "$(default_entries)"
   run bash "$SCRIPT" baseline --root "$REPO" --round 1 --out "$BASELINE_FILE"
   [ "$status" -eq 4 ]
   [ ! -e "$BASELINE_FILE" ]
   [ ! -e "$RUN_FOLDER/verifier-bin-1" ]
-  printf '%s\n' "$output" | grep -qx 'member-wave-dirty'
-  printf '%s\n' "$output" | grep -qx 'dirty a.txt'
-}
-
-@test "UAT-007: baseline over an untracked non-ignored file exits 4 and names it" {
+  printf '%s\n' "$output" | grep -qx 'member-wave-dirty' || return 1
+  printf '%s\n' "$output" | grep -qx 'dirty a.txt' || return 1
+  # row: UAT-007, an untracked non-ignored file exits 4 and names it
+  reset_case
   printf 'new\n' >"$REPO/fresh.txt"
   run bash "$SCRIPT" baseline --root "$REPO" --round 1 --out "$BASELINE_FILE"
   [ "$status" -eq 4 ]
   [ ! -e "$BASELINE_FILE" ]
-  printf '%s\n' "$output" | grep -qx 'member-wave-dirty'
-  printf '%s\n' "$output" | grep -qx 'dirty fresh.txt'
-}
-
-@test "UAT-007: baseline names every dirty path, modified and untracked together" {
+  printf '%s\n' "$output" | grep -qx 'member-wave-dirty' || return 1
+  printf '%s\n' "$output" | grep -qx 'dirty fresh.txt' || return 1
+  # row: UAT-007, every dirty path is named, modified and untracked together
+  reset_case
   edit a.txt
   edit "with space.txt"
   printf 'new\n' >"$REPO/fresh.txt"
   run bash "$SCRIPT" baseline --root "$REPO" --round 1 --out "$BASELINE_FILE"
   [ "$status" -eq 4 ]
-  printf '%s\n' "$output" | grep -qx 'dirty a.txt'
-  printf '%s\n' "$output" | grep -qx 'dirty with space.txt'
-  printf '%s\n' "$output" | grep -qx 'dirty fresh.txt'
-}
-
-@test "UAT-007: baseline passes when the only new file is git-ignored" {
+  printf '%s\n' "$output" | grep -qx 'dirty a.txt' || return 1
+  printf '%s\n' "$output" | grep -qx 'dirty with space.txt' || return 1
+  printf '%s\n' "$output" | grep -qx 'dirty fresh.txt' || return 1
+  # row: new files that are all git-ignored let the baseline pass
+  reset_case
   mkdir -p "$REPO/.gaia/local/audit"
   printf 'x\n' >"$REPO/.gaia/local/audit/sidecar.json"
   printf 'ignored.log\n' >>"$REPO/.git/info/exclude"
@@ -784,16 +812,16 @@ declared_edit_check() {
   [ -e "$BASELINE_FILE" ]
 }
 
-@test "bad-input: the wrong round fails" {
+@test "bad-input: wrong result round, wrong dispositions round, attempt mismatch, unparseable JSON, .. / absolute / dash-leading paths" {
+  # row: the wrong round fails
   prepare
   edit a.txt
   edit b.txt
   default_result | jq '.round = 2' >"$RESULT_FILE"
   do_check
   assert_fail_kind bad-input "wrong round"
-}
-
-@test "bad-input: a dispositions file with the wrong round fails" {
+  # row: a dispositions file with the wrong round fails
+  reset_case
   write_dispositions "$(default_entries)"
   jq '.round = 2' "$DISPOSITIONS_FILE" >"$DISPOSITIONS_FILE.new"
   mv "$DISPOSITIONS_FILE.new" "$DISPOSITIONS_FILE"
@@ -802,9 +830,8 @@ declared_edit_check() {
   default_result >"$RESULT_FILE"
   do_check
   assert_fail_kind bad-input "wrong round"
-}
-
-@test "bad-input: a result attempt 1 against --attempt 2 (the continuation case) fails" {
+  # row: a result attempt 1 against --attempt 2 (the continuation case) fails
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -813,27 +840,24 @@ declared_edit_check() {
   VERIFIER_OUTPUT_FILE="$RUN_FOLDER/verifier-1-2.json"
   do_check
   assert_fail_kind bad-input "attempt"
-  [ "$(jq -r '.attempt' "$VERIFIER_OUTPUT_FILE")" = 2 ]
-}
-
-@test "bad-input: unparseable JSON fails" {
+  [ "$(jq -r '.attempt' "$VERIFIER_OUTPUT_FILE")" = 2 ] || return 1
+  # row: unparseable JSON fails
+  reset_case
   prepare
   edit a.txt
   printf '{not json' >"$RESULT_FILE"
   do_check
   assert_fail_kind bad-input "result file"
-}
-
-@test "bad-input: a result path with a .. segment fails" {
+  # row: a result path with a .. segment fails
+  reset_case
   prepare
   edit a.txt
   edit b.txt
   default_result | jq '.changed_paths += ["../x"]' >"$RESULT_FILE"
   do_check
   assert_fail_kind bad-input "../x"
-}
-
-@test "bad-input: an absolute and a dash-leading result path fail" {
+  # row: an absolute and a dash-leading result path fail
+  reset_case
   prepare
   edit a.txt
   edit b.txt
@@ -849,21 +873,17 @@ declared_edit_check() {
   esac
 }
 
-@test "paths with spaces are hashed and compared correctly" {
-  write_dispositions '[{"member":"m","finding_class":"c1","path":"with space.txt","line":1,"disposition":"fix"}]'
-  take_baseline
-  take_digests
-  edit "with space.txt"
-  printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"m","finding_class":"c1","path":"with space.txt","line":1,"disposition":"fixed","reason":"r","changed_paths":["with space.txt"]}],"changed_paths":["with space.txt"],"reverted_paths":[]}' >"$RESULT_FILE"
-  do_check
-  [ "$status" -eq 0 ]
-  printf 'x\n' >"$REPO/other space.txt"
-  do_check
-  assert_fail_kind undeclared-path "other space.txt"
-}
-
-@test "round-check: gate logs with passing verifiers exit 0, a missing or failing verifier exits 1 naming the log" {
+@test "round-check: passing verifiers or no logs of this round exit 0, a missing or failing verifier exits 1 naming the log" {
   local runs_directory="$BATS_TEST_TMPDIR/runs" attempt_number
+  # row: no gate logs, or logs of another round, exit 0
+  mkdir -p "$runs_directory"
+  run bash "$SCRIPT" round-check --run-folder "$runs_directory" --round 3
+  [ "$status" -eq 0 ]
+  : >"$runs_directory/gate-2-1.log"
+  run bash "$SCRIPT" round-check --run-folder "$runs_directory" --round 3
+  [ "$status" -eq 0 ]
+  # row: gate logs with passing verifiers exit 0, a missing or failing verifier exits 1 naming the log
+  rm -rf "$runs_directory"
   mkdir -p "$runs_directory"
   for attempt_number in 1 2 3; do
     : >"$runs_directory/gate-3-$attempt_number.log"
@@ -893,23 +913,13 @@ declared_edit_check() {
   esac
 }
 
-@test "round-check: no gate logs, or logs of another round, exit 0" {
-  local runs_directory="$BATS_TEST_TMPDIR/runs"
-  mkdir -p "$runs_directory"
-  run bash "$SCRIPT" round-check --run-folder "$runs_directory" --round 3
-  [ "$status" -eq 0 ]
-  : >"$runs_directory/gate-2-1.log"
-  run bash "$SCRIPT" round-check --run-folder "$runs_directory" --round 3
-  [ "$status" -eq 0 ]
-}
-
-@test "drift: exit 0 on a tree equal to the baseline" {
+@test "drift: equal tree exits 0; further edit, new untracked file, staged change each exit 1 naming the cause" {
+  # row: exit 0 on a tree equal to the baseline
   take_baseline
   run bash "$SCRIPT" drift --root "$REPO" --baseline "$BASELINE_FILE"
   [ "$status" -eq 0 ]
-}
-
-@test "drift: exit 1 naming the path after a further edit" {
+  # row: exit 1 naming the path after a further edit
+  reset_case
   take_baseline
   edit stray.txt
   run bash "$SCRIPT" drift --root "$REPO" --baseline "$BASELINE_FILE"
@@ -921,9 +931,8 @@ declared_edit_check() {
       return 1
       ;;
   esac
-}
-
-@test "drift: exit 1 naming the path after a new untracked file" {
+  # row: exit 1 naming the path after a new untracked file
+  reset_case
   take_baseline
   printf 'n\n' >"$REPO/fresh.txt"
   run bash "$SCRIPT" drift --root "$REPO" --baseline "$BASELINE_FILE"
@@ -935,9 +944,8 @@ declared_edit_check() {
       return 1
       ;;
   esac
-}
-
-@test "drift: exit 1 after a staged change" {
+  # row: exit 1 after a staged change
+  reset_case
   take_baseline
   edit a.txt
   git -C "$REPO" add a.txt
@@ -993,7 +1001,8 @@ declared_edit_check() {
   [ "$status" -eq 0 ]
 }
 
-@test "a tampered pinned copy fails check with bad-input" {
+@test "pin integrity: a tampered pinned script, a tampered pinned library, or a baseline with no pin each refuse" {
+  # row: a tampered pinned copy fails check with bad-input
   prepare
   edit a.txt
   edit b.txt
@@ -1004,21 +1013,19 @@ declared_edit_check() {
     --result "$RESULT_FILE" --out "$VERIFIER_OUTPUT_FILE"
   [ "$status" -eq 1 ]
   jq -e '[.errors[].kind] | index("bad-input") != null' "$VERIFIER_OUTPUT_FILE" >/dev/null
-  [[ "$output" == *"pinned"* ]]
-}
-
-@test "a tampered pinned library fails drift and round-check" {
+  [[ "$output" == *"pinned"* ]] || return 1
+  # row: a tampered pinned library fails drift and round-check
+  reset_case
   prepare
   printf '# edited\n' >>"$RUN_FOLDER/verifier-bin-1/main-root-lib.sh"
   run bash "$RUN_FOLDER/verifier-bin-1/audit-fix-verify.sh" drift --root "$REPO" --baseline "$BASELINE_FILE"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"pinned"* ]]
+  [[ "$output" == *"pinned"* ]] || return 1
   run bash "$RUN_FOLDER/verifier-bin-1/audit-fix-verify.sh" round-check --run-folder "$RUN_FOLDER" --round 1
   [ "$status" -eq 1 ]
-  [[ "$output" == *"pinned"* ]]
-}
-
-@test "a baseline that records no pin fails check with bad-input" {
+  [[ "$output" == *"pinned"* ]] || return 1
+  # row: a baseline that records no pin fails check with bad-input
+  reset_case
   prepare
   jq 'del(.verifier_digest)' "$BASELINE_FILE" >"$BASELINE_FILE.n"
   mv "$BASELINE_FILE.n" "$BASELINE_FILE"

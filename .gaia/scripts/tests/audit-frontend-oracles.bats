@@ -143,57 +143,43 @@ invoked() {
   grep -c "^$1 start" "$STUB_LOG" || true
 }
 
-@test "a markdown-only change skips both gated oracles and still runs advisories" {
-  branch_with docs/note.md
+# reset_feature: back to main with no feature branch and an empty stub log, so
+# one test can drive several branches against the one scratch repository.
+reset_feature() {
+  git -C "$SANDBOX" checkout -q main
+  git -C "$SANDBOX" branch -q -D feature 2>/dev/null || true
+  : >"$STUB_LOG"
+}
+
+# gating_case <path> <npx> <pnpm>: a branch adding only <path> invokes npx
+# (react-doctor), pnpm (knip) and the gaia CLI (advisories) that many times.
+gating_case() {
+  reset_feature
+  branch_with "$1"
   run_oracles "$BASE_SHA"
-  [ "$status" -eq 0 ]
-  [ "$(invoked npx)" -eq 0 ]
-  [ "$(invoked pnpm)" -eq 0 ]
-  [ "$(invoked gaia)" -eq 1 ]
+  [ "$status" -eq 0 ] || return 1
+  [ "$(invoked npx)" -eq "$2" ] || return 1
+  [ "$(invoked pnpm)" -eq "$3" ] || return 1
+  [ "$(invoked gaia)" -eq 1 ] || return 1
+}
+
+@test "scope gating: markdown, package.json, pnpm-lock.yaml, nested package.json, pnpm-workspace.yaml and tsx paths each run only the oracles their scope needs" {
+  gating_case docs/note.md 0 0
   [ "$(printf '%s\n' "$output" | sed -n 1p)" = '| Oracle | Status | Result | Output |' ]
   [ "$(printf '%s\n' "$output" | sed -n 2p)" = '|---|---|---|---|' ]
   row react-doctor | grep -q 'skipped: no .ts or .tsx path in scope'
   row knip | grep -q 'skipped: no .ts, .tsx, manifest or lockfile path in scope'
   row advisories | grep -q 'ran (exit 0)'
-}
 
-@test "a package.json-only change runs knip and not react-doctor" {
-  branch_with package.json
-  run_oracles "$BASE_SHA"
-  [ "$status" -eq 0 ]
-  [ "$(invoked npx)" -eq 0 ]
-  [ "$(invoked pnpm)" -eq 1 ]
+  gating_case package.json 0 1
   row react-doctor | grep -q 'skipped'
   row knip | grep -q 'ran (exit 0)'
-}
 
-@test "a pnpm-lock.yaml-only change runs knip" {
-  branch_with pnpm-lock.yaml
-  run_oracles "$BASE_SHA"
-  [ "$status" -eq 0 ]
-  [ "$(invoked pnpm)" -eq 1 ]
-  [ "$(invoked npx)" -eq 0 ]
-}
+  gating_case pnpm-lock.yaml 0 1
+  gating_case apps/web/package.json 0 1
+  gating_case pnpm-workspace.yaml 0 1
 
-@test "a nested package.json and a pnpm-workspace.yaml each run knip" {
-  branch_with apps/web/package.json
-  run_oracles "$BASE_SHA"
-  [ "$(invoked pnpm)" -eq 1 ]
-  git -C "$SANDBOX" checkout -q main
-  git -C "$SANDBOX" branch -q -D feature
-  : >"$STUB_LOG"
-  branch_with pnpm-workspace.yaml
-  run_oracles "$BASE_SHA"
-  [ "$(invoked pnpm)" -eq 1 ]
-}
-
-@test "a tsx change runs all three oracles" {
-  branch_with app/page.tsx
-  run_oracles "$BASE_SHA"
-  [ "$status" -eq 0 ]
-  [ "$(invoked npx)" -eq 1 ]
-  [ "$(invoked pnpm)" -eq 1 ]
-  [ "$(invoked gaia)" -eq 1 ]
+  gating_case app/page.tsx 1 1
   row react-doctor | grep -q 'ran (exit 0)'
   row knip | grep -q 'ran (exit 0)'
 }
@@ -206,7 +192,7 @@ invoked() {
   [ "$(awk '{print $2}' "$STUB_LOG" | paste -sd' ' -)" = "start start start end end end" ]
 }
 
-@test "an unresolvable base runs everything and says the scope was unresolved" {
+@test "unknown scope (unresolvable base, empty --base before --out) runs every oracle and says scope unresolved" {
   branch_with docs/note.md
   run_oracles 0000000000000000000000000000000000000001
   [ "$status" -eq 0 ]
@@ -215,10 +201,8 @@ invoked() {
   [ "$(invoked gaia)" -eq 1 ]
   row react-doctor | grep -q 'scope unresolved; ran anyway'
   row knip | grep -q 'scope unresolved; ran anyway'
-}
 
-@test "an empty --base followed by --out runs everything, writes to --out and exits 0" {
-  branch_with docs/note.md
+  : >"$STUB_LOG"
   run --separate-stderr bash "$SCRIPT" --root "$SANDBOX" --base '' --out "$OUT_DIR"
   [ "$status" -eq 0 ]
   [ "$(invoked npx)" -eq 1 ]
@@ -230,7 +214,7 @@ invoked() {
   row react-doctor | grep -q 'scope unresolved; ran anyway'
 }
 
-@test "advisories: one surfaced high, one acknowledged critical, a single second-table row" {
+@test "advisories row and second table: surfaced vs acknowledged, unpatched hint, unavailable source, empty list" {
   branch_with docs/note.md
   run_oracles "$BASE_SHA"
   row advisories | grep -q '1 high/critical surfaced; 1 acknowledged suppressed'
@@ -239,29 +223,18 @@ invoked() {
   printf '%s\n' "$output" | grep -qx '| lodash | high | GHSA-aaaa-bbbb-cccc | 4.17.21 |'
   printf '%s\n' "$output" | grep -q 'minimist' && return 1
   printf '%s\n' "$output" | grep -q 'left-pad' && return 1
-  true
-}
 
-@test "advisories: an unpatched surfaced row falls back to the override hint" {
-  branch_with docs/note.md
   printf '%s' '{"source":"dependabot","advisories":[{"package":"p","severity":"critical","ghsa":null,"key":"pnpm:9","firstPatchedVersion":null,"patchedVersions":[],"baselineAcknowledged":false}]}' >"$BATS_TEST_TMPDIR/unpatched.json"
   export STUB_ADVISORIES_PAYLOAD="$BATS_TEST_TMPDIR/unpatched.json"
   run_oracles "$BASE_SHA"
   printf '%s\n' "$output" | grep -qx '| p | critical | pnpm:9 | no patched range; consider an override or a baseline acknowledgment |'
-}
 
-@test "advisories: an unavailable source reads source unavailable and no second table" {
-  branch_with docs/note.md
   printf '%s' '{"source":"unavailable","advisories":[]}' >"$BATS_TEST_TMPDIR/unavailable.json"
   export STUB_ADVISORIES_PAYLOAD="$BATS_TEST_TMPDIR/unavailable.json"
   run_oracles "$BASE_SHA"
   row advisories | grep -q 'source unavailable'
   printf '%s\n' "$output" | grep -q 'Package | Severity' && return 1
-  true
-}
 
-@test "advisories: an empty list reads No high/critical advisories and no second table" {
-  branch_with docs/note.md
   printf '%s' '{"source":"dependabot","advisories":[]}' >"$BATS_TEST_TMPDIR/empty.json"
   export STUB_ADVISORIES_PAYLOAD="$BATS_TEST_TMPDIR/empty.json"
   run_oracles "$BASE_SHA"
@@ -270,46 +243,35 @@ invoked() {
   true
 }
 
-@test "knip: rows holding only empty arrays read No issues" {
+@test "knip Result: empty arrays, canned per-type counts and order, cycles counted and owners not, non-zero exit with payload is ran" {
   branch_with app/page.ts
   printf '%s' '{"issues":[{"file":"a.ts","owners":[],"exports":[],"files":[]},{"file":"b.ts","types":[]}]}' >"$BATS_TEST_TMPDIR/knip-clean.json"
   export STUB_KNIP_PAYLOAD="$BATS_TEST_TMPDIR/knip-clean.json"
   run_oracles "$BASE_SHA"
   row knip | grep -q '| No issues |'
-}
 
-@test "knip: the canned payload yields per-type counts in descending count then key order" {
-  branch_with app/page.ts
+  export STUB_KNIP_PAYLOAD="$BATS_TEST_TMPDIR/knip.json"
   run_oracles "$BASE_SHA"
   row knip | grep -q '| 4 issues: exports=2, dependencies=1, unlisted=1 |'
-}
 
-@test "knip: a row holding only a cycles entry counts, and owners never do" {
-  branch_with app/page.ts
   printf '%s' '{"issues":[{"file":"a.ts","owners":[{"name":"team"}],"cycles":[["a.ts","b.ts"]]}]}' >"$BATS_TEST_TMPDIR/knip-cycles.json"
   export STUB_KNIP_PAYLOAD="$BATS_TEST_TMPDIR/knip-cycles.json"
   run_oracles "$BASE_SHA"
   row knip | grep -q '| 1 issues: cycles=1 |'
   row knip | grep -q 'owners' && return 1
-  true
-}
 
-@test "knip: a non-zero exit with a parseable payload is still ran" {
-  branch_with app/page.ts
+  export STUB_KNIP_PAYLOAD="$BATS_TEST_TMPDIR/knip.json"
   export STUB_KNIP_RC=1
   run_oracles "$BASE_SHA"
   [ "$status" -eq 0 ]
   row knip | grep -q 'ran (exit 1)'
 }
 
-@test "react-doctor: the recorded sample yields the count the pinned rule gives" {
+@test "react-doctor Result: the recorded sample gives its pinned count, empty output reads No issues" {
   branch_with app/page.tsx
   run_oracles "$BASE_SHA"
   row react-doctor | grep -q '| 6 diagnostics |'
-}
 
-@test "react-doctor: empty output reads No issues" {
-  branch_with app/page.tsx
   unset STUB_REACT_DOCTOR_OUTPUT
   run_oracles "$BASE_SHA"
   row react-doctor | grep -q '| No issues |'

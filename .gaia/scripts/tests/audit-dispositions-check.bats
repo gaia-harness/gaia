@@ -21,6 +21,18 @@ setup_file() {
 }
 
 setup() {
+  build_fixture
+}
+
+# reset_fixture: rebuild the setup fixture from scratch inside a merged case
+# table, for a row that opens rounds, writes snapshots or vetoes the next row
+# must not see.
+reset_fixture() {
+  rm -rf "$BATS_TEST_TMPDIR/repo" "$BATS_TEST_TMPDIR/origin.git" "$BATS_TEST_TMPDIR/mutant" "$BATS_TEST_TMPDIR/mutant-tree" "$GH_CALLS"
+  build_fixture
+}
+
+build_fixture() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS="$REPO_ROOT/.gaia/scripts"
   SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
@@ -119,6 +131,13 @@ run_check_all() {
   run bash "$SCRIPT" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" "$@"
 }
 
+# check_filled <entries-json> [enforcement-json]: round 1's dispositions, the
+# entries plus a fix for every other finding, then the live check.
+check_filled() {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "$1")" "${2-[]}"
+  run_check 1
+}
+
 # red <token> <key-json>: the last run exited 1 with exactly that line.
 red() {
   [ "$status" -eq 1 ] || { echo "status $status: $output"; return 1; }
@@ -138,157 +157,142 @@ vetoes() {
 }
 
 # bats test_tags=protected
-@test "critical: a branch-authored Critical as accept-residual fails critical-not-fix" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 1 c/crit accept-residual)]")"
-  run_check 1
-  red critical-not-fix "$(key_json c/crit f.txt 1)"
-}
-
-@test "critical: a branch-authored Critical as waive-out-of-scope fails critical-not-fix" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 1 c/crit waive-out-of-scope because triage-threshold)]")"
-  run_check 1
-  red critical-not-fix "$(key_json c/crit f.txt 1)"
-}
-
-@test "critical: a branch-authored Critical as file fails critical-not-fix" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 1 c/crit file)]")"
-  run_check 1
-  red critical-not-fix "$(key_json c/crit f.txt 1)"
-}
-
-@test "critical: relabelling the Critical as major inside the dispositions entry still fails" {
-  local entry
+@test "check: each dispositions rule refuses its own kind on its key and each allowed disposition passes (case table)" {
+  local reason entry
+  printf 'case: %s\n' 'branch Critical as accept-residual, waive-out-of-scope, file' >&2
+  check_filled "[$(disposition_entry f.txt 1 c/crit accept-residual)]"
+  red critical-not-fix "$(key_json c/crit f.txt 1)" || return 1
+  check_filled "[$(disposition_entry f.txt 1 c/crit waive-out-of-scope because triage-threshold)]"
+  red critical-not-fix "$(key_json c/crit f.txt 1)" || return 1
+  check_filled "[$(disposition_entry f.txt 1 c/crit file)]"
+  red critical-not-fix "$(key_json c/crit f.txt 1)" || return 1
+  printf 'case: %s\n' 'Critical relabelled major inside the entry' >&2
   entry="$(disposition_entry f.txt 1 c/crit waive-out-of-scope because triage-threshold | jq -c '. + {severity: "major", security: false}')"
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$entry]")"
-  run_check 1
-  red critical-not-fix "$(key_json c/crit f.txt 1)"
-}
-
-# bats test_tags=protected
-@test "security: a security:true Minor waived fails security-not-fix" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 2 c/sec waive-out-of-scope because triage-threshold)]")"
-  run_check 1
-  red security-not-fix "$(key_json c/sec f.txt 2)"
-}
-
-@test "security: a finding with no security field reads true and fails security-not-fix" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 5 c/nosec waive-out-of-scope because triage-threshold)]")"
-  run_check 1
-  red security-not-fix "$(key_json c/nosec f.txt 5)"
-}
-
-@test "reason: an empty and a whitespace-only reason each fail empty-reason" {
-  local reason
+  check_filled "[$entry]"
+  red critical-not-fix "$(key_json c/crit f.txt 1)" || return 1
+  printf 'case: %s\n' 'security true Minor and no security field waived' >&2
+  check_filled "[$(disposition_entry f.txt 2 c/sec waive-out-of-scope because triage-threshold)]"
+  red security-not-fix "$(key_json c/sec f.txt 2)" || return 1
+  check_filled "[$(disposition_entry f.txt 5 c/nosec waive-out-of-scope because triage-threshold)]"
+  red security-not-fix "$(key_json c/nosec f.txt 5)" || return 1
+  printf 'case: %s\n' 'empty and whitespace-only reasons' >&2
   for reason in "" "   "; do
-    write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope "$reason" triage-threshold)]")"
-    run_check 1
+    check_filled "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope "$reason" triage-threshold)]"
     red empty-reason "$(key_json c/imp f.txt 3)" || return 1
   done
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp accept-residual "")]")"
-  run_check 1
-  red empty-reason "$(key_json c/imp f.txt 3)"
-}
-
-@test "enforcement: a non-empty enforcement_paths_allowed fails enforcement-paths-set" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")" '["x"]'
-  run_check 1
-  red enforcement-paths-set '["x"]'
-}
-
-@test "basis: a waive-out-of-scope with no basis fails missing-basis" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because)]")"
-  run_check 1
-  red missing-basis "$(key_json c/imp f.txt 3)"
-}
-
-@test "basis: cross-remit basis on a finding not flagged cross_remit fails" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because cross-remit)]")"
-  run_check 1
-  red cross-remit-basis-mismatch "$(key_json c/imp f.txt 3)"
-}
-
-@test "security divert: an out-of-scope security:true Minor filed fails on INTERNAL and on a failed probe" {
-  local visibility
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 5 c/oossec file "filed upstream")]")"
-  for visibility in INTERNAL ''; do
-    GH_VISIBILITY="$visibility"
-    run_check 1
-    red security-file-not-private "$(key_json c/oossec base.txt 5)" || return 1
-  done
-}
-
-@test "security divert: an out-of-scope non-security Major filed on a PUBLIC repo passes without probing" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file "filed upstream")]")"
-  run_check 1
-  green || return 1
-  [ ! -e "$GH_CALLS" ] || { echo "probed: $(cat "$GH_CALLS")"; return 1; }
-}
-
-@test "control: a branch-authored security:false Minor waived on the triage threshold passes" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug waive-out-of-scope "below threshold" triage-threshold)]")"
-  run_check 1
-  green
-}
-
-@test "control: a cross_remit Major waived with basis cross-remit passes" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 4 c/xr waive-out-of-scope "other member's remit" cross-remit)]")"
-  run_check 1
-  green
-}
-
-@test "unknown-key: a non-fix entry for a key no member reported fails; a fix entry passes" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 9 c/ghost waive-out-of-scope because triage-threshold)]")"
-  run_check 1
+  check_filled "[$(disposition_entry f.txt 3 c/imp accept-residual "")]"
+  red empty-reason "$(key_json c/imp f.txt 3)" || return 1
+  printf 'case: %s\n' 'enforcement_paths_allowed' >&2
+  check_filled "[$(disposition_entry f.txt 3 c/imp fix)]" '["x"]'
+  red enforcement-paths-set '["x"]' || return 1
+  printf 'case: %s\n' 'basis' >&2
+  check_filled "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because)]"
+  red missing-basis "$(key_json c/imp f.txt 3)" || return 1
+  check_filled "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because cross-remit)]"
+  red cross-remit-basis-mismatch "$(key_json c/imp f.txt 3)" || return 1
+  printf 'case: %s\n' 'unknown key' >&2
+  check_filled "[$(disposition_entry f.txt 9 c/ghost waive-out-of-scope because triage-threshold)]"
   red unknown-key "$(key_json c/ghost f.txt 9)" || return 1
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 9 c/ghost fix)]")"
-  run_check 1
-  green
-}
-
-@test "undisposed: an omitted branch-authored Critical fails" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.line != 1)')"
-  run_check 1
-  red undisposed "$(key_json c/crit f.txt 1)"
-}
-
-@test "undisposed: an omitted branch-authored security finding fails" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.line != 2)')"
-  run_check 1
-  red undisposed "$(key_json c/sec f.txt 2)"
-}
-
-@test "undisposed: an omitted branch-authored Minor fails, and a fix entry clears it" {
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/minorgap","severity":"minor","security":false}]'
-  write_dispositions 2 '[]'
-  run_check 2
-  red undisposed "$(key_json c/minorgap f.txt 7)" || return 1
-  write_dispositions 2 "[$(disposition_entry f.txt 7 c/minorgap fix)]"
-  run_check 2
-  green
-}
-
-@test "security: a security:true Major waived fails security-not-fix" {
+  check_filled "[$(disposition_entry f.txt 9 c/ghost fix)]"
+  green || return 1
+  printf 'case: %s\n' 'divert' >&2
+  check_filled "[$(disposition_entry base.txt 3 c/oos divert "")]"
+  red empty-reason "$(key_json c/oos base.txt 3)" || return 1
+  check_filled "[$(disposition_entry f.txt 2 c/sec divert "security class")]"
+  red divert-not-allowed "$(key_json c/sec f.txt 2)" || return 1
+  check_filled "[$(disposition_entry base.txt 6 c/oosimp divert "not security")]"
+  red divert-not-allowed "$(key_json c/oosimp base.txt 6)" || return 1
+  check_filled "[$(disposition_entry base.txt 3 c/oos divert "security class"),$(disposition_entry base.txt 5 c/oossec divert "security class"),$(disposition_entry base.txt 7 c/oosnosec divert "no security flag")]"
+  green || return 1
+  printf 'case: %s\n' 'allowed controls' >&2
+  check_filled "[$(disposition_entry f.txt 6 c/sug waive-out-of-scope "below threshold" triage-threshold)]"
+  green || return 1
+  check_filled "[$(disposition_entry f.txt 4 c/xr waive-out-of-scope "other member's remit" cross-remit)]"
+  green || return 1
+  printf 'case: %s\n' 'security true Major waived (round 2, last: it overwrites the sidecar)' >&2
   open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/majsec","severity":"major","security":true}]'
   write_dispositions 2 "[$(disposition_entry f.txt 7 c/majsec waive-out-of-scope because triage-threshold)]"
   run_check 2
   red security-not-fix "$(key_json c/majsec f.txt 7)"
 }
 
-@test "undisposed: an omitted key vetoed for the round fails, though no member re-reported it" {
+@test "security-file-not-private: each security-class out-of-branch kind and each non-PRIVATE answer refuses, only an exact PRIVATE passes, a non-security file never probes (case table)" {
+  local visibility line_number finding_class
+  printf 'case: %s\n' 'non-security Major filed on a PUBLIC repository passes without probing' >&2
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file "filed upstream")]")"
+  run_check 1
+  green || return 1
+  [ ! -e "$GH_CALLS" ] || { echo "probed: $(cat "$GH_CALLS")"; return 1; }
+  printf 'case: %s\n' 'security true Minor filed on INTERNAL and on a failed probe' >&2
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 5 c/oossec file "filed upstream")]")"
+  for visibility in INTERNAL ''; do
+    GH_VISIBILITY="$visibility"
+    run_check 1
+    red security-file-not-private "$(key_json c/oossec base.txt 5)" || return 1
+  done
+  printf 'case: %s\n' 'out-of-branch Critical, security true and security-absent filed on a PUBLIC repository' >&2
+  GH_VISIBILITY=PUBLIC
+  for line_number in 3 5 7; do
+    finding_class="$(jq -r --argjson line "$line_number" '.[] | select(.path == "base.txt" and .line == $line) | .finding_class' <<<"$FINDINGS_JSON")"
+    write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt "$line_number" "$finding_class" file "filed upstream")]")"
+    run_check 1
+    red security-file-not-private "$(key_json "$finding_class" base.txt "$line_number")" || return 1
+    grep -qF -- 'violation: empty-reason' <<<"$output" && { echo "empty-reason fired: $output"; return 1; }
+  done
+  printf 'case: %s\n' 'only an exact PRIVATE answer passes; the environment and a cache change nothing' >&2
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos file "filed upstream")]")"
+  : >"$GH_CALLS"
+  export GH_REPO=someone/private GAIA_REPO_VISIBILITY=PRIVATE REPO_VISIBILITY=PRIVATE VISIBILITY=PRIVATE
+  printf 'PRIVATE\n' >"$ALF_ROOT/.gaia/local/repo-visibility"
+  printf '{"visibility":"PRIVATE"}\n' >"$ALF_ROOT/.gaia/local/audit/visibility.json"
+  for visibility in '' __empty__ PUBLIC INTERNAL private 'PRIVATE '; do
+    GH_VISIBILITY="$visibility"
+    run_check 1
+    red security-file-not-private "$(key_json c/oos base.txt 3)" || { echo "visibility '$visibility'"; return 1; }
+  done
+  GH_VISIBILITY=PRIVATE
+  run_check 1
+  green || return 1
+  grep -qxF -- 'repo view owner/repo --json visibility --jq .visibility GH_REPO=unset' "$GH_CALLS" || { cat "$GH_CALLS"; return 1; }
+  grep -F -- 'GH_REPO=someone/private' "$GH_CALLS" && return 1
+  true
+}
+
+@test "undisposed: each omitted finding kind fails, and an entry clears the kinds an entry may clear (case table)" {
+  printf 'case: %s\n' 'omitted branch-authored Critical, then security finding' >&2
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.line != 1)')"
+  run_check 1
+  red undisposed "$(key_json c/crit f.txt 1)" || return 1
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.line != 2)')"
+  run_check 1
+  red undisposed "$(key_json c/sec f.txt 2)" || return 1
+  printf 'case: %s\n' 'omitted out-of-branch Major, then the entry clears it' >&2
+  accept_at 1
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "base.txt" or .line != 6)')"
+  run_check 1
+  red undisposed "$(key_json c/oosimp base.txt 6)" || return 1
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp accept-residual "left for later")]")"
+  run_check 1
+  green || return 1
+  printf 'case: %s\n' 'vetoed key omitted, then every finding and vetoed key disposed but the out-of-branch Critical' >&2
   vetoes 1 c/gone f.txt 9
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
   run_check 1
-  red undisposed "$(key_json c/gone f.txt 9)"
-}
-
-@test "undisposed: every branch-authored finding and vetoed key disposed fails with the out-of-branch Critical left out" {
-  accept_at 1
-  vetoes 1 c/gone f.txt 9
+  red undisposed "$(key_json c/gone f.txt 9)" || return 1
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later),$(disposition_entry f.txt 9 c/gone fix)]" 'select(.path != "base.txt" or .line != 3)')"
   run_check 1
   red undisposed "$(key_json c/oos base.txt 3)" || return 1
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later),$(disposition_entry f.txt 9 c/gone fix)]")"
   run_check 1
+  green || return 1
+  rm -f "$RUN_FOLDER/vetoes.json"
+  printf 'case: %s\n' 'omitted branch-authored Minor, then a fix entry clears it (round 2, last: it overwrites the sidecar)' >&2
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/minorgap","severity":"minor","security":false}]'
+  write_dispositions 2 '[]'
+  run_check 2
+  red undisposed "$(key_json c/minorgap f.txt 7)" || return 1
+  write_dispositions 2 "[$(disposition_entry f.txt 7 c/minorgap fix)]"
+  run_check 2
   green
 }
 
@@ -316,21 +320,32 @@ vetoes() {
   green
 }
 
-@test "snapshots: check-all re-grades round 1 from its snapshot after the sidecar is overwritten (CG-003)" {
+@test "snapshots: check-all re-grades an overwritten round from an explicit or default-directory snapshot and fails unknown-key without one, writing nothing read-only (case table)" {
+  local before after
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
   [ -f "$SNAPSHOT_DIRECTORY/dispositions-1.checked.json" ] || return 1
   open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
+  printf 'case: %s\n' 'explicit --snapshot-dir' >&2
   run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  green
-}
-
-@test "snapshots: the same sequence without a snapshot fails round 1 unknown-key" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
-  run_check 1
   green || return 1
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
+  printf 'case: %s\n' 'default directory snapshot, nothing written' >&2
+  write_dispositions 2 "[$(disposition_entry f.txt 7 c/later fix)]"
+  before="$(tree_state)"
+  run_check_all
+  green || return 1
+  after="$(tree_state)"
+  [ "$before" = "$after" ] || { printf 'a read-only check-all wrote:\n%s\n---\n%s\n' "$before" "$after" >&2; return 1; }
+  [ ! -e "$SNAPSHOT_DIRECTORY/dispositions-2.checked.json" ] || return 1
+  printf 'case: %s\n' 'default directory holds no snapshot for the round' >&2
+  mv "$SNAPSHOT_DIRECTORY/dispositions-1.checked.json" "$BATS_TEST_TMPDIR/kept-snapshot.json"
+  before="$(tree_state)"
+  run_check_all
+  red unknown-key "$(key_json c/imp f.txt 3)" || return 1
+  [ "$before" = "$(tree_state)" ] || return 1
+  printf 'case: %s\n' 'no snapshot directory at all' >&2
+  rm -rf "$SNAPSHOT_DIRECTORY"
   run_check_all
   red unknown-key "$(key_json c/imp f.txt 3)"
 }
@@ -343,36 +358,7 @@ tree_state() {
   done
 }
 
-@test "snapshots: check-all with no --snapshot-dir reads the default directory's snapshot, so round 1 passes after its sidecar is overwritten, and writes nothing" {
-  local before after
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
-  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  green || return 1
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
-  write_dispositions 2 "[$(disposition_entry f.txt 7 c/later fix)]"
-  before="$(tree_state)"
-  run_check_all
-  green || return 1
-  after="$(tree_state)"
-  [ "$before" = "$after" ] || { printf 'a read-only check-all wrote:\n%s\n---\n%s\n' "$before" "$after" >&2; return 1; }
-  [ ! -e "$SNAPSHOT_DIRECTORY/dispositions-2.checked.json" ]
-}
-
-@test "snapshots: check-all with no --snapshot-dir still fails unknown-key when the default directory holds no snapshot for the round" {
-  local before
-  mkdir -p "$SNAPSHOT_DIRECTORY"
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
-  run_check 1
-  green || return 1
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
-  write_dispositions 2 "[$(disposition_entry f.txt 7 c/later fix)]"
-  before="$(tree_state)"
-  run_check_all
-  red unknown-key "$(key_json c/imp f.txt 3)" || return 1
-  [ "$before" = "$(tree_state)" ]
-}
-
-@test "snapshots: check with no --snapshot-dir re-grades a round from its existing snapshot and flags an edit, writing nothing" {
+@test "snapshots: an edit after the snapshot fails edited-after-check through check and check-all, with and without --snapshot-dir (case table)" {
   local before after
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
@@ -381,22 +367,17 @@ tree_state() {
   run_check 1
   green || return 1
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope "a different reason" triage-threshold)]")"
+  printf 'case: %s\n' 'check-all and check with --snapshot-dir' >&2
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  red edited-after-check '{"round":1}' || return 1
+  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  red edited-after-check '{"round":1}' || return 1
+  printf 'case: %s\n' 'check with no --snapshot-dir, writing nothing' >&2
   before="$(tree_state)"
   run_check 1
   red edited-after-check '{"round":1}' || return 1
   after="$(tree_state)"
   [ "$before" = "$after" ]
-}
-
-@test "snapshots: editing the dispositions file after its snapshot fails edited-after-check" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
-  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  green || return 1
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope "a different reason" triage-threshold)]")"
-  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  red edited-after-check '{"round":1}' || return 1
-  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  red edited-after-check '{"round":1}'
 }
 
 @test "check-all: exits 1 when any one of three files fails and 0 when all pass" {
@@ -439,25 +420,32 @@ tree_state() {
   [ "$before" = "$after" ]
 }
 
-@test "exit 3: a corrupt state file (the evaluator fails) is not a pass" {
+@test "exit 3: each unreadable input (state file, vetoes.json, dispositions file, missing triage library) exits 3 and grades nothing (case table)" {
+  local copy="$BATS_TEST_TMPDIR/no-triage-library"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
+  printf 'case: %s\n' 'triage library missing' >&2
+  mkdir -p "$copy"
+  cp "$SCRIPTS/audit-dispositions-check.sh" "$SCRIPTS/filing-outcomes-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$copy/"
+  run bash "$copy/audit-dispositions-check.sh" check --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --round 1
+  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
+  grep -qF -- 'audit-triage-lib.sh' <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- 'violation' <<<"$output" && return 1
+  printf 'case: %s\n' 'corrupt state file' >&2
+  cp "$ALF_STATE" "$BATS_TEST_TMPDIR/state.kept"
   printf 'not json' >"$ALF_STATE"
   run_check 1
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
   run_check_all
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
-}
-
-@test "exit 3: an unparseable vetoes.json is not a pass" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
+  cp "$BATS_TEST_TMPDIR/state.kept" "$ALF_STATE"
+  printf 'case: %s\n' 'unparseable vetoes.json' >&2
   printf 'not json' >"$RUN_FOLDER/vetoes.json"
   run_check 1
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
   run_check_all
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
-}
-
-@test "exit 3: an unparseable dispositions file is not a pass" {
+  rm -f "$RUN_FOLDER/vetoes.json"
+  printf 'case: %s\n' 'unparseable dispositions file' >&2
   printf 'not json' >"$RUN_FOLDER/dispositions-1.json"
   run_check 1
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
@@ -631,73 +619,9 @@ run_sections() {
   run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
 }
 
-@test "UAT-002: an out-of-branch finding with no entry and no triage mark fails undisposed; an entry clears it" {
-  accept_at 1
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "base.txt" or .line != 6)')"
-  run_check 1
-  red undisposed "$(key_json c/oosimp base.txt 6)" || return 1
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp accept-residual "left for later")]")"
-  run_check 1
-  green
-}
-
-@test "UAT-003a: an out-of-branch Critical, security:true or security-absent finding filed on a non-PRIVATE repo fails security-file-not-private, not empty-reason" {
-  local line_number finding_class
-  for line_number in 3 5 7; do
-    finding_class="$(jq -r --argjson line "$line_number" '.[] | select(.path == "base.txt" and .line == $line) | .finding_class' <<<"$FINDINGS_JSON")"
-    write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt "$line_number" "$finding_class" file "filed upstream")]")"
-    run_check 1
-    red security-file-not-private "$(key_json "$finding_class" base.txt "$line_number")" || return 1
-    grep -qF -- 'violation: empty-reason' <<<"$output" && { echo "empty-reason fired: $output"; return 1; }
-  done
-  true
-}
-
-@test "UAT-003b: divert with a reason on each out-of-branch security-class finding passes" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos divert "security class"),$(disposition_entry base.txt 5 c/oossec divert "security class"),$(disposition_entry base.txt 7 c/oosnosec divert "no security flag")]")"
-  run_check 1
-  green
-}
-
-@test "UAT-003c: divert with an empty reason fails empty-reason" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos divert "")]")"
-  run_check 1
-  red empty-reason "$(key_json c/oos base.txt 3)"
-}
-
-@test "UAT-003d: divert on a branch-authored security finding fails divert-not-allowed" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 2 c/sec divert "security class")]")"
-  run_check 1
-  red divert-not-allowed "$(key_json c/sec f.txt 2)"
-}
-
-@test "UAT-003e: divert on an out-of-branch security:false major fails divert-not-allowed" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp divert "not security")]")"
-  run_check 1
-  red divert-not-allowed "$(key_json c/oosimp base.txt 6)"
-}
-
-@test "visibility: only an exact PRIVATE answer for the repository resolved once lets the file pass; the environment and a cache change nothing" {
-  local visibility
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos file "filed upstream")]")"
-  export GH_REPO=someone/private GAIA_REPO_VISIBILITY=PRIVATE REPO_VISIBILITY=PRIVATE VISIBILITY=PRIVATE
-  printf 'PRIVATE\n' >"$ALF_ROOT/.gaia/local/repo-visibility"
-  printf '{"visibility":"PRIVATE"}\n' >"$ALF_ROOT/.gaia/local/audit/visibility.json"
-  for visibility in '' __empty__ PUBLIC INTERNAL private 'PRIVATE '; do
-    GH_VISIBILITY="$visibility"
-    run_check 1
-    red security-file-not-private "$(key_json c/oos base.txt 3)" || { echo "visibility '$visibility'"; return 1; }
-  done
-  GH_VISIBILITY=PRIVATE
-  run_check 1
-  green || return 1
-  grep -qxF -- 'repo view owner/repo --json visibility --jq .visibility GH_REPO=unset' "$GH_CALLS" || { cat "$GH_CALLS"; return 1; }
-  grep -F -- 'GH_REPO=someone/private' "$GH_CALLS" && return 1
-  true
-}
-
-@test "UAT-037: check-outcomes passes filed and diverted, fails a missing line or failed, passes absent and transient" {
+@test "check-outcomes: each outcome value per file and divert entry, and the exact-key veto exemption for refused-authored (case table)" {
   local outcome_file="$RUN_FOLDER/filing-outcomes-1.jsonl" outcome
+  printf 'case: %s\n' 'filed and diverted pass, a missing line or failed fails, absent and transient pass' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream),$(disposition_entry base.txt 3 c/oos divert "security class")]")"
   printf '%s\n%s\n' "$(outcome_line c/oosimp base.txt 6 file filed)" "$(outcome_line c/oos base.txt 3 divert diverted)" >"$outcome_file"
   run_outcomes 1
@@ -722,6 +646,42 @@ run_sections() {
   printf 'not json\n' >"$outcome_file"
   run_outcomes 1
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
+  printf 'case: %s\n' 'refused-authored on a file entry is its own violation, and the mutant that passes it goes green' >&2
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
+  outcome_line c/oosimp base.txt 6 file refused-authored >"$outcome_file"
+  run_outcomes 1
+  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
+  grep -qF -- outcome-failed <<<"$output" && return 1
+  mutant_script audit-dispositions-check.sh -e '/elif \$outcome.outcome == "refused-authored"/d' \
+    -e 's/"absent", "transient"/"absent", "transient", "refused-authored"/' || return 1
+  run_outcomes 1
+  green || return 1
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  printf 'case: %s\n' 'a divert entry refused-authored fails too, and the other outcomes pass' >&2
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos divert "security class")]")"
+  outcome_line c/oos base.txt 3 divert refused-authored >"$outcome_file"
+  run_outcomes 1
+  red refused-authored "$(key_json c/oos base.txt 3)" || return 1
+  for outcome in filed matched diverted absent transient; do
+    outcome_line c/oos base.txt 3 divert "$outcome" >"$outcome_file"
+    run_outcomes 1
+    green || { echo "outcome $outcome"; return 1; }
+  done
+  printf 'case: %s\n' 'refused-authored passes once the exact key is vetoed; a malformed vetoes.json exits 3' >&2
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
+  outcome_line c/oosimp base.txt 6 file refused-authored >"$outcome_file"
+  run_outcomes 1
+  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
+  grep -qF -- unbound <<<"$output" && { echo "$output"; return 1; }
+  vetoes 2 c/oosimp base.txt 7
+  run_outcomes 1
+  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
+  vetoes 2 c/oosimp base.txt 6
+  run_outcomes 1
+  green || return 1
+  printf 'not json' >"$RUN_FOLDER/vetoes.json"
+  run_outcomes 1
+  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
 }
 
 @test "check-outcomes passes a matched outcome, a dedup hit on an existing issue" {
@@ -740,8 +700,9 @@ run_sections() {
   green
 }
 
-@test "UAT-023: a maintainer triage mark on its own harness path, security:false and major, needs no entry and renders one waived line" {
-  local line_count
+@test "triage mark: honored only for an allowlisted member on its own path with security false and severity not critical, under a readable roster (case table)" {
+  local line_count mutation with_mark
+  printf 'case: %s\n' 'honored: own harness path, security false, major' >&2
   with_maintainer "[$TRIAGE_ENTRY]"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
   run_check 1
@@ -751,10 +712,7 @@ run_sections() {
   grep -qxF -- '## Waived below triage threshold (not filed)' <<<"$output" || { echo "$output"; return 1; }
   line_count="$(grep -cxF -- '- .claude/hooks/h.sh:1 c/tri: below threshold' <<<"$output")"
   [ "$line_count" -eq 1 ] || { echo "$output"; return 1; }
-}
-
-@test "UAT-023: a triage mark with severity critical, security true, security absent, off its member's globs, or with no roster is ignored" {
-  local mutation
+  printf 'case: %s\n' 'ignored: critical, security true, security absent, off its member globs, no roster' >&2
   for mutation in '.severity = "critical"' '.security = true' 'del(.security)' '.path = "f.txt" | .line = 9'; do
     with_maintainer "[$(jq -c "$mutation" <<<"$TRIAGE_ENTRY")]"
     write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
@@ -766,11 +724,8 @@ run_sections() {
   with_maintainer "[$TRIAGE_ENTRY]"
   rm -f "$ALF_ROOT/.gaia/audit-ci.yml"
   run_check 1
-  red undisposed "$(member_key_json "$SHELL_MEMBER" c/tri .claude/hooks/h.sh 1)"
-}
-
-@test "UAT-023: a code-audit-frontend triage mark is ignored" {
-  local with_mark
+  red undisposed "$(member_key_json "$SHELL_MEMBER" c/tri .claude/hooks/h.sh 1)" || return 1
+  printf 'case: %s\n' 'ignored: a code-audit-frontend mark' >&2
   write_roster
   with_mark="$(jq -c '. + [{"path":"f.txt","line":8,"finding_class":"c/fronttri","severity":"minor","security":false,"triage":true,"triage_reason":"below threshold"}]' <<<"$FINDINGS_JSON")"
   alf_sidecar "$MEMBER" "$with_mark" 11
@@ -797,31 +752,23 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   true
 }
 
-@test "UAT-023: a waive line for a security:true finding does not render" {
+@test "pr-sections: a waive line renders exactly once only for security false and severity not critical (case table)" {
+  printf 'case: %s\n' 'security true' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 5 c/oossec waive-out-of-scope "below threshold" triage-threshold)]")"
   run_sections
   green || return 1
   grep -qF -- 'c/oossec' <<<"$output" && { echo "$output"; return 1; }
-  true
-}
-
-@test "UAT-023: a waive line for a finding with no security field does not render" {
+  printf 'case: %s\n' 'no security field' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 7 c/oosnosec waive-out-of-scope "below threshold" triage-threshold)]")"
   run_sections
   green || return 1
   grep -qF -- 'c/oosnosec' <<<"$output" && { echo "$output"; return 1; }
-  true
-}
-
-@test "UAT-023: a waive line for a severity critical finding does not render" {
+  printf 'case: %s\n' 'severity critical' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos waive-out-of-scope "below threshold" triage-threshold)]")"
   run_sections
   green || return 1
   grep -qF -- 'c/oos' <<<"$output" && { echo "$output"; return 1; }
-  true
-}
-
-@test "UAT-023: a waive line for a security:false major with a clean reason renders exactly once" {
+  printf 'case: %s\n' 'security false major with a clean reason' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp waive-out-of-scope "below threshold" triage-threshold)]")"
   run_sections
   green || return 1
@@ -889,8 +836,9 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   green
 }
 
-@test "forward-only: a version-1 snapshot re-grades an undisposed out-of-branch finding clean; live, or as version 2, it fails undisposed" {
+@test "forward-only: each snapshot version re-grades under its own predicate while live grading uses the current one (case table)" {
   local lookup sha snapshot_file="$SNAPSHOT_DIRECTORY/dispositions-1.checked.json"
+  printf 'case: %s\n' 'version 1: an undisposed out-of-branch finding re-grades clean; as version 2 it fails' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.path == "f.txt")')"
   run_check 1
   red undisposed "$(key_json c/oos base.txt 3)" || return 1
@@ -904,7 +852,22 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   green || return 1
   jq -c '.version = 2' "$snapshot_file" >"$snapshot_file.new" && mv "$snapshot_file.new" "$snapshot_file"
   run_check_all
-  red undisposed "$(key_json c/oos base.txt 3)"
+  red undisposed "$(key_json c/oos base.txt 3)" || return 1
+  printf 'case: %s\n' 'version 2: an accept-residual re-grades clean; live it fails; a mutant grading version 2 as 3 goes red' >&2
+  rm -f "$snapshot_file"
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
+  run_check 1
+  red accept-residual-not-eligible "$(key_json c/sug f.txt 6)" || return 1
+  lookup="$(bash "$SCRIPTS/audit-loop-eval.sh" findings --root "$ALF_ROOT" --round 1 | jq -c '.entries | map({member, finding_class, path, line, severity, security, cross_remit, authored, triage: false, triage_reason: ""})')"
+  sha="$(shasum -a 256 <"$RUN_FOLDER/dispositions-1.json" | cut -d' ' -f1)"
+  jq -n -c --arg sha "$sha" --argjson lookup "$lookup" '{version: 2, round: 1, dispositions_sha256: $sha, lookup: $lookup}' >"$snapshot_file"
+  run_check_all
+  green || return 1
+  run_check 1
+  green || return 1
+  mutant_script audit-dispositions-check.sh -e 's/"accept-residual" and \$version >= 3/"accept-residual" and $version >= 2/' || return 1
+  run_check_all
+  red accept-residual-not-eligible "$(key_json c/sug f.txt 6)"
 }
 
 @test "snapshot projection: check-all honors an earlier round's triage mark from its snapshot after the sidecar loses it" {
@@ -924,8 +887,9 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   red undisposed "$(member_key_json "$SHELL_MEMBER" c/tri .claude/hooks/h.sh 1)"
 }
 
-@test "carry-forward: a key disposed file in round 1, filed or transient, is not undisposed when round 2 re-reports it with no entry" {
-  local outcome
+@test "carry-forward: which earlier dispositions carry into a re-report (file filed/transient, fix, filer-refused, accepted, accepted escalated) (case table)" {
+  local outcome escalation escalated
+  printf 'case: %s\n' 'file, filed or transient, is carried' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
@@ -938,16 +902,58 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
     run_check_all
     green || { echo "outcome $outcome"; return 1; }
   done
-}
-
-@test "carry-forward: a key disposed fix in round 1 is still undisposed when round 2 re-reports it with no entry" {
+  printf 'case: %s\n' 'a key the filer refused is not carried, and the mutant that carries it goes green' >&2
+  outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  run_check 2
+  red undisposed "$(key_json c/oosimp base.txt 6)" || return 1
+  mutant_script audit-dispositions-check.sh -e 's/gaia_filing_refused_keys "$RUN_FOLDER"/printf "[]"/' || return 1
+  run_check 2
+  green || return 1
+  reset_fixture
+  printf 'case: %s\n' 'fix is not carried' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
   open_round 2 "$FINDINGS_JSON"
   write_dispositions 2 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "base.txt" or .line != 6)')"
   run_check 2
-  red undisposed "$(key_json c/oosimp base.txt 6)"
+  red undisposed "$(key_json c/oosimp base.txt 6)" || return 1
+  reset_fixture
+  printf 'case: %s\n' 'an accepted key on a non-stop round needs no entry; re-disposing it fails; the mutant not carrying accepts goes red' >&2
+  accept_at 1
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
+  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  open_round 2 "$FINDINGS_JSON"
+  open_round 3 "$FINDINGS_JSON"
+  write_dispositions 3 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "f.txt" or .line != 6)')"
+  run_check 3
+  green || return 1
+  mutant_script audit-dispositions-check.sh -e 's/select(\$version >= 3 and .disposition == "accept-residual")/select(false)/' || return 1
+  run_check 3
+  red undisposed "$(key_json c/sug f.txt 6)" || return 1
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  write_dispositions 3 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
+  run_check 3
+  red accept-residual-not-eligible "$(key_json c/sug f.txt 6)" || return 1
+  reset_fixture
+  printf 'case: %s\n' 'an accepted key re-reported as Critical or security-class is undisposed' >&2
+  accept_at 1
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
+  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  open_round 2 "$FINDINGS_JSON"
+  for escalation in '.severity = "critical"' '.severity = "major" | .security = true'; do
+    escalated="$(jq -c "map(if .path == \"f.txt\" and .line == 6 then $escalation else . end)" <<<"$FINDINGS_JSON")"
+    open_round 3 "$escalated"
+    write_dispositions 3 "$(fill "$escalated" '[]' 'select(.path != "f.txt" or .line != 6)')"
+    run_check 3
+    red undisposed "$(key_json c/sug f.txt 6)" || return 1
+  done
+  mutant_script audit-dispositions-check.sh -e 's/ and (security_class | not))/)/' || return 1
+  open_round 3 "$escalated"
+  run_check 3
+  green
 }
 
 # mutant_script <file> <sed args...>: a scratch copy of the check script and the
@@ -970,31 +976,6 @@ recorded_row() {
     >>"$RUN_FOLDER/recorded-residuals.jsonl"
 }
 
-@test "check-outcomes: a refused-authored outcome on a file entry is its own violation, never outcome-failed" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
-  outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
-  run_outcomes 1
-  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
-  grep -qF -- outcome-failed <<<"$output" && return 1
-  mutant_script audit-dispositions-check.sh -e '/elif \$outcome.outcome == "refused-authored"/d' \
-    -e 's/"absent", "transient"/"absent", "transient", "refused-authored"/' || return 1
-  run_outcomes 1
-  green
-}
-
-@test "check-outcomes: a divert entry refused-authored fails too, and the other outcomes still pass" {
-  local outcome
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos divert "security class")]")"
-  outcome_line c/oos base.txt 3 divert refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
-  run_outcomes 1
-  red refused-authored "$(key_json c/oos base.txt 3)" || return 1
-  for outcome in filed matched diverted absent transient; do
-    outcome_line c/oos base.txt 3 divert "$outcome" >"$RUN_FOLDER/filing-outcomes-1.jsonl"
-    run_outcomes 1
-    green || { echo "outcome $outcome"; return 1; }
-  done
-}
-
 @test "a refused-authored entry re-disposed accept-residual fails on an ordinary round, passes with a human accept and renders once under the accepted heading" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
   outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
@@ -1012,23 +993,6 @@ recorded_row() {
   green || return 1
   grep -qxF -- '## Accepted residuals (recorded, not fixed)' <<<"$output" || { echo "$output"; return 1; }
   [ "$(grep -cF -- 'base.txt:6' <<<"$output")" -eq 1 ] || { echo "$output"; return 1; }
-}
-
-@test "carry-forward: a key the filer refused is not carried, so round 2 re-reporting it is undisposed" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
-  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  green || return 1
-  open_round 2 "$FINDINGS_JSON"
-  write_dispositions 2 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "base.txt" or .line != 6)')"
-  outcome_line c/oosimp base.txt 6 file filed >"$RUN_FOLDER/filing-outcomes-1.jsonl"
-  run_check 2
-  green || return 1
-  outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
-  run_check 2
-  red undisposed "$(key_json c/oosimp base.txt 6)" || return 1
-  mutant_script audit-dispositions-check.sh -e 's/gaia_filing_refused_keys "$RUN_FOLDER"/printf "[]"/' || return 1
-  run_check 2
-  green
 }
 
 @test "pr-sections: one recorded worthiness row and no dispositions render the committed fixture byte for byte" {
@@ -1134,18 +1098,6 @@ recorded_row() {
   run_sections
   green || return 1
   grep -qF -- 'f.txt:3' <<<"$output"
-}
-
-@test "the triage library is required: a copy without it exits 3 naming it and grades nothing" {
-  local copy="$BATS_TEST_TMPDIR/no-triage-library"
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
-  mkdir -p "$copy"
-  cp "$SCRIPTS/audit-dispositions-check.sh" "$SCRIPTS/filing-outcomes-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$copy/"
-  run bash "$copy/audit-dispositions-check.sh" check --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --round 1
-  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
-  grep -qF -- 'audit-triage-lib.sh' <<<"$output" || { echo "$output"; return 1; }
-  grep -qF -- 'violation' <<<"$output" && return 1
-  true
 }
 
 # --- accept-residual eligibility, veto satisfaction, residual count ----------
@@ -1288,7 +1240,10 @@ run_residual_count() {
   red edited-after-check '{"round":3}'
 }
 
-@test "eligibility: a Minor-only round 2 fails accept-residual-not-eligible; a human accept passes the same entry (mutant dropping human_accept goes red)" {
+@test "eligibility: accept-residual is refused when the stop does not hold or a stop key is fixed, allowed by a human accept or a typed key, never by claims in the entry (case table)" {
+  local shape key claims round=1
+  local -a rows=()
+  printf 'case: %s\n' 'Minor-only round 2 refused; a human accept passes; the mutant dropping human_accept goes red' >&2
   stop_rounds "$(minor_rows f.txt 1 3)" "$(minor_rows f.txt 1 2)"
   accept_all 2 "$(minor_rows f.txt 1 2)"
   run_check 2
@@ -1299,10 +1254,9 @@ run_residual_count() {
   green || return 1
   mutant_check_tree audit-dispositions-check.sh -e 's/(\$stop.human_accept or (\$stop.default_stop/(($stop.default_stop/' || return 1
   run_check 2
-  red accept-residual-not-eligible "$(minor_key f.txt 1)"
-}
-
-@test "eligibility: a key typed with audit-accept-finding at the round-1 checkpoint passes accept-residual on round 2, and no other key does (mutant dropping the key arm goes red)" {
+  red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  printf 'case: %s\n' 'a key typed with audit-accept-finding passes and no other key does; the mutant dropping the key arm goes red' >&2
   stop_rounds "$(minor_rows f.txt 1 3)" "$(minor_rows f.txt 1 2)"
   alf_add_checkpoint 1 fallback
   alf_state_edit '.allowance.accepted_keys = [{checkpoint: 1, key: [$member, "rule/x", "f.txt", 1], source: "typed", at: "t", session_id: "s1"}]' --arg member "$MEMBER"
@@ -1318,7 +1272,62 @@ run_residual_count() {
   grep -F -- 'f.txt:1' <<<"$output" | grep -qF -- 'Human decision: ' || { echo "$output"; return 1; }
   mutant_check_tree audit-dispositions-check.sh -e 's/(\$accept_allowed or (\$stop.accepted_keys \/\/ \[\] | any(. == \$key)) | not)/($accept_allowed | not)/' || return 1
   run_check 2
-  red accept-residual-not-eligible "$(minor_key f.txt 1)"
+  red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  printf 'case: %s\n' 'each stop-false shape refuses with no accept and passes with a human accept' >&2
+  for shape in major critical security-absent unknown-verdict null-previous-count legacy-snapshot no-marker whole-branch-member \
+    repeat-fixed-triple repeat-back-again repeat-gap repeat-moved; do
+    stop_false_case "$shape" || { echo "fixture $shape"; return 1; }
+    [ "$(evaluator_field "$LAST_ROUND" '.default_stop')" = false ] || { echo "$shape: the stop holds"; return 1; }
+    case "$shape" in
+      repeat-*) [ "$(evaluator_field "$LAST_ROUND" '.signals.reintroduced')" = true ] || { echo "$shape: not reintroduced"; return 1; } ;;
+    esac
+    key="$(jq -c '.entries | map(select(.disposition == "accept-residual")) | first | {member, finding_class, path, line}' "$RUN_FOLDER/dispositions-$LAST_ROUND.json")"
+    run_check "$LAST_ROUND"
+    red accept-residual-not-eligible "$key" || { echo "shape $shape"; return 1; }
+    accept_at "$LAST_ROUND"
+    run_check "$LAST_ROUND"
+    green || { echo "shape $shape twin"; return 1; }
+  done
+  printf 'case: %s\n' 'round 10 refused while round 9 passes on the stop' >&2
+  while [ "$round" -le 9 ]; do rows+=("$(minor_rows f.txt 1 2)"); round=$((round + 1)); done
+  stop_rounds "${rows[@]}"
+  accept_all 9 "$(minor_rows f.txt 1 2)"
+  run_check 9
+  green || return 1
+  alf_set_line other.txt 10 "round 10"
+  alf_commit "round 10"
+  alf_round 10 "$MEMBER" "$(minor_rows f.txt 1 2)"
+  review_base_all member-clearance
+  earn_marker "$MEMBER" 10
+  accept_all 10 "$(minor_rows f.txt 1 2)"
+  run_check 10
+  red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
+  printf 'case: %s\n' 'a claim inside the entry changes nothing; the mutant reading the entry goes green' >&2
+  claims='{"severity":"minor","security":false,"default_stop":true,"human_accept":true,"eligible":true}'
+  stop_rounds "$(minor_rows f.txt 1 3)" "$(minor_rows f.txt 1 2)"
+  accept_all 2 "$(minor_rows f.txt 1 2)"
+  jq -c --argjson claims "$claims" '.entries |= map(. + $claims)' "$RUN_FOLDER/dispositions-2.json" >"$RUN_FOLDER/claimed.json"
+  mv "$RUN_FOLDER/claimed.json" "$RUN_FOLDER/dispositions-2.json"
+  run_check 2
+  red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
+  mutant_check_tree audit-dispositions-check.sh \
+    -e 's/and (\$accept_allowed or/and (.eligible == true or $accept_allowed or/' || return 1
+  run_check 2
+  green || return 1
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  printf 'case: %s\n' 'a threshold fix on a stop key refuses the accept beside it; a threshold waiver passes; the mutant dropping the fix arm goes green' >&2
+  stop_base
+  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x fix)]"
+  run_check 3
+  red accept-residual-not-eligible "$(minor_key f.txt 2)" || return 1
+  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x waive-out-of-scope "below the threshold" triage-threshold)]"
+  run_check 3
+  green || return 1
+  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x fix)]"
+  mutant_check_tree audit-dispositions-check.sh -e 's/ and (\$threshold_fix | not)//' || return 1
+  run_check 3
+  green
 }
 
 # stop_false_case <name>: a branch whose last round fails the default stop
@@ -1375,134 +1384,12 @@ stop_false_case() {
   accept_all "$LAST_ROUND" "$(jq -c '.findings | map({finding_class, path, line})' "$ALF_ROOT"/.gaia/local/audit/*."$ALF_SLUG.$MEMBER".findings.json)"
 }
 
-@test "eligibility: each stop-false shape fails accept-residual-not-eligible with no accept, and the same entry passes with a human accept" {
-  local shape key
-  for shape in major critical security-absent unknown-verdict null-previous-count legacy-snapshot no-marker whole-branch-member \
-    repeat-fixed-triple repeat-back-again repeat-gap repeat-moved; do
-    stop_false_case "$shape" || { echo "fixture $shape"; return 1; }
-    [ "$(evaluator_field "$LAST_ROUND" '.default_stop')" = false ] || { echo "$shape: the stop holds"; return 1; }
-    case "$shape" in
-      repeat-*) [ "$(evaluator_field "$LAST_ROUND" '.signals.reintroduced')" = true ] || { echo "$shape: not reintroduced"; return 1; } ;;
-    esac
-    key="$(jq -c '.entries | map(select(.disposition == "accept-residual")) | first | {member, finding_class, path, line}' "$RUN_FOLDER/dispositions-$LAST_ROUND.json")"
-    run_check "$LAST_ROUND"
-    red accept-residual-not-eligible "$key" || { echo "shape $shape"; return 1; }
-    accept_at "$LAST_ROUND"
-    run_check "$LAST_ROUND"
-    green || { echo "shape $shape twin"; return 1; }
-  done
-}
-
-@test "eligibility: round 10 fails accept-residual-not-eligible while the same entry at round 9 passes on the stop" {
-  local round=1
-  local -a rows=()
-  while [ "$round" -le 9 ]; do rows+=("$(minor_rows f.txt 1 2)"); round=$((round + 1)); done
-  stop_rounds "${rows[@]}"
-  accept_all 9 "$(minor_rows f.txt 1 2)"
-  run_check 9
-  green || return 1
-  # Round 10 overwrites the one sidecar, so round 9 is checked first.
-  alf_set_line other.txt 10 "round 10"
-  alf_commit "round 10"
-  alf_round 10 "$MEMBER" "$(minor_rows f.txt 1 2)"
-  review_base_all member-clearance
-  earn_marker "$MEMBER" 10
-  accept_all 10 "$(minor_rows f.txt 1 2)"
-  run_check 10
-  red accept-residual-not-eligible "$(minor_key f.txt 1)"
-}
-
-@test "eligibility: a severity or eligibility claim inside the dispositions entry changes nothing (mutant reading the entry goes red)" {
-  local claims='{"severity":"minor","security":false,"default_stop":true,"human_accept":true,"eligible":true}'
-  stop_rounds "$(minor_rows f.txt 1 3)" "$(minor_rows f.txt 1 2)"
-  accept_all 2 "$(minor_rows f.txt 1 2)"
-  jq -c --argjson claims "$claims" '.entries |= map(. + $claims)' "$RUN_FOLDER/dispositions-2.json" >"$RUN_FOLDER/claimed.json"
-  mv "$RUN_FOLDER/claimed.json" "$RUN_FOLDER/dispositions-2.json"
-  run_check 2
-  red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
-  mutant_check_tree audit-dispositions-check.sh \
-    -e 's/and (\$accept_allowed or/and (.eligible == true or $accept_allowed or/' || return 1
-  run_check 2
-  green
-}
-
-@test "eligibility: a threshold fix on a stop key fails the accept beside it; a threshold waiver beside it passes (mutant dropping the fix arm goes red)" {
-  stop_base
-  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x fix)]"
-  run_check 3
-  red accept-residual-not-eligible "$(minor_key f.txt 2)" || return 1
-  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x waive-out-of-scope "below the threshold" triage-threshold)]"
-  run_check 3
-  green || return 1
-  accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x fix)]"
-  mutant_check_tree audit-dispositions-check.sh -e 's/ and (\$threshold_fix | not)//' || return 1
-  run_check 3
-  green
-}
-
 @test "eligibility: an honored triage mark on the stop round needs no entry beside the accepts" {
   local mark='[{"path":"lib/s.sh","line":4,"finding_class":"rule/t","severity":"major","security":false,"triage":true,"triage_reason":"below the threshold"}]'
   MEMBER="$SHELL_MAINTAINER"
   stop_rounds "$(minor_rows lib/s.sh 1 3)" "$(minor_rows lib/s.sh 1 2)" "$(joined "$(minor_rows lib/s.sh 1 2)" "$mark")"
   [ "$(evaluator_field 3 '.default_stop')" = true ] || return 1
   accept_all 3 "$(minor_rows lib/s.sh 1 2)"
-  run_check 3
-  green
-}
-
-@test "forward-only: a version-2 snapshot with an accept-residual re-grades clean; live it fails (mutant grading version 2 as 3 goes red)" {
-  local lookup sha snapshot_file="$SNAPSHOT_DIRECTORY/dispositions-1.checked.json"
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
-  run_check 1
-  red accept-residual-not-eligible "$(key_json c/sug f.txt 6)" || return 1
-  lookup="$(bash "$SCRIPTS/audit-loop-eval.sh" findings --root "$ALF_ROOT" --round 1 | jq -c '.entries | map({member, finding_class, path, line, severity, security, cross_remit, authored, triage: false, triage_reason: ""})')"
-  sha="$(shasum -a 256 <"$RUN_FOLDER/dispositions-1.json" | cut -d' ' -f1)"
-  mkdir -p "$SNAPSHOT_DIRECTORY"
-  jq -n -c --arg sha "$sha" --argjson lookup "$lookup" '{version: 2, round: 1, dispositions_sha256: $sha, lookup: $lookup}' >"$snapshot_file"
-  run_check_all
-  green || return 1
-  run_check 1
-  green || return 1
-  mutant_script audit-dispositions-check.sh -e 's/"accept-residual" and \$version >= 3/"accept-residual" and $version >= 2/' || return 1
-  run_check_all
-  red accept-residual-not-eligible "$(key_json c/sug f.txt 6)"
-}
-
-@test "carry-forward: a re-reported accepted key on a non-stop round needs no entry; re-disposing it accept-residual fails (mutant not carrying accepts goes red)" {
-  accept_at 1
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
-  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  green || return 1
-  open_round 2 "$FINDINGS_JSON"
-  open_round 3 "$FINDINGS_JSON"
-  write_dispositions 3 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "f.txt" or .line != 6)')"
-  run_check 3
-  green || return 1
-  mutant_script audit-dispositions-check.sh -e 's/select(\$version >= 3 and .disposition == "accept-residual")/select(false)/' || return 1
-  run_check 3
-  red undisposed "$(key_json c/sug f.txt 6)" || return 1
-  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
-  write_dispositions 3 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
-  run_check 3
-  red accept-residual-not-eligible "$(key_json c/sug f.txt 6)"
-}
-
-@test "carry-forward: an accepted key re-reported as Critical or security-class is undisposed with no entry" {
-  local escalation escalated
-  accept_at 1
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
-  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
-  green || return 1
-  open_round 2 "$FINDINGS_JSON"
-  for escalation in '.severity = "critical"' '.severity = "major" | .security = true'; do
-    escalated="$(jq -c "map(if .path == \"f.txt\" and .line == 6 then $escalation else . end)" <<<"$FINDINGS_JSON")"
-    open_round 3 "$escalated"
-    write_dispositions 3 "$(fill "$escalated" '[]' 'select(.path != "f.txt" or .line != 6)')"
-    run_check 3
-    red undisposed "$(key_json c/sug f.txt 6)" || return 1
-  done
-  mutant_script audit-dispositions-check.sh -e 's/ and (security_class | not))/)/' || return 1
-  open_round 3 "$escalated"
   run_check 3
   green
 }
@@ -1549,8 +1436,9 @@ veto_unsatisfied_red() {
 }
 
 # bats test_tags=protected
-@test "vetoes: an unsatisfied veto fails vetoed-not-fix on an accept and undisposed with no entry: never fixed, re-reported, or the fixer disputed or could not fix" {
-  local fixer_disposition
+@test "vetoes: unsatisfied (never fixed, re-reported, fixer disputed or cannot_fix, member not dispatched, fix before the veto, shifted line) and satisfied (fixer fixed on a closing round, main-thread fix reviewed clean) (case table)" {
+  local fixer_disposition shifted
+  printf 'case: %s\n' 'unsatisfied: never fixed, re-reported, fixer disputed or cannot_fix' >&2
   vetoes 1 c/imp f.txt 3
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
   fixed_tree_round 2 "$(without_veto_key)"
@@ -1563,11 +1451,8 @@ veto_unsatisfied_red() {
     veto_fixed_in 1 "$fixer_disposition"
     veto_unsatisfied_red 2 "$(without_veto_key)" || { echo "fixer $fixer_disposition"; return 1; }
   done
-}
-
-# The gate cases bind the veto from round 3: its waiver round 2 already sits
-# on the fixed tree, so only counting round 1's fix could satisfy it.
-@test "vetoes: unsatisfied when the member was not dispatched after the fix, or the fix came before the veto's round, at the round it binds and later" {
+  reset_fixture
+  printf 'case: %s\n' 'unsatisfied: member not dispatched after the fix, or the fix came before the veto round (the round it binds and later)' >&2
   vetoes 1 c/imp f.txt 3
   veto_fixed_in 1 fixed
   fixed_tree_round 2 "$(without_veto_key)"
@@ -1584,10 +1469,8 @@ veto_unsatisfied_red() {
   veto_unsatisfied_red 3 "$(without_veto_key)" || { echo "fix before the veto, the round it binds"; return 1; }
   next_tree_round 4 "$(without_veto_key)"
   veto_unsatisfied_red 4 "$(without_veto_key)" || { echo "fix before the veto, later round"; return 1; }
-}
-
-@test "vetoes: a shifted-line re-report is a new key, undisposed on its own, while the satisfied veto needs nothing" {
-  local shifted
+  reset_fixture
+  printf 'case: %s\n' 'a shifted-line re-report is a new key; the satisfied veto needs nothing' >&2
   vetoes 1 c/imp f.txt 3
   veto_fixed_in 1 fixed
   shifted="$(jq -c '. + [{"path":"f.txt","line":8,"finding_class":"c/imp","severity":"major","security":false}]' <<<"$(without_veto_key)")"
@@ -1596,10 +1479,8 @@ veto_unsatisfied_red() {
   run_check 2
   red undisposed "$(key_json c/imp f.txt 8)" || return 1
   grep -qF -- "$(key_json c/imp f.txt 3)" <<<"$output" && { echo "$output"; return 1; }
-  true
-}
-
-@test "vetoes: a satisfied veto lets a closing round omit the key with no entry through check, both check-alls and a later round" {
+  reset_fixture
+  printf 'case: %s\n' 'satisfied: a closing round omits the key with no entry through check, both check-alls and a later round' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
@@ -1626,10 +1507,9 @@ veto_unsatisfied_red() {
   next_tree_round 4 "$(without_veto_key)"
   write_dispositions 4 "$(fill "$(without_veto_key)" '[]')"
   run_check 4
-  green
-}
-
-@test "vetoes: a main-thread fix reviewed clean satisfies the veto, and its synthetic fix entry passes with the veto kept or retired" {
+  green || return 1
+  reset_fixture
+  printf 'case: %s\n' 'satisfied: a main-thread fix reviewed clean, its synthetic fix entry passing with the veto kept or retired' >&2
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
@@ -1844,20 +1724,20 @@ cross_remit_critical_fixed() {
   write_dispositions 2 "$(fill "$1" '[]')"
 }
 
-@test "needs-human: a cross-remit Critical decided fix is satisfied by its path owner's clean review of the repair, so check-all allows the stop" {
+@test "needs-human: a cross-remit Critical decided fix is satisfied only by its path owner's clean review of the repair (case table)" {
+  printf 'case: %s\n' 'owner reviews the repair clean, check-all allows the stop' >&2
   cross_remit_critical_fixed '[]' || return 1
   run_check_all
-  green
-}
-
-@test "needs-human: a cross-remit Critical decided fix stays unsatisfied when its path owner re-reports the repaired line" {
+  green || return 1
+  printf 'case: %s\n' 'owner re-reports the repaired line, the veto stays unsatisfied' >&2
   cross_remit_critical_fixed "$(alf_entries lib/s.sh 2 2 rule/owner | jq -c 'map(. + {severity: "major", security: false})')" || return 1
   run_check_all
   red undisposed "$(key_json rule/x lib/s.sh 1)"
 }
 
-@test "needs-human: a fixed decision records a cross-remit finding a commit changed after its round, naming that commit, with no veto; an unchanged path or a finding not cross-remit is refused" {
+@test "needs-human: a fixed decision is recorded only for a non-security cross-remit finding whose path changed, or a security-class one no member owns, under a readable roster (case table)" {
   local fixing_commit
+  printf 'case: %s\n' 'fixed on a cross-remit finding a commit changed; an unchanged path or a finding not cross-remit is refused' >&2
   stop_rounds "$(joined "$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true})')" "$(minor_rows f.txt 2 2)")"
   decide 1 fixed '{"reason":"reworded"}'
   [ "$status" -eq 3 ] || { echo "a fixed on an unchanged path recorded: $status $output"; return 1; }
@@ -1882,18 +1762,14 @@ cross_remit_critical_fixed() {
 ## Cross-remit findings fixed after their round
 
 - f.txt:1 rule/x: fixed in ${fixing_commit:0:12}: reworded" ] || { echo "pr-sections: $output"; return 1; }
-}
-
-@test "needs-human: a fixed decision is refused for a security-class cross-remit finding even after a commit changed its path" {
+  printf 'case: %s\n' 'a security-class cross-remit finding is refused fixed even after a commit changed its path' >&2
   stop_rounds "$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true, security: true})')"
   alf_set_line f.txt 1 "reworded"
   alf_commit "reword f.txt" || return 1
   decide 1 fixed '{"reason":"reworded"}'
   [ "$status" -eq 3 ] || { echo "a security-class fixed recorded: $status $output"; return 1; }
-  [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ]
-}
-
-@test "needs-human: a security-class cross-remit finding no member owns takes fixed, with no veto, once a commit changed its path" {
+  [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ] || return 1
+  printf 'case: %s\n' 'a security-class cross-remit finding no member owns takes fixed, with no veto, once a commit changed its path' >&2
   stop_rounds "$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true, security: true})')"
   with_f_txt_ownerless decide 1 fixed '{"reason":"reworded"}'
   [ "$status" -eq 3 ] || { echo "a fixed on an unchanged path recorded: $status $output"; return 1; }
@@ -1902,7 +1778,16 @@ cross_remit_critical_fixed() {
   with_f_txt_ownerless decide 1 fixed '{"reason":"reworded"}'
   [ "$status" -eq 0 ] || { echo "a security-class fixed on an unowned path was refused: $status $output"; return 1; }
   [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
-  jq -e -s 'length == 1 and .[0].decision == "fixed"' "$RUN_FOLDER/recorded-residuals.jsonl" >/dev/null
+  jq -e -s 'length == 1 and .[0].decision == "fixed"' "$RUN_FOLDER/recorded-residuals.jsonl" >/dev/null || return 1
+  printf 'case: %s\n' 'a security-class cross-remit finding takes no fixed and no fix while the roster cannot be read' >&2
+  stop_rounds "$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true, security: true})')"
+  alf_set_line f.txt 1 "reworded"
+  alf_commit "reword f.txt" || return 1
+  with_roster_unreadable decide 1 fixed '{"reason":"reworded"}'
+  [ "$status" -eq 3 ] || { echo "a security-class fixed under an unreadable roster recorded: $status $output"; return 1; }
+  with_roster_unreadable decide 1 fix
+  [ "$status" -eq 3 ] || { echo "a cross-remit fix under an unreadable roster recorded: $status $output"; return 1; }
+  [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ] && [ ! -e "$RUN_FOLDER/vetoes.json" ]
 }
 
 @test "needs-human: a key an earlier round accepted needs a new decision when the open round re-reports it security-class" {
@@ -1959,7 +1844,8 @@ discard_refused() {
   [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ] || { cat "$RUN_FOLDER/recorded-residuals.jsonl"; return 1; }
 }
 
-@test "needs-human: a discard on an enforcement-draft key withdraws its veto and renders it an accepted residual; a repeat is refused" {
+@test "needs-human: a discard is allowed only on a vetoed enforcement-draft non-security non-Critical key, once (case table)" {
+  printf 'case: %s\n' 'allowed: withdraws its veto and renders an accepted residual; a repeat is refused; the renderer mutant drops the row' >&2
   draft_stop "$(minor_rows f.txt 1 1)" || return 1
   decide 1 discard '{"reason":"the human discarded the drafted repair"}' || return 1
   [ "$status" -eq 0 ] || { echo "status $status: $output"; return 1; }
@@ -1973,10 +1859,8 @@ discard_refused() {
   grep -qF -- '- `f.txt:1` the human discarded the drafted repair.' <<<"$output" && { echo "the renderer mutant still rendered the row"; return 1; }
   SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
   decide 1 discard || return 1
-  [ "$status" -eq 3 ]
-}
-
-@test "needs-human: a discard is refused with no enforcement_draft fix entry, on an unvetoed key, and on a Critical or security-class key; each guard's mutant goes red" {
+  [ "$status" -eq 3 ] || return 1
+  printf 'case: %s\n' 'refused: no enforcement_draft fix entry, an unvetoed key, a Critical or a security-class key; each guard mutant lets the discard through' >&2
   draft_stop "$(minor_rows f.txt 1 1)" false || return 1
   decide 1 discard; discard_refused || return 1
   mutant_check_tree audit-recorded-decision-lib.sh -e 's/ and \.enforcement_draft == true//' || return 1
@@ -1998,23 +1882,6 @@ discard_refused() {
   mutant_check_tree audit-recorded-decision-lib.sh -e 's/ and all(\.\[\]; security_class | not)//' || return 1
   decide 1 discard
   [ "$status" -eq 0 ] || { echo "the security-class mutant still refused: $output"; return 1; }
-}
-
-@test "check-outcomes: refused-authored passes once the exact key is vetoed; a malformed vetoes.json exits 3 and an absent one runs clean" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
-  outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
-  run_outcomes 1
-  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
-  grep -qF -- unbound <<<"$output" && { echo "$output"; return 1; }
-  vetoes 2 c/oosimp base.txt 7
-  run_outcomes 1
-  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
-  vetoes 2 c/oosimp base.txt 6
-  run_outcomes 1
-  green || return 1
-  printf 'not json' >"$RUN_FOLDER/vetoes.json"
-  run_outcomes 1
-  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
 }
 
 @test "pr-sections: each residual renders its own failure mode and key; a fixed vetoed key leaves while the others stay, and residual-count matches the heading" {
@@ -2092,15 +1959,4 @@ discard_refused() {
   green || return 1
   run_residual_count
   [ "$output" = '{"total":1,"ask":1}' ] || { echo "$output"; return 1; }
-}
-
-@test "needs-human: a security-class cross-remit finding takes no fixed, and no fix, while the roster cannot be read" {
-  stop_rounds "$(minor_rows f.txt 1 1 | jq -c 'map(. + {cross_remit: true, security: true})')"
-  alf_set_line f.txt 1 "reworded"
-  alf_commit "reword f.txt" || return 1
-  with_roster_unreadable decide 1 fixed '{"reason":"reworded"}'
-  [ "$status" -eq 3 ] || { echo "a security-class fixed under an unreadable roster recorded: $status $output"; return 1; }
-  with_roster_unreadable decide 1 fix
-  [ "$status" -eq 3 ] || { echo "a cross-remit fix under an unreadable roster recorded: $status $output"; return 1; }
-  [ ! -e "$RUN_FOLDER/recorded-residuals.jsonl" ] && [ ! -e "$RUN_FOLDER/vetoes.json" ]
 }

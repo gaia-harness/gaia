@@ -440,7 +440,7 @@ render_wrapped() {
   [ "$(printf '%s\n' "$block" | grep -c '^#   [a-z-]*  ')" -eq "$(printf '%s\n' "$block" | grep -c .)" ]
   [ "$marked" = "$(printf '%s\n' "${router_owned[@]}" | LC_ALL=C sort)" ]
   for token in "${classifier_reasons[@]}"; do
-    grep -qF "@test \"red $token:" "$BATS_TEST_FILENAME" || { printf 'no red case for %s\n' "$token" >&2; return 1; }
+    grep -qE "(qc_expect_deep|qc_component_pair) $token |qc_route \"$token " "$BATS_TEST_FILENAME" || { printf 'no red case for %s\n' "$token" >&2; return 1; }
   done
 }
 
@@ -539,7 +539,8 @@ quick_library_files() {
 
 # --- path stage ---------------------------------------------------------------
 
-@test "red quick-path: a stylesheet, a route, the document component and a language aggregator each route deep" {
+@test "red routing: a path shape routes deep" {
+  # case: red quick-path: a stylesheet, a route, the document component and a language aggregator each route deep
   local path
   for path in apps/web/app/styles/tailwind.css apps/web/app/routes/_index.tsx \
     apps/web/app/components/document/index.tsx apps/web/app/languages/en/index.ts; do
@@ -554,9 +555,8 @@ quick_library_files() {
   qc_edit "$COMPONENT" replace 10 '      Hello there'
   qc_paths "$COMPONENT"
   qc_expect_quick
-}
 
-@test "red quick-path: a component whose post-image carries an always-deep marker, each with a clean twin" {
+  # case: red quick-path: a component whose post-image carries an always-deep marker, each with a clean twin
   local marker
   for marker in 'nonce' 'process.env' 'import.meta.env' 'request'; do
     qc_component
@@ -568,9 +568,8 @@ quick_library_files() {
     qc_paths "$COMPONENT"
     qc_expect_quick || return 1
   done
-}
 
-@test "red quick-path: a story whose component is not in the selected set" {
+  # case: red quick-path: a story whose component is not in the selected set
   qc_story
   qc_edit "$STORY" replace 12 "    label: 'Submit',"
   qc_paths "$STORY"
@@ -579,9 +578,8 @@ quick_library_files() {
   qc_edit "$STORY" replace 12 "    label: 'Submit',"
   qc_paths "$COMPONENT" "$STORY"
   qc_expect_quick
-}
 
-@test "red quick-path: a story paired with a page, and one paired with a non-component sibling" {
+  # case: red quick-path: a story paired with a page, and one paired with a non-component sibling
   local page="apps/web/app/pages/home/page.tsx" page_story="apps/web/app/pages/home/tests/page.stories.tsx"
   local sibling="apps/web/app/styles/inline-link.tsx" sibling_story="apps/web/app/styles/tests/inline-link.stories.tsx"
   qc_start
@@ -604,22 +602,21 @@ quick_library_files() {
   qc_expect_deep quick-path "$sibling_story" -
 }
 
-@test "red quick-file-status: an added component file" {
+@test "red quick-file-status: an added, deleted, renamed, symlinked or mode-changed component routes deep" {
+  # case: red quick-file-status: an added component file
   local added="apps/web/app/components/badge/index.tsx"
   qc_component
   qc_put "$added" '<span>New</span>;'
   qc_paths "$added"
   qc_expect_deep quick-file-status "$added" -
-}
 
-@test "red quick-file-status: a deleted component file" {
+  # case: red quick-file-status: a deleted component file
   qc_component
   rm "$QC_ROOT/$COMPONENT"
   qc_paths "$COMPONENT"
   qc_expect_deep quick-file-status "$COMPONENT" -
-}
 
-@test "red quick-file-status: a renamed component reads as a delete plus an add, named by the first selected path" {
+  # case: red quick-file-status: a renamed component reads as a delete plus an add, named by the first selected path
   local renamed="apps/web/app/components/panel/index.tsx"
   qc_component
   mkdir -p "$QC_ROOT/apps/web/app/components/panel"
@@ -629,17 +626,15 @@ quick_library_files() {
   qc_write_paths "$renamed" "$COMPONENT"
   run quick_classify_paths "$QC_ROOT" "$QC_FROM" "$QC_HEAD" "$QC_PATHS"
   qc_expect_deep quick-file-status "$renamed" -
-}
 
-@test "red quick-file-status: a component turned into a symlink" {
+  # case: red quick-file-status: a component turned into a symlink
   qc_component
   rm "$QC_ROOT/$COMPONENT"
   ln -s ../layout/index.tsx "$QC_ROOT/$COMPONENT"
   qc_paths "$COMPONENT"
   qc_expect_deep quick-file-status "$COMPONENT" -
-}
 
-@test "red quick-file-status: a component whose mode becomes 100755" {
+  # case: red quick-file-status: a component whose mode becomes 100755
   qc_component
   chmod 755 "$QC_ROOT/$COMPONENT"
   qc_git config core.fileMode true
@@ -649,105 +644,38 @@ quick_library_files() {
 
 # --- line stage: must-quick shapes --------------------------------------------
 
-@test "must-quick: static JSX text, a div to span swap, intrinsic className tokens and a capitalized element's className line" {
-  qc_component
-  qc_edit "$COMPONENT" replace 10 '      Hello there'
-  qc_lines "$COMPONENT"
-  qc_expect_quick || return 1
-  qc_component
-  qc_edit "$COMPONENT" replace 9 '    <span>'
-  qc_edit "$COMPONENT" replace 11 '    </span>'
-  qc_lines "$COMPONENT"
-  qc_expect_quick || return 1
-  qc_component
-  qc_edit "$COMPONENT" replace 7 '  <div className="flex gap-4 items-center">'
-  qc_lines "$COMPONENT"
-  qc_expect_quick || return 1
-  qc_component
-  qc_edit "$COMPONENT" replace 23 '      className="mt-4 focus-visible:ring-2"'
-  qc_lines "$COMPONENT"
-  qc_expect_quick
-}
-
-@test "must-quick: a token change inside an existing cn() string literal, single-line and multi-line" {
-  qc_component
-  qc_edit "$COMPONENT" replace 12 "    <span className={cn('px-3', 'py-1')}>Badge</span>"
-  qc_lines "$COMPONENT"
-  qc_expect_quick || return 1
-  qc_component
-  qc_edit "$COMPONENT" replace 15 "        'rounded-lg',"
-  qc_lines "$COMPONENT"
-  qc_expect_quick
-}
-
-@test "must-quick: a paired story args literal change alongside its component's change" {
-  qc_story
-  qc_edit "$STORY" replace 12 "    label: 'Submit',"
-  qc_lines "$COMPONENT" "$STORY"
-  qc_expect_quick || return 1
-  qc_story
-  qc_edit "$STORY" replace 17 "  args: {label: 'Run'},"
-  qc_lines "$COMPONENT" "$STORY"
-  qc_expect_quick
-}
-
-@test "must-quick: a value-only change in the en and ja language files, single-line, wrapped and single-line to wrapped" {
-  qc_language
-  qc_edit "$ENGLISH" replace 2 "  title: 'Hello there',"
-  qc_edit "$JAPANESE" replace 2 "  title: 'やあ',"
-  qc_lines "$ENGLISH" "$JAPANESE"
-  qc_expect_quick || return 1
-  qc_language
-  qc_edit "$ENGLISH" replace 8 "    'A longer value that prettier wrapped onto its own line for width',"
-  qc_edit "$JAPANESE" replace 8 "    'もっと長い値',"
-  qc_lines "$ENGLISH" "$JAPANESE"
-  qc_expect_quick || return 1
-  qc_language
-  qc_edit "$ENGLISH" replace 2 "$(printf "  title:\n    'Hello and welcome to a value long enough that prettier wraps it',")"
-  qc_lines "$ENGLISH"
-  qc_expect_quick
-}
-
 # --- line stage: deep signals, each with its green twin ----------------------
 
-@test "red quick-codepoint: a U+202E in a text line, and a non-ASCII byte in a className value" {
+@test "red: a changed text or markup line routes deep with its reason" {
+  # case: red quick-codepoint: a U+202E in a text line, and a non-ASCII byte in a className value
   qc_component_pair quick-codepoint replace 10 "$(printf '      Hello \342\200\256world')" post:10 '      Hello world!' || return 1
   qc_component_pair quick-codepoint replace 7 "$(printf '  <div className="flex gap-2 \303\251">')" post:7 '  <div className="flex gap-3">'
-}
 
-@test "red quick-block-comment: a /* on a changed text line" {
+  # case: red quick-block-comment: a /* on a changed text line
   qc_component_pair quick-block-comment replace 10 '      Hello /* world' post:10 '      Hello / world'
-}
 
-@test "red quick-template-literal: a backtick on a changed text line" {
+  # case: red quick-template-literal: a backtick on a changed text line
   qc_component_pair quick-template-literal replace 10 '      Hello `world`' post:10 "      Hello 'world'"
-}
 
-@test "red quick-import: an added import line" {
+  # case: red quick-import: an added import line
   qc_component_pair quick-import insert 2 "import x from 'y';" post:3 ''
-}
 
-@test "red quick-hook: an added hook call in JSX children" {
+  # case: red quick-hook: an added hook call in JSX children
   qc_component_pair quick-hook insert 10 '      {useThing()}' post:11 '      More text'
-}
 
-@test "red quick-handler: an added element carrying an event handler" {
+  # case: red quick-handler: an added element carrying an event handler
   qc_component_pair quick-handler insert 10 '      <span onClick={go}>x</span>' post:11 '      More text'
-}
 
-@test "red quick-spread: an added element carrying a spread" {
+  # case: red quick-spread: an added element carrying a spread
   qc_component_pair quick-spread insert 10 '      <span {...rest}>x</span>' post:11 '      More text'
-}
 
-@test "red quick-conditional: an added conditional render" {
+  # case: red quick-conditional: an added conditional render
   qc_component_pair quick-conditional insert 10 "      {ok && 'x'}" post:11 '      More text'
-}
 
-@test "red quick-map: an added list render" {
+  # case: red quick-map: an added list render
   qc_component_pair quick-map insert 10 '      {items.map(render)}' post:11 '      More text'
-}
 
-@test "red quick-cva: a className change inside a cva variant map" {
+  # case: red quick-cva: a className change inside a cva variant map
   qc_start
   qc_put "$CHIP" "$CHIP_BASE"
   qc_base
@@ -760,14 +688,12 @@ quick_library_files() {
   qc_edit "$CHIP" replace 12 '  <span className="bg-muted">Chip</span>'
   qc_lines "$CHIP"
   qc_expect_quick
-}
 
-@test "red quick-cn-argument: a multi-line cn( continuation line turned into a variable, and a new cn argument" {
+  # case: red quick-cn-argument: a multi-line cn( continuation line turned into a variable, and a new cn argument
   qc_component_pair quick-cn-argument replace 16 '        borderClass' pre:16 "        'border-2'" || return 1
   qc_component_pair quick-cn-argument replace 12 "    <span className={cn('px-2', 'py-1', 'm-1')}>Badge</span>" pre:12 "    <span className={cn('px-2', 'py-2')}>Badge</span>"
-}
 
-@test "red quick-element: an added capitalized element, and a changed capitalized element line" {
+  # case: red quick-element: an added capitalized element, and a changed capitalized element line
   qc_component_pair quick-element insert 10 '      <Icon />' post:11 '      More text' || return 1
   qc_component
   qc_edit "$COMPONENT" replace 22 '    <Button size="sm"'
@@ -777,23 +703,20 @@ quick_library_files() {
   qc_edit "$COMPONENT" replace 23 '      className="mt-3 focus-visible:ring-2"'
   qc_lines "$COMPONENT"
   qc_expect_quick
-}
 
-@test "red quick-tag: h2 to div and button to div" {
+  # case: red quick-tag: h2 to div and button to div
   qc_component_pair quick-tag replace 8 '    <div className="text-xl">Title</div>' pre:8 '    <h2 className="text-2xl">Title</h2>' || return 1
   qc_component_pair quick-tag replace 21 '    <div className="p-1">Go</div>' pre:21 '    <button className="p-2">Go</button>'
-}
 
-@test "red quick-tag: an added iframe, script, form and meta" {
+  # case: red quick-tag: an added iframe, script, form and meta
   local tag count=0
   for tag in iframe script form meta; do
     qc_component_pair quick-tag insert 10 "      <$tag />" post:11 '      More text' || { printf 'tag %s\n' "$tag" >&2; return 1; }
     count=$((count + 1))
   done
   [ "$count" -eq 4 ]
-}
 
-@test "red quick-attribute: each non-className attribute added on an intrinsic element" {
+  # case: red quick-attribute: each non-className attribute added on an intrinsic element
   local names=(aria-label role tabIndex alt htmlFor id key href to target src srcDoc action hidden inert disabled placeholder)
   local name count=0
   [ "${#names[@]}" -eq 17 ]
@@ -802,9 +725,8 @@ quick_library_files() {
     count=$((count + 1))
   done
   [ "$count" -eq 17 ]
-}
 
-@test "red quick-attribute: a multi-line href continuation line" {
+  # case: red quick-attribute: a multi-line href continuation line
   qc_component
   qc_edit "$COMPONENT" replace 32 "        'evil'"
   qc_lines "$COMPONENT"
@@ -815,36 +737,31 @@ quick_library_files() {
   qc_expect_quick
 }
 
-@test "red quick-hiding-token: an added hidden, an added-only outline-none, and a removed focus-visible:ring-2" {
+@test "red: a token change routes deep with its reason" {
+  # case: red quick-hiding-token: an added hidden, an added-only outline-none, and a removed focus-visible:ring-2
   qc_component_pair quick-hiding-token replace 7 '  <div className="flex gap-2 hidden">' post:7 '  <div className="flex gap-2 block">' || return 1
   qc_component_pair quick-hiding-token replace 7 '  <div className="flex gap-2 outline-none">' post:7 '  <div className="flex gap-2 outline-2">' || return 1
   qc_component_pair quick-hiding-token replace 23 '      className="mt-2"' pre:23 '      className="mt-2 focus-visible:ring-2 px-1"'
-}
 
-@test "red quick-motion-order-token: an added animate token" {
+  # case: red quick-motion-order-token: an added animate token
   qc_component_pair quick-motion-order-token replace 7 '  <div className="flex gap-2 animate-spin">' post:7 '  <div className="flex gap-2 rounded">'
-}
 
-@test "red quick-palette: an added raw palette token" {
+  # case: red quick-palette: an added raw palette token
   qc_component_pair quick-palette replace 7 '  <div className="flex gap-2 bg-red-500">' post:7 '  <div className="flex gap-2 bg-primary">'
-}
 
-@test "red quick-arbitrary-value: an added url( arbitrary value" {
+  # case: red quick-arbitrary-value: an added url( arbitrary value
   qc_component_pair quick-arbitrary-value replace 7 '  <div className="flex gap-2 bg-[url(x)]">' post:7 '  <div className="flex gap-2 w-3">'
-}
 
-@test "red quick-arbitrary-value: an arbitrary property or value spelling of a hiding, motion or palette token" {
+  # case: red quick-arbitrary-value: an arbitrary property or value spelling of a hiding, motion or palette token
   local token
   for token in '[display:none]' '[visibility:hidden]' '[outline:none]' '[pointer-events:none]' '[animation:spin_1s]' '[order:-1]' 'bg-[#ff0000]' 'text-[red]' 'opacity-[0]'; do
     qc_component_pair quick-arbitrary-value replace 7 "  <div className=\"flex gap-2 $token\">" post:7 '  <div className="flex gap-2 rounded">' || { printf 'token %s\n' "$token" >&2; return 1; }
   done
-}
 
-@test "red quick-hiding-token: an added size-0" {
+  # case: red quick-hiding-token: an added size-0
   qc_component_pair quick-hiding-token replace 7 '  <div className="flex gap-2 size-0">' post:7 '  <div className="flex gap-2 size-4">'
-}
 
-@test "red quick-text-deleted: control text deleted with no replacement" {
+  # case: red quick-text-deleted: control text deleted with no replacement
   qc_component
   qc_edit "$COMPONENT" delete 26
   qc_lines "$COMPONENT"
@@ -855,31 +772,8 @@ quick_library_files() {
   qc_expect_quick
 }
 
-@test "red quick-unclassified: a line inside a multi-line string constant such as an inline theme script" {
-  qc_component
-  qc_edit "$COMPONENT" replace 4 '  "(function(){return 2})()";'
-  qc_lines "$COMPONENT"
-  qc_expect_deep quick-unclassified "$COMPONENT" pre:4 || return 1
-  qc_component_pair quick-unclassified insert 10 "      {t('extra')}" post:11 '      More text'
-}
-
-@test "red quick-unclassified: text inside an existing style element, beside the same edit in a p" {
-  local page="apps/web/app/pages/home/page.tsx"
-  qc_start
-  qc_put "$page" "$(printf 'const Home = () => (\n  <div>\n    <style>\n      a\n    </style>\n    <p>\n      Hello\n    </p>\n  </div>\n);\n')"
-  qc_base
-  qc_edit "$page" replace 4 '      b'
-  qc_lines "$page"
-  qc_expect_deep quick-unclassified "$page" pre:4 || return 1
-  qc_start
-  qc_put "$page" "$(printf 'const Home = () => (\n  <div>\n    <style>\n      a\n    </style>\n    <p>\n      Hello\n    </p>\n  </div>\n);\n')"
-  qc_base
-  qc_edit "$page" replace 7 '      Hi'
-  qc_lines "$page"
-  qc_expect_quick
-}
-
-@test "red quick-language-shape: a process.env and an import.meta.env language value" {
+@test "red: a language file change routes deep with its reason" {
+  # case: red quick-language-shape: a process.env and an import.meta.env language value
   local value
   for value in 'process.env.TITLE' 'import.meta.env.TITLE'; do
     qc_language
@@ -891,9 +785,8 @@ quick_library_files() {
   qc_edit "$ENGLISH" replace 2 "  title: 'Env title',"
   qc_lines "$ENGLISH"
   qc_expect_quick
-}
 
-@test "red quick-language-key: a plural suffix change" {
+  # case: red quick-language-key: a plural suffix change
   qc_language
   qc_edit "$ENGLISH" replace 4 "    clicks_few: '{{count}} click',"
   qc_lines "$ENGLISH"
@@ -902,9 +795,8 @@ quick_library_files() {
   qc_edit "$ENGLISH" replace 4 "    clicks_one: '{{count}} tap',"
   qc_lines "$ENGLISH"
   qc_expect_quick
-}
 
-@test "red quick-placeholder: {{count}} to {{count, number}}" {
+  # case: red quick-placeholder: {{count}} to {{count, number}}
   qc_language
   qc_edit "$ENGLISH" replace 4 "    clicks_one: '{{count, number}} click',"
   qc_lines "$ENGLISH"
@@ -913,9 +805,8 @@ quick_library_files() {
   qc_edit "$ENGLISH" replace 4 "    clicks_one: '{{count}} press',"
   qc_lines "$ENGLISH"
   qc_expect_quick
-}
 
-@test "red quick-nesting: a changed \$t( reference" {
+  # case: red quick-nesting: a changed $t( reference
   qc_language
   qc_edit "$ENGLISH" replace 9 "  nested: '\$t(common:other) here',"
   qc_lines "$ENGLISH"
@@ -924,9 +815,8 @@ quick_library_files() {
   qc_edit "$ENGLISH" replace 9 "  nested: '\$t(common:title) there',"
   qc_lines "$ENGLISH"
   qc_expect_quick
-}
 
-@test "red quick-html: a tag in a language value" {
+  # case: red quick-html: a tag in a language value
   qc_language
   qc_edit "$ENGLISH" replace 10 "  html: 'Plain <b>text</b>',"
   qc_lines "$ENGLISH"
@@ -935,9 +825,8 @@ quick_library_files() {
   qc_edit "$ENGLISH" replace 10 "  html: 'Plain bold text',"
   qc_lines "$ENGLISH"
   qc_expect_quick
-}
 
-@test "red quick-empty-value: a value emptied, and one made whitespace-only" {
+  # case: red quick-empty-value: a value emptied, and one made whitespace-only
   local value
   for value in "''" "'   '"; do
     qc_language
@@ -949,9 +838,8 @@ quick_library_files() {
   qc_edit "$ENGLISH" replace 2 "  title: 'Hi',"
   qc_lines "$ENGLISH"
   qc_expect_quick
-}
 
-@test "red quick-locale-missing: a key changed in en while ja lacks it" {
+  # case: red quick-locale-missing: a key changed in en while ja lacks it
   local japanese_without_html
   japanese_without_html="$(printf '%s\n' "$JAPANESE_BASE" | grep -v "^  html:")"
   qc_language "$japanese_without_html"
@@ -961,28 +849,6 @@ quick_library_files() {
   qc_language
   qc_edit "$ENGLISH" replace 10 "  html: 'Plain words',"
   qc_lines "$ENGLISH"
-  qc_expect_quick
-}
-
-@test "red quick-story-shape: a story parameters change that turns a11y off" {
-  qc_story
-  qc_edit "$STORY" replace 19 "    a11y: {test: 'off'},"
-  qc_lines "$COMPONENT" "$STORY"
-  qc_expect_deep quick-story-shape "$STORY" pre:19 || return 1
-  qc_story
-  qc_edit "$STORY" replace 12 "    label: 'Off',"
-  qc_lines "$COMPONENT" "$STORY"
-  qc_expect_quick
-}
-
-@test "red quick-story-play: a story expect change" {
-  qc_story
-  qc_edit "$STORY" replace 23 "    await expect(canvas.getByText('Run')).toBeVisible();"
-  qc_lines "$COMPONENT" "$STORY"
-  qc_expect_deep quick-story-play "$STORY" pre:23 || return 1
-  qc_story
-  qc_edit "$STORY" replace 17 "  args: {label: 'Run'},"
-  qc_lines "$COMPONENT" "$STORY"
   qc_expect_quick
 }
 
@@ -1005,7 +871,28 @@ qc_story_args_edit() {
   qc_lines "$COMPONENT" "$STORY"
 }
 
-@test "red quick-story-play: a test added to a story file" {
+@test "red: a story change routes deep with its reason" {
+  # case: red quick-story-shape: a story parameters change that turns a11y off
+  qc_story
+  qc_edit "$STORY" replace 19 "    a11y: {test: 'off'},"
+  qc_lines "$COMPONENT" "$STORY"
+  qc_expect_deep quick-story-shape "$STORY" pre:19 || return 1
+  qc_story
+  qc_edit "$STORY" replace 12 "    label: 'Off',"
+  qc_lines "$COMPONENT" "$STORY"
+  qc_expect_quick
+
+  # case: red quick-story-play: a story expect change
+  qc_story
+  qc_edit "$STORY" replace 23 "    await expect(canvas.getByText('Run')).toBeVisible();"
+  qc_lines "$COMPONENT" "$STORY"
+  qc_expect_deep quick-story-play "$STORY" pre:23 || return 1
+  qc_story
+  qc_edit "$STORY" replace 17 "  args: {label: 'Run'},"
+  qc_lines "$COMPONENT" "$STORY"
+  qc_expect_quick
+
+  # case: red quick-story-play: a test added to a story file
   qc_story
   qc_edit "$STORY" insert 29 "
 Default.test('shows a second label', async ({canvas}) => {
@@ -1017,16 +904,14 @@ Default.test('shows a second label', async ({canvas}) => {
   qc_edit "$STORY" insert 27 "  const note = 'x';"
   qc_lines "$COMPONENT" "$STORY"
   qc_expect_deep quick-story-play "$STORY" post:28
-}
 
-@test "red quick-story-play: a line added inside a play body that holds no assertion word" {
+  # case: red quick-story-play: a line added inside a play body that holds no assertion word
   qc_story
   qc_edit "$STORY" insert 22 "    const delay = 1;"
   qc_lines "$COMPONENT" "$STORY"
   qc_expect_deep quick-story-play "$STORY" post:23
-}
 
-@test "red quick-story-format: an old-format story file editing only an args literal" {
+  # case: red quick-story-format: an old-format story file editing only an args literal
   local old_format
   old_format="$(cat <<'EOF'
 import type {Meta, StoryObj} from '@storybook/react-vite';
@@ -1051,72 +936,38 @@ EOF
   qc_expect_deep quick-story-format "$STORY" - || return 1
   qc_story_args_edit "$STORY_BASE"
   qc_expect_quick
-}
 
-@test "red quick-story-format: a story export that is an object literal" {
+  # case: red quick-story-format: a story export that is an object literal
   qc_story_args_edit "$STORY_BASE"$'\n\n'"export const Raw = {args: {label: 'Save'}};"
   qc_expect_deep quick-story-format "$STORY" - || return 1
   qc_story_args_edit "$STORY_BASE"$'\n\n'"export const Typed: Story = {args: {label: 'Save'}};"
   qc_expect_deep quick-story-format "$STORY" -
-}
 
-@test "red quick-story-format: clause (a), an export default line alone" {
+  # case: red quick-story-format: clause (a), an export default line alone
   qc_story_args_edit "$STORY_BASE"$'\n\nexport default meta;'
   qc_expect_deep quick-story-format "$STORY" -
-}
 
-@test "red quick-story-format: clause (b), a preview import that is not the preview module" {
+  # case: red quick-story-format: clause (b), a preview import that is not the preview module
   qc_story_args_edit "$(qc_swap "$STORY_BASE" '#.storybook/preview' './preview')"
   qc_expect_deep quick-story-format "$STORY" - || return 1
   qc_story_args_edit "$(qc_swap "$STORY_BASE" '#.storybook/preview' './nested.storybook/preview')"
   qc_expect_deep quick-story-format "$STORY" -
-}
 
-@test "red quick-story-format: clause (c), no binding from the preview import's meta" {
+  # case: red quick-story-format: clause (c), no binding from the preview import's meta
   qc_story_args_edit "$(qc_swap "$STORY_BASE" '= preview.meta(' '= preview.configure(')"
   qc_expect_deep quick-story-format "$STORY" - || return 1
   qc_story_args_edit "$(qc_swap "$STORY_BASE" '= preview.meta(' '= other.meta(')"
   qc_expect_deep quick-story-format "$STORY" -
-}
 
-@test "red quick-story-format: clause (d), a named export initialized with an object literal" {
+  # case: red quick-story-format: clause (d), a named export initialized with an object literal
   qc_story_args_edit "$STORY_BASE"$'\n\nexport const Raw: Record<string, string> = {a: 1};'
   qc_expect_deep quick-story-format "$STORY" -
 }
 
-@test "must-quick: a relative preview import and a type-parameterized meta are CSF Next" {
-  qc_story_args_edit "$(qc_swap "$STORY_BASE" '#.storybook/preview' '../../../.storybook/preview.ts')"
-  qc_expect_quick || return 1
-  qc_story_args_edit "$(qc_swap "$STORY_BASE" '= preview.meta(' '= preview.type<{args: {label: string}}>().meta(')"
-  qc_expect_quick
-}
-
 # --- line stage: an element nested as an attribute expression's value ----------
 
-@test "must-quick: a className token change on a render-prop element, an icon prop element, the innermost of two nestings and a nested cn() literal" {
-  qc_fixture "$RENDER_BASE"
-  qc_route quick replace 14 '            className="absolute top-1 right-1"' || return 1
-  qc_fixture "$RENDER_BASE"
-  qc_route quick replace 25 '            className="size-5 shrink-0"' || return 1
-  qc_fixture "$NESTED_BASE"
-  qc_route quick replace 8 '              className="block px-3"' || return 1
-  qc_fixture "$NESTED_BASE"
-  qc_route quick replace 20 "            'top-1'" || return 1
-  # The same cn() literal change at top level routes the same way.
-  qc_component
-  qc_route quick replace 15 "        'rounded-lg',"
-}
-
-@test "must-quick: a nested className change with the element closing on the brace's line, in parentheses, and under a one-line render={<Button" {
-  qc_fixture "$RENDER_BASE"
-  qc_route quick replace 46 '            className="mx-4"' || return 1
-  qc_fixture "$(render_wrapped "$(printf '        render={(\n          <Button\n            className="absolute top-2 right-2"\n          />\n        )}')")"
-  qc_route quick replace 13 '            className="absolute top-1 right-1"' || return 1
-  qc_fixture "$(render_wrapped "$(printf '        render={<Button\n          className="absolute top-2 right-2"\n        />}')")"
-  qc_route quick replace 12 '          className="absolute top-1 right-1"'
-}
-
-@test "red quick-hiding-token: a hiding or focus token added to or removed from a nested className, each with its green twin" {
+@test "red: a nested element change routes deep with its reason" {
+  # case: red quick-hiding-token: a hiding or focus token added to or removed from a nested className, each with its green twin
   local token carried='            className="absolute top-2 right-2 sr-only focus:ring-2 animate-spin order-2 top-[3px]"'
   for token in sr-only focus:ring-2; do
     qc_fixture "$RENDER_BASE"
@@ -1130,9 +981,8 @@ EOF
   qc_route quick replace 14 "$(printf '%s\n' "$carried" | sed 's/ right-2//')" || return 1
   qc_fixture "$RENDER_BASE"
   qc_route quick replace 14 '            className="absolute top-2 right-3"'
-}
 
-@test "red quick-motion-order-token: an animate or order token added to or removed from a nested className" {
+  # case: red quick-motion-order-token: an animate or order token added to or removed from a nested className
   local token carried='            className="absolute top-2 right-2 sr-only focus:ring-2 animate-spin order-2 top-[3px]"'
   for token in animate-spin order-2; do
     qc_fixture "$RENDER_BASE"
@@ -1140,29 +990,25 @@ EOF
     qc_fixture "$RENDER_BASE" 14 "$carried"
     qc_route "quick-motion-order-token pre:14" replace 14 "$(printf '%s\n' "$carried" | sed "s/ $token//")" || { printf 'removed %s\n' "$token" >&2; return 1; }
   done
-}
 
-@test "red quick-palette: a raw palette token added to a nested className" {
+  # case: red quick-palette: a raw palette token added to a nested className
   qc_fixture "$RENDER_BASE"
   qc_route "quick-palette post:14" replace 14 '            className="absolute top-2 right-2 bg-red-500"' || return 1
   qc_fixture "$RENDER_BASE"
   qc_route quick replace 14 '            className="absolute top-2 right-2 bg-primary"'
-}
 
-@test "red quick-arbitrary-value: an arbitrary value added to or removed from a nested className" {
+  # case: red quick-arbitrary-value: an arbitrary value added to or removed from a nested className
   local carried='            className="absolute top-2 right-2 sr-only focus:ring-2 animate-spin order-2 top-[3px]"'
   qc_fixture "$RENDER_BASE"
   qc_route "quick-arbitrary-value post:14" replace 14 '            className="absolute top-[3px] right-2"' || return 1
   qc_fixture "$RENDER_BASE" 14 "$carried"
   qc_route "quick-arbitrary-value pre:14" replace 14 '            className="absolute top-2 right-2 sr-only focus:ring-2 animate-spin order-2"'
-}
 
-@test "red quick-codepoint: a non-ASCII byte in a nested className" {
+  # case: red quick-codepoint: a non-ASCII byte in a nested className
   qc_fixture "$RENDER_BASE"
   qc_route "quick-codepoint post:14" replace 14 "$(printf '            className="absolute top-\303\251 right-2"')"
-}
 
-@test "red quick-attribute: a nested element's other attribute changed, added or deleted, and the outer render line changed" {
+  # case: red quick-attribute: a nested element's other attribute changed, added or deleted, and the outer render line changed
   qc_fixture "$RENDER_BASE"
   qc_route "quick-attribute pre:15" replace 15 '            size="icon-lg"' || return 1
   qc_fixture "$RENDER_BASE"
@@ -1173,9 +1019,8 @@ EOF
   qc_route "quick-attribute pre:16" delete 16 '' || return 1
   qc_fixture "$RENDER_BASE"
   qc_route "quick-attribute pre:11" replace 11 '        renderAs={'
-}
 
-@test "red quick-element: a nested element's tag line changed, and a one-line render={<Button line changed" {
+  # case: red quick-element: a nested element's tag line changed, and a one-line render={<Button line changed
   qc_fixture "$RENDER_BASE"
   qc_route "quick-element pre:12" replace 12 '          <Button type="button"' || return 1
   qc_fixture "$NESTED_BASE"
@@ -1184,18 +1029,16 @@ EOF
   qc_route "quick-element pre:11" replace 11 '        render={<Button data-x' || return 1
   qc_fixture "$(render_wrapped '        render={<Button className="top-2" />}')"
   qc_route "quick-element pre:11" replace 11 '        render={<Button className="top-3" />}'
-}
 
-@test "red quick-attribute: a one-line intrinsic element in a render expression keeps its attribute reason" {
+  # case: red quick-attribute: a one-line intrinsic element in a render expression keeps its attribute reason
   qc_fixture "$(render_wrapped '        render={<a className="top-2" />}')"
   qc_route "quick-attribute pre:11" replace 11 '        render={<a className="top-3" />}' || return 1
   qc_fixture "$(render_wrapped '        render={<div />}')"
   qc_route "quick-attribute pre:11" replace 11 '        render={<span />}' || return 1
   qc_fixture "$(render_wrapped "$(printf '        render={\n          <a\n            className="absolute top-2 right-2"\n          />\n        }')")"
   qc_route "quick-attribute pre:13" replace 13 '            className="absolute top-1 right-1"'
-}
 
-@test "red quick-attribute: a className change inside a render expression that is not one element keeps its attribute reason" {
+  # case: red quick-attribute: a className change inside a render expression that is not one element keeps its attribute reason
   local name block line
   local -a cases=(
     "ternary|14|$(printf '        render={\n          open ? (\n            <Button\n              className="absolute top-2 right-2"\n            />\n          ) : undefined\n        }')"
@@ -1218,23 +1061,100 @@ EOF
     qc_fixture "$(render_wrapped "$block")"
     qc_route "quick-attribute pre:$line" replace "$line" "$(sed -n "${line}p" "$QC_ROOT/$COMPONENT" | sed 's/top-2 right-2/top-1 right-1/')" || { printf 'wrapper %s\n' "$name" >&2; return 1; }
   done
-}
 
-@test "red quick-attribute: text and a child expression inside a render-prop element keep their attribute reason" {
+  # case: red quick-attribute: text and a child expression inside a render-prop element keep their attribute reason
   qc_fixture "$RENDER_BASE"
   qc_route "quick-attribute pre:32" replace 32 '            Dismiss' || return 1
   qc_fixture "$RENDER_BASE"
   qc_route "quick-attribute pre:39" replace 39 '            {title}'
 }
 
-@test "red quick-unclassified: a multi-line className string on a nested element" {
-  qc_fixture "$(render_wrapped "$(printf '        render={\n          <Button\n            className="absolute\n              top-2 right-2"\n          />\n        }')")"
-  qc_route "quick-unclassified pre:14" replace 14 '              top-1 right-1"'
-}
-
 # --- line stage: a one-line capitalized element -------------------------------
 
-@test "must-quick: a static className added, changed or removed on a one-line capitalized element" {
+@test "must-quick: allowlisted edits classify quick" {
+  # case: must-quick: static JSX text, a div to span swap, intrinsic className tokens and a capitalized element's className line
+  qc_component
+  qc_edit "$COMPONENT" replace 10 '      Hello there'
+  qc_lines "$COMPONENT"
+  qc_expect_quick || return 1
+  qc_component
+  qc_edit "$COMPONENT" replace 9 '    <span>'
+  qc_edit "$COMPONENT" replace 11 '    </span>'
+  qc_lines "$COMPONENT"
+  qc_expect_quick || return 1
+  qc_component
+  qc_edit "$COMPONENT" replace 7 '  <div className="flex gap-4 items-center">'
+  qc_lines "$COMPONENT"
+  qc_expect_quick || return 1
+  qc_component
+  qc_edit "$COMPONENT" replace 23 '      className="mt-4 focus-visible:ring-2"'
+  qc_lines "$COMPONENT"
+  qc_expect_quick
+
+  # case: must-quick: a token change inside an existing cn() string literal, single-line and multi-line
+  qc_component
+  qc_edit "$COMPONENT" replace 12 "    <span className={cn('px-3', 'py-1')}>Badge</span>"
+  qc_lines "$COMPONENT"
+  qc_expect_quick || return 1
+  qc_component
+  qc_edit "$COMPONENT" replace 15 "        'rounded-lg',"
+  qc_lines "$COMPONENT"
+  qc_expect_quick
+
+  # case: must-quick: a paired story args literal change alongside its component's change
+  qc_story
+  qc_edit "$STORY" replace 12 "    label: 'Submit',"
+  qc_lines "$COMPONENT" "$STORY"
+  qc_expect_quick || return 1
+  qc_story
+  qc_edit "$STORY" replace 17 "  args: {label: 'Run'},"
+  qc_lines "$COMPONENT" "$STORY"
+  qc_expect_quick
+
+  # case: must-quick: a value-only change in the en and ja language files, single-line, wrapped and single-line to wrapped
+  qc_language
+  qc_edit "$ENGLISH" replace 2 "  title: 'Hello there',"
+  qc_edit "$JAPANESE" replace 2 "  title: 'やあ',"
+  qc_lines "$ENGLISH" "$JAPANESE"
+  qc_expect_quick || return 1
+  qc_language
+  qc_edit "$ENGLISH" replace 8 "    'A longer value that prettier wrapped onto its own line for width',"
+  qc_edit "$JAPANESE" replace 8 "    'もっと長い値',"
+  qc_lines "$ENGLISH" "$JAPANESE"
+  qc_expect_quick || return 1
+  qc_language
+  qc_edit "$ENGLISH" replace 2 "$(printf "  title:\n    'Hello and welcome to a value long enough that prettier wraps it',")"
+  qc_lines "$ENGLISH"
+  qc_expect_quick
+
+  # case: must-quick: a relative preview import and a type-parameterized meta are CSF Next
+  qc_story_args_edit "$(qc_swap "$STORY_BASE" '#.storybook/preview' '../../../.storybook/preview.ts')"
+  qc_expect_quick || return 1
+  qc_story_args_edit "$(qc_swap "$STORY_BASE" '= preview.meta(' '= preview.type<{args: {label: string}}>().meta(')"
+  qc_expect_quick
+
+  # case: must-quick: a className token change on a render-prop element, an icon prop element, the innermost of two nestings and a nested cn() literal
+  qc_fixture "$RENDER_BASE"
+  qc_route quick replace 14 '            className="absolute top-1 right-1"' || return 1
+  qc_fixture "$RENDER_BASE"
+  qc_route quick replace 25 '            className="size-5 shrink-0"' || return 1
+  qc_fixture "$NESTED_BASE"
+  qc_route quick replace 8 '              className="block px-3"' || return 1
+  qc_fixture "$NESTED_BASE"
+  qc_route quick replace 20 "            'top-1'" || return 1
+  # The same cn() literal change at top level routes the same way.
+  qc_component
+  qc_route quick replace 15 "        'rounded-lg',"
+
+  # case: must-quick: a nested className change with the element closing on the brace's line, in parentheses, and under a one-line render={<Button
+  qc_fixture "$RENDER_BASE"
+  qc_route quick replace 46 '            className="mx-4"' || return 1
+  qc_fixture "$(render_wrapped "$(printf '        render={(\n          <Button\n            className="absolute top-2 right-2"\n          />\n        )}')")"
+  qc_route quick replace 13 '            className="absolute top-1 right-1"' || return 1
+  qc_fixture "$(render_wrapped "$(printf '        render={<Button\n          className="absolute top-2 right-2"\n        />}')")"
+  qc_route quick replace 12 '          className="absolute top-1 right-1"'
+
+  # case: must-quick: a static className added, changed or removed on a one-line capitalized element
   local edit count=0
   local -a edits=(
     '6|    <DialogContent className="sm:max-w-lg">'
@@ -1255,7 +1175,8 @@ EOF
   [ "$count" -eq 9 ]
 }
 
-@test "red quick-hiding-token: a hiding or focus token on a one-line capitalized element, inside a className or with it whole" {
+@test "red: a one-line capitalized element change routes deep with its reason" {
+  # case: red quick-hiding-token: a hiding or focus token on a one-line capitalized element, inside a className or with it whole
   local token carried='    <DialogContent className="sm:max-w-md hidden invisible sr-only size-0 opacity-0 focus:ring-2 animate-spin order-2 max-w-[30rem]">'
   for token in hidden invisible sr-only size-0 opacity-0 focus:ring-2; do
     qc_fixture "$ONELINE_BASE"
@@ -1277,9 +1198,8 @@ EOF
   qc_route quick replace 6 "$(printf '%s\n' "$carried" | sed 's/sm:max-w-md /sm:max-w-lg /')" || return 1
   qc_fixture "$ONELINE_BASE" 7 '      <DialogHeader className="mr-8">'
   qc_route quick replace 7 '      <DialogHeader>'
-}
 
-@test "red quick-motion-order-token: an animate or order token on a one-line capitalized element" {
+  # case: red quick-motion-order-token: an animate or order token on a one-line capitalized element
   local token carried='    <DialogContent className="sm:max-w-md hidden invisible sr-only size-0 opacity-0 focus:ring-2 animate-spin order-2 max-w-[30rem]">'
   for token in animate-spin order-2; do
     qc_fixture "$ONELINE_BASE"
@@ -1289,9 +1209,8 @@ EOF
   done
   qc_fixture "$ONELINE_BASE"
   qc_route "quick-motion-order-token post:7" replace 7 '      <DialogHeader className="animate-spin">'
-}
 
-@test "red quick-arbitrary-value: an arbitrary value on a one-line capitalized element" {
+  # case: red quick-arbitrary-value: an arbitrary value on a one-line capitalized element
   local carried='    <DialogContent className="sm:max-w-md hidden invisible sr-only size-0 opacity-0 focus:ring-2 animate-spin order-2 max-w-[30rem]">'
   qc_fixture "$ONELINE_BASE"
   qc_route "quick-arbitrary-value post:6" replace 6 '    <DialogContent className="sm:max-w-md max-w-[30rem]">' || return 1
@@ -1303,38 +1222,28 @@ EOF
   qc_route "quick-arbitrary-value pre:7" replace 7 '      <DialogHeader>' || return 1
   qc_fixture "$ONELINE_BASE"
   qc_route "quick-arbitrary-value post:9" replace 9 '        <DialogTitle className="text-lg max-w-[30rem]">{title}</DialogTitle>'
-}
 
-@test "red quick-palette: a raw palette token on a one-line capitalized element, inside a className or with it whole" {
+  # case: red quick-palette: a raw palette token on a one-line capitalized element, inside a className or with it whole
   qc_fixture "$ONELINE_BASE"
   qc_route "quick-palette post:6" replace 6 '    <DialogContent className="sm:max-w-md bg-red-500">' || return 1
   qc_fixture "$ONELINE_BASE"
   qc_route "quick-palette post:7" replace 7 '      <DialogHeader className="bg-red-500">' || return 1
   qc_fixture "$ONELINE_BASE"
   qc_route quick replace 7 '      <DialogHeader className="bg-primary">'
-}
 
-@test "red quick-codepoint: a non-ASCII byte in a one-line capitalized element's className" {
+  # case: red quick-codepoint: a non-ASCII byte in a one-line capitalized element's className
   qc_fixture "$ONELINE_BASE"
   qc_route "quick-codepoint post:6" replace 6 "$(printf '    <DialogContent className="sm:max-w-l\303\251">')"
-}
 
-@test "red quick-cn-argument: a one-line capitalized element's className turned into cn()" {
+  # case: red quick-cn-argument: a one-line capitalized element's className turned into cn()
   qc_fixture "$ONELINE_BASE"
   qc_route "quick-cn-argument pre:6" replace 6 "    <DialogContent className={cn('sm:max-w-lg')}>"
-}
 
-@test "red quick-unclassified: a one-line capitalized element's className turned into an identifier" {
-  qc_fixture "$ONELINE_BASE"
-  qc_route "quick-unclassified pre:6" replace 6 '    <DialogContent className={size}>'
-}
-
-@test "red quick-attribute: another attribute changed beside a one-line className change" {
+  # case: red quick-attribute: another attribute changed beside a one-line className change
   qc_fixture "$ONELINE_BASE"
   qc_route "quick-attribute pre:14" replace 14 '    <DialogContent className="gap-6" showCloseButton>'
-}
 
-@test "red quick-element: a one-line capitalized element whose line changes outside its className" {
+  # case: red quick-element: a one-line capitalized element whose line changes outside its className
   local edit
   local -a edits=(
     '8|        <DialogTitle className="text-xl">Remove</DialogTitle>|pre:8'
@@ -1355,24 +1264,52 @@ EOF
   # An opening tag whose attributes continue onto the next line is not one-line.
   qc_fixture "$ONELINE_BASE" 14 "$(printf '    <DialogContent className="gap-4"\n      showCloseButton={false}>')"
   qc_route "quick-element pre:14" replace 14 '    <DialogContent className="gap-6"'
-}
 
-@test "red quick-spread: an unchanged spread beside a one-line className change" {
+  # case: red quick-spread: an unchanged spread beside a one-line className change
   qc_fixture "$ONELINE_BASE" 6 '    <DialogContent className="sm:max-w-md" {...props}>'
   qc_route "quick-spread pre:6" replace 6 '    <DialogContent className="sm:max-w-lg" {...props}>'
-}
 
-@test "red quick-block-comment: a comment child beside a one-line className change" {
+  # case: red quick-block-comment: a comment child beside a one-line className change
   qc_fixture "$ONELINE_BASE" 8 '        <DialogTitle className="text-lg">{/* note */}Delete</DialogTitle>'
   qc_route "quick-block-comment pre:8" replace 8 '        <DialogTitle className="text-xl">{/* note */}Delete</DialogTitle>'
-}
 
-@test "red quick-conditional: a conditional wrapper beside a one-line className change" {
+  # case: red quick-conditional: a conditional wrapper beside a one-line className change
   qc_fixture "$ONELINE_BASE" 6 '    {open && <DialogContent className="sm:max-w-md">' 13 '    </DialogContent>}'
   qc_route "quick-conditional pre:6" replace 6 '    {open && <DialogContent className="sm:max-w-lg">'
 }
 
-@test "red quick-unclassified: a className line inserted into or deleted from a multi-line capitalized element" {
+@test "red quick-unclassified: an unclassifiable line routes deep" {
+  # case: red quick-unclassified: a line inside a multi-line string constant such as an inline theme script
+  qc_component
+  qc_edit "$COMPONENT" replace 4 '  "(function(){return 2})()";'
+  qc_lines "$COMPONENT"
+  qc_expect_deep quick-unclassified "$COMPONENT" pre:4 || return 1
+  qc_component_pair quick-unclassified insert 10 "      {t('extra')}" post:11 '      More text'
+
+  # case: red quick-unclassified: text inside an existing style element, beside the same edit in a p
+  local page="apps/web/app/pages/home/page.tsx"
+  qc_start
+  qc_put "$page" "$(printf 'const Home = () => (\n  <div>\n    <style>\n      a\n    </style>\n    <p>\n      Hello\n    </p>\n  </div>\n);\n')"
+  qc_base
+  qc_edit "$page" replace 4 '      b'
+  qc_lines "$page"
+  qc_expect_deep quick-unclassified "$page" pre:4 || return 1
+  qc_start
+  qc_put "$page" "$(printf 'const Home = () => (\n  <div>\n    <style>\n      a\n    </style>\n    <p>\n      Hello\n    </p>\n  </div>\n);\n')"
+  qc_base
+  qc_edit "$page" replace 7 '      Hi'
+  qc_lines "$page"
+  qc_expect_quick
+
+  # case: red quick-unclassified: a multi-line className string on a nested element
+  qc_fixture "$(render_wrapped "$(printf '        render={\n          <Button\n            className="absolute\n              top-2 right-2"\n          />\n        }')")"
+  qc_route "quick-unclassified pre:14" replace 14 '              top-1 right-1"'
+
+  # case: red quick-unclassified: a one-line capitalized element's className turned into an identifier
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-unclassified pre:6" replace 6 '    <DialogContent className={size}>'
+
+  # case: red quick-unclassified: a className line inserted into or deleted from a multi-line capitalized element
   qc_fixture "$ONELINE_BASE"
   qc_route "quick-unclassified pre:21" delete 21 '' || return 1
   qc_fixture "$ONELINE_BASE"
@@ -1389,7 +1326,8 @@ EOF
 
 # --- determinism and failure direction ----------------------------------------
 
-@test "an unreadable from-tree exits 2 with no quick on stdout" {
+@test "classifier fails closed with exit 2 on unreadable inputs" {
+  # case: an unreadable from-tree exits 2 with no quick on stdout
   qc_component
   qc_edit "$COMPONENT" replace 10 '      Hello there'
   qc_head
@@ -1401,9 +1339,8 @@ EOF
   [ "$status" -eq 2 ]
   grep -q quick <<<"$output" && return 1
   true
-}
 
-@test "a missing light_route_diff exits 2 with no quick on stdout" {
+  # case: a missing light_route_diff exits 2 with no quick on stdout
   qc_component
   qc_edit "$COMPONENT" replace 10 '      Hello there'
   qc_head
