@@ -32,7 +32,7 @@ setup() {
   OBLIGATION_LITERAL='Capture your own branch-own digest at scope resolution with `.gaia/scripts/audit-scope-digest.sh --capture`, and at marker-write time read that captured value back with `--read` and pass it as `--scope-digest`; never re-derive it in the writing call, and a rotation between the two means the review was superseded and you must be re-dispatched on the new HEAD.'
 }
 
-# --- Group 1: no agent definition carries its own copy ---------------------
+# --- Group 1: the protocol carries the sentence once; no agent definition copies it ---
 
 # scope_section: the protocol's "## Scope resolution" section body.
 scope_section() {

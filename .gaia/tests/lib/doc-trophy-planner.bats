@@ -128,7 +128,7 @@ check_lens_doctrine_rows() {
   need "$doctrine" 'never a test, at any layer, that hand-calls the middleware function; a new case for that guard extends the row that runs the real chain' || return 1
 }
 
-@test "the doctrine keeps the barred rows a plan's tests follow" {
+@test "the doctrine keeps the guard, case-split and barred-row rules a plan's tests follow" {
   green check_lens_doctrine_rows
 }
 
