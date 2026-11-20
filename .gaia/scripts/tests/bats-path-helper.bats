@@ -34,10 +34,10 @@ setup() {
 
 @test "path helpers refuse rather than writing outside a bats per-test temp dir" {
   # Sourced outside a test there is nowhere sanctioned to build the shim, and
-  # picking one anyway would write where no caller asked. Asserted on the diagnostic rather than on
-  # the status alone: a non-zero status is also what a failed mkdir at an
-  # unwritable guessed path returns, so the status cannot tell the refusal apart
-  # from the accident it exists to replace.
+  # picking one anyway would write where no caller asked. Asserted on the
+  # diagnostic rather than on the status alone: a non-zero status is also what
+  # a failed mkdir at an unwritable guessed path returns, so the status cannot
+  # tell the refusal apart from the accident it exists to replace.
   local diagnostic_output exit_status=0
   diagnostic_output="$(BATS_TEST_TMPDIR="" path_shim_without uvx 2>&1)" || exit_status=$?
   [ "$exit_status" -ne 0 ] || { echo "path_shim_without: status 0"; return 1; }

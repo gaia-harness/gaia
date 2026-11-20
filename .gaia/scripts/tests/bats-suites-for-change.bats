@@ -61,7 +61,7 @@ build_fixture() {
   }
 }
 
-@test "a deleted or renamed file still selects the suites naming it (deleted, renamed, renamed uncommitted in default mode)" {
+@test "a deleted or renamed file still selects the suites naming it, including an uncommitted rename in default mode" {
   git -C "$FIXTURE" rm -q scripts/gone.sh
   git -C "$FIXTURE" commit -q -m delete
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD

@@ -715,7 +715,7 @@ validate_in() {
   [ "$status" -eq 2 ]
   [ -z "$output" ]
   grep -qF 'jq' <<<"$stderr"
-  # the shared types file unreadable
+  # the shared types file missing
   local directory="$BATS_TEST_TMPDIR/no-types"
   scratch_library "$directory"
   # Armed first: with the file present the same call is valid, so the 2 below
