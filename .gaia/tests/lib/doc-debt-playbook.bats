@@ -11,7 +11,7 @@
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PLAYBOOK_DIR="${DOC_DEBT_PLAYBOOK_DIR:-$REPO_ROOT/.claude/skills/gaia/references}"
+  PLAYBOOK_DIR="$REPO_ROOT/.claude/skills/gaia/references"
 }
 
 # --- every sub-reference is routed, and every route resolves ----------------

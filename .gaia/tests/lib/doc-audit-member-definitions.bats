@@ -13,10 +13,9 @@
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  AGENTS_DIRECTORY="${DOC_MEMBER_DEFINITIONS_AGENTS:-$REPO_ROOT/.claude/agents}"
-  PROTOCOL="${DOC_MEMBER_DEFINITIONS_PROTOCOL:-$REPO_ROOT/.claude/hooks/lib/audit-member-protocol.md}"
-  RELEASE_EXCLUDE="${DOC_MEMBER_DEFINITIONS_RELEASE_EXCLUDE:-$REPO_ROOT/.gaia/release-exclude}"
-  FRONTEND="$AGENTS_DIRECTORY/code-audit-frontend.md"
+  PROTOCOL="$REPO_ROOT/.claude/hooks/lib/audit-member-protocol.md"
+  RELEASE_EXCLUDE="$REPO_ROOT/.gaia/release-exclude"
+  FRONTEND="$REPO_ROOT/.claude/agents/code-audit-frontend.md"
   PROTOCOL_PATH='.claude/hooks/lib/audit-member-protocol.md'
 }
 
