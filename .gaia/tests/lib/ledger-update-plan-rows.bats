@@ -57,7 +57,7 @@ _row_field() {
 _plan_field() { _row_field plan PLAN-001 "$1"; }
 _spec_field() { _row_field spec SPEC-001 "$1"; }
 
-@test "ledger-update stamps merged_at, pr_number and status_changed_at only on a status change, preserves every other field, and patches only the row of the id kind" {
+@test "ledger-update writes the patched merged_at and pr_number, stamps status_changed_at only on a status change, preserves every other field, and patches only the row of the id kind" {
   run _update PLAN-001 '{"status":"merged","merged_at":"2026-07-05T00:00:00Z","pr_number":321}'
   [ "$status" -eq 0 ]
   [ "$(_plan_field status)" = "merged" ]

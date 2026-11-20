@@ -131,7 +131,7 @@ script_exists() {
   [ -f "$SCRATCH/.gaia/scripts/spec/flow-coverage.sh" ]
 }
 
-# reset_scratch: an empty scratch repository, so each row of a case table
+# reset_scratch: a fresh scratch repository, so each row of a case table
 # builds its own SPEC and branch.
 reset_scratch() {
   rm -rf "$SCRATCH"
@@ -287,7 +287,7 @@ write_stage() {
   fi
 }
 
-@test "a skipped or absent test stage reports each flow as a gap and passes" {
+@test "a skipped or absent test stage reports each flow with no test as a gap and passes, a ran or running stage reports it as a finding, and an unknown stage status exits 3" {
   write_spec flows: \
     "$(web_flow FLOW-001 sign-in app/a)" \
     "$(command_flow FLOW-002 refuse-check .gaia/tests/lib/refuse-check.bats)"
@@ -329,7 +329,7 @@ write_stage() {
     [ "$output" = "flow-coverage: FLOW-001: missing $FLOWS_DIRECTORY/sign-in.spec.ts" ]
   done
 
-  # A first line that is none of the three statuses is an operational failure.
+  # A first line that is no known status is an operational failure.
   for stage_line in 'status: done' '' 'ran'; do
     write_stage "$stage_line"
     run coverage --plan-dir "$PLAN"

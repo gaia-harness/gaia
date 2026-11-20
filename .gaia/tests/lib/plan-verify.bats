@@ -343,7 +343,7 @@ assert_out_of_order() {
   fi
 }
 
-@test "plan-verify passes a complete plan in each arm: spec-derived, spec-less, an absolute --spec spelled through .., no New tests line, no test table or flow phase" {
+@test "plan-verify passes a complete plan in each arm: spec-derived, spec-less, an absolute --spec spelled through .., no New tests line, no test-stage record and no flow lines" {
   local arm
   spec_fixture
   verify_spec
@@ -423,7 +423,7 @@ assert_out_of_order() {
   done
 }
 
-@test "plan-verify fails a sentinel out of order and names it: flow-checks before gate-retry, close above promotion, yield above resume, gate-retry above yield, each adjacent swap among the late sentinels, resume-detection after a later step" {
+@test "plan-verify fails a sentinel out of order and names it: flow-checks before gate-retry, close above promotion, yield above resume in both arms, gate-retry above yield, each adjacent swap among the late sentinels" {
   local order=("$S_SECWRITER" "$S_SIMPLIFY" "$S_FLOW" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE") index swapped
   assert_out_of_order spec "$S_RETRY" "$S_RESUME" "$S_YIELD" "$S_FLOW" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   assert_out_of_order spec_less '' "$S_RESUME" "$S_YIELD" "$S_RETRY" "$S_SECWRITER" "$S_SIMPLIFY" "$S_CLOSE" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"

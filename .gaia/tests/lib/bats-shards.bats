@@ -9,14 +9,13 @@
 # runs again, every shard still greens, and the declared-required check still
 # reports success having covered less than it used to.
 #
-# The partition test independently re-discovers the six directories rather
+# The partition test independently re-discovers the default directories rather
 # than asking the script to grade its own homework. S9 covers the second
 # invariant the partition has to hold: the weighted groups are split by weight,
 # not by file count, and the partition check is blind to that on its own. S16,
 # with A6 and the fail-closed test, covers the third: no two suites the sharder
-# declares cost outliers share a scripts shard, which the weight checks are
-# equally blind to, since those suites are unremarkable by the weight being
-# balanced.
+# declares cost outliers share a shard in the scripts or hooks group, which the
+# weight checks are equally blind to.
 #
 # Assertion style per .claude/rules/bats-assertions.md: no bare mid-test
 # [[ ... ]], POSIX [ ] and grep only, so a broken assertion still fails on
@@ -95,7 +94,7 @@ union_of_shard_files() {
   done < <(bash "$script" shards)
 }
 
-# Whether any path repeats across the shard partition of script $1.
+# Succeeds when no path repeats across the shard partition of script $1.
 check_no_duplicates() {
   local script="$1" duplicates
   duplicates="$(union_of_shard_files "$script" | LC_ALL=C sort | uniq -d)"
@@ -221,7 +220,7 @@ write_trivial_bats() {
   SCRIPTS_TESTS_DIRECTORY="$directory" run bash "$SCRIPT" files scripts-1
   [ "$status" -eq 0 ] || { echo "seam override: status $status"; return 1; }
 
-  # Every file seed_anchor_tree writes is one more than the group has buckets.
+  # Anchor every file seed_anchor_tree writes: one more than the group has buckets.
   bucket_count="$(bash "$SCRIPT" group scripts-1 | grep -c .)"
   while [ "$filler" -lt "$bucket_count" ]; do
     every_file="fill-$filler.bats $every_file"
@@ -246,7 +245,7 @@ write_trivial_bats() {
 }
 
 # bats test_tags=whole-tree
-@test "usage errors: a missing or unknown shard, id or change exits 2 with a usage line, and -h exits 0" {
+@test "usage errors: a missing or unknown shard, id or change exits 2, a bare call or bare group prints a usage line, and -h exits 0" {
   run bash "$SCRIPT" files nope
   [ "$status" -eq 2 ] || { echo "files nope: status $status"; return 1; }
   run bash "$SCRIPT" run nope
@@ -925,7 +924,7 @@ run_for_change_fixture() {
     bash "$1" "$3" audit base-ref head-ref
 }
 
-@test "files-for-change and run-for-change pick the picked and whole-tree-marked suites, and fall back to the whole shard when the selector fails" {
+@test "files-for-change and run-for-change take the selector's picks and the whole-tree-marked tests, and fall back to the whole shard when the selector fails" {
   local directory="$BATS_TEST_TMPDIR/change-scoped"
   write_change_fixture "$directory"
 
@@ -1007,7 +1006,7 @@ clear_plan_stubs() {
   unset STUB_CLASSIFIER_OUTPUT STUB_CLASSIFIER_STATUS STUB_SELECTOR_PICKS STUB_SELECTOR_FAILS
 }
 
-@test "plan prints mode, reason, needs_node and needs_chromium as four key=value lines for each change kind (harness, unreadable, dependency, none, selected, full)" {
+@test "plan prints mode, reason, needs_node and needs_chromium as key=value lines, in that order, for each change kind (harness, unreadable, dependency, none, selected, full)" {
   local directory="$BATS_TEST_TMPDIR/plan" arm
   write_plan_fixture "$directory"
 

@@ -47,7 +47,7 @@ _iso_days_before_now() {
   [ "$status" -eq 1 ]
 }
 
-@test "gaia_ledger_age_past_window is past exactly at the boundary, parses fractional seconds, and never reaps on empty, garbage or non-positive now" {
+@test "gaia_ledger_age_past_window is past exactly at the boundary, parses fractional seconds, and never reaps on an empty or garbage timestamp or an empty or non-positive now" {
   gaia_ledger_age_past_window "$(_iso_days_before_now 30)" "$NOW_EPOCH" 30
   run gaia_ledger_age_past_window "$(_iso_days_before_now 29)" "$NOW_EPOCH" 30
   [ "$status" -eq 1 ]

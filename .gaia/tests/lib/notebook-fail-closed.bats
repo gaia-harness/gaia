@@ -9,8 +9,7 @@
 # (`--no-catalog --legacy`). For each: exit non-zero, stderr names the move
 # command, and a before/after snapshot of the fixture's notebook and local
 # state is identical, so no id was minted, no row written, no folder created
-# and nothing removed. The snapshot is the path list plus a sha256 of every
-# regular file.
+# and nothing removed.
 
 bats_require_minimum_version 1.5.0
 

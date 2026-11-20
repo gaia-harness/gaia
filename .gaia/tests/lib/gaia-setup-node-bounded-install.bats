@@ -50,7 +50,7 @@ run_install() {
   STUB_ATTEMPT_STATUSES="$1" run bash "$helper" --attempt-seconds 180 -- fake-install --frozen-lockfile
 }
 
-@test "bounded-install retries only an install the bound ended: in time runs once, ended once retries with a warning, ended twice fails naming the bound and input, failed on its own returns at once" {
+@test "bounded-install retries only an install the bound ended: in time runs once, ended once retries with a warning naming the bound, ended twice fails saying both attempts and naming the input, failed on its own returns at once" {
   run_install "0"
   [ "$status" -eq 0 ] || { echo "in time: status $status"; return 1; }
   [ "$(attempts_made)" -eq 1 ] || { echo "in time: attempts $(attempts_made)"; return 1; }

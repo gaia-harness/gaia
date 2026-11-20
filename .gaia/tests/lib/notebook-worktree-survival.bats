@@ -98,7 +98,6 @@ _write_three_items() {
     _fixture_repository
     if [ "$shape" = directory ]; then
       mkdir "$WORKTREE/.notebook"
-      [ ! -L "$WORKTREE/.notebook" ] || { echo "shape $shape: the notebook is a link"; return 1; }
     fi
 
     _write_three_items

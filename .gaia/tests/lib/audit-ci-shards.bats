@@ -1438,7 +1438,7 @@ case_w4_adversarial_a_full_run_that_ignores_push_is_caught() {
   printf '%s\n' "$output" | grep -qF -- "on push: the selection step does not plan --full" || { echo "W27 did not name the FULL_RUN gap: $output" >&2; return 1; }
 }
 
-@test "W4: filter-gated steps admit push and dispatch and FULL_RUN reads true (live workflow passes, each doctored copy is caught)" {
+@test "W4: filter-gated steps and jobs admit push and dispatch, and FULL_RUN plans full only for a pull request arming code (live workflow passes, each doctored copy is caught)" {
   echo "case: case_w4_every_filter_gated_step_and_job_admits_push_and_workflow_dispatch_a"
   case_w4_every_filter_gated_step_and_job_admits_push_and_workflow_dispatch_a
   echo "case: case_w4_adversarial_dropping_the_dispatch_admission_from_one_filter_gated_s"
@@ -1537,7 +1537,7 @@ case_w5_adversarial_an_expression_valued_cap_is_caught() {
   }
 }
 
-@test "W5: every job and runner step declares an integer timeout cap (live workflow passes, each doctored copy is caught)" {
+@test "W5: every job declares an integer timeout cap and every runner step one strictly below its job's (live workflow passes, each doctored copy is caught)" {
   echo "case: case_w5_every_job_declares_an_integer_cap"
   case_w5_every_job_declares_an_integer_cap
   echo "case: case_w5_every_runner_step_declares_an_integer_cap_strictly_below_its_job_s"
@@ -1638,7 +1638,7 @@ case_w7_adversarial_a_second_dorny_paths_filter_step_is_caught() {
   }
 }
 
-@test "W7: exactly one dorny/paths-filter step (live workflow passes, each doctored copy is caught)" {
+@test "W7: exactly one dorny/paths-filter step (live workflow passes, a doctored copy is caught)" {
   echo "case: case_w7_exactly_one_dorny_paths_filter_step_in_the_whole_workflow"
   case_w7_exactly_one_dorny_paths_filter_step_in_the_whole_workflow
   echo "case: case_w7_adversarial_a_second_dorny_paths_filter_step_is_caught"
@@ -1816,7 +1816,7 @@ case_w9_adversarial_an_empty_or_absent_sandbox_directory_is_caught() {
   [ "$status" -eq 0 ]
 }
 
-@test "W9: no sandbox suite references zsh, python3 or require_yaml_parser (live workflow passes, each doctored copy is caught)" {
+@test "W9: no sandbox suite references zsh, python3 or require_yaml_parser (live sandbox tree passes, a zsh fixture and an empty or absent tree are caught)" {
   echo "case: case_w9_no_gaia_tests_sandbox_suite_references_zsh_python3_or_require_yaml"
   case_w9_no_gaia_tests_sandbox_suite_references_zsh_python3_or_require_yaml
   echo "case: case_w9_adversarial_a_sandbox_fixture_naming_zsh_is_caught"
@@ -2313,7 +2313,7 @@ case_w10_adversarial_a_shard_that_cannot_be_listed_fails_the_scan_rather_th() {
   }
 }
 
-@test "W10: the apt shard-list scan refuses each unresolvable or mis-gated input" {
+@test "W10: the apt shard-list scan finds a needing suite or helper wherever it lands, stops at its own group, and refuses each unresolvable or mis-gated input" {
   echo "case: case_w10_adversarial_rounding_up_stops_at_the_needing_leg_s_own_group"
   case_w10_adversarial_rounding_up_stops_at_the_needing_leg_s_own_group
   echo "case: case_w10_adversarial_a_group_the_sharder_cannot_resolve_fails_the_closure_r"
@@ -2441,7 +2441,7 @@ case_w10_adversarial_a_grep_hard_error_fails_the_scan_rather_than_reporting() {
   }
 }
 
-@test "W10: the concurrency leg reaches for neither dropped package (live workflow passes, doctored copy and grep error are caught)" {
+@test "W10: the concurrency leg reaches for neither apt package (live workflow and tree pass, a zsh fixture and a grep hard error are caught)" {
   echo "case: case_w10_the_concurrency_leg_reaches_for_neither_package_the_apt_step_dropp"
   case_w10_the_concurrency_leg_reaches_for_neither_package_the_apt_step_dropp
   echo "case: case_w10_adversarial_a_concurrency_file_reaching_for_zsh_is_caught"
@@ -2571,7 +2571,7 @@ case_w13_adversarial_the_renamed_copied_sweep_reds_when_a_second_unrelated() {
   }
 }
 
-@test "W13: no code: filter entry carries a change-type token (live workflow passes, each doctored copy is caught)" {
+@test "W13: no code: filter entry carries a renamed or copied change-type token (live workflow passes, a doctored copy is caught)" {
   echo "case: case_w13_no_code_filter_entry_anywhere_carries_a_renamed_or_copied_change_t"
   case_w13_no_code_filter_entry_anywhere_carries_a_renamed_or_copied_change_t
   echo "case: case_w13_adversarial_the_renamed_copied_sweep_reds_when_a_second_unrelated"
@@ -2604,7 +2604,7 @@ case_w14_adversarial_the_committed_bumped_pin_fixture_reds_and_names_both_v() {
   }
 }
 
-@test "W14: the paths-filter pin matches the version the premises were verified against (live workflow passes, each doctored copy is caught)" {
+@test "W14: the paths-filter pin matches the version the premises were verified against (live workflow passes, the committed bumped-pin fixture is caught)" {
   echo "case: case_w14_the_workflow_s_dorny_paths_filter_pin_matches_the_version_lever_on"
   case_w14_the_workflow_s_dorny_paths_filter_pin_matches_the_version_lever_on
   echo "case: case_w14_adversarial_the_committed_bumped_pin_fixture_reds_and_names_both_v"
@@ -2682,7 +2682,7 @@ case_w20_adversarial_dropping_one_harness_glob_from_code_or_one_install_inp() {
   printf '%s\n' "$output" | grep -qxF -- '.gaia/cli/package.json' || { echo "W20 did not name the missing input: $output" >&2; return 1; }
 }
 
-@test "W20: the code filter equals the classifier's harness list (live workflow passes, each doctored copy is caught)" {
+@test "W20: the code filter equals the classifier's harness list and the scoped and commitlint filters list every install input (live workflow passes, each doctored copy is caught)" {
   echo "case: case_w20_the_code_filter_equals_the_classifier_s_harness_list_and_scoped_an"
   case_w20_the_code_filter_equals_the_classifier_s_harness_list_and_scoped_an
   echo "case: case_w20_adversarial_dropping_one_harness_glob_from_code_or_one_install_inp"
@@ -2893,7 +2893,7 @@ case_w23_adversarial_a_reporter_copy_with_the_comparison_removed_is_caught() {
   [ "$status" -ne 0 ] || { echo "a reporter that closes without a compare verdict passed W23" >&2; return 1; }
 }
 
-@test "W23: the reporter closes the issue only after a compare verdict (live workflow passes, each doctored copy is caught)" {
+@test "W23: the reporter closes the issue only after a compare verdict (live reporter passes, a copy without the comparison is caught)" {
   echo "case: case_w23_the_reporter_closes_the_issue_only_after_a_compare_verdict_of_iden"
   case_w23_the_reporter_closes_the_issue_only_after_a_compare_verdict_of_iden
   echo "case: case_w23_adversarial_a_reporter_copy_with_the_comparison_removed_is_caught"
@@ -2940,7 +2940,7 @@ case_w24_adversarial_a_static_group_key_or_cancel_in_progress_true_is_caugh() {
   [ "$status" -ne 0 ] || { echo "cancel-in-progress: true passed W24" >&2; return 1; }
 }
 
-@test "W24: the concurrency group keys on commit for push and ref otherwise (live workflow passes, each doctored copy is caught)" {
+@test "W24: the concurrency group keys on commit for push and ref otherwise, cancelling in progress on pull_request only (live workflow passes, each doctored copy is caught)" {
   echo "case: case_w24_the_concurrency_group_keys_on_the_commit_for_push_and_the_ref_othe"
   case_w24_the_concurrency_group_keys_on_the_commit_for_push_and_the_ref_othe
   echo "case: case_w24_adversarial_a_static_group_key_or_cancel_in_progress_true_is_caugh"
@@ -3023,7 +3023,7 @@ case_w25_adversarial_dropping_the_mode_gate_from_the_apt_step_or_deleting_t() {
   [ "$status" -ne 0 ] || { echo "a concurrency leg without a bats install passed W25" >&2; return 1; }
 }
 
-@test "W25: an empty or unarmed bats leg installs and runs nothing (live workflow passes, each doctored copy is caught)" {
+@test "W25: an empty or unarmed bats leg installs and runs nothing and the concurrency leg keeps its bats install (live workflow passes, each doctored copy is caught)" {
   echo "case: case_w25_an_empty_or_unarmed_bats_leg_installs_and_runs_nothing_and_the_con"
   case_w25_an_empty_or_unarmed_bats_leg_installs_and_runs_nothing_and_the_con
   echo "case: case_w25_adversarial_dropping_the_mode_gate_from_the_apt_step_or_deleting_t"
@@ -3243,7 +3243,7 @@ case_w27_adversarial_a_selection_step_that_drops_push_is_caught() {
   [ "$status" -ne 0 ] || { echo "a selection step skipped on push passed W27" >&2; return 1; }
 }
 
-@test "W27: push and dispatch run every leg's widest step set (live workflow passes, each doctored copy is caught)" {
+@test "W27: push and dispatch run every leg's widest step set, plan --full, and reach exactly one whole-shard run step (live workflow passes, each doctored copy is caught)" {
   echo "case: case_w27_push_and_dispatch_run_every_leg_s_widest_step_set_plan_full_and_re"
   case_w27_push_and_dispatch_run_every_leg_s_widest_step_set_plan_full_and_re
   echo "case: case_w27_adversarial_a_bats_leg_left_out_of_every_run_step_s_leg_list_is_ca"

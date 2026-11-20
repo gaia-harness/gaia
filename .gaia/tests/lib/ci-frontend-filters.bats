@@ -61,7 +61,7 @@ tests_verdict() {
   if printf '%s\n' "$2" | grep -qE "$1"; then printf 'select'; else printf 'skip'; fi
 }
 
-@test "tests.yml: the path filter selects the frontend app, e2e, manifest and lockfile and skips harness, wiki and the retired root app/" {
+@test "tests.yml: the path filter selects the frontend app, e2e, manifest and lockfile and skips harness, wiki and a bare root app/" {
   local pattern candidate
   pattern="$(tests_pattern)"
   [ -n "$pattern" ] || return 1
@@ -76,7 +76,7 @@ tests_verdict() {
   done
 }
 
-@test "chromatic.yml: the code filter lists the descriptor entries, selects storybook inputs and the setup action, and skips wiki and the retired root app/" {
+@test "chromatic.yml: the code filter lists the descriptor entries, selects storybook inputs and the setup action, and skips wiki and a bare root app/" {
   local globs candidate
   globs="$(chromatic_globs)"
   printf '%s\n' "$globs" | grep -qxF 'apps/web/app/**' || return 1

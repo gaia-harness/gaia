@@ -183,10 +183,6 @@ EOF
   [ ! -e "$STUB_DIRECTORY/gh-called" ] || { echo "pr_number: reached gh"; return 1; }
 
   # The two-argument form matches the script at HEAD: same stdout, stderr and exit, no pr_number, no network.
-  # The committed script still names the retired two-script chokepoint; point
-  # that call at the merged one, and its one wording the catalog changed
-  # (the missing-row stderr line) at the new text, so only the third-argument
-  # behavior differs.
   _fresh_sandbox
   git -C "$REPO_ROOT" show HEAD:.gaia/scripts/spec/plan-reconcile.sh \
     | sed -e 's#/plan-\(ledger-update\.sh\)#/\1#g' -e 's#missing ledger/row#missing catalog row#' >"$SANDBOX/.gaia/scripts/spec/plan-reconcile-before.sh"
@@ -201,7 +197,7 @@ EOF
   [ "$(_row_field PLAN-005 pr_number)" = "null" ] || { echo "two-argument: stamped pr_number"; return 1; }
   [ ! -e "$STUB_DIRECTORY/gh-called" ] || { echo "two-argument: reached gh"; return 1; }
 
-  # A non-numeric third argument stamps without pr_number and names the value on stderr.
+  # A third argument that is not a positive integer stamps without pr_number and names the value on stderr.
   for bad in abc 0 007 -4 12x ""; do
     _fresh_sandbox
     run --separate-stderr _reconcile PLAN-005 "$bad"
@@ -283,7 +279,7 @@ EOF
   grep -qF "usage: plan-reconcile.sh <repo_root> [<plan_id> [<pr_number>]]" <<<"$stderr"
 }
 
-@test "when the one-time move is pending both forms print the move line on stderr, exit 0, change nothing and never reach gh" {
+@test "when the one-time move is pending both forms print the move line on stderr, exit 0 and change nothing" {
   local before after
 
   rm -rf "$SANDBOX"

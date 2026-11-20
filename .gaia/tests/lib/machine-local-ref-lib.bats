@@ -193,7 +193,7 @@ make_repo() {
 }
 
 # bats test_tags=protected
-@test "the staged verb refuses an added id line (Markdown, FLOW, full-line code comment, appended rename line), names path and line, and passes test and fixture trees, a space in a path, a pure rename, and a merge in progress" {
+@test "the staged verb refuses an added id line (Markdown, FLOW, full-line code comment, appended rename line), names path and line, and passes a code line, test and fixture trees, a space in a path, a pure rename, and a merge in progress" {
   make_repo
   printf '# Page\n\nOld text citing SPEC-001 stays until edited.\n\nNew line naming PLAN-007.\n' > "$REPO/wiki/page.md"
   git -C "$REPO" add wiki/page.md

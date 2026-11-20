@@ -2,8 +2,9 @@
 #
 # Runs the fitness lint exactly as the `cli-tests` job in
 # .github/workflows/cli-tests.yml runs it, against scratch copies of the
-# tracked tree, and proves the job fails on a frontmatter defect and holds when
-# the pull request edits its own suppression file.
+# tracked tree, and proves the job fails on a frontmatter defect or a
+# line-limit breach, and still fails when the pull request suppresses its own
+# violation.
 #
 # The command line is read out of the workflow, not restated here, so an edit
 # to the workflow is what this suite sees. Scratch trees come from the index

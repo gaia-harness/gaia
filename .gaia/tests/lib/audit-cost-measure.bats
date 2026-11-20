@@ -269,7 +269,7 @@ classify_json() {
 }
 
 # bats test_tags=whole-tree
-@test "the toolkit scripts exit 2 with a usage line on no arguments or a missing required flag" {
+@test "the toolkit scripts exit 2 with a usage line on no arguments or a missing required flag, and run-replay refuses an unknown --replay naming the allowed values" {
   run node "$TOOLKIT/measure-dispatch.mjs" --session "$RC3/session.jsonl"
   [ "$status" -eq 2 ]
   grep -qF 'usage: measure-dispatch.mjs' <<<"$output" || return 1
@@ -324,7 +324,7 @@ make_throwaway() {
 }
 
 # bats test_tags=whole-tree,protected
-@test "the probe and replay drivers refuse a root without the scratch sentinel before any claude call, and pass the guard with it" {
+@test "the probe and replay drivers refuse a root without the scratch sentinel before any claude call, pass the guard with it, and the replay's exit trap closes its draft pull request and returns to main" {
   make_stubs
   mkdir -p "$BATS_TEST_TMPDIR/root"
   PATH="$STUB_DIRECTORY:$PATH" run bash "$TOOLKIT/probe-first-call.sh" --root "$BATS_TEST_TMPDIR/root" --types code-audit-frontend --out "$BATS_TEST_TMPDIR/out" --max-usd 1

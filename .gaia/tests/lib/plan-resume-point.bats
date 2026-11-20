@@ -69,7 +69,7 @@ _expect() {
   [ "$output" = "$expected" ] || { echo "$label: got '$output'"; return 1; }
 }
 
-@test "resume point: line 1 is the first gap and COMPLETE lines list the phases whose Commit is an ancestor" {
+@test "resume point: line 1 is the first gap and COMPLETE lines list the ancestor-Commit phases before it" {
   local sha1 sha2 sha3 sha30 nonrepo
 
   new_repo

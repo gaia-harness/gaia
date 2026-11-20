@@ -64,7 +64,7 @@ refute_code_match() {
 }
 
 # bats test_tags=protected
-@test "V2: the vendored archive exists for the pinned version and its digest matches the script's pin" {
+@test "the vendored archive exists for the pinned version and its digest matches the script's pin" {
   local actual
   [ -n "$BATS_VERSION_PIN" ]
   [ -n "$BATS_SHA256_PIN" ]

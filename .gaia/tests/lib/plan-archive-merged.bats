@@ -196,8 +196,6 @@ _age_case() {
   esac
   if [ -n "$pr_number" ]; then
     _set_pr_number PLAN-001 "$pr_number"
-  else
-    [ "$(_row_field PLAN-001 pr_number)" = "none" ] || { echo "$label: fixture row carries a pr_number"; return 1; }
   fi
   export GAIA_SPEC_RETENTION_DAYS="$retention"
   _sweep "$label" || return 1
@@ -293,7 +291,7 @@ _age_case() {
   _lacks "ready with pr_number" "Deleted" || return 1
   [ -d "$PLANS/PLAN-001" ] || { echo "ready with pr_number: folder deleted"; return 1; }
 
-  # A ready row carrying a stale aged merged_at is never a candidate.
+  # A ready row with a merged_at past the window is never a candidate.
   _reset
   _seed_merged_plan PLAN-001
   _set_status PLAN-001 ready

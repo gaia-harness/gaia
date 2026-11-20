@@ -167,7 +167,7 @@ grant_folder_to_shell_member() {
 }
 
 # bats test_tags=whole-tree
-@test "a decline-only diff owes no audit member, while a roster that owns the folder or the same JSON as a flat .gaia file does" {
+@test "a decline-only diff owes no audit member, while the same JSON as a flat .gaia file, or a decline under a roster that owns the folder, owes the shell member" {
   local clone="$BATS_TEST_TMPDIR/clone" base relative_path
   clone_repository "$clone" || return 1
   base="$(git -C "$clone" rev-parse HEAD)"
