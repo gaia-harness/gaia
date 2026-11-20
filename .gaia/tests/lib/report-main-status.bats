@@ -213,7 +213,7 @@ reset_case() {
 }
 
 # bats test_tags=protected
-@test "only the issue author's newest marker counts" {
+@test "only the newest marker the workflow token wrote counts" {
   export SHARDS_RESULT="success"
   local case_name
   for case_name in newest stranger-comment stranger-only; do

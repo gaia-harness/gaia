@@ -224,7 +224,7 @@ _fresh_case() {
   rm -rf "$REPO2"
 }
 
-# --- the retired defer cache no longer blocks a reap --------------------------
+# --- a leftover defer cache does not block a reap -----------------------------
 
 # bats test_tags=protected
 @test "6: a leftover wiki-promote defer cache file beside a reapable spec no longer blocks its reap" {

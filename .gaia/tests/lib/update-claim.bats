@@ -150,8 +150,8 @@ count_lines_matching() {
   grep -c -- "$1" "$2" || true
 }
 
-# Clear the logs, the gh behaviour switches, both hooks and the claim commit,
-# so each case of a table starts from the state setup() built.
+# Clear the logs, the gh behaviour switches, the claims list, both hooks, the
+# claim commit and its pushed branch, so each case starts from setup()'s state.
 reset_case() {
   rm -f "$STATE_DIR"/fail-* "$STATE_DIR/require-body" \
     "$WORK/.git/hooks/pre-commit" "$ORIGIN/hooks/pre-receive"
@@ -316,7 +316,7 @@ reset_case() {
 }
 
 # bats test_tags=protected
-@test "start skips with its reason before or after the failing step and never forces or bypasses" {
+@test "start skips with the failing step's reason and never retries, forces or bypasses" {
   echo "case: gh-missing before any commit"
   reset_case
   local restricted
@@ -452,7 +452,7 @@ view_tsv() {
 }
 
 # bats test_tags=protected
-@test "close-own closes an open own PR from the named branch and refuses another head, a closed PR or a gh failure" {
+@test "close-own closes an open own PR from the named branch, refuses another head or a PR that is not open, and exits 3 when gh fails" {
   printf 'octo-cat\n' >"$STATE_DIR/login.txt"
 
   echo "case: refuses when the head differs from --branch"

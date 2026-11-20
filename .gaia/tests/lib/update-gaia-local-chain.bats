@@ -202,9 +202,9 @@ reach_b_recorded() {
   [ "$(cat "$PROJECT/.gaia/VERSION-dev")" = "$BUILD_A" ]
 }
 
-# --- 2 to 4. a second local bundle: proceed, identical, already synced, older ---
+# --- 2 to 4. a second local bundle: proceed, already synced, older ---
 
-@test "a second local bundle proceeds unless it is identical, already synced or older" {
+@test "a second local bundle proceeds unless it is the recorded build or older" {
   make_project "$PROJECT" 2.2.0
   make_bundles
   source_ok A 2.2.0 "$BUILD_A"
@@ -373,7 +373,7 @@ add_update_branch() {
   printf '%s\n' "$output" | grep -qxF "LATEST_DIR=$CACHE_PREFIX/v2.3.0/tree"
   run_preflight prune --baseline 2.2.0 --baseline-tag "$TAG_B" --latest-tag v2.3.0
   [ "$(cache_listing)" = "$TAG_B v2.3.0 " ]
-  # Without the flag the recorded build is pruned.
+  # Without --baseline-tag the recorded build is pruned.
   run_preflight prune --baseline 2.2.0 --latest-tag v2.3.0
   [ "$(cache_listing)" = 'v2.3.0 ' ]
   record_release 2.3.0

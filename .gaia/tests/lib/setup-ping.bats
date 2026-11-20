@@ -116,7 +116,7 @@ drift failure|A B C|A B C|1|||SKIPPED
 CASES
 }
 
-@test "ping arguments: empty type and repo are absent, an enabled sandbox sends on" {
+@test "ping arguments: empty type and repo are absent, an enabled sandbox sends --sandbox on" {
   run_ping DRIFT_JSON="$(decided_json A)" --owed 'A' --type '' --repo ''
   [ "$(cat "$PING_LOG")" = '--event setup --sandbox off' ] || { echo "case empty type and repo: $(cat "$PING_LOG")"; return 1; }
   rm -f "$PING_LOG"
@@ -124,7 +124,7 @@ CASES
   [ "$(cat "$PING_LOG")" = '--event setup --sandbox on' ] || { echo "case enabled sandbox: $(cat "$PING_LOG")"; return 1; }
 }
 
-@test "the reference snippet sends the ping under each shell's word-splitting" {
+@test "the reference snippet sends the ping in bash with an empty IFS and in zsh, neither of which word-splits" {
   local shell_kind
   DRIFT_JSON="$(decided_json B Z)"
   for shell_kind in bash-no-split zsh; do

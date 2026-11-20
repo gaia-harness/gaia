@@ -2,7 +2,7 @@
 #
 # Tests for .gaia/tests/verify-harness.sh: argument handling, branch-mode
 # preconditions and selection, round mode's narrower selection, and the missing-tool
-# probes. Every case builds a fixture repository under $BATS_TEST_TMPDIR with
+# probes. Most tests build a fixture repository and its origin under $BATS_TEST_TMPDIR with
 # .gaia/tests/lib/helpers/verify-harness-fixture.sh, whose stub checks log the
 # toplevel they ran from, so a passing case proves a check ran rather than a
 # label printed. The merge-base comparison and the pass record live in
@@ -130,7 +130,7 @@ begin_case() {
 # suites, and the file-marked cases share the plain fixture. The second case of
 # each pair builds on the first: branch mode selects over the merge-base range,
 # so the earlier unrelated commit stays in the range.
-@test "the whole-tree and selected bats steps run each marked and selected suite the right number of times" {
+@test "the whole-tree step runs the marked tests of an unselected suite, and a marked suite the change selects runs once in full" {
   TABLE_TMPDIR="$BATS_TEST_TMPDIR"
   TABLE_PATH="$PATH"
 

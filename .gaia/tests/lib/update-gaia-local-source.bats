@@ -112,7 +112,7 @@ reset_project() {
   : > "$GH_LOG"
 }
 
-@test "source proceeds, reports already-synced, or refuses a downgrade by version and build" {
+@test "source proceeds on a same or newer core or another build, reports the recorded build already synced, and refuses an older version" {
   make_bundle same 2.2.0 "dev.$SHA"
   make_bundle newer 2.3.0 "dev.$SHA"
   make_bundle older 2.1.0 "dev.$SHA"
@@ -172,7 +172,7 @@ reset_project() {
 }
 
 # bats test_tags=protected
-@test "source refuses a bundle missing its build id, manifest or with a malformed version or build id" {
+@test "source refuses a bundle with a missing or malformed build id, a malformed version or no manifest" {
   project_at 2.2.0
 
   echo "case: a bundle without .gaia/VERSION-dev is refused"

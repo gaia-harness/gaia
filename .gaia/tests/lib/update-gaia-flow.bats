@@ -1,13 +1,7 @@
 #!/usr/bin/env bats
 # The /update-gaia skill's commands and hand-offs as SKILL.md and its
-# references write them: every command block in the shape a worktree session
-# admits, no branch-moving git command, the main checkout's classification arms
-# (Step 3) and branch check, the --tree flag on every claim call, no forced push
-# or bypassed hook, the pull mode's command lines, the pull gate's
-# unpushed-commits arm, the one commit question and the update commit's
-# subject, the machine-scope features and leftover files deferred
-# to the post-merge cleanup (Step 9c, Step 12, work-lifecycle.md), and the
-# migration notes read only from the verified target bundle. The pre-merge
+# references write them, and the migration notes it reads from the verified
+# target bundle. The pre-merge
 # blocks live in .gaia/scripts/update-gaia-preflight.sh and the drift block in
 # update-gaia-drift.sh; their behavior is driven by update-gaia-preflight.bats
 # and update-gaia-drift.bats.

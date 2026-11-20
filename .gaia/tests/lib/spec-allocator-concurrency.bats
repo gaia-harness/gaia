@@ -48,7 +48,7 @@ _run_parallel_next() {
 # --- Test 8: N-parallel next → N distinct ids, zero lost rows -----------------
 
 # bats test_tags=protected
-@test "8: N-parallel next yields N distinct ids and N rows under flock and under the mkdir fallback" {
+@test "8: N-parallel next yields N distinct ids and N rows under the default lock and the forced mkdir fallback" {
   local lock_label printed distinct rows id
   PARALLEL_JOB_COUNT=10
   # Each lock variant needs an empty catalog, so each builds its own repo.
@@ -111,7 +111,7 @@ _run_parallel_next() {
   [ "$status" -eq 0 ] || { echo "case folder without row: status $status"; return 1; }
   [ "$output" = "none" ] || { echo "case folder without row: $output"; return 1; }
   rm -rf "$REPO"
-  # Defect-2 regression: a draft ledger row is surfaced.
+  # A draft ledger row is surfaced.
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-007 draft)"
   cd "$REPO"
   run bash -c "bash '$REPO/$ALLOCATOR' in_progress '$REPO'"
@@ -134,7 +134,7 @@ _run_parallel_next() {
 
 # --- Test 14: exit-code preservation -----------------------------------------
 
-@test "14: allocator refusals map to exit codes 3, 4 and 5" {
+@test "14: allocator and ledger-update refusals map to exit codes 3, 4 and 5" {
   local realjq stub_directory before
   # One seeded repo serves every case; the non-git case strips .git, so it runs last.
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"

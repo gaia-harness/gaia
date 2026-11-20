@@ -77,7 +77,7 @@ _lint_case() {
   [ "$status" -eq 0 ]
 }
 
-@test "an invalid lineage entry yields one invalid_lineage naming it" {
+@test "each invalid lineage entry is refused, and a lone bad entry yields one invalid_lineage naming it" {
   _lint_case "guard: one bad entry yields exactly one invalid_lineage naming it" \
     'lineage: [research:topic-a, bogus]'
   [ "$status" -eq 1 ]

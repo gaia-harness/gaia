@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Canonical-status-vocabulary tests for the SPEC rows of the notebook catalog.
 #
-# Two concerns:
+# Concerns:
 #   1. Behavioral guard: ledger-update.sh (the single chokepoint for status
 #      writes) accepts the four canonical statuses {draft, ready, merged,
 #      abandoned}, and rejects anything else (including the retired
@@ -13,6 +13,8 @@
 #      unrecognized status untouched (logging it). This repairs the hand-edit /
 #      backfill vector the guard cannot see (raw edits bypass the chokepoint),
 #      and it also ships to adopters (runs on every /gaia-spec).
+#   3. Frontmatter status: spec/lint.sh holds a SPEC file's own status to its
+#      own vocabulary, accepting in-progress and refusing ready as bad_status.
 #
 # Canonical vocabulary is documented in wiki/concepts/GAIA Spec.md
 # ("Ledger status vocabulary"). Keep WRITABLE below in sync with that section.
@@ -62,7 +64,7 @@ _first_spec_field() {
 }
 
 # bats test_tags=protected
-@test "ledger-update accepts every writable status and a status-less patch, and rejects every other status with exit 6 leaving the catalog unchanged" {
+@test "ledger-update accepts every writable status and a status-less patch, and rejects a non-canonical or retired status with exit 6" {
   # One repo for every case. The rejections and the status-less patch run
   # while the row is still draft; the writable statuses run last because each
   # accepted write changes the row.

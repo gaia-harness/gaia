@@ -390,7 +390,7 @@ write_report() {
   done
 }
 
-@test "deferred and deferred-tags list deferred entries once, in semver order, and nothing for an absent file" {
+@test "deferred lists deferred entries, deferred-tags prints each tag once in semver order, and both print nothing for an absent file" {
   echo "case: deferred lists deferred entries only, with their baseline tag and key"
   write_decisions '{"path": "a.md", "decision": "deferred", "tag": "v2.0.10", "baselineTag": "v2.0.10"}, {"path": "b.md", "decision": "deferred", "tag": "v2.0.2", "baselineTag": "v2.0.2"}, {"path": "d.md", "decision": "keep", "tag": "v1.0.0", "baselineTag": "v1.0.0"}, {"path": "package.json", "key": "scripts.x", "decision": "deferred", "tag": "v2.0.2", "baselineTag": "v2.0.2-rc.1"}'
   run bash "$SCRIPT" deferred --file "$LOG"

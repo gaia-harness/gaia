@@ -62,7 +62,7 @@ _row() {
 
 # --- the .lock re-key: a live lock follows the id, a missing one is a no-op ---
 
-@test "renumber re-keys a live or absent session lock" {
+@test "renumber re-keys a live session lock and treats a missing one as a no-op" {
   REPO="$(_fixture_repository --seed-spec-folder SPEC-901 draft --seed-spec-folder SPEC-903 draft)"
 
   echo "case: renumbering a draft with a live-shaped .lock re-keys it and keeps the recorded pid"

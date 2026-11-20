@@ -40,7 +40,7 @@ manifest_keys() {
   "$MAINTAINER_CLI" release manifest --stdout --allow-undecided | jq -r '.files | keys[]'
 }
 
-@test "M: the manifest lists no retired root frontend path and no generated settings or package registry, and lists apps/web/app/root.tsx, the descriptor, the overlay and apps/web/package.json" {
+@test "M: the manifest omits retired root paths, the generated settings and the package registry, and lists the required apps/web keys" {
   keys="$(manifest_keys)"
   [ -n "$keys" ] || { echo "case keys: manifest listed no keys"; return 1; }
   retired="$(printf '%s\n' "$keys" | grep -E -- "$RETIRED_ROOT_PATTERN" || true)"

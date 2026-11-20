@@ -2,8 +2,8 @@
 
 # Suite for .gaia/tests/whole-tree-mark-guard.sh, the guard that flags a bats
 # test enumerating the tracked tree through a recognized idiom without the
-# whole-tree mark. Only the test that runs the guard over the real tracked tree
-# carries the mark; every other test reads fixtures under $BATS_TEST_TMPDIR or
+# whole-tree mark. Only the tests that run the guard over the real tracked tree
+# carry the mark; every other test reads fixtures under $BATS_TEST_TMPDIR or
 # named files.
 #
 # Fixture suites live under $BATS_TEST_TMPDIR. Every tag line and waiver line a
@@ -834,7 +834,7 @@ write_scoped() {
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
-# ---- waivers over a continued statement --------------------------------------
+# ---- continued-statement fixture ----------------------------------------------
 
 # write_continued <path> <with | without | misplaced>: a helper holding the two
 # real continued shapes, a listing piped on the next physical line and a read

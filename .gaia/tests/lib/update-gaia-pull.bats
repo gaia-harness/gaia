@@ -184,7 +184,7 @@ assert_refused() {
 }
 
 # bats test_tags=protected
-@test "pull and check refuse each unsafe tree state and leave the tree untouched" {
+@test "pull and check refuse each unsafe tree state untouched, a local-only commit is not a divergence, and a failed fetch leaves the tree alone" {
   build_pristine
 
   pull_case 'refuses on a non-default branch and leaves the tree untouched'
@@ -202,7 +202,7 @@ assert_refused() {
   run bash "$SCRIPT" pull --tree "$TREE"
   assert_refused not-default-branch "$before"
 
-  pull_case 'check refuses with a modified tracked file too'
+  pull_case 'check refuses with a modified tracked file'
   echo edited >>"$TREE/pnpm-lock.yaml"
   local before
   before="$(tree_snapshot)"

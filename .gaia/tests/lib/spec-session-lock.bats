@@ -37,8 +37,7 @@
 # a real Claude Code host process running this very session.
 #
 # Case 14 uses `run --separate-stderr` to assert empty stderr independently of
-# stdout. The case tables echo each case's number and name before asserting, so
-# a failing table names the case.
+# stdout.
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -288,8 +287,8 @@ SP
   [ "$output" = "error" ]
 }
 
-# _acquire <args...>: acquire through the one fixture host the acquire table
-# spawns.
+# _acquire <args...>: runs the script with the walk pointed at the fixture host
+# the acquire table spawns.
 _acquire() {
   env GAIA_SPEC_LOCK_HOST_PATTERN="$FAKE_PATTERN" GAIA_SPEC_LOCK_START_PID="$GRANDCHILD_PID" \
     bash "$SCRIPT" "$@"

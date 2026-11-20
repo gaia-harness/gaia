@@ -3,7 +3,7 @@
 # .gaia/scripts/update-gaia-report.sh against a fixture report. The fixture is a
 # small baseline tree, latest tree, adopter tree, decision log and a merge
 # report covering every status and every row of the option order table. Each
-# case copies it into $BATS_TEST_TMPDIR and breaks one thing, so every refusal
+# report_case copies it into $BATS_TEST_TMPDIR and breaks one thing, so every refusal
 # is driven into its failing state.
 #
 # Assertion style follows .claude/rules/bats-assertions.md; run through

@@ -12,8 +12,9 @@
 # records a reap on the row. Unlike the merged sweep there is
 # no consolidation gate: an abandoned folder reaps as one unit.
 #
-# Each test spins up its own tmp git repo via helpers/tmp-notebook-repo.sh and
-# tears it down; hermetic, no reliance on the real project notebook.
+# Each test spins up its own tmp git repo via helpers/tmp-notebook-repo.sh (the
+# table test copies one per case) and tears it down; hermetic, no reliance on
+# the real project notebook.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -206,8 +207,8 @@ _clear_abandoned_at() {
   done <<'CASES'
 within the retention window is kept|30|days:2|kept|yes
 past the retention window is reaped|30|days:45|reaped|no
-no abandoned_at is kept regardless of the usage ledger|0|none|kept|yes
-an unparseable abandoned_at is kept regardless of the usage ledger|0|not-a-timestamp|kept|yes
+no abandoned_at is kept even with a zero retention window|0|none|kept|yes
+an unparseable abandoned_at is kept even with a zero retention window|0|not-a-timestamp|kept|yes
 GAIA_SPEC_RETENTION_DAYS=0 reaps a just-abandoned folder|0|days:0|reaped|no
 GAIA_SPEC_RETENTION_DAYS=99999 keeps an old abandoned folder|99999|days:400|kept|no
 a non-numeric GAIA_SPEC_RETENTION_DAYS keeps a 10-day-old folder under the 30-day default|abc|days:10|kept|no

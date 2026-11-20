@@ -57,7 +57,7 @@ reset_project() {
 }
 
 # bats test_tags=protected
-@test "baseline resolves release tag, recorded build, fallback, stale or refuses a malformed record" {
+@test "baseline resolves the release tag, a recorded build or its fallback, reports a stale record, and refuses a malformed record or version" {
   echo "case: a project with no build record gets only the release tag"
   project_at 2.2.0
   run_local baseline

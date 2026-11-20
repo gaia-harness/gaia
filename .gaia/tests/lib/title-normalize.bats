@@ -3,8 +3,7 @@
 # (collapse whitespace -> first sentence -> bounded word-safe prefix, or a
 # hard cut when the over-bound text has no interior word boundary). Dual-mode
 # (sourced function + argv/stdin filter); setup_file copies the script, which
-# sources nothing, into the file's tmp dir so the lib is exercised as a real
-# file on disk, not the live working tree.
+# sources nothing, into the file's tmp dir.
 
 setup_file() {
   cp "$BATS_TEST_DIRNAME/../../scripts/spec/title-normalize.sh" "$BATS_FILE_TMPDIR/title-normalize.sh"

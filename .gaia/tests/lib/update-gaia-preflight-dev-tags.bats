@@ -172,7 +172,7 @@ start_case() {
   printf '%s\n' "$output" | grep -qxF "CACHE_MISSING $DEV_C"
   grep -q 'dev' "$GH_LOG" && return 1
 
-  start_case 'a release run is byte-identical with no dev tag and no baseline flag'
+  start_case 'a release run with no dev tag and no baseline flag prints only the plain release lines'
   write_serving_gh
   run_preflight verify-bundles --baseline 2.0.0 --latest-tag v2.1.0
   [ "$status" -eq 0 ]
