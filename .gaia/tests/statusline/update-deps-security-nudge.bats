@@ -43,7 +43,8 @@ render_at() {
   plain=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
 }
 
-@test "UAT-002: security alone renders without an outdated term" {
+@test "the update-deps nudge folds the cached security count beside the outdated count" {
+  echo "case: UAT-002: security alone renders without an outdated term"
   write_cache '{"outdatedCount":0,"securityCount":2,"securitySource":"pnpm-audit","securityUnavailableReason":"forbidden"}'
   render_at 200
   [ "$status" -eq 0 ]
@@ -53,9 +54,7 @@ render_at() {
   esac
   grep -qF -- "outdated" <<<"$plain" && return 1
   true
-}
-
-@test "UAT-003: outdated alone renders without a security term" {
+  echo "case: UAT-003: outdated alone renders without a security term"
   write_cache '{"outdatedCount":3,"securityCount":0,"securitySource":"dependabot","securityUnavailableReason":""}'
   render_at 200
   [ "$status" -eq 0 ]
@@ -65,6 +64,32 @@ render_at() {
   esac
   grep -qF -- "security" <<<"$plain" && return 1
   true
+  echo "case: TST-004: a null security count beside outdated renders only the outdated form"
+  write_cache '{"outdatedCount":3,"securityCount":null,"securitySource":"unavailable","securityUnavailableReason":"cli-failed"}'
+  render_at 200
+  [ "$status" -eq 0 ]
+  case "$plain" in
+    *"📦 /update-deps (3 outdated)") ;;
+    *) return 1 ;;
+  esac
+  grep -qF -- "null" <<<"$plain" && return 1
+  true
+  echo "case: a cache with no security fields renders the outdated form"
+  write_cache '{"outdatedCount":3}'
+  render_at 200
+  [ "$status" -eq 0 ]
+  case "$plain" in
+    *"📦 /update-deps (3 outdated)") ;;
+    *) return 1 ;;
+  esac
+  echo "case: a non-numeric security count is treated as absent"
+  write_cache '{"outdatedCount":3,"securityCount":"two","securitySource":"dependabot"}'
+  render_at 200
+  [ "$status" -eq 0 ]
+  case "$plain" in
+    *"📦 /update-deps (3 outdated)") ;;
+    *) return 1 ;;
+  esac
 }
 
 @test "UAT-004: zero or unavailable security with no outdated renders no nudge at any tier" {
@@ -84,34 +109,3 @@ render_at() {
   true
 }
 
-@test "TST-004: a null security count beside outdated renders only the outdated form" {
-  write_cache '{"outdatedCount":3,"securityCount":null,"securitySource":"unavailable","securityUnavailableReason":"cli-failed"}'
-  render_at 200
-  [ "$status" -eq 0 ]
-  case "$plain" in
-    *"📦 /update-deps (3 outdated)") ;;
-    *) return 1 ;;
-  esac
-  grep -qF -- "null" <<<"$plain" && return 1
-  true
-}
-
-@test "a cache with no security fields renders the outdated form" {
-  write_cache '{"outdatedCount":3}'
-  render_at 200
-  [ "$status" -eq 0 ]
-  case "$plain" in
-    *"📦 /update-deps (3 outdated)") ;;
-    *) return 1 ;;
-  esac
-}
-
-@test "a non-numeric security count is treated as absent" {
-  write_cache '{"outdatedCount":3,"securityCount":"two","securitySource":"dependabot"}'
-  render_at 200
-  [ "$status" -eq 0 ]
-  case "$plain" in
-    *"📦 /update-deps (3 outdated)") ;;
-    *) return 1 ;;
-  esac
-}

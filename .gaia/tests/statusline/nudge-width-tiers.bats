@@ -79,7 +79,8 @@ visual_width() {
   printf '%s' "$1" | LC_ALL=C awk '{wide = gsub(/[\360-\364]/, "&"); gsub(/[\200-\277]/, ""); print length + wide}'
 }
 
-@test "every nudge renders Large, in priority order, when the line fits" {
+@test "the right side shrinks Large to Medium to Small to icon to +N at exact widths, in priority order" {
+  echo "case: every nudge renders Large, in priority order, when the line fits"
   render_at 235
   [ "$status" -eq 0 ]
   expected="Claude Code  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
@@ -103,9 +104,7 @@ visual_width() {
     "/gaia-debt" \
     "/gaia-residue")
   [ "$order" = "$expected_order" ]
-}
-
-@test "the line stops 4 columns short of COLUMNS, where Claude Code's statusline row ends" {
+  echo "case: the line stops 4 columns short of COLUMNS, where Claude Code's statusline row ends"
   render_at 235
   [ "$status" -eq 0 ]
   expected="Claude Code  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
@@ -119,9 +118,7 @@ visual_width() {
     *) return 1 ;;
   esac
   [ "$(visual_width "$plain")" -le 230 ]
-}
-
-@test "Large shrinks to Medium bottom-up, leaving mixed sizes at one width" {
+  echo "case: Large shrinks to Medium bottom-up, leaving mixed sizes at one width"
   render_at 180
   [ "$status" -eq 0 ]
   expected="Claude Code  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
@@ -145,9 +142,7 @@ visual_width() {
     *"🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)") ;;
     *) return 1 ;;
   esac
-}
-
-@test "cleanse has no Medium: it goes straight to its bare command" {
+  echo "case: cleanse has no Medium: it goes straight to its bare command"
   render_at 180
   [ "$status" -eq 0 ]
   grep -qF -- "🔎 /gaia-cleanse (34 days since review)" <<<"$plain"
@@ -162,9 +157,7 @@ visual_width() {
   [ "$status" -eq 0 ]
   grep -qF -- "🔎 /gaia-cleanse (" <<<"$plain" && return 1
   true
-}
-
-@test "update-gaia has no Medium: its Large is already the version, so it goes straight to Small" {
+  echo "case: update-gaia has no Medium: its Large is already the version, so it goes straight to Small"
   render_at 147
   [ "$status" -eq 0 ]
   grep -qF -- "🚀 /update-gaia │ 📦 /update-deps (28)" <<<"$plain"
@@ -173,9 +166,7 @@ visual_width() {
   [ "$status" -eq 0 ]
   expected="Claude Code  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28) │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
   [ "$plain" = "$expected" ]
-}
-
-@test "Medium shrinks to Small bottom-up after every nudge reached Medium" {
+  echo "case: Medium shrinks to Small bottom-up after every nudge reached Medium"
   render_at 139
   [ "$status" -eq 0 ]
   case "$plain" in
@@ -203,9 +194,7 @@ visual_width() {
   grep -qF -- "🧹 15" <<<"$plain"
   grep -qF -- "🧹 /gaia-residue" <<<"$plain" && return 1
   true
-}
-
-@test "icons carry their Medium number: deps and codify gain counts, update-gaia and cleanse stay bare" {
+  echo "case: icons carry their Medium number: deps and codify gain counts, update-gaia and cleanse stay bare"
   render_at 77
   [ "$status" -eq 0 ]
   expected="Claude Code  🚀 /update-gaia │ 📦 /update-deps │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
@@ -230,9 +219,7 @@ visual_width() {
   [ "$status" -eq 0 ]
   expected="Claude Code      🚀 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
   [ "$plain" = "$expected" ]
-}
-
-@test "+N names how many icons were dropped and never vanishes" {
+  echo "case: +N names how many icons were dropped and never vanishes"
   render_at 53
   [ "$status" -eq 0 ]
   expected="Claude Code      🚀 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 +1"
@@ -263,7 +250,8 @@ visual_width() {
   true
 }
 
-@test "a block-character left side is measured in characters, not bytes" {
+@test "the left side is measured in display columns whatever its content" {
+  echo "case: a block-character left side is measured in characters, not bytes"
   mkdir -p "$TEMPORARY_HOME/.claude"
   cat > "$TEMPORARY_HOME/.claude/settings.json" <<'JSON'
 {"statusLine": {"command": "printf '▓▓░░░░░░░░'"}}
@@ -284,9 +272,7 @@ JSON
     *"🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15)") ;;
     *) return 1 ;;
   esac
-}
-
-@test "an emoji in the left side is measured as two columns, not one" {
+  echo "case: an emoji in the left side is measured as two columns, not one"
   mkdir -p "$TEMPORARY_HOME/.claude"
   cat > "$TEMPORARY_HOME/.claude/settings.json" <<'JSON'
 {"statusLine": {"command": "printf '🚀'"}}
@@ -307,9 +293,7 @@ JSON
     *"🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15)") ;;
     *) return 1 ;;
   esac
-}
-
-@test "a two-line left sizes the right side against the last line's width" {
+  echo "case: a two-line left sizes the right side against the last line's width"
   mkdir -p "$TEMPORARY_HOME/.claude"
   cat > "$TEMPORARY_HOME/.claude/settings.json" <<'JSON'
 {"statusLine": {"command": "printf 'line one\\n%s' \"$(printf '%052d' 0 | tr 0 x)\""}}
@@ -363,7 +347,8 @@ JSON
   esac
 }
 
-@test "a lone nudge steps through Large, Medium, Small, icon, +N" {
+@test "a lone nudge steps through every tier at its own boundaries" {
+  echo "case: a lone nudge steps through Large, Medium, Small, icon, +N"
   printf '{"outdatedCount":28}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
   rm -f "$MAIN/.gaia/local/debt/count.json"
 
@@ -428,63 +413,7 @@ JSON
   esac
   grep -qF -- "📦" <<<"$plain" && return 1
   true
-}
-
-@test "text forms keep their color, icons and +N render uncolored; setup-gaia renders alone" {
-  render_at 148
-  [ "$status" -eq 0 ]
-  grep -qF -- $'\033[01;91m🐛 /gaia-debt (1)\033[00m' <<<"$output"
-  grep -qF -- $'\033[01;36m🚀 /update-gaia (9.9.9)\033[00m' <<<"$output"
-
-  render_at 61
-  [ "$status" -eq 0 ]
-  after_left="${output#*Claude Code}"
-  grep -qF -- $'\033' <<<"$after_left" && return 1
-
-  render_at 21
-  [ "$status" -eq 0 ]
-  after_left="${output#*Claude Code}"
-  grep -qF -- $'\033' <<<"$after_left" && return 1
-
-  rm -f "$MAIN/.gaia/local/setup-state.json"
-  render_at 24
-  [ "$status" -eq 0 ]
-  case "$plain" in
-    *"⚙️ /setup-gaia (Required)") ;;
-    *) return 1 ;;
-  esac
-  grep -qF -- "🚀" <<<"$plain" && return 1
-  grep -qF -- "+" <<<"$plain" && return 1
-  true
-}
-
-# The /gaia-wiki nudge is the lowest-priority slot, so it is the first to give
-# up width. Its Medium is the commit count, its icon is the brain.
-arm_wiki_nudge() {
-  local cache="$MAIN/.gaia/local/cache/shared/update-check.json"
-  jq --argjson drift "$1" '. + {wikiDriftCount: $drift}' "$cache" > "$cache.tmp"
-  mv "$cache.tmp" "$cache"
-}
-
-@test "wiki renders last at Large and is the first nudge to shrink" {
-  arm_wiki_nudge 20
-
-  render_at 264
-  [ "$status" -eq 0 ]
-  case "$plain" in
-    *"🧹 /gaia-residue (15 residuals) │ 🧠 /gaia-wiki (20 commits)") ;;
-    *) return 1 ;;
-  esac
-
-  render_at 263
-  [ "$status" -eq 0 ]
-  case "$plain" in
-    *"🧹 /gaia-residue (15 residuals) │ 🧠 /gaia-wiki (20)") ;;
-    *) return 1 ;;
-  esac
-}
-
-@test "a lone wiki nudge steps through Large, Medium, Small, icon, +N" {
+  echo "case: a lone wiki nudge steps through Large, Medium, Small, icon, +N"
   printf '{"wikiDriftCount":20}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
   rm -f "$MAIN/.gaia/local/debt/count.json"
 
@@ -553,33 +482,7 @@ arm_wiki_nudge() {
   esac
   grep -qF -- "🧠" <<<"$plain" && return 1
   true
-}
-
-@test "the wiki text form carries its own color and the icon renders uncolored" {
-  printf '{"wikiDriftCount":20}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
-  rm -f "$MAIN/.gaia/local/debt/count.json"
-
-  render_at 304
-  [ "$status" -eq 0 ]
-  grep -qF -- $'\033[01;96m🧠 /gaia-wiki (20 commits)\033[00m' <<<"$output"
-
-  render_at 24
-  [ "$status" -eq 0 ]
-  after_left="${output#*Claude Code}"
-  grep -qF -- $'\033' <<<"$after_left" && return 1
-  true
-}
-
-# Writes a cache holding only the update-deps counts, so the lone nudge steps
-# through every tier at the widths below: Large "📦 /update-deps (3 outdated,
-# 2 security)" is 40 columns, Medium "📦 /update-deps (5)" is 19, Small is 15,
-# and the left side plus the 2-column gap adds 13.
-write_lone_deps_cache() {
-  printf '%s' "$1" > "$MAIN/.gaia/local/cache/shared/update-check.json"
-  rm -f "$MAIN/.gaia/local/debt/count.json"
-}
-
-@test "UAT-028: outdated plus security steps Large, Medium sum, Small, icon sum at the boundaries" {
+  echo "case: UAT-028: outdated plus security steps Large, Medium sum, Small, icon sum at the boundaries"
   write_lone_deps_cache '{"outdatedCount":3,"securityCount":2,"securitySource":"dependabot"}'
 
   render_at 57
@@ -616,9 +519,7 @@ write_lone_deps_cache() {
     *"📦 5") ;;
     *) return 1 ;;
   esac
-}
-
-@test "UAT-028: security only renders its own count at Medium and icon" {
+  echo "case: UAT-028: security only renders its own count at Medium and icon"
   write_lone_deps_cache '{"outdatedCount":0,"securityCount":2,"securitySource":"dependabot"}'
 
   render_at 204
@@ -641,9 +542,7 @@ write_lone_deps_cache() {
     *"📦 2") ;;
     *) return 1 ;;
   esac
-}
-
-@test "UAT-028: an unavailable security count adds nothing at Medium and icon" {
+  echo "case: UAT-028: an unavailable security count adds nothing at Medium and icon"
   write_lone_deps_cache '{"outdatedCount":3,"securityCount":null,"securitySource":"unavailable"}'
 
   render_at 36
@@ -663,3 +562,82 @@ write_lone_deps_cache() {
   grep -qF -- "security" <<<"$plain" && return 1
   true
 }
+
+@test "text forms keep their color and icons and +N render uncolored" {
+  echo "case: text forms keep their color, icons and +N render uncolored; setup-gaia renders alone"
+  render_at 148
+  [ "$status" -eq 0 ]
+  grep -qF -- $'\033[01;91m🐛 /gaia-debt (1)\033[00m' <<<"$output"
+  grep -qF -- $'\033[01;36m🚀 /update-gaia (9.9.9)\033[00m' <<<"$output"
+
+  render_at 61
+  [ "$status" -eq 0 ]
+  after_left="${output#*Claude Code}"
+  grep -qF -- $'\033' <<<"$after_left" && return 1
+
+  render_at 21
+  [ "$status" -eq 0 ]
+  after_left="${output#*Claude Code}"
+  grep -qF -- $'\033' <<<"$after_left" && return 1
+
+  rm -f "$MAIN/.gaia/local/setup-state.json"
+  render_at 24
+  [ "$status" -eq 0 ]
+  case "$plain" in
+    *"⚙️ /setup-gaia (Required)") ;;
+    *) return 1 ;;
+  esac
+  grep -qF -- "🚀" <<<"$plain" && return 1
+  grep -qF -- "+" <<<"$plain" && return 1
+  true
+  printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$MAIN/.gaia/local/setup-state.json"
+  echo "case: the wiki text form carries its own color and the icon renders uncolored"
+  printf '{"wikiDriftCount":20}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
+  rm -f "$MAIN/.gaia/local/debt/count.json"
+
+  render_at 304
+  [ "$status" -eq 0 ]
+  grep -qF -- $'\033[01;96m🧠 /gaia-wiki (20 commits)\033[00m' <<<"$output"
+
+  render_at 24
+  [ "$status" -eq 0 ]
+  after_left="${output#*Claude Code}"
+  grep -qF -- $'\033' <<<"$after_left" && return 1
+  true
+}
+
+# The /gaia-wiki nudge is the lowest-priority slot, so it is the first to give
+# up width. Its Medium is the commit count, its icon is the brain.
+arm_wiki_nudge() {
+  local cache="$MAIN/.gaia/local/cache/shared/update-check.json"
+  jq --argjson drift "$1" '. + {wikiDriftCount: $drift}' "$cache" > "$cache.tmp"
+  mv "$cache.tmp" "$cache"
+}
+
+@test "wiki renders last at Large and is the first nudge to shrink" {
+  arm_wiki_nudge 20
+
+  render_at 264
+  [ "$status" -eq 0 ]
+  case "$plain" in
+    *"🧹 /gaia-residue (15 residuals) │ 🧠 /gaia-wiki (20 commits)") ;;
+    *) return 1 ;;
+  esac
+
+  render_at 263
+  [ "$status" -eq 0 ]
+  case "$plain" in
+    *"🧹 /gaia-residue (15 residuals) │ 🧠 /gaia-wiki (20)") ;;
+    *) return 1 ;;
+  esac
+}
+
+# Writes a cache holding only the update-deps counts, so the lone nudge steps
+# through every tier at the widths below: Large "📦 /update-deps (3 outdated,
+# 2 security)" is 40 columns, Medium "📦 /update-deps (5)" is 19, Small is 15,
+# and the left side plus the 2-column gap adds 13.
+write_lone_deps_cache() {
+  printf '%s' "$1" > "$MAIN/.gaia/local/cache/shared/update-check.json"
+  rm -f "$MAIN/.gaia/local/debt/count.json"
+}
+

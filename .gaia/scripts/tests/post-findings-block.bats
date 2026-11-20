@@ -184,10 +184,9 @@ STUB
 
 # minimal_path <omit>: builds a curated bin dir carrying only the named
 # coreutils (never the host's real PATH), so a tool named in <omit> is
-# genuinely absent, not merely shadowed. Mirrors the no-gh forensics fixture
-# (.gaia/tests/forensics/07-gh-not-installed.bats), extended with the extra
-# tools this script's own body needs (jq, git, mktemp, sort, dirname -- the
-# last for sourcing audit-key-lib.sh, .gaia/scripts/audit-key-lib.sh).
+# genuinely absent, not merely shadowed. It carries the tools this script's
+# own body needs (jq, git, mktemp, sort, dirname -- the last for sourcing
+# .gaia/scripts/audit-key-lib.sh).
 minimal_path() {
   local omit="$1"
   local command_name

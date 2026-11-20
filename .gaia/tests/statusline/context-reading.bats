@@ -81,39 +81,56 @@ assert_context_file() {
   [ ! -e "$WORKTREE/.gaia/local/cache/shared/context" ]
 }
 
-@test "a user global statusLine.command still gets the context file written" {
+@test "the context file is written whatever the left side or setup state: user global command, nested flag, setup pending" {
+  echo "case: a user global statusLine.command still gets the context file written"
   mkdir -p "$TEMPORARY_HOME/.claude"
   printf '{"statusLine":{"type":"command","command":"printf USERLEFT"}}' >"$TEMPORARY_HOME/.claude/settings.json"
   render "$(main_script)" "$(payload "$MAIN" "$SESSION_ID" 25 1000000)"
   [ "$status" -eq 0 ]
   assert_context_file
   grep -qF "USERLEFT" <<<"$output"
+
+  echo "case: GAIA_STATUSLINE_NESTED=1 still writes the file"
+  rm -rf "$CONTEXT_DIRECTORY" "$TEMPORARY_HOME/.claude"
+  render "$(main_script)" "$(payload "$MAIN" "$SESSION_ID" 25 1000000)" GAIA_STATUSLINE_NESTED=1
+  [ "$status" -eq 0 ]
+  assert_context_file
+
+  echo "case: setup-gaia pending (no setup state) still writes the file"
+  rm -rf "$CONTEXT_DIRECTORY" "$TEMPORARY_HOME/.claude"
+  rm -f "$MAIN/.gaia/local/setup-state.json"
+  render "$(main_script)" "$(payload "$MAIN" "$SESSION_ID" 25 1000000)"
+  [ "$status" -eq 0 ]
+  grep -qF "⚙️ /setup-gaia" <<<"$output"
+  assert_context_file
 }
 
-@test "used_tokens is the percentage-derived value, not total_input_tokens" {
+@test "used_tokens is derived from the percentage: integer and long fractional inputs" {
+  echo "case: used_tokens is the percentage-derived value, not total_input_tokens"
   render "$(main_script)" "$(payload "$MAIN" "$SESSION_ID" 33.3333 200000 123)"
   [ "$status" -eq 0 ]
   # round(33.3333 / 100 * 200000) = 66667; total_input_tokens (123) must not win.
   [ "$(jq -r .used_tokens "$CONTEXT_DIRECTORY/$SESSION_ID.json")" = "66667" ]
-}
 
-@test "a long fractional percentage is accepted (rounded to the lib's shape)" {
+  echo "case: a long fractional percentage is accepted (rounded to the lib's shape)"
+  rm -rf "$CONTEXT_DIRECTORY"
   render "$(main_script)" "$(payload "$MAIN" "$SESSION_ID" 33.333333333333336 200000)"
   [ "$status" -eq 0 ]
   assert_context_file
   [ "$(jq -r .used_tokens "$CONTEXT_DIRECTORY/$SESSION_ID.json")" = "66667" ]
 }
 
-@test "red: no session_id writes nothing and still renders" {
+# bats test_tags=protected
+@test "red: an invalid or absent session_id, context_window, window size or non-JSON stdin writes nothing and still renders" {
+  echo "case: red: no session_id writes nothing and still renders"
   local json
   json=$(payload "$MAIN" "$SESSION_ID" 25 1000000 | jq 'del(.session_id)')
   render "$(main_script)" "$json"
   [ "$status" -eq 0 ]
   [ -n "$output" ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
-}
 
-@test "red: a path-traversal session_id writes nothing anywhere and still renders" {
+  echo "case: red: a path-traversal session_id writes nothing anywhere and still renders"
   render "$(main_script)" "$(payload "$MAIN" "../../x" 25 1000000)"
   [ "$status" -eq 0 ]
   [ -n "$output" ]
@@ -121,50 +138,30 @@ assert_context_file() {
   # "../../x" resolves to <main>/.gaia/local/cache/x.json when it escapes.
   [ -z "$(find "$MAIN" -name 'x*' -not -path '*/.git/*')" ]
   [ -z "$(find "$(dirname "$MAIN")" -maxdepth 1 -name 'x.json')" ]
-}
 
-@test "red: a non-UUID session_id writes nothing" {
+  echo "case: red: a non-UUID session_id writes nothing"
   render "$(main_script)" "$(payload "$MAIN" "not-a-uuid" 25 1000000)"
   [ "$status" -eq 0 ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
-}
 
-@test "red: no context_window writes nothing and still renders" {
-  local json
+  echo "case: red: no context_window writes nothing and still renders"
   json=$(payload "$MAIN" "$SESSION_ID" 25 1000000 | jq 'del(.context_window, .effort)')
   render "$(main_script)" "$json"
   [ "$status" -eq 0 ]
   [ -n "$output" ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
-}
 
-@test "red: a context_window without a size writes nothing" {
-  local json
+  echo "case: red: a context_window without a size writes nothing"
   json=$(payload "$MAIN" "$SESSION_ID" 25 1000000 | jq 'del(.context_window.context_window_size, .effort)')
   render "$(main_script)" "$json"
   [ "$status" -eq 0 ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
-}
 
-@test "red: a non-JSON stdin writes nothing and still renders" {
+  echo "case: red: a non-JSON stdin writes nothing and still renders"
   render "$(main_script)" "this is not json"
   [ "$status" -eq 0 ]
   [ -n "$output" ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
-}
-
-@test "GAIA_STATUSLINE_NESTED=1 still writes the file" {
-  render "$(main_script)" "$(payload "$MAIN" "$SESSION_ID" 25 1000000)" GAIA_STATUSLINE_NESTED=1
-  [ "$status" -eq 0 ]
-  assert_context_file
-}
-
-@test "setup-gaia pending (no setup state) still writes the file" {
-  rm -f "$MAIN/.gaia/local/setup-state.json"
-  render "$(main_script)" "$(payload "$MAIN" "$SESSION_ID" 25 1000000)"
-  [ "$status" -eq 0 ]
-  grep -qF "⚙️ /setup-gaia" <<<"$output"
-  assert_context_file
 }
 
 @test "a missing sibling (older checkout) degrades: renders, writes nothing" {

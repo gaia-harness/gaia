@@ -5,8 +5,6 @@
 # $output.
 bats_require_minimum_version 1.5.0
 
-# Tests for .github/audit/resolve-audit-base.sh.
-#
 # The helper is consumed by the Code Audit Team's agent definitions on local
 # runs. Two invocation forms:
 #
@@ -31,86 +29,130 @@ bats_require_minimum_version 1.5.0
 # test (global rules reset every member, a member's own agent definition
 # resets only that member, merely-shared machinery resets nobody).
 #
-# Each test runs the script in an isolated `git init`'d temp dir whose HEAD
-# sits on a FEATURE branch off `main`, so the merge-base bound leaves the
-# branch's own commits walkable (committing straight on main would make
-# merge-base == HEAD and the candidate list empty). The four predicate libs
-# are provisioned on disk (not committed -- the resolver only needs them
-# loadable, never as digest input); their absence now DECIDES the answer, so
-# dedicated tests remove them one at a time.
+# Each test, and each case of a case table, runs the script in its own copy
+# (bare origin and base worktree included) of one sandbox setup_file builds,
+# whose HEAD sits on a FEATURE branch off `main`, so the merge-base bound
+# leaves the branch's own commits walkable. The predicate libs are provisioned
+# on disk, not committed: the resolver only needs them loadable, never as
+# digest input, and their absence DECIDES the answer.
 #
 # The commit-status path is exercised by mocking `gh` on a prepended PATH
 # (see install_gh_mock), keyed by commit SHA so a multi-commit walk can
 # return different statuses per commit.
 #
 
-setup() {
+suite_paths() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   SCRIPT="$THIS_DIRECTORY/../resolve-audit-base.sh"
-  [ -x "$SCRIPT" ]
+}
 
-  SANDBOX="$BATS_TEST_TMPDIR/sandbox"
-  mkdir -p "$SANDBOX/.gaia"
-  printf '1.2.3\n' > "$SANDBOX/.gaia/VERSION"
+setup_file() {
+  suite_paths
+  local template_sandbox
+  SANDBOX_TEMPLATE="$BATS_FILE_TMPDIR/template"
+  export SANDBOX_TEMPLATE
+  template_sandbox="$SANDBOX_TEMPLATE/sandbox"
+  mkdir -p "$template_sandbox/.gaia"
+  printf '1.2.3\n' > "$template_sandbox/.gaia/VERSION"
 
-  git -C "$SANDBOX" init --quiet --initial-branch=main
-  git -C "$SANDBOX" config user.email "test@example.com"
-  git -C "$SANDBOX" config user.name "Test"
-  git -C "$SANDBOX" config commit.gpgsign false
+  git -C "$template_sandbox" init --quiet --initial-branch=main
+  git -C "$template_sandbox" config user.email "test@example.com"
+  git -C "$template_sandbox" config user.name "Test"
+  git -C "$template_sandbox" config commit.gpgsign false
 
   # The clearance store is gitignored in a real checkout; keep it out of the
   # index here too, so a fixture's `git add -A` cannot commit a marker and
   # turn the store into diff content.
-  mkdir -p "$SANDBOX/.git/info"
-  printf '.gaia/local/\n' > "$SANDBOX/.git/info/exclude"
+  mkdir -p "$template_sandbox/.git/info"
+  printf '.gaia/local/\n' > "$template_sandbox/.git/info/exclude"
 
   # Base commit on main; the PR branch diverges from here.
-  echo "# readme" > "$SANDBOX/README.md"
-  git -C "$SANDBOX" add .gaia/VERSION README.md
-  git -C "$SANDBOX" commit --quiet -m "init"
+  echo "# readme" > "$template_sandbox/README.md"
+  git -C "$template_sandbox" add .gaia/VERSION README.md
+  git -C "$template_sandbox" commit --quiet -m "init"
 
-  git -C "$SANDBOX" checkout --quiet -b feature
+  git -C "$template_sandbox" checkout --quiet -b feature
 
   # A bare origin carrying main, so the resolver's base is the fully-qualified
   # remote-tracking ref, cached as this branch's audit base.
   . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
-  # The fixture removes an existing origin before adding its own, and that
-  # removal is unguarded, so give it one to remove.
-  git -C "$SANDBOX" remote add origin "$BATS_TEST_TMPDIR/placeholder-origin"
-  catchup_add_origin "$SANDBOX"
-
-  # Every test posts its whole-team signals through this one mock, so it is
-  # installed here in the parent shell: a fixture that posts a status from a
-  # command substitution could not export PATH or the token to the test.
-  install_gh_mock
+  catchup_add_origin "$template_sandbox"
 
   # Provision the predicate libs on disk (the resolver sources them from
   # "$repo_root/.claude/hooks/lib/"). NOT committed: they only have to be
-  # loadable, never digest input (this script computes no digest). All five
-  # are provisioned because all five now decide the answer: without the
+  # loadable, never digest input (this script computes no digest). Without the
   # classifier, the machinery matcher, the rules-tier predicate or the version
   # normalizer the resolver resets to full scope, and without the clearance
   # reader the per-member anchor arm is disabled.
-  mkdir -p "$SANDBOX/.claude/hooks/lib"
-  cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$SANDBOX/.claude/hooks/lib/audit-scope.sh"
-  cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$SANDBOX/.claude/hooks/lib/audit-machinery.sh"
-  cp "$REPO_ROOT/.claude/hooks/lib/audit-rules-changed.sh" "$SANDBOX/.claude/hooks/lib/audit-rules-changed.sh"
-  cp "$REPO_ROOT/.claude/hooks/lib/audit-clearance.sh" "$SANDBOX/.claude/hooks/lib/audit-clearance.sh"
-  cp "$REPO_ROOT/.claude/hooks/lib/gaia-version.sh" "$SANDBOX/.claude/hooks/lib/gaia-version.sh"
-  cp "$REPO_ROOT/.claude/hooks/lib/audit-base-provenance.sh" "$SANDBOX/.claude/hooks/lib/audit-base-provenance.sh"
-  cp "$REPO_ROOT/.claude/hooks/lib/audit-branch-patch.sh" "$SANDBOX/.claude/hooks/lib/audit-branch-patch.sh"
+  mkdir -p "$template_sandbox/.claude/hooks/lib"
+  local library_name
+  for library_name in audit-scope.sh audit-machinery.sh audit-rules-changed.sh \
+    audit-clearance.sh gaia-version.sh audit-base-provenance.sh audit-branch-patch.sh; do
+    cp "$REPO_ROOT/.claude/hooks/lib/$library_name" "$template_sandbox/.claude/hooks/lib/$library_name"
+  done
 
   # The team-signal arm scans every roster member's markers, so the roster is
   # provisioned too (uncommitted, like the libs).
-  cp "$REPO_ROOT/.gaia/audit-ci.yml" "$SANDBOX/.gaia/audit-ci.yml"
+  cp "$REPO_ROOT/.gaia/audit-ci.yml" "$template_sandbox/.gaia/audit-ci.yml"
 
   # The refusal link locates the re-run ledger through the key library; its
-  # absence fails only that link, so one test removes it.
-  mkdir -p "$SANDBOX/.gaia/scripts"
-  cp "$REPO_ROOT/.gaia/scripts/audit-key-lib.sh" "$SANDBOX/.gaia/scripts/audit-key-lib.sh"
+  # absence fails only that link, so one case removes it.
+  mkdir -p "$template_sandbox/.gaia/scripts"
+  cp "$REPO_ROOT/.gaia/scripts/audit-key-lib.sh" "$template_sandbox/.gaia/scripts/audit-key-lib.sh"
+}
 
-  # The resolver takes one path whatever the environment; the tests that prove
+# fresh_sandbox <case number>: copy the template into a directory of its own
+# and point the copy's origin and base worktree at the copy, so no case sees
+# another's commits, markers, mocks or published base commits.
+fresh_sandbox() {
+  CASE_TMPDIR="$BATS_TEST_TMPDIR/case-$1"
+  mkdir -p "$CASE_TMPDIR"
+  cp -R "$SANDBOX_TEMPLATE"/. "$CASE_TMPDIR"/
+  SANDBOX="$CASE_TMPDIR/sandbox"
+  git -C "$SANDBOX" remote set-url origin "$SANDBOX.catchup-origin.git"
+  git -C "$SANDBOX" worktree repair "$SANDBOX.catchup-base" >/dev/null 2>&1
+  # The catch-up fixture's functions read these, which shellcheck cannot see.
+  # shellcheck disable=SC2034
+  {
+    CATCHUP_ROOT="$SANDBOX"
+    CATCHUP_ORIGIN="$SANDBOX.catchup-origin.git"
+    CATCHUP_BASE_BRANCH=main
+    CATCHUP_BASE_WORKTREE="$SANDBOX.catchup-base"
+    CATCHUP_BRANCH=feature
+  }
+  MEMBER_OUTPUT_FILE="$CASE_TMPDIR/member.out"
+
+  # Installed here, outside the case body: a fixture that posts a status from a
+  # command substitution could not export PATH or the token itself.
+  install_gh_mock
+}
+
+# run_cases <label> <command> [<label> <command>...]: each command in a fresh
+# sandbox and its own subshell, so nothing a case exports reaches the next. The
+# subshell inherits errexit and its status is never tested, so a failing
+# assertion fails the test.
+run_cases() {
+  local case_number=0 label command
+  while [ "$#" -gt 0 ]; do
+    label="$1"
+    command="$2"
+    shift 2
+    case_number=$((case_number + 1))
+    (
+      fresh_sandbox "$case_number"
+      echo "case: $label"
+      eval "$command"
+    )
+  done
+}
+
+setup() {
+  suite_paths
+  [ -x "$SCRIPT" ]
+  . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
+
+  # The resolver takes one path whatever the environment; the cases that prove
   # that export these variables themselves.
   unset GITHUB_ACTIONS CI GITHUB_BASE_REF
 
@@ -129,7 +171,7 @@ setup() {
   # signal commit needs, without ever becoming a per-member anchor itself.
   SUPPORT_MEMBER="code-audit-maintainer-node"
 
-  MEMBER_OUTPUT_FILE="$BATS_TEST_TMPDIR/member.out"
+  fresh_sandbox 0
 }
 
 # Run the script with cwd inside the sandbox so its
@@ -338,8 +380,8 @@ support_signal_at() {
 # Any SHA not in the map returns an empty array (no GAIA-Audit status).
 # $@ = "sha=description" pairs.
 install_gh_mock() {
-  GH_BIN="$BATS_TEST_TMPDIR/bin"
-  MAP="$BATS_TEST_TMPDIR/gh-status-map"
+  GH_BIN="$CASE_TMPDIR/bin"
+  MAP="$CASE_TMPDIR/gh-status-map"
   mkdir -p "$GH_BIN"
   : > "$MAP"
   for pair in "$@"; do
@@ -377,8 +419,8 @@ EOF
 # empty-array result (null), the resolver's "no status" path.
 #   $@ = "sha=<json-array>" pairs.
 install_gh_array_mock() {
-  GH_BIN="$BATS_TEST_TMPDIR/bin"
-  MAP_DIRECTORY="$BATS_TEST_TMPDIR/gh-array-map"
+  GH_BIN="$CASE_TMPDIR/bin"
+  MAP_DIRECTORY="$CASE_TMPDIR/gh-array-map"
   mkdir -p "$GH_BIN" "$MAP_DIRECTORY"
   for pair in "$@"; do
     sha="${pair%%=*}"
@@ -421,7 +463,7 @@ EOF
 # on every input except the degraded arm, which inverted deliberately.
 # =============================================================================
 
-@test "no audit signal on any PR commit → main ref" {
+case_no_audit_signal_on_any_pr_commit_main_ref() {
   add_commit a
   add_commit b
   run --separate-stderr run_in_sandbox
@@ -435,19 +477,14 @@ EOF
 # repository default: falling back to the default hands the audit the base
 # branch's entire divergence as if this pull request had introduced it, and
 # findings raised against that history are indistinguishable, in the member's
-# output, from findings against the pull request's own code
-# (gaia-react/gaia#1057).
-#
-# `git init` leaves the sandbox with no remote at all, which is why every other
-# test here sees the bare local `main`. These write remote-tracking refs by
-# hand so an `origin/<ref>` can resolve.
+# output, from findings against the pull request's own code.
 # -----------------------------------------------------------------------------
 
 set_origin_reference() {
   git -C "$SANDBOX" update-ref "refs/remotes/origin/$1" "$(git -C "$SANDBOX" rev-parse "$2")"
 }
 
-@test "no base ref declared → the repository default" {
+case_no_base_ref_declared_the_repository_default() {
   add_commit a
   add_commit b
   set_origin_reference main main
@@ -460,7 +497,7 @@ set_origin_reference() {
 # the environment that resolved at or near HEAD would empty the reviewed delta
 # and let a member earn a clearance having read nothing, so a declared base ref
 # is ignored whether or not the event variables claim to be Actions.
-@test "a declared base ref is ignored, with or without GITHUB_ACTIONS" {
+case_a_declared_base_ref_is_ignored_with_or_without_github_action() {
   add_commit a
   add_commit b
   set_origin_reference main main
@@ -476,7 +513,7 @@ set_origin_reference() {
   [ "$output" = "$(fork_point)" ]
 }
 
-@test "stdout is identical with the CI variables exported and without them, in both forms" {
+case_stdout_is_identical_with_the_ci_variables_exported_and_witho() {
   local plain with_ci
   add_commit a
   add_commit b
@@ -496,9 +533,16 @@ set_origin_reference() {
   [ "$plain" = "$with_ci" ]
 }
 
+# bats test_tags=protected
+@test "CI variables and a declared base ref never change the resolver output" {
+  run_cases \
+    "a declared base ref is ignored, with or without GITHUB_ACTIONS" 'case_a_declared_base_ref_is_ignored_with_or_without_github_action' \
+    "stdout is identical with the CI variables exported and without them, in both forms" 'case_stdout_is_identical_with_the_ci_variables_exported_and_witho'
+}
+
 # A trailer is not a signal: a branch whose history carries one, and no status
 # or clearance for the current tree, resolves exactly as the same branch without.
-@test "a GAIA-Audit trailer on the parent is ignored: resolves as the branch without it" {
+case_a_gaia_audit_trailer_on_the_parent_is_ignored_resolves_as_th() {
   add_commit a
   add_commit b
   run --separate-stderr run_in_sandbox
@@ -515,7 +559,7 @@ set_origin_reference() {
   grep -qF "reason=no-anchor" <<<"$stderr"
 }
 
-@test "a GAIA-Audit trailer is ignored in the member form too" {
+case_a_gaia_audit_trailer_is_ignored_in_the_member_form_too() {
   add_commit a
   amend_head_with_trailer "GAIA-Audit: 1.2.3 ${DIGEST} $(tree_of HEAD)"
   support_signal_at HEAD
@@ -528,11 +572,7 @@ set_origin_reference() {
   [ "$(member_shared_base)" = "$(fork_point)" ]
 }
 
-# -----------------------------------------------------------------------------
-# 4. Newest of several audited commits wins
-# -----------------------------------------------------------------------------
-
-@test "newest audited commit wins over an older audited commit" {
+case_newest_audited_commit_wins_over_an_older_audited_commit() {
   add_commit a
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
   older="$(sha_of HEAD)"
@@ -546,7 +586,7 @@ set_origin_reference() {
   [ "$output" != "$older" ]
 }
 
-@test "status on parent with matching version → parent SHA" {
+case_status_on_parent_with_matching_version_parent_sha() {
   add_commit a
   base="$(sha_of HEAD)"
   add_commit b
@@ -556,7 +596,7 @@ set_origin_reference() {
   [ "$output" = "$base" ]
 }
 
-@test "status on parent with version mismatch → main ref" {
+case_status_on_parent_with_version_mismatch_main_ref() {
   add_commit a
   base="$(sha_of HEAD)"
   add_commit b
@@ -566,11 +606,7 @@ set_origin_reference() {
   [ "$output" = "$(fork_point)" ]
 }
 
-# -----------------------------------------------------------------------------
-# 7. A trailer newer than a status does not displace it
-# -----------------------------------------------------------------------------
-
-@test "a newer trailer does not displace an older status" {
+case_a_newer_trailer_does_not_displace_an_older_status() {
   add_commit a
   status_sha="$(sha_of HEAD)"
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
@@ -584,7 +620,15 @@ set_origin_reference() {
   [ "$output" != "$trailer_sha" ]
 }
 
-@test ".gaia/VERSION missing → main ref" {
+# bats test_tags=protected
+@test "a GAIA-Audit commit trailer is never a signal" {
+  run_cases \
+    "a GAIA-Audit trailer on the parent is ignored: resolves as the branch without it" 'case_a_gaia_audit_trailer_on_the_parent_is_ignored_resolves_as_th' \
+    "a GAIA-Audit trailer is ignored in the member form too" 'case_a_gaia_audit_trailer_is_ignored_in_the_member_form_too' \
+    "a newer trailer does not displace an older status" 'case_a_newer_trailer_does_not_displace_an_older_status'
+}
+
+case_gaia_version_missing_main_ref() {
   add_commit a
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
   add_commit b
@@ -596,7 +640,7 @@ set_origin_reference() {
   [ "$output" = "$(fork_point)" ]
 }
 
-@test ".gaia/VERSION empty → main ref" {
+case_gaia_version_empty_main_ref() {
   add_commit a
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
   add_commit b
@@ -608,7 +652,7 @@ set_origin_reference() {
   [ "$output" = "$(fork_point)" ]
 }
 
-@test "matching status on HEAD is not used as its own base" {
+case_matching_status_on_head_is_not_used_as_its_own_base() {
   add_commit a
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
   run --separate-stderr run_in_sandbox
@@ -616,18 +660,14 @@ set_origin_reference() {
   [ "$output" = "$(fork_point)" ]
 }
 
-# -----------------------------------------------------------------------------
-# 11. Single-commit PR (HEAD is the only commit past merge-base) → main ref
-# -----------------------------------------------------------------------------
-
-@test "single-commit PR → main ref" {
+case_single_commit_pr_main_ref() {
   add_commit a
   run --separate-stderr run_in_sandbox
   [ "$status" -eq 0 ]
   [ "$output" = "$(fork_point)" ]
 }
 
-@test "no GH_TOKEN → status path skipped → main ref" {
+case_no_gh_token_status_path_skipped_main_ref() {
   add_commit a
   base="$(sha_of HEAD)"
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
@@ -641,7 +681,7 @@ set_origin_reference() {
   [ "$output" = "$(fork_point)" ]
 }
 
-@test "status base: pending GAIA-Audit ancestor is not a usable base" {
+case_status_base_pending_gaia_audit_ancestor_is_not_a_usable_base() {
   add_commit a
   base="$(sha_of HEAD)"
   add_commit b
@@ -655,7 +695,21 @@ set_origin_reference() {
   [ "$output" = "$(fork_point)" ]
 }
 
-@test "status base: success GAIA-Audit ancestor is a usable base" {
+# bats test_tags=protected
+@test "argument-less form falls back to the fork point when no usable anchor exists" {
+  run_cases \
+    "no audit signal on any PR commit → main ref" 'case_no_audit_signal_on_any_pr_commit_main_ref' \
+    "no base ref declared → the repository default" 'case_no_base_ref_declared_the_repository_default' \
+    "single-commit PR → main ref" 'case_single_commit_pr_main_ref' \
+    "matching status on HEAD is not used as its own base" 'case_matching_status_on_head_is_not_used_as_its_own_base' \
+    "no GH_TOKEN → status path skipped → main ref" 'case_no_gh_token_status_path_skipped_main_ref' \
+    ".gaia/VERSION missing → main ref" 'case_gaia_version_missing_main_ref' \
+    ".gaia/VERSION empty → main ref" 'case_gaia_version_empty_main_ref' \
+    "status on parent with version mismatch → main ref" 'case_status_on_parent_with_version_mismatch_main_ref' \
+    "status base: pending GAIA-Audit ancestor is not a usable base" 'case_status_base_pending_gaia_audit_ancestor_is_not_a_usable_base'
+}
+
+case_status_base_success_gaia_audit_ancestor_is_a_usable_base() {
   add_commit a
   base="$(sha_of HEAD)"
   add_commit b
@@ -667,13 +721,10 @@ set_origin_reference() {
   [ "$output" = "$base" ]
 }
 
-# -----------------------------------------------------------------------------
-# 16. RT-006: a machinery change between the version-matching base and HEAD
-# resets to full scope, so a pre-base machinery change (a different classifier
-# ruleset) is never left unreviewed by an incremental <base>..HEAD diff.
-# -----------------------------------------------------------------------------
-
-@test "RT-006: a machinery change between the version-matching base and HEAD resets to full scope" {
+# A machinery change between the version-matching base and HEAD resets to full
+# scope, so a different classifier ruleset is never left unreviewed by an
+# incremental <base>..HEAD diff.
+case_rt_006_a_machinery_change_between_the_version_matching_base() {
   add_commit a
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
   add_machinery_commit
@@ -684,12 +735,7 @@ set_origin_reference() {
   grep -qF "machinery changed" <<<"$stderr"
 }
 
-# -----------------------------------------------------------------------------
-# 17. RT-006 regression: an ordinary (non-machinery) follow-up commit does NOT
-# trigger the reset; the version-matching candidate is still returned.
-# -----------------------------------------------------------------------------
-
-@test "RT-006: a non-machinery follow-up commit does not reset the base" {
+case_rt_006_a_non_machinery_follow_up_commit_does_not_reset_the_b() {
   add_commit a
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
   base="$(sha_of HEAD)"
@@ -702,16 +748,19 @@ set_origin_reference() {
   return 0
 }
 
-# -----------------------------------------------------------------------------
-# 18. The fail direction INVERTED. This arm used to skip the base-reset check
-# and return the version-only candidate (fail-open toward reviewing LESS). It
-# now resets to full scope: with the predicate libs unloadable neither reset
-# tier can be evaluated, so the anchor's soundness for the resolving member
-# cannot be established at all, and the merge gate already denies outright on
-# the same input.
-# -----------------------------------------------------------------------------
+# bats test_tags=protected
+@test "argument-less form anchors at the newest version-matching success status with no machinery change" {
+  run_cases \
+    "newest audited commit wins over an older audited commit" 'case_newest_audited_commit_wins_over_an_older_audited_commit' \
+    "status on parent with matching version → parent SHA" 'case_status_on_parent_with_matching_version_parent_sha' \
+    "status base: success GAIA-Audit ancestor is a usable base" 'case_status_base_success_gaia_audit_ancestor_is_a_usable_base' \
+    "RT-006: a non-machinery follow-up commit does not reset the base" 'case_rt_006_a_non_machinery_follow_up_commit_does_not_reset_the_b'
+}
 
-@test "classifier/machinery libs unavailable resets to full scope" {
+# With the predicate libs unloadable neither reset tier can be evaluated, so
+# the anchor's soundness cannot be established: the answer is full scope, and
+# the merge gate denies outright on the same input.
+case_classifier_machinery_libs_unavailable_resets_to_full_scope() {
   add_commit a
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
   base="$(sha_of HEAD)"
@@ -727,16 +776,10 @@ set_origin_reference() {
   grep -qF "libs unavailable" <<<"$stderr"
 }
 
-# -----------------------------------------------------------------------------
-# 19. RT-006 encoding: the reset fires for a machinery path carrying non-ASCII
-# bytes, exactly as it does for test 16's ASCII one. The classifier reads the
-# names `git diff` prints, so letting git C-quote them turns a machinery change
-# into a machinery-free delta -- and a delta with no machinery in it is the
-# ordinary case, so nothing anywhere reports that the reset was skipped. This
-# is the encoding half of test 16, which the ASCII path cannot reach.
-# -----------------------------------------------------------------------------
-
-@test "RT-006: a machinery change on a non-ASCII path resets to full scope" {
+# The classifier reads the names `git diff` prints, so letting git C-quote a
+# non-ASCII path turns a machinery change into a machinery-free delta, the
+# ordinary case, and nothing reports that the reset was skipped.
+case_rt_006_a_machinery_change_on_a_non_ascii_path_resets_to_full() {
   add_commit a
   status_at_head "1.2.3 ${DIGEST} $(tree_of HEAD)"
   add_non_ascii_machinery_commit
@@ -747,12 +790,19 @@ set_origin_reference() {
   grep -qF "machinery changed" <<<"$stderr"
 }
 
+# bats test_tags=protected
+@test "argument-less form resets to full scope on a machinery change or unavailable libs" {
+  run_cases \
+    "RT-006: a machinery change between the version-matching base and HEAD resets to full scope" 'case_rt_006_a_machinery_change_between_the_version_matching_base' \
+    "classifier/machinery libs unavailable resets to full scope" 'case_classifier_machinery_libs_unavailable_resets_to_full_scope' \
+    "RT-006: a machinery change on a non-ASCII path resets to full scope" 'case_rt_006_a_machinery_change_on_a_non_ascii_path_resets_to_full'
+}
+
 # =============================================================================
 # The per-member form: a second anchor arm over the same walk.
 # =============================================================================
 
-@test "two members resolve different bases from the same invocation shape" {
-  require_jq
+case_two_members_resolve_different_bases_from_the_same_invocation() {
   add_commit a
   team_anchor_sha="$(stamp_anchor)"
   add_commit b
@@ -779,8 +829,7 @@ set_origin_reference() {
   [ -z "$(member_anchor_tree)" ]
 }
 
-@test "a member clearance newer than the whole-team signal wins the walk" {
-  require_jq
+case_a_member_clearance_newer_than_the_whole_team_signal_wins_the() {
   add_commit a
   team_anchor_sha="$(stamp_anchor)"
   add_commit b
@@ -795,8 +844,7 @@ set_origin_reference() {
   [ "$(member_reason)" = "member-clearance" ]
 }
 
-@test "a whole-team signal newer than the member clearance wins the walk" {
-  require_jq
+case_a_whole_team_signal_newer_than_the_member_clearance_wins_the() {
   add_commit a
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 >/dev/null
   member_clearance_sha="$(sha_of HEAD)"
@@ -809,6 +857,15 @@ set_origin_reference() {
   [ "$(member_base)" = "$team_anchor_sha" ]
   [ "$(member_base)" != "$member_clearance_sha" ]
   [ "$(member_reason)" = "team-signal" ]
+}
+
+# bats test_tags=protected
+@test "member form anchors on the newest of the member clearance and the whole-team signal" {
+  require_jq
+  run_cases \
+    "two members resolve different bases from the same invocation shape" 'case_two_members_resolve_different_bases_from_the_same_invocation' \
+    "a member clearance newer than the whole-team signal wins the walk" 'case_a_member_clearance_newer_than_the_whole_team_signal_wins_the' \
+    "a whole-team signal newer than the member clearance wins the walk" 'case_a_whole_team_signal_newer_than_the_member_clearance_wins_the'
 }
 
 # -----------------------------------------------------------------------------
@@ -837,27 +894,11 @@ assert_global_reset_for() {
   return 0
 }
 
-@test "global tier: a gate-governing rule change resets the member" {
-  assert_global_reset_for ".claude/rules/quality-gate.md"
-}
-
-@test "global tier: an ownership classifier change resets the member" {
-  assert_global_reset_for ".claude/hooks/lib/audit-scope.sh"
-}
-
-@test "global tier: a base resolver change resets the member" {
-  assert_global_reset_for ".github/audit/resolve-audit-base.sh"
-}
-
-@test "global tier: a version file change resets the member" {
-  assert_global_reset_for ".gaia/VERSION"
-}
-
 # -----------------------------------------------------------------------------
 # The member tier and the merely-shared carve-out.
 # -----------------------------------------------------------------------------
 
-@test "member tier: a member's own agent definition resets only that member" {
+case_member_tier_a_member_s_own_agent_definition_resets_only_that() {
   add_commit a
   base="$(stamp_anchor)"
   commit_append ".claude/agents/${DEFAULT_MEMBER}.md"
@@ -874,7 +915,7 @@ assert_global_reset_for() {
   [ "$(member_reason)" = "team-signal" ]
 }
 
-@test "merely-shared machinery resets nobody in the member form" {
+case_merely_shared_machinery_resets_nobody_in_the_member_form() {
   add_commit a
   base="$(stamp_anchor)"
   commit_append ".claude/hooks/lib/cross-repo-refusal.sh"
@@ -900,7 +941,7 @@ assert_global_reset_for() {
 # incremental anchor. Held global, this one path re-scoped the entire roster to
 # full review on any convention edit, which is the cost that made rule edits
 # get deferred rather than made.
-@test "a coding-convention rule under .claude/rules/ resets nobody in the member form" {
+case_a_coding_convention_rule_under_claude_rules_resets_nobody_in() {
   add_commit a
   base="$(stamp_anchor)"
   commit_append ".claude/rules/tailwind.md"
@@ -917,11 +958,24 @@ assert_global_reset_for() {
   [ "$(member_reason)" = "team-signal" ]
 }
 
+# bats test_tags=protected
+@test "rules-tier reset: global paths reset every member, a member's agent resets only that member, shared and convention paths reset nobody" {
+  run_cases \
+    "global tier: a gate-governing rule change resets the member" 'assert_global_reset_for .claude/rules/quality-gate.md' \
+    "global tier: an ownership classifier change resets the member" 'assert_global_reset_for .claude/hooks/lib/audit-scope.sh' \
+    "global tier: a base resolver change resets the member" 'assert_global_reset_for .github/audit/resolve-audit-base.sh' \
+    "global tier: a version file change resets the member" 'assert_global_reset_for .gaia/VERSION' \
+    "member tier: a member's own agent definition resets only that member" 'case_member_tier_a_member_s_own_agent_definition_resets_only_that' \
+    "merely-shared machinery resets nobody in the member form" 'case_merely_shared_machinery_resets_nobody_in_the_member_form' \
+    "a coding-convention rule under .claude/rules/ resets nobody in the member form" 'case_a_coding_convention_rule_under_claude_rules_resets_nobody_in'
+}
+
 # -----------------------------------------------------------------------------
 # The status arm drives the reset, exercised through the mock that returns a
 # full statuses array, so the production state filter runs too.
 # -----------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "the reset fires on the commit-status arm" {
   add_commit a
   base="$(sha_of HEAD)"
@@ -939,6 +993,7 @@ assert_global_reset_for() {
   grep -qF ".claude/rules/quality-gate.md" <<<"$stderr"
 }
 
+# bats test_tags=protected
 @test "the status arm anchors the member form" {
   add_commit a
   base="$(sha_of HEAD)"
@@ -960,8 +1015,7 @@ assert_global_reset_for() {
 # candidate the unusable clearance points at.
 # -----------------------------------------------------------------------------
 
-@test "unusable clearance: a stale recorded version is not an anchor" {
-  require_jq
+case_unusable_clearance_a_stale_recorded_version_is_not_an_anchor() {
   add_commit a
   team_anchor_sha="$(stamp_anchor)"
   add_commit b
@@ -976,8 +1030,7 @@ assert_global_reset_for() {
   [ "$(member_reason)" = "team-signal" ]
 }
 
-@test "unusable clearance: a recorded tree matching no candidate is not an anchor" {
-  require_jq
+case_unusable_clearance_a_recorded_tree_matching_no_candidate_is() {
   add_commit a
   team_anchor_sha="$(stamp_anchor)"
   add_commit b
@@ -992,8 +1045,7 @@ assert_global_reset_for() {
   [ "$(member_reason)" = "team-signal" ]
 }
 
-@test "unusable clearance: a pruned record is not an anchor" {
-  require_jq
+case_unusable_clearance_a_pruned_record_is_not_an_anchor() {
   add_commit a
   team_anchor_sha="$(stamp_anchor)"
   add_commit b
@@ -1009,8 +1061,7 @@ assert_global_reset_for() {
   [ "$(member_reason)" = "team-signal" ]
 }
 
-@test "unusable clearance: no whole-team signal in range yields the main ref" {
-  require_jq
+case_unusable_clearance_no_whole_team_signal_in_range_yields_the() {
   add_commit a
   add_commit b
   unusable_clearance_sha="$(sha_of HEAD)"
@@ -1024,8 +1075,7 @@ assert_global_reset_for() {
   [ "$(member_reason)" = "no-anchor" ]
 }
 
-@test "another member's clearance is not readable as this member's anchor" {
-  require_jq
+case_another_member_s_clearance_is_not_readable_as_this_member_s() {
   add_commit a
   add_commit b
   unusable_clearance_sha="$(sha_of HEAD)"
@@ -1039,11 +1089,23 @@ assert_global_reset_for() {
   [ "$(member_reason)" = "no-anchor" ]
 }
 
+# bats test_tags=protected
+@test "unusable member clearance is never an anchor" {
+  require_jq
+  run_cases \
+    "unusable clearance: a stale recorded version is not an anchor" 'case_unusable_clearance_a_stale_recorded_version_is_not_an_anchor' \
+    "unusable clearance: a recorded tree matching no candidate is not an anchor" 'case_unusable_clearance_a_recorded_tree_matching_no_candidate_is' \
+    "unusable clearance: a pruned record is not an anchor" 'case_unusable_clearance_a_pruned_record_is_not_an_anchor' \
+    "unusable clearance: no whole-team signal in range yields the main ref" 'case_unusable_clearance_no_whole_team_signal_in_range_yields_the' \
+    "another member's clearance is not readable as this member's anchor" 'case_another_member_s_clearance_is_not_readable_as_this_member_s'
+}
+
 # -----------------------------------------------------------------------------
 # An amend rewrites the sha a moments-old clearance recorded while preserving
 # the tree. Matching on the tree is what survives it.
 # -----------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "a clearance still anchors after an amend rewrites the commit sha" {
   require_jq
   add_commit a
@@ -1230,8 +1292,7 @@ assert_refusal_fallback() {
   return 0
 }
 
-@test "refusal anchor: a linked refusal anchors the member at the refused commit" {
-  require_jq
+case_refusal_anchor_a_linked_refusal_anchors_the_member_at_the_re() {
   build_linked_refusal
 
   run --separate-stderr run_member "$DEFAULT_MEMBER"
@@ -1244,40 +1305,35 @@ assert_refusal_fallback() {
   [ "$(golden_value refusal-only argless 1)" = "main-ref" ]
 }
 
-@test "refusal link: an absent ledger falls back" {
-  require_jq
+case_refusal_link_an_absent_ledger_falls_back() {
   build_linked_refusal
   rm -f "$LEDGER"
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "the re-run ledger is absent"
 }
 
-@test "refusal link: a ledger that is not valid JSON falls back" {
-  require_jq
+case_refusal_link_a_ledger_that_is_not_valid_json_falls_back() {
   build_linked_refusal
   printf 'not json at all\n' > "$LEDGER"
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "the re-run ledger does not parse"
 }
 
-@test "refusal link: a ledger with no open entry for the member falls back" {
-  require_jq
+case_refusal_link_a_ledger_with_no_open_entry_for_the_member_fall() {
   build_linked_refusal
   edit_ledger "$LEDGER" '.remaining = []'
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "holds no open entry for ${DEFAULT_MEMBER}"
 }
 
-@test "refusal link: a ledger whose entries all belong to another member falls back" {
-  require_jq
+case_refusal_link_a_ledger_whose_entries_all_belong_to_another_me() {
   build_linked_refusal
   edit_ledger "$LEDGER" ".remaining |= map(.member = \"${OTHER_MEMBER}\")"
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "holds no open entry for ${DEFAULT_MEMBER}"
 }
 
-@test "refusal link: provenance naming an older refusal of the member falls back" {
-  require_jq
+case_refusal_link_provenance_naming_an_older_refusal_of_the_membe() {
   add_commit o
   older_tree="$(tree_of HEAD)"
   older_record="$(write_clearance "$DEFAULT_MEMBER" refused "$older_tree" 1.2.3)"
@@ -1289,28 +1345,25 @@ assert_refusal_fallback() {
   assert_refusal_fallback "names a different refusal of ${DEFAULT_MEMBER}"
 }
 
-@test "refusal link: provenance naming the refusal's digest with another tree falls back" {
-  require_jq
+case_refusal_link_provenance_naming_the_refusal_s_digest_with_ano() {
   build_linked_refusal
   edit_ledger "$LEDGER" ".member_provenance[\"${DEFAULT_MEMBER}\"].refusal_tree = \"$(printf '%040d' 5)\""
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "records a different tree for this refusal"
 }
 
-@test "refusal link: a ledger with no member provenance at all falls back" {
-  require_jq
+case_refusal_link_a_ledger_with_no_member_provenance_at_all_falls() {
   build_linked_refusal
   edit_ledger "$LEDGER" 'del(.member_provenance)'
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "holds no provenance for ${DEFAULT_MEMBER}"
 }
 
-@test "refusal link: a jq that cannot run falls back" {
-  require_jq
+case_refusal_link_a_jq_that_cannot_run_falls_back() {
   build_linked_refusal
   # A failing jq shadows the real one, the shim shape the clearance writer's
   # suite uses; git, awk and sed still resolve behind it.
-  shim="$BATS_TEST_TMPDIR/shim-nojq"
+  shim="$CASE_TMPDIR/shim-nojq"
   mkdir -p "$shim"
   printf '#!/bin/sh\nexit 1\n' > "$shim/jq"
   chmod +x "$shim/jq"
@@ -1320,8 +1373,7 @@ assert_refusal_fallback() {
   assert_refusal_fallback "jq is unavailable"
 }
 
-@test "refusal link: an absent key library falls back without degrading" {
-  require_jq
+case_refusal_link_an_absent_key_library_falls_back_without_degrad() {
   build_linked_refusal
   rm -f "$SANDBOX/.gaia/scripts/audit-key-lib.sh"
   run --separate-stderr run_member "$DEFAULT_MEMBER"
@@ -1329,46 +1381,40 @@ assert_refusal_fallback() {
   [ "$(member_reason)" != "degraded" ]
 }
 
-@test "refusal link: a ledger recorded for another branch falls back" {
-  require_jq
+case_refusal_link_a_ledger_recorded_for_another_branch_falls_back() {
   build_linked_refusal
   edit_ledger "$LEDGER" '.branch = "another-branch"'
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "stale re-run ledger"
 }
 
-@test "refusal link: a ledger recorded against another base falls back" {
-  require_jq
+case_refusal_link_a_ledger_recorded_against_another_base_falls_ba() {
   build_linked_refusal
   edit_ledger "$LEDGER" ".base_sha = \"$(printf '%040d' 3)\""
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "stale re-run ledger"
 }
 
-@test "refusal link: a refusal with no review-coverage proof falls back" {
-  require_jq
+case_refusal_link_a_refusal_with_no_review_coverage_proof_falls_b() {
   build_linked_refusal none
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "no review-coverage proof"
 }
 
-@test "refusal link: a review-coverage proof naming another digest falls back" {
-  require_jq
+case_refusal_link_a_review_coverage_proof_naming_another_digest_f() {
   build_linked_refusal mismatch
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_fallback "no review-coverage proof"
 }
 
-@test "refusal link: the ledger is read with GITHUB_ACTIONS and CI exported" {
-  require_jq
+case_refusal_link_the_ledger_is_read_with_github_actions_and_ci_e() {
   build_linked_refusal
   export GITHUB_ACTIONS=true CI=true
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   assert_refusal_anchor
 }
 
-@test "refusal link: CI=true outside GitHub Actions still reads the ledger" {
-  require_jq
+case_refusal_link_ci_true_outside_github_actions_still_reads_the() {
   build_linked_refusal
   export CI=true
   unset GITHUB_ACTIONS
@@ -1376,8 +1422,7 @@ assert_refusal_fallback() {
   assert_refusal_anchor
 }
 
-@test "refusal anchor: a linked refusal newer than an earned clearance anchors at the refusal" {
-  require_jq
+case_refusal_anchor_a_linked_refusal_newer_than_an_earned_clearan() {
   add_commit c
   earned_tree="$(tree_of HEAD)"
   write_clearance "$DEFAULT_MEMBER" earned "$earned_tree" 1.2.3 full >/dev/null
@@ -1391,8 +1436,7 @@ assert_refusal_fallback() {
   [ "$(member_anchor_tree)" != "$earned_tree" ]
 }
 
-@test "refusal anchor: the member's own agent definition changing resets it" {
-  require_jq
+case_refusal_anchor_the_member_s_own_agent_definition_changing_re() {
   add_commit a
   refuse_head
   commit_append ".claude/agents/${DEFAULT_MEMBER}.md"
@@ -1405,8 +1449,7 @@ assert_refusal_fallback() {
   [ "$(member_reason)" = "rules-reset-member" ]
 }
 
-@test "refusal anchor: a global rules path changing resets it" {
-  require_jq
+case_refusal_anchor_a_global_rules_path_changing_resets_it() {
   add_commit a
   refuse_head
   commit_append ".claude/rules/quality-gate.md"
@@ -1419,8 +1462,7 @@ assert_refusal_fallback() {
   [ "$(member_reason)" = "rules-reset-global" ]
 }
 
-@test "refusal anchor: both rule tiers changing resolve as the golden recorded for a clearance" {
-  require_jq
+case_refusal_anchor_both_rule_tiers_changing_resolve_as_the_golde() {
   add_commit a
   refuse_head
   commit_append ".claude/agents/${DEFAULT_MEMBER}.md"
@@ -1434,8 +1476,7 @@ assert_refusal_fallback() {
   assert_member_lines_match_golden clearance-both-rules
 }
 
-@test "refusal anchor: a missing predicate lib degrades as the golden recorded for a clearance" {
-  require_jq
+case_refusal_anchor_a_missing_predicate_lib_degrades_as_the_golde() {
   build_linked_refusal
   rm -f "$SANDBOX/.claude/hooks/lib/audit-scope.sh"
 
@@ -1445,8 +1486,7 @@ assert_refusal_fallback() {
   assert_member_lines_match_golden clearance-degraded
 }
 
-@test "refusal anchor: a missing version file resolves as the golden recorded for a clearance" {
-  require_jq
+case_refusal_anchor_a_missing_version_file_resolves_as_the_golden() {
   build_linked_refusal
   rm -f "$SANDBOX/.gaia/VERSION"
 
@@ -1456,8 +1496,18 @@ assert_refusal_fallback() {
   assert_member_lines_match_golden clearance-no-version
 }
 
-@test "refusal link: a refusal recorded under another version never anchors and blocks an older clearance" {
+# bats test_tags=protected
+@test "refusal anchor resets and degrades like a clearance anchor" {
   require_jq
+  run_cases \
+    "refusal anchor: the member's own agent definition changing resets it" 'case_refusal_anchor_the_member_s_own_agent_definition_changing_re' \
+    "refusal anchor: a global rules path changing resets it" 'case_refusal_anchor_a_global_rules_path_changing_resets_it' \
+    "refusal anchor: both rule tiers changing resolve as the golden recorded for a clearance" 'case_refusal_anchor_both_rule_tiers_changing_resolve_as_the_golde' \
+    "refusal anchor: a missing predicate lib degrades as the golden recorded for a clearance" 'case_refusal_anchor_a_missing_predicate_lib_degrades_as_the_golde' \
+    "refusal anchor: a missing version file resolves as the golden recorded for a clearance" 'case_refusal_anchor_a_missing_version_file_resolves_as_the_golden'
+}
+
+case_refusal_link_a_refusal_recorded_under_another_version_never() {
   add_commit c
   earned_sha="$(sha_of HEAD)"
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 full >/dev/null
@@ -1474,8 +1524,27 @@ assert_refusal_fallback() {
   [ "$(member_base)" != "$earned_sha" ]
 }
 
-@test "refusal precedence: an earned clearance newer than the refusal anchors" {
+# bats test_tags=protected
+@test "refusal link falls back whenever the ledger link cannot be proven" {
   require_jq
+  run_cases \
+    "refusal link: an absent ledger falls back" 'case_refusal_link_an_absent_ledger_falls_back' \
+    "refusal link: a ledger that is not valid JSON falls back" 'case_refusal_link_a_ledger_that_is_not_valid_json_falls_back' \
+    "refusal link: a ledger with no open entry for the member falls back" 'case_refusal_link_a_ledger_with_no_open_entry_for_the_member_fall' \
+    "refusal link: a ledger whose entries all belong to another member falls back" 'case_refusal_link_a_ledger_whose_entries_all_belong_to_another_me' \
+    "refusal link: provenance naming an older refusal of the member falls back" 'case_refusal_link_provenance_naming_an_older_refusal_of_the_membe' \
+    "refusal link: provenance naming the refusal's digest with another tree falls back" 'case_refusal_link_provenance_naming_the_refusal_s_digest_with_ano' \
+    "refusal link: a ledger with no member provenance at all falls back" 'case_refusal_link_a_ledger_with_no_member_provenance_at_all_falls' \
+    "refusal link: a jq that cannot run falls back" 'case_refusal_link_a_jq_that_cannot_run_falls_back' \
+    "refusal link: an absent key library falls back without degrading" 'case_refusal_link_an_absent_key_library_falls_back_without_degrad' \
+    "refusal link: a ledger recorded for another branch falls back" 'case_refusal_link_a_ledger_recorded_for_another_branch_falls_back' \
+    "refusal link: a ledger recorded against another base falls back" 'case_refusal_link_a_ledger_recorded_against_another_base_falls_ba' \
+    "refusal link: a refusal with no review-coverage proof falls back" 'case_refusal_link_a_refusal_with_no_review_coverage_proof_falls_b' \
+    "refusal link: a review-coverage proof naming another digest falls back" 'case_refusal_link_a_review_coverage_proof_naming_another_digest_f' \
+    "refusal link: a refusal recorded under another version never anchors and blocks an older clearance" 'case_refusal_link_a_refusal_recorded_under_another_version_never'
+}
+
+case_refusal_precedence_an_earned_clearance_newer_than_the_refusa() {
   add_commit a
   refused_sha="$(sha_of HEAD)"
   write_clearance "$DEFAULT_MEMBER" refused "$(tree_of HEAD)" 1.2.3 >/dev/null
@@ -1493,8 +1562,7 @@ assert_refusal_fallback() {
   [ "$(member_anchor_tree)" = "$earned_tree" ]
 }
 
-@test "refusal precedence: an older earned clearance never anchors past an unlinked refusal" {
-  require_jq
+case_refusal_precedence_an_older_earned_clearance_never_anchors_p() {
   add_commit c
   earned_sha="$(sha_of HEAD)"
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 full >/dev/null
@@ -1513,8 +1581,7 @@ assert_refusal_fallback() {
   [ "$(member_base)" != "$earned_sha" ]
 }
 
-@test "refusal precedence: a refusal and an earned record at the same tree resolve as the refusal" {
-  require_jq
+case_refusal_precedence_a_refusal_and_an_earned_record_at_the_sam() {
   add_commit a
   refuse_head
   write_twin "$REFUSAL_RECORD" earned
@@ -1526,8 +1593,7 @@ assert_refusal_fallback() {
   assert_refusal_anchor
 }
 
-@test "refusal link: a team signal older than the refusal is the fallback, and the link beats it" {
-  require_jq
+case_refusal_link_a_team_signal_older_than_the_refusal_is_the_fal() {
   add_commit t
   team_anchor_sha="$(stamp_anchor)"
   add_commit a
@@ -1546,6 +1612,7 @@ assert_refusal_fallback() {
   [ "$(member_shared_base)" = "$team_anchor_sha" ]
 }
 
+# bats test_tags=protected
 @test "refusal anchor: merely-shared machinery after the anchor resets line 3 and never line 1" {
   require_jq
   add_commit t
@@ -1568,8 +1635,7 @@ assert_refusal_fallback() {
   [ "$output" = "$argless_without_link" ]
 }
 
-@test "refusal precedence: a refusal at HEAD disables the member arm" {
-  require_jq
+case_refusal_precedence_a_refusal_at_head_disables_the_member_arm() {
   add_commit c
   earned_sha="$(sha_of HEAD)"
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 full >/dev/null
@@ -1585,8 +1651,7 @@ assert_refusal_fallback() {
   grep -qF "refused content at HEAD" <<<"$stderr"
 }
 
-@test "refusal precedence: an earned clearance beside a live refusal for its own digest is no anchor" {
-  require_jq
+case_refusal_precedence_an_earned_clearance_beside_a_live_refusal() {
   add_commit c
   earned_sha="$(sha_of HEAD)"
   earned_record="$(write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 full)"
@@ -1601,8 +1666,7 @@ assert_refusal_fallback() {
   [ "$(member_reason)" = "no-anchor" ]
 }
 
-@test "refusal link: a co-member advancing the ledger's head and round leaves the link intact" {
-  require_jq
+case_refusal_link_a_co_member_advancing_the_ledger_s_head_and_rou() {
   build_linked_refusal
   edit_ledger "$LEDGER" "
     .head_sha = \"$(printf '%040d' 4)\"
@@ -1624,8 +1688,7 @@ assert_refusal_fallback() {
 # holding a live refusal IS pending, so a whole-team signal at or newer than
 # the refused commit is evidence the refusal was already resolved (superseded
 # by its author, or retired by a digest rotation).
-@test "a whole-team signal newer than a refusal still anchors the member" {
-  require_jq
+case_a_whole_team_signal_newer_than_a_refusal_still_anchors_the_m() {
   add_commit a
   write_clearance "$DEFAULT_MEMBER" refused "$(tree_of HEAD)" 1.2.3 >/dev/null
   add_commit b
@@ -1639,6 +1702,20 @@ assert_refusal_fallback() {
   [ -z "$(member_anchor_tree)" ]
 }
 
+# bats test_tags=protected
+@test "refusal, earned clearance and team signal precedence" {
+  require_jq
+  run_cases \
+    "refusal anchor: a linked refusal newer than an earned clearance anchors at the refusal" 'case_refusal_anchor_a_linked_refusal_newer_than_an_earned_clearan' \
+    "refusal precedence: an earned clearance newer than the refusal anchors" 'case_refusal_precedence_an_earned_clearance_newer_than_the_refusa' \
+    "refusal precedence: an older earned clearance never anchors past an unlinked refusal" 'case_refusal_precedence_an_older_earned_clearance_never_anchors_p' \
+    "refusal precedence: a refusal and an earned record at the same tree resolve as the refusal" 'case_refusal_precedence_a_refusal_and_an_earned_record_at_the_sam' \
+    "refusal link: a team signal older than the refusal is the fallback, and the link beats it" 'case_refusal_link_a_team_signal_older_than_the_refusal_is_the_fal' \
+    "refusal precedence: a refusal at HEAD disables the member arm" 'case_refusal_precedence_a_refusal_at_head_disables_the_member_arm' \
+    "refusal precedence: an earned clearance beside a live refusal for its own digest is no anchor" 'case_refusal_precedence_an_earned_clearance_beside_a_live_refusal' \
+    "a whole-team signal newer than a refusal still anchors the member" 'case_a_whole_team_signal_newer_than_a_refusal_still_anchors_the_m'
+}
+
 # -----------------------------------------------------------------------------
 # Review depth. Only a marker carrying `review: full` anchors, in the member
 # arm and, through the store scan, in the team-signal arm: the
@@ -1646,8 +1723,7 @@ assert_refusal_fallback() {
 # past a non-full clearance of ANY member, or where no full review is on record.
 # -----------------------------------------------------------------------------
 
-@test "review depth: a light clearance after a full one never anchors" {
-  require_jq
+case_review_depth_a_light_clearance_after_a_full_one_never_anchor() {
   add_commit a
   full_sha="$(sha_of HEAD)"
   full_tree="$(tree_of HEAD)"
@@ -1665,8 +1741,7 @@ assert_refusal_fallback() {
   [ "$(member_anchor_tree)" != "$light_tree" ]
 }
 
-@test "review depth: a marker lacking the review field is not an anchor" {
-  require_jq
+case_review_depth_a_marker_lacking_the_review_field_is_not_an_anc() {
   add_commit a
   full_sha="$(sha_of HEAD)"
   full_tree="$(tree_of HEAD)"
@@ -1682,8 +1757,7 @@ assert_refusal_fallback() {
   [ "$(member_anchor_tree)" = "$full_tree" ]
 }
 
-@test "review depth: a status on a light-cleared commit does not anchor the team arm" {
-  require_jq
+case_review_depth_a_status_on_a_light_cleared_commit_does_not_anc() {
   add_commit a
   full_sha="$(sha_of HEAD)"
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 full >/dev/null
@@ -1702,8 +1776,7 @@ assert_refusal_fallback() {
   [ "$(member_shared_base)" = "$light_sha" ]
 }
 
-@test "review depth: the same status anchors when the clearance at it is full" {
-  require_jq
+case_review_depth_the_same_status_anchors_when_the_clearance_at_i() {
   add_commit a
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 full >/dev/null
   add_commit b
@@ -1719,8 +1792,7 @@ assert_refusal_fallback() {
 # The scan covers every roster member. The resolving member's own stale-version
 # full marker at the signal tree satisfies the "a full review is on record"
 # half on its own, so only the OTHER member's light marker can disable the arm.
-@test "review depth: another member's light clearance at the signal disables the team arm" {
-  require_jq
+case_review_depth_another_member_s_light_clearance_at_the_signal() {
   add_commit a
   full_sha="$(sha_of HEAD)"
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 full >/dev/null
@@ -1738,8 +1810,7 @@ assert_refusal_fallback() {
   grep -qF "${OTHER_MEMBER} holds a non-full clearance at ${signal_sha}" <<<"$stderr"
 }
 
-@test "review depth: a non-full marker outside the range leaves the verified signal as the base" {
-  require_jq
+case_review_depth_a_non_full_marker_outside_the_range_leaves_the() {
   add_commit a
   add_commit b
   signal_sha="$(stamp_anchor bare)"
@@ -1753,8 +1824,7 @@ assert_refusal_fallback() {
   [ "$(member_reason)" = "team-signal" ]
 }
 
-@test "review depth: the same signal anchors when the other member's clearance is full" {
-  require_jq
+case_review_depth_the_same_signal_anchors_when_the_other_member_s() {
   add_commit a
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 full >/dev/null
   add_commit b
@@ -1769,8 +1839,7 @@ assert_refusal_fallback() {
   [ "$(member_reason)" = "team-signal" ]
 }
 
-@test "review depth: a light-only history has no anchor" {
-  require_jq
+case_review_depth_a_light_only_history_has_no_anchor() {
   add_commit a
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 light >/dev/null
   add_commit b
@@ -1785,7 +1854,16 @@ assert_refusal_fallback() {
   [ -z "$(member_anchor_tree)" ]
 }
 
-@test "review depth: a signal with an empty marker store refuses to anchor" {
+# bats test_tags=protected
+@test "member arm anchors only on a full review" {
+  require_jq
+  run_cases \
+    "review depth: a light clearance after a full one never anchors" 'case_review_depth_a_light_clearance_after_a_full_one_never_anchor' \
+    "review depth: a marker lacking the review field is not an anchor" 'case_review_depth_a_marker_lacking_the_review_field_is_not_an_anc' \
+    "review depth: a light-only history has no anchor" 'case_review_depth_a_light_only_history_has_no_anchor'
+}
+
+case_review_depth_a_signal_with_an_empty_marker_store_refuses_to() {
   add_commit a
   add_commit b
   stamp_anchor bare >/dev/null
@@ -1799,8 +1877,7 @@ assert_refusal_fallback() {
   grep -qF "unverifiable" <<<"$stderr"
 }
 
-@test "review depth: a full review of another member at the signal tree lets the arm anchor" {
-  require_jq
+case_review_depth_a_full_review_of_another_member_at_the_signal_t() {
   add_commit a
   add_commit b
   signal_sha="$(stamp_anchor bare)"
@@ -1814,8 +1891,7 @@ assert_refusal_fallback() {
   [ -z "$(member_anchor_tree)" ]
 }
 
-@test "review depth: a marker the reader cannot parse at the signal tree is unverifiable" {
-  require_jq
+case_review_depth_a_marker_the_reader_cannot_parse_at_the_signal() {
   add_commit a
   add_commit b
   stamp_anchor bare >/dev/null
@@ -1830,8 +1906,7 @@ assert_refusal_fallback() {
   grep -qF "unverifiable" <<<"$stderr"
 }
 
-@test "review depth: an unreadable roster refuses the team arm" {
-  require_jq
+case_review_depth_an_unreadable_roster_refuses_the_team_arm() {
   add_commit a
   stamp_anchor >/dev/null
   add_commit b
@@ -1844,10 +1919,24 @@ assert_refusal_fallback() {
   grep -qF "roster is unreadable" <<<"$stderr"
 }
 
+# bats test_tags=protected
+@test "team arm anchors only when the signal stands on full reviews of the roster" {
+  require_jq
+  run_cases \
+    "review depth: a status on a light-cleared commit does not anchor the team arm" 'case_review_depth_a_status_on_a_light_cleared_commit_does_not_anc' \
+    "review depth: the same status anchors when the clearance at it is full" 'case_review_depth_the_same_status_anchors_when_the_clearance_at_i' \
+    "review depth: another member's light clearance at the signal disables the team arm" 'case_review_depth_another_member_s_light_clearance_at_the_signal' \
+    "review depth: a non-full marker outside the range leaves the verified signal as the base" 'case_review_depth_a_non_full_marker_outside_the_range_leaves_the' \
+    "review depth: the same signal anchors when the other member's clearance is full" 'case_review_depth_the_same_signal_anchors_when_the_other_member_s' \
+    "review depth: a full review of another member at the signal tree lets the arm anchor" 'case_review_depth_a_full_review_of_another_member_at_the_signal_t' \
+    "review depth: a marker the reader cannot parse at the signal tree is unverifiable" 'case_review_depth_a_marker_the_reader_cannot_parse_at_the_signal' \
+    "review depth: an unreadable roster refuses the team arm" 'case_review_depth_an_unreadable_roster_refuses_the_team_arm'
+}
+
 # Records every clearance_scan call (member and provenance) into the file the
 # sandbox's reader copy appends to, so a test can see which stores were read.
 trace_clearance_scans() {
-  CLEARANCE_SCAN_TRACE="$BATS_TEST_TMPDIR/scan.trace"
+  CLEARANCE_SCAN_TRACE="$CASE_TMPDIR/scan.trace"
   export CLEARANCE_SCAN_TRACE
   : > "$CLEARANCE_SCAN_TRACE"
   local reader="$SANDBOX/.claude/hooks/lib/audit-clearance.sh"
@@ -1856,8 +1945,7 @@ trace_clearance_scans() {
   grep -qF 'CLEARANCE_SCAN_TRACE' "$reader"
 }
 
-@test "review depth: the roster scan is skipped when no whole-team signal is in range" {
-  require_jq
+case_review_depth_the_roster_scan_is_skipped_when_no_whole_team_s() {
   trace_clearance_scans
   add_commit a
   write_clearance "$OTHER_MEMBER" earned "$(tree_of HEAD)" 1.2.3 light >/dev/null
@@ -1873,8 +1961,7 @@ trace_clearance_scans() {
   [ "$(sort "$CLEARANCE_SCAN_TRACE" | tr '\n' ',')" = "${DEFAULT_MEMBER} earned,${DEFAULT_MEMBER} refused," ]
 }
 
-@test "review depth: a signal in range scans each roster member once and the resolving member only once" {
-  require_jq
+case_review_depth_a_signal_in_range_scans_each_roster_member_once() {
   trace_clearance_scans
   add_commit a
   add_commit b
@@ -1890,14 +1977,20 @@ trace_clearance_scans() {
   [ -z "$(sort "$CLEARANCE_SCAN_TRACE" | uniq -d)" ]
 }
 
+@test "roster clearance scan is bounded" {
+  require_jq
+  run_cases \
+    "review depth: the roster scan is skipped when no whole-team signal is in range" 'case_review_depth_the_roster_scan_is_skipped_when_no_whole_team_s' \
+    "review depth: a signal in range scans each roster member once and the resolving member only once" 'case_review_depth_a_signal_in_range_scans_each_roster_member_once'
+}
+
 # -----------------------------------------------------------------------------
 # Library availability. Four libs decide the answer and their absence resets
 # to full scope; the clearance reader's absence is the CONTRAST, because it is
 # the same condition as the empty store every continuous-integration run has.
 # -----------------------------------------------------------------------------
 
-# Remove one provisioned lib, then assert the member form degraded rather than
-# emitting the candidate it would otherwise have anchored on.
+# Remove one provisioned lib and assert the member form degraded, never anchored.
 assert_degraded_without() {
   local library_name="$1" base
   add_commit a
@@ -1916,25 +2009,22 @@ assert_degraded_without() {
   return 0
 }
 
-@test "degraded: the ownership classifier cannot be sourced" {
-  assert_degraded_without "audit-scope.sh"
-}
-
-@test "degraded: the machinery matcher cannot be sourced" {
-  assert_degraded_without "audit-machinery.sh"
-}
-
-@test "degraded: the rules-tier predicate cannot be sourced" {
-  assert_degraded_without "audit-rules-changed.sh"
-}
-
 # The version normalizer is sourced ahead of the library block the other three
 # share, because the version gate answers before the walk starts. Folding it
 # down into that block would put its `command -v` probe below the call it
 # guards, where an absent lib is a command-not-found that aborts the resolver
 # under `set -euo pipefail` instead of degrading it.
-@test "degraded: the version normalizer cannot be sourced" {
+case_degraded_the_version_normalizer_cannot_be_sourced() {
   assert_degraded_without "gaia-version.sh"
+}
+
+# bats test_tags=protected
+@test "a missing predicate lib degrades the member form to full scope" {
+  run_cases \
+    "degraded: the ownership classifier cannot be sourced" 'assert_degraded_without audit-scope.sh' \
+    "degraded: the machinery matcher cannot be sourced" 'assert_degraded_without audit-machinery.sh' \
+    "degraded: the rules-tier predicate cannot be sourced" 'assert_degraded_without audit-rules-changed.sh' \
+    "degraded: the version normalizer cannot be sourced" 'case_degraded_the_version_normalizer_cannot_be_sourced'
 }
 
 # -----------------------------------------------------------------------------
@@ -1991,6 +2081,7 @@ assert_degraded_with_unparseable() {
 # nothing to do with either load shape. The clearance-reader case at the end
 # needs no such control: it asserts `team-signal` rather than `degraded`, so a
 # resolver that had stopped resolving could not satisfy it.
+# bats test_tags=protected
 @test "unparseable control: with every lib intact, stock /bin/bash resolves normally" {
   [ -x /bin/bash ] || skip "no /bin/bash"
   add_commit a
@@ -2006,31 +2097,21 @@ assert_degraded_with_unparseable() {
   return 0
 }
 
-@test "degraded: the ownership classifier is present but unparseable" {
+# bats test_tags=protected
+@test "an unparseable predicate lib degrades under stock bash" {
   [ -x /bin/bash ] || skip "no /bin/bash"
-  assert_degraded_with_unparseable "audit-scope.sh"
-}
-
-@test "degraded: the machinery matcher is present but unparseable" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
-  assert_degraded_with_unparseable "audit-machinery.sh"
-}
-
-@test "degraded: the rules-tier predicate is present but unparseable" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
-  assert_degraded_with_unparseable "audit-rules-changed.sh"
-}
-
-@test "degraded: the version normalizer is present but unparseable" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
-  assert_degraded_with_unparseable "gaia-version.sh"
+  run_cases \
+    "degraded: the ownership classifier is present but unparseable" 'assert_degraded_with_unparseable audit-scope.sh' \
+    "degraded: the machinery matcher is present but unparseable" 'assert_degraded_with_unparseable audit-machinery.sh' \
+    "degraded: the rules-tier predicate is present but unparseable" 'assert_degraded_with_unparseable audit-rules-changed.sh' \
+    "degraded: the version normalizer is present but unparseable" 'assert_degraded_with_unparseable gaia-version.sh'
 }
 
 # The resolver sources its stages from its own directory. Each sibling is
 # removed in turn from a copy of that directory: the answer must be the
 # degraded full-scope main ref on both forms, exit 0, never the anchor the
 # intact resolver would pick and never a 127 from a call into an absent stage.
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "a missing sibling degrades to full review, never a narrower base" {
   local base copy_directory sibling_path sibling_name sibling_count=0
   add_commit a
@@ -2040,7 +2121,7 @@ assert_degraded_with_unparseable() {
     [ -f "$sibling_path" ] || continue
     sibling_count=$((sibling_count + 1))
     sibling_name="$(basename "$sibling_path")"
-    copy_directory="$BATS_TEST_TMPDIR/without-${sibling_name%.sh}"
+    copy_directory="$CASE_TMPDIR/without-${sibling_name%.sh}"
     mkdir -p "$copy_directory"
     cp "$(dirname "$SCRIPT")"/resolve-audit-base*.sh "$copy_directory/"
     rm -f "$copy_directory/$sibling_name"
@@ -2072,8 +2153,7 @@ assert_degraded_with_unparseable() {
 # does not degrade, but the team-signal arm cannot verify review depth without
 # it, so the member form refuses the signal and the argument-less form (which
 # reads no store) still anchors.
-@test "an unparseable clearance reader refuses the team signal rather than degrading" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
+case_an_unparseable_clearance_reader_refuses_the_team_signal_rath() {
   add_commit a
   base="$(stamp_anchor)"
   add_commit b
@@ -2088,7 +2168,7 @@ assert_degraded_with_unparseable() {
   grep -qF "clearance reader is unavailable" <<<"$stderr"
 }
 
-@test "an absent clearance reader refuses the team signal rather than degrading" {
+case_an_absent_clearance_reader_refuses_the_team_signal_rather_th() {
   add_commit a
   base="$(stamp_anchor)"
   add_commit b
@@ -2103,7 +2183,7 @@ assert_degraded_with_unparseable() {
   grep -qF "clearance reader is unavailable" <<<"$stderr"
 }
 
-@test "an empty clearance store refuses the team signal and resolves the full-branch base" {
+case_an_empty_clearance_store_refuses_the_team_signal_and_resolve() {
   add_commit a
   base="$(stamp_anchor bare)"
   add_commit b
@@ -2118,6 +2198,16 @@ assert_degraded_with_unparseable() {
   grep -qF "unverifiable" <<<"$stderr"
 }
 
+# bats test_tags=protected
+@test "the team arm refuses an unverifiable store or reader" {
+  [ -x /bin/bash ] || skip "no /bin/bash"
+  run_cases \
+    "review depth: a signal with an empty marker store refuses to anchor" 'case_review_depth_a_signal_with_an_empty_marker_store_refuses_to' \
+    "an empty clearance store refuses the team signal and resolves the full-branch base" 'case_an_empty_clearance_store_refuses_the_team_signal_and_resolve' \
+    "an absent clearance reader refuses the team signal rather than degrading" 'case_an_absent_clearance_reader_refuses_the_team_signal_rather_th' \
+    "an unparseable clearance reader refuses the team signal rather than degrading" 'case_an_unparseable_clearance_reader_refuses_the_team_signal_rath'
+}
+
 # -----------------------------------------------------------------------------
 # Output shape. Line 3 is the argument-less resolution, produced by the same
 # code path, which is what makes review-time and merge-time key agreement
@@ -2125,7 +2215,7 @@ assert_degraded_with_unparseable() {
 # from $output, so the empty fourth line vanishes there.
 # -----------------------------------------------------------------------------
 
-@test "the argument-less form prints exactly one line on every fixture shape" {
+case_the_argument_less_form_prints_exactly_one_line_on_every_fixt() {
   add_commit a
   stamp_anchor >/dev/null
   add_commit b
@@ -2144,8 +2234,7 @@ assert_degraded_with_unparseable() {
   [ "$(printf '%s\n' "$output" | grep -c .)" -eq 1 ]
 }
 
-@test "the member form prints four lines and line 3 matches the argument-less form" {
-  require_jq
+case_the_member_form_prints_four_lines_and_line_3_matches_the_arg() {
   add_commit a
   stamp_anchor >/dev/null
   add_commit b
@@ -2164,7 +2253,7 @@ assert_degraded_with_unparseable() {
   [ "$output" = "$key" ]
 }
 
-@test "the member form prints four lines on the no-version path" {
+case_the_member_form_prints_four_lines_on_the_no_version_path() {
   add_commit a
   stamp_anchor >/dev/null
   add_commit b
@@ -2179,7 +2268,7 @@ assert_degraded_with_unparseable() {
   [ -z "$(member_anchor_tree)" ]
 }
 
-@test "the member form prints four lines on a reset path" {
+case_the_member_form_prints_four_lines_on_a_reset_path() {
   add_commit a
   stamp_anchor >/dev/null
   add_global_rules_commit
@@ -2191,7 +2280,7 @@ assert_degraded_with_unparseable() {
   [ -z "$(member_anchor_tree)" ]
 }
 
-@test "every path writes exactly one decision line to stderr" {
+case_every_path_writes_exactly_one_decision_line_to_stderr() {
   add_commit a
   base="$(stamp_anchor)"
   add_commit b
@@ -2205,6 +2294,16 @@ assert_degraded_with_unparseable() {
   [ "$status" -eq 0 ]
   [ "$(grep -c 'resolve-audit-base: member=' <<<"$stderr")" -eq 1 ]
   grep -qF "member=${DEFAULT_MEMBER} base=${base} reason=team-signal anchor_tree=-" <<<"$stderr"
+}
+
+@test "output shape: one line argument-less, four lines member form, one decision line on stderr" {
+  require_jq
+  run_cases \
+    "the argument-less form prints exactly one line on every fixture shape" 'case_the_argument_less_form_prints_exactly_one_line_on_every_fixt' \
+    "the member form prints four lines and line 3 matches the argument-less form" 'case_the_member_form_prints_four_lines_and_line_3_matches_the_arg' \
+    "the member form prints four lines on the no-version path" 'case_the_member_form_prints_four_lines_on_the_no_version_path' \
+    "the member form prints four lines on a reset path" 'case_the_member_form_prints_four_lines_on_a_reset_path' \
+    "every path writes exactly one decision line to stderr" 'case_every_path_writes_exactly_one_decision_line_to_stderr'
 }
 
 # -----------------------------------------------------------------------------
@@ -2230,12 +2329,6 @@ characterization_forms() {
     clearance-degraded|clearance-no-version) printf '%s\n' "member2 argless" ;;
     *) return 1 ;;
   esac
-}
-
-# Fixture names, derived from the builder functions below so a builder added
-# without a golden record (or the reverse) is caught by the set-equality test.
-characterization_fixture_names() {
-  declare -F | awk '{ print $3 }' | grep '^characterization_build_' | sed 's/^characterization_build_//'
 }
 
 # Record <label> for the sha and tree of <ref>.
@@ -2331,7 +2424,7 @@ characterization_build_clearance-no-version() {
 # rendered records in golden format.
 characterization_render() {
   local fixture="$1" form line_number value
-  CHARACTERIZATION_LABELS="$BATS_TEST_TMPDIR/characterization-labels"
+  CHARACTERIZATION_LABELS="$CASE_TMPDIR/characterization-labels"
   : > "$CHARACTERIZATION_LABELS"
   "characterization_build_${fixture}" || return 1
   for form in $(characterization_forms "$fixture"); do
@@ -2371,62 +2464,22 @@ characterization_matches_golden() {
   return 0
 }
 
-# Assert the golden holds <count> records for <fixture>.
-assert_characterization_count() {
-  local fixture="$1" count="$2"
-  [ "$(grep -cE "^${fixture} " "$(characterization_golden_path)")" -eq "$count" ]
+# assert_characterization <fixture> <count>: the fixture renders as the golden,
+# which holds <count> records for it.
+assert_characterization() {
+  characterization_matches_golden "$1" || return 1
+  [ "$(grep -cE "^${1} " "$(characterization_golden_path)")" -eq "$2" ]
 }
 
-@test "characterization: refusal-only fixture matches the golden" {
+@test "characterization: every fixture matches the golden" {
   require_jq
-  characterization_matches_golden refusal-only
-  assert_characterization_count refusal-only 5
-}
-
-@test "characterization: team-older-than-refusal fixture matches the golden" {
-  require_jq
-  characterization_matches_golden team-older-than-refusal
-  assert_characterization_count team-older-than-refusal 5
-}
-
-@test "characterization: machinery-after-team fixture matches the golden" {
-  require_jq
-  characterization_matches_golden machinery-after-team
-  assert_characterization_count machinery-after-team 5
-}
-
-@test "characterization: clearance-both-rules fixture matches the golden" {
-  require_jq
-  characterization_matches_golden clearance-both-rules
-  assert_characterization_count clearance-both-rules 2
-}
-
-@test "characterization: clearance-degraded fixture matches the golden" {
-  require_jq
-  characterization_matches_golden clearance-degraded
-  assert_characterization_count clearance-degraded 3
-}
-
-@test "characterization: clearance-no-version fixture matches the golden" {
-  require_jq
-  characterization_matches_golden clearance-no-version
-  assert_characterization_count clearance-no-version 3
-}
-
-@test "characterization: the comparison fails on a deliberately wrong expected line" {
-  require_jq
-  wrong_golden="$BATS_TEST_TMPDIR/wrong.golden"
-  sed 's/^refusal-only member 2 .*/refusal-only member 2 team-signal/' "$(characterization_golden_path)" > "$wrong_golden"
-  grep -qxF "refusal-only member 2 team-signal" "$wrong_golden"
-  characterization_matches_golden refusal-only "$wrong_golden" 2>/dev/null && return 1
-  true
-}
-
-@test "characterization: the golden's fixture set equals the suite's fixture set" {
-  golden_names="$(grep -v '^#' "$(characterization_golden_path)" | awk 'NF { print $1 }' | sort -u)"
-  suite_names="$(characterization_fixture_names | sort -u)"
-  [ -n "$suite_names" ]
-  [ "$golden_names" = "$suite_names" ]
+  run_cases \
+    "characterization: refusal-only fixture matches the golden" 'assert_characterization refusal-only 5' \
+    "characterization: team-older-than-refusal fixture matches the golden" 'assert_characterization team-older-than-refusal 5' \
+    "characterization: machinery-after-team fixture matches the golden" 'assert_characterization machinery-after-team 5' \
+    "characterization: clearance-both-rules fixture matches the golden" 'assert_characterization clearance-both-rules 2' \
+    "characterization: clearance-degraded fixture matches the golden" 'assert_characterization clearance-degraded 3' \
+    "characterization: clearance-no-version fixture matches the golden" 'assert_characterization clearance-no-version 3'
 }
 
 # -----------------------------------------------------------------------------
@@ -2436,7 +2489,7 @@ assert_characterization_count() {
 # review scope rather than a full one.
 # -----------------------------------------------------------------------------
 
-@test "an unknown argument resolves full scope and exits 0" {
+case_an_unknown_argument_resolves_full_scope_and_exits_0() {
   add_commit a
   base="$(stamp_anchor)"
   add_commit b
@@ -2448,7 +2501,7 @@ assert_characterization_count() {
   grep -qF "unknown argument" <<<"$stderr"
 }
 
-@test "--member with an empty value resolves full scope and exits 0" {
+case_member_with_an_empty_value_resolves_full_scope_and_exits_0() {
   add_commit a
   base="$(stamp_anchor)"
   add_commit b
@@ -2460,7 +2513,7 @@ assert_characterization_count() {
   grep -qF "non-empty value" <<<"$stderr"
 }
 
-@test "--member with no value at all resolves full scope and exits 0" {
+case_member_with_no_value_at_all_resolves_full_scope_and_exits_0() {
   add_commit a
   stamp_anchor >/dev/null
   add_commit b
@@ -2469,6 +2522,14 @@ assert_characterization_count() {
   [ "$status" -eq 0 ]
   [ "$output" = "$(fork_point)" ]
   grep -qF "requires a value" <<<"$stderr"
+}
+
+# bats test_tags=protected
+@test "a mis-invocation resolves full scope and exits 0" {
+  run_cases \
+    "an unknown argument resolves full scope and exits 0" 'case_an_unknown_argument_resolves_full_scope_and_exits_0' \
+    "--member with an empty value resolves full scope and exits 0" 'case_member_with_an_empty_value_resolves_full_scope_and_exits_0' \
+    "--member with no value at all resolves full scope and exits 0" 'case_member_with_no_value_at_all_resolves_full_scope_and_exits_0'
 }
 
 # =============================================================================
@@ -2494,29 +2555,6 @@ clear_branch_fully() {
   write_clearance "$OTHER_MEMBER" earned "$CLEARED_TREE" 1.2.3 full >/dev/null
 }
 
-# A scratch copy of the resolver and its siblings with <sed script> applied to
-# <file> (default the resolver itself; a sibling holding the mutated code is
-# named by its basename), the copy's resolver installed as SCRIPT. The siblings
-# are copied beside it because the resolver loads them from its own directory.
-# The mutation must change the file, or the case proving a guard can fail would
-# prove nothing.
-mutate_resolver() {
-  local target_name="${2:-resolve-audit-base.sh}"
-  local source_directory mutant_directory="$BATS_TEST_TMPDIR/mutant-resolver"
-  source_directory="$(dirname "$SCRIPT")"
-  mkdir -p "$mutant_directory"
-  cp "$source_directory"/resolve-audit-base*.sh "$mutant_directory/"
-  sed -e "$1" "$source_directory/$target_name" > "$mutant_directory/$target_name"
-  chmod +x "$mutant_directory/resolve-audit-base.sh"
-  if cmp -s "$source_directory/$target_name" "$mutant_directory/$target_name"; then
-    return 1
-  fi
-  SCRIPT="$mutant_directory/resolve-audit-base.sh"
-}
-
-# The mutation that makes the reset read the whole anchor..HEAD name diff again.
-WHOLE_DIFF_MUTATION='s|audit_branch_patch_changed_paths "[$]repo_root" "[$]base_tip" "[$]1" "[$]head_sha"|git -C "$repo_root" diff --name-only -z "$1" "$head_sha"|'
-
 # Whether any member, or the argument-less form, resets after the base changed
 # <path> and the branch merged it cleanly. Echoes the reasons seen.
 reasons_after_base_changes() {
@@ -2539,41 +2577,13 @@ assert_no_reset_reasons() {
   return 0
 }
 
-@test "a base-only change to a machinery path resets nothing after a clean catch-up" {
-  require_jq
+# A fully cleared branch that merges a base-only change to <path> resets nothing.
+assert_no_reset_after_base_change() {
   clear_branch_fully
-  assert_no_reset_reasons "$(reasons_after_base_changes ".claude/rules/new-rule.md")"
+  assert_no_reset_reasons "$(reasons_after_base_changes "$1")"
 }
 
-@test "a base-only change to a global rules path resets nothing after a clean catch-up" {
-  require_jq
-  clear_branch_fully
-  assert_no_reset_reasons "$(reasons_after_base_changes ".claude/rules/quality-gate.md")"
-}
-
-@test "a base-only change to a member's agent definition resets nothing after a clean catch-up" {
-  require_jq
-  clear_branch_fully
-  assert_no_reset_reasons "$(reasons_after_base_changes ".claude/agents/${OTHER_MEMBER}.md")"
-}
-
-@test "the base-only change resets once the reset reads the whole anchor..HEAD name diff again" {
-  require_jq
-  clear_branch_fully
-  mutate_resolver "$WHOLE_DIFF_MUTATION" resolve-audit-base-context.sh
-  catchup_base_commit ".claude/rules/new-rule.md" "from the base"
-  catchup_merge_base
-  run --separate-stderr run_in_sandbox
-  [ "$(stderr_reason)" = "machinery-reset" ]
-
-  catchup_base_commit ".claude/rules/quality-gate.md" "from the base"
-  catchup_merge_base
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$(member_reason)" = "rules-reset-global" ]
-}
-
-@test "a branch edit to a machinery path still resets the argument-less form after a catch-up" {
-  require_jq
+case_a_branch_edit_to_a_machinery_path_still_resets_the_argument() {
   clear_branch_fully
   add_machinery_commit
   fork_before="$(fork_point)"
@@ -2584,8 +2594,7 @@ assert_no_reset_reasons() {
   [ "$output" = "$fork_before" ]
 }
 
-@test "a branch edit to a global rules path still resets every member after a catch-up" {
-  require_jq
+case_a_branch_edit_to_a_global_rules_path_still_resets_every_memb() {
   clear_branch_fully
   add_global_rules_commit
   catchup_base_commit "base-only.txt" "from the base"
@@ -2597,8 +2606,7 @@ assert_no_reset_reasons() {
   [ "$(member_reason)" = "rules-reset-global" ]
 }
 
-@test "a branch edit to one member's agent definition resets that member and no other" {
-  require_jq
+case_a_branch_edit_to_one_member_s_agent_definition_resets_that_m() {
   clear_branch_fully
   commit_append ".claude/agents/${OTHER_MEMBER}.md"
   catchup_base_commit "base-only.txt" "from the base"
@@ -2609,6 +2617,18 @@ assert_no_reset_reasons() {
   [ "$(member_reason)" = "member-clearance" ]
   run --separate-stderr run_member "$SUPPORT_MEMBER"
   [ "$(member_reason)" = "member-clearance" ]
+}
+
+# bats test_tags=protected
+@test "a clean catch-up merge resets nothing, a branch edit still resets" {
+  require_jq
+  run_cases \
+    "a base-only change to a machinery path resets nothing after a clean catch-up" 'assert_no_reset_after_base_change .claude/rules/new-rule.md' \
+    "a base-only change to a global rules path resets nothing after a clean catch-up" 'assert_no_reset_after_base_change .claude/rules/quality-gate.md' \
+    "a base-only change to a member's agent definition resets nothing after a clean catch-up" 'assert_no_reset_after_base_change .claude/agents/${OTHER_MEMBER}.md' \
+    "a branch edit to a machinery path still resets the argument-less form after a catch-up" 'case_a_branch_edit_to_a_machinery_path_still_resets_the_argument' \
+    "a branch edit to a global rules path still resets every member after a catch-up" 'case_a_branch_edit_to_a_global_rules_path_still_resets_every_memb' \
+    "a branch edit to one member's agent definition resets that member and no other" 'case_a_branch_edit_to_one_member_s_agent_definition_resets_that_m'
 }
 
 # --- Line 3 and the artifact key -------------------------------------------
@@ -2649,8 +2669,7 @@ catch_up_cleanly() {
   catchup_merge_base
 }
 
-@test "line 3 is stable across a clean catch-up on the team-signal arm" {
-  require_jq
+case_line_3_is_stable_across_a_clean_catch_up_on_the_team_signal() {
   add_commit a
   anchor_sha="$(stamp_anchor)"
   add_commit b
@@ -2662,8 +2681,7 @@ catch_up_cleanly() {
   [ "$after_line_three" = "$anchor_sha" ]
 }
 
-@test "line 3 is stable across a clean catch-up on the member-clearance arm" {
-  require_jq
+case_line_3_is_stable_across_a_clean_catch_up_on_the_member_clear() {
   add_commit a
   write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 full >/dev/null
   add_commit b
@@ -2677,7 +2695,7 @@ catch_up_cleanly() {
   [ "$(member_reason)" = "member-clearance" ]
 }
 
-@test "line 3 is the fork point before any catch-up and stays stable across one on the no-anchor arm" {
+case_line_3_is_the_fork_point_before_any_catch_up_and_stays_stabl() {
   add_commit a
   add_commit b
   record_shared_bases before
@@ -2691,8 +2709,7 @@ catch_up_cleanly() {
   [ "$(fork_point)" != "$before_line_three" ]
 }
 
-@test "line 3 is stable across a clean catch-up on the reset arms" {
-  require_jq
+case_line_3_is_stable_across_a_clean_catch_up_on_the_reset_arms() {
   add_commit a
   stamp_anchor >/dev/null
   add_global_rules_commit
@@ -2708,7 +2725,7 @@ catch_up_cleanly() {
   [ "$(stderr_reason)" = "machinery-reset" ]
 }
 
-@test "line 3 is stable across a clean catch-up on the degraded arm" {
+case_line_3_is_stable_across_a_clean_catch_up_on_the_degraded_arm() {
   add_commit a
   add_commit b
   rm -f "$SANDBOX/.claude/hooks/lib/audit-scope.sh"
@@ -2722,7 +2739,7 @@ catch_up_cleanly() {
   [ "$(stderr_reason)" = "degraded" ]
 }
 
-@test "line 3 is stable across a clean catch-up on the no-version arm" {
+case_line_3_is_stable_across_a_clean_catch_up_on_the_no_version_a() {
   add_commit a
   add_commit b
   rm -f "$SANDBOX/.gaia/VERSION"
@@ -2736,27 +2753,18 @@ catch_up_cleanly() {
   [ "$(stderr_reason)" = "no-version" ]
 }
 
-@test "the argument-less early arms print the main ref again, and the key moves, once the pin is removed" {
-  add_commit a
-  add_commit b
-  mutate_resolver '/^  \[ "[$]member_form" = "true" \] || base="[$]shared_base"$/d'
-  rm -f "$SANDBOX/.claude/hooks/lib/audit-scope.sh"
-  record_shared_bases before
-  catch_up_cleanly
-  record_shared_bases after
-  [ "$before_argless" = "$MAIN_REF" ]
-  [ "$before_argless_key" != "$after_argless_key" ]
-
-  # The same for no-version, on a fresh branch tip.
-  add_commit c
-  rm -f "$SANDBOX/.gaia/VERSION"
-  record_shared_bases before
-  catchup_base_commit "second-base-only.txt" "from the base"
-  catchup_merge_base
-  record_shared_bases after
-  [ "$before_argless_key" != "$after_argless_key" ]
+@test "line 3 and the artifact key are stable across a clean catch-up on every arm" {
+  require_jq
+  run_cases \
+    "line 3 is stable across a clean catch-up on the team-signal arm" 'case_line_3_is_stable_across_a_clean_catch_up_on_the_team_signal' \
+    "line 3 is stable across a clean catch-up on the member-clearance arm" 'case_line_3_is_stable_across_a_clean_catch_up_on_the_member_clear' \
+    "line 3 is the fork point before any catch-up and stays stable across one on the no-anchor arm" 'case_line_3_is_the_fork_point_before_any_catch_up_and_stays_stabl' \
+    "line 3 is stable across a clean catch-up on the reset arms" 'case_line_3_is_stable_across_a_clean_catch_up_on_the_reset_arms' \
+    "line 3 is stable across a clean catch-up on the degraded arm" 'case_line_3_is_stable_across_a_clean_catch_up_on_the_degraded_arm' \
+    "line 3 is stable across a clean catch-up on the no-version arm" 'case_line_3_is_stable_across_a_clean_catch_up_on_the_no_version_a'
 }
 
+# bats test_tags=protected
 @test "no local base reference: line 3 and the argument-less line are the main ref, degraded, naming the fetch" {
   add_commit a
   git -C "$SANDBOX" remote set-head origin -d >/dev/null
@@ -2783,6 +2791,7 @@ record_all_outputs() {
   printf 'member=%s\n%s\n' "$(cat "$MEMBER_OUTPUT_FILE")" "$stderr"
 }
 
+# bats test_tags=protected
 @test "a local branch named origin/main changes no resolver output" {
   add_commit a
   stamp_anchor >/dev/null
@@ -2796,21 +2805,6 @@ record_all_outputs() {
   [ "$honest" = "$with_forged" ]
 }
 
-@test "the forged-branch output diverges once the base reference loses its full spelling" {
-  add_commit a
-  add_commit b
-  forged_commit="$(git -C "$SANDBOX" commit-tree -m forged 4b825dc642cb6eb9a060e54bf8d69288fbee4904)"
-  git -C "$SANDBOX" branch origin/main "$forged_commit"
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$(member_reason)" = "no-anchor" ]
-  sed -i.orig 's|reference="refs/remotes/origin/[$]{name}"|reference="origin/${name}"|' "$SANDBOX/.claude/hooks/lib/audit-base-provenance.sh"
-  if cmp -s "$SANDBOX/.claude/hooks/lib/audit-base-provenance.sh" "$SANDBOX/.claude/hooks/lib/audit-base-provenance.sh.orig"; then
-    return 1
-  fi
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$(member_reason)" = "degraded" ]
-}
-
 # --- Earlier-recipe anchors ------------------------------------------------
 
 # A marker or a posted status from before the branch-own recipe still anchors
@@ -2818,8 +2812,7 @@ record_all_outputs() {
 # attested the full content at that tree, a superset of the branch's own
 # change. The digest field is never compared here, so an earlier recipe's value
 # anchors exactly as a current one does; the merge gate is what refuses it.
-@test "an earlier-recipe full marker at a branch commit's tree still anchors the member" {
-  require_jq
+case_an_earlier_recipe_full_marker_at_a_branch_commit_s_tree_stil() {
   add_commit a
   anchor_tree="$(tree_of HEAD)"
   write_clearance "$DEFAULT_MEMBER" earned "$anchor_tree" 1.2.3 full >/dev/null
@@ -2831,8 +2824,7 @@ record_all_outputs() {
   [ "$(member_base)" != "$MAIN_REF" ]
 }
 
-@test "an earlier-recipe status at a branch commit still anchors the team signal" {
-  require_jq
+case_an_earlier_recipe_status_at_a_branch_commit_still_anchors_th() {
   add_commit a
   anchor_sha="$(stamp_anchor)"
   add_commit b
@@ -2841,8 +2833,17 @@ record_all_outputs() {
   [ "$(stderr_reason)" = "team-signal" ]
 }
 
+# bats test_tags=protected
+@test "earlier-recipe anchors still anchor on version and tree" {
+  require_jq
+  run_cases \
+    "an earlier-recipe full marker at a branch commit's tree still anchors the member" 'case_an_earlier_recipe_full_marker_at_a_branch_commit_s_tree_stil' \
+    "an earlier-recipe status at a branch commit still anchors the team signal" 'case_an_earlier_recipe_status_at_a_branch_commit_still_anchors_th'
+}
+
 # --- Criss-cross -----------------------------------------------------------
 
+# bats test_tags=protected
 @test "a criss-cross against the base resolves degraded, main ref on line 1, naming the remedy" {
   add_commit a
   catchup_criss_cross
@@ -2854,17 +2855,7 @@ record_all_outputs() {
   grep -qF "more than one merge base" <<<"$stderr"
 }
 
-@test "the criss-cross answer is the merge-base-status arm: without it the walk carries on" {
-  add_commit a
-  catchup_criss_cross
-  mutate_resolver 's|"[$]merge_base_status" -eq 3|"$merge_base_status" -eq 99|' resolve-audit-base-context.sh
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(member_reason)" != "degraded" ]
-}
-
-@test "reason token: member-refusal" {
-  require_jq
+case_reason_token_member_refusal() {
   build_linked_refusal
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   [ "$status" -eq 0 ]
@@ -2872,4 +2863,23 @@ record_all_outputs() {
   [ "$(member_base)" = "$REFUSED_SHA" ]
   [ "$(member_anchor_tree)" = "$REFUSED_TREE" ]
   grep -qF "member=${DEFAULT_MEMBER} base=${REFUSED_SHA} reason=member-refusal anchor_tree=${REFUSED_TREE}" <<<"$stderr"
+}
+
+# bats test_tags=protected
+@test "a linked refusal anchors the member at the refused commit" {
+  require_jq
+  run_cases \
+    "refusal anchor: a linked refusal anchors the member at the refused commit" 'case_refusal_anchor_a_linked_refusal_anchors_the_member_at_the_re' \
+    "refusal link: the ledger is read with GITHUB_ACTIONS and CI exported" 'case_refusal_link_the_ledger_is_read_with_github_actions_and_ci_e' \
+    "refusal link: CI=true outside GitHub Actions still reads the ledger" 'case_refusal_link_ci_true_outside_github_actions_still_reads_the' \
+    "refusal link: a co-member advancing the ledger's head and round leaves the link intact" 'case_refusal_link_a_co_member_advancing_the_ledger_s_head_and_rou'
+}
+
+# .claude/agents/code-audit-frontend.md names this test as its member-refusal
+# enforcer, and .gaia/tests/lib/doc-audit-prose-enforcers.bats requires exactly
+# one @test carrying this name: keep it a standalone @test.
+# bats test_tags=protected
+@test "reason token: member-refusal" {
+  require_jq
+  run_cases "reason token: member-refusal" 'case_reason_token_member_refusal'
 }

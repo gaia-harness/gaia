@@ -46,110 +46,78 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-# ---------------------------------------------------------------------------
-# Layer-A fixture invariants; `valid` group.
-# ---------------------------------------------------------------------------
-
-@test "fixture valid-init-failure parses cleanly" {
-  run "$PARSER" "$FIXTURES_DIRECTORY/valid-init-failure.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":true'* ]]
-  [[ "$output" == *'"class":"init"'* ]]
-}
-
-@test "fixture valid-update-conflict parses cleanly" {
-  run "$PARSER" "$FIXTURES_DIRECTORY/valid-update-conflict.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":true'* ]]
-  [[ "$output" == *'"class":"update"'* ]]
-}
-
-@test "fixture non-issue-config parses cleanly" {
-  run "$PARSER" "$FIXTURES_DIRECTORY/non-issue-config.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":true'* ]]
-  [[ "$output" == *'"class":"dev-server"'* ]]
+# parse_case <fixture> <needle>...: the parser exits 0 and its output holds
+# every needle.
+parse_case() {
+  local fixture="$1" needle
+  shift
+  echo "case: fixture $fixture"
+  run "$PARSER" "$FIXTURES_DIRECTORY/$fixture.md"
+  [ "$status" -eq 0 ] || return 1
+  for needle in "$@"; do
+    [[ "$output" == *"$needle"* ]] || return 1
+  done
+  return 0
 }
 
 # ---------------------------------------------------------------------------
-# Layer-A fixture invariants; `malformed` group (UAT-013).
+# Layer-A fixture invariants: valid fixtures parse cleanly, malformed ones
+# return the documented error code (UAT-013). The denylist-attempt (UAT-007)
+# and unenumerated-attempt (UAT-014) fixtures parse as VALID bodies; the
+# boundary they exercise is the scope checker, tested below.
 # ---------------------------------------------------------------------------
 
-@test "fixture malformed-missing-symptom returns missing-section" {
-  run "$PARSER" "$FIXTURES_DIRECTORY/malformed-missing-symptom.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":false'* ]]
-  [[ "$output" == *'"error":"missing-section"'* ]]
-  [[ "$output" == *'"symptom"'* ]]
-}
-
-@test "fixture malformed-frontmatter returns malformed-frontmatter" {
-  run "$PARSER" "$FIXTURES_DIRECTORY/malformed-frontmatter.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":false'* ]]
-  [[ "$output" == *'"error":"malformed-frontmatter"'* ]]
+@test "parse-issue-body.sh returns the documented result for each fixture" {
+  parse_case valid-init-failure '"valid":true' '"class":"init"' || return 1
+  parse_case valid-update-conflict '"valid":true' '"class":"update"' || return 1
+  parse_case non-issue-config '"valid":true' '"class":"dev-server"' || return 1
+  parse_case malformed-missing-symptom \
+    '"valid":false' '"error":"missing-section"' '"symptom"' || return 1
+  parse_case malformed-frontmatter \
+    '"valid":false' '"error":"malformed-frontmatter"' || return 1
+  parse_case denylist-attempt '"valid":true' || return 1
+  parse_case unenumerated-attempt '"valid":true'
 }
 
 # ---------------------------------------------------------------------------
-# Layer-A fixture invariants; UAT-015 redaction passthrough.
+# UAT-015 redaction passthrough.
 #
 # The fixture deliberately carries TWO tokens: a `<redacted>` literal AND
 # a repo-relative path (`.gaia/cli/src/config/load.ts`) derived from an
 # absolute path. Both must survive the parser byte-for-byte.
 # ---------------------------------------------------------------------------
 
-@test "fixture redaction-passthrough preserves <redacted> token verbatim" {
-  run "$PARSER" "$FIXTURES_DIRECTORY/redaction-passthrough.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'<redacted>'* ]]
-  [[ "$output" == *'api_key: <redacted>'* ]]
-}
-
-@test "fixture redaction-passthrough preserves repo-relative path token verbatim" {
-  run "$PARSER" "$FIXTURES_DIRECTORY/redaction-passthrough.md"
-  [ "$status" -eq 0 ]
-  # Two distinct sites: capture (`config_path: ...`) and reproduction context.
-  [[ "$output" == *'config_path: .gaia/cli/src/config/load.ts'* ]]
-  [[ "$output" == *'.gaia/cli/src/config/load.ts'* ]]
+@test "parse-issue-body.sh passes redaction tokens through byte-for-byte" {
+  # The second token sits at two sites: capture (`config_path: ...`) and
+  # reproduction context.
+  parse_case redaction-passthrough \
+    '<redacted>' 'api_key: <redacted>' \
+    'config_path: .gaia/cli/src/config/load.ts' '.gaia/cli/src/config/load.ts'
 }
 
 # ---------------------------------------------------------------------------
-# Layer-A fixture invariants; UAT-007 (denylist) and UAT-014 (unenumerated).
-#
-# Both fixtures parse as VALID bodies; the boundary they exercise is the
-# scope checker that the workflow runs AFTER the classifier proposes
-# paths. We feed the proposed paths through `check-scope.sh` directly.
+# UAT-007 (denylist) and UAT-014 (unenumerated): the proposed paths go through
+# `check-scope.sh` directly, as the workflow does after the classifier runs.
 # ---------------------------------------------------------------------------
 
-@test "fixture denylist-attempt parses cleanly (boundary tested via check-scope)" {
-  run "$PARSER" "$FIXTURES_DIRECTORY/denylist-attempt.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":true'* ]]
-}
-
-@test "UAT-007: mixed allow + deny path proposal denies the whole attempt" {
+# bats test_tags=protected
+@test "check-scope.sh denies a denylisted or unenumerated path" {
+  echo "case: UAT-007 mixed allow + deny path proposal denies the whole attempt"
   # Two paths: one in the allowlist (`.claude/skills/`), one on the canonical
   # denylist (`apps/web/app/`). Per UAT-007 the WHOLE attempt is denied;
   # `ok:false`; not just the denylisted path.
   run "$SCOPE" .claude/skills/gaia/SKILL.md apps/web/app/routes/_index.tsx
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"ok":false'* ]]
-  [[ "$output" == *'apps/web/app/routes/_index.tsx'* ]]
-  [[ "$output" == *'"reason":"denylist"'* ]]
+  [ "$status" -eq 0 ] || return 1
+  [[ "$output" == *'"ok":false'* ]] || return 1
+  [[ "$output" == *'apps/web/app/routes/_index.tsx'* ]] || return 1
+  [[ "$output" == *'"reason":"denylist"'* ]] || return 1
   # The allowed leg still appears in `allowed[]`; the partition is informational
   # but `ok` is false, which is what the workflow gates on.
-  [[ "$output" == *'"allowed":[".claude/skills/gaia/SKILL.md"]'* ]]
-}
+  [[ "$output" == *'"allowed":[".claude/skills/gaia/SKILL.md"]'* ]] || return 1
 
-@test "fixture unenumerated-attempt parses cleanly (boundary tested via check-scope)" {
-  run "$PARSER" "$FIXTURES_DIRECTORY/unenumerated-attempt.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":true'* ]]
-}
-
-@test "UAT-014: unenumerated path (tsconfig.json) denied as default-deny-unenumerated" {
+  echo "case: UAT-014 unenumerated path (tsconfig.json) denied as default-deny-unenumerated"
   run "$SCOPE" tsconfig.json
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"ok":false'* ]]
+  [ "$status" -eq 0 ] || return 1
+  [[ "$output" == *'"ok":false'* ]] || return 1
   [[ "$output" == *'"reason":"default-deny-unenumerated"'* ]]
 }

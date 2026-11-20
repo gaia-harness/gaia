@@ -81,12 +81,13 @@ rendered_commands() {
   grep -oE ' /(setup|update|gaia)-[a-z0-9-]*' <<<"$1" | sed 's/^ //' | LC_ALL=C sort
 }
 
-# The saturated fixture is what gives the uniqueness test below anything to
+# The saturated fixture is what gives the uniqueness check below anything to
 # check, so pin the exact set it arms rather than a cardinality floor. A floor
 # still passes on the survivors when a fixture path drifts out from under one
 # segment, and the invariant then goes unexercised over the command that
 # dropped out with nothing to say coverage shrank.
-@test "the saturated cache arms every right-side segment" {
+@test "the saturated render names every right-side command exactly once" {
+  echo "case: the saturated cache arms every right-side segment"
   run_saturated_statusline
   [ "$status" -eq 0 ]
   expected=$(printf '%s\n' \
@@ -99,9 +100,7 @@ rendered_commands() {
     "/update-deps" \
     "/update-gaia")
   [ "$(rendered_commands "$output")" = "$expected" ]
-}
-
-@test "no slash command appears in more than one rendered statusline segment" {
+  echo "case: no slash command appears in more than one rendered statusline segment"
   run_saturated_statusline
   [ "$status" -eq 0 ]
   duplicate_commands=$(rendered_commands "$output" | uniq -d)

@@ -130,16 +130,16 @@ wait_for_entered() {
   [ ! -e "$MOCK_LOG" ]
 }
 
-@test "a fresh lock held by another run blocks this one" {
+@test "a pre-existing live lock blocks this run, including through the shared helper with a non-exclusive mkdir first on PATH" {
+  echo "case: a fresh lock held by another run blocks this one"
   mkdir "$LOCK_DIRECTORY"
   run bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   [ ! -f "$CACHE_FILE" ]
   [ ! -e "$MOCK_LOG" ]
   [ -d "$LOCK_DIRECTORY" ]
-}
-
-@test "a lock held through the shared helper blocks this run, with a non-exclusive mkdir first on PATH" {
+  rm -rf "$LOCK_DIRECTORY"
+  echo "case: a lock held through the shared helper blocks this run, with a non-exclusive mkdir first on PATH"
   bash -c '. "$1"; gaia_exclusive_lock_take "$2"' _ "$(cd "$BATS_TEST_DIRNAME/../../scripts" && pwd)/exclusive-lock-lib.sh" "$LOCK_DIRECTORY"
   # shellcheck source=/dev/null
   . "$(cd "$BATS_TEST_DIRNAME/../.." && pwd)/tests/helpers/non-exclusive-mkdir.sh"

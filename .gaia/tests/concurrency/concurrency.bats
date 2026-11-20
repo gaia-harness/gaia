@@ -1,9 +1,10 @@
 #!/usr/bin/env bats
 #
 # The INV-7 concurrency meter suite (see README.md). One @test per scenario
-# id; each drives the real GAIA code for its named defect and asserts the
-# isolation property, not a stub of it. `skip` is banned in this suite: it
-# reports green without asserting anything.
+# id, except that C4-02 runs as a labeled case inside C4-01 and C4-06 inside
+# C4-04, on the fixture each pair shares; each drives the real GAIA code for
+# its named defect and asserts the isolation property, not a stub of it.
+# `skip` is banned in this suite: it reports green without asserting anything.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/concurrency/
 #
@@ -155,7 +156,7 @@ setup_c4_base_sha_pair() {
   KEY_B="$(run_in "$WORKTREE_B" -- bash -c '. .gaia/scripts/audit-key-lib.sh; gaia_audit_key "$1"' _ "$BASE_SHA_B")"
 }
 
-@test "C4-01: findings sidecar isolated across worktrees" {
+@test "C4-01: audit sidecar and rerun ledger isolated across worktrees via gaia_audit_key" {
   setup_c4_base_sha_pair gaia-c401-main
   # The collision precondition, measured rather than assumed: two trees cut
   # from one main tip compute the SAME base sha.
@@ -165,6 +166,7 @@ setup_c4_base_sha_pair() {
   [ -n "$KEY_A" ]
   [ -n "$KEY_B" ]
 
+  echo "case: C4-01: findings sidecar isolated across worktrees"
   sidecar_a="$WORKTREE_A/.gaia/local/audit/${KEY_A}.code-audit-frontend.findings.json"
   sidecar_b="$WORKTREE_B/.gaia/local/audit/${KEY_B}.code-audit-frontend.findings.json"
 
@@ -191,18 +193,12 @@ setup_c4_base_sha_pair() {
   run jq -r '.tree' "$sidecar_b"
   [ "$status" -eq 0 ]
   [ "$output" = "treeB" ]
-}
 
-@test "C4-02: rerun ledger isolated across worktrees" {
-  setup_c4_base_sha_pair gaia-c402-main
-  [ "$BASE_SHA_A" = "$BASE_SHA_B" ]
-  [ -n "$KEY_A" ]
-  [ -n "$KEY_B" ]
-
+  echo "case: C4-02: rerun ledger isolated across worktrees"
   ledger_a="$WORKTREE_A/.gaia/local/audit/${KEY_A}.rerun.json"
   ledger_b="$WORKTREE_B/.gaia/local/audit/${KEY_B}.rerun.json"
 
-  # Its own parent, as the real writers do and as C4-01 explains.
+  # Its own parent, as the real writers do and as the sidecar case explains.
   mkdir -p "$(dirname "$ledger_a")" "$(dirname "$ledger_b")"
 
   jq -n --arg branch treeA --arg base "$BASE_SHA_A" '{schema: 1, branch: $branch, base_sha: $base, round: 1}' > "$ledger_a"
@@ -266,7 +262,7 @@ setup_c4_base_sha_pair() {
   printf '%s' "$output" | jq -e '.number == 100' >/dev/null
 }
 
-@test "C4-04: worthiness ledger is per tree" {
+@test "C4-04: per-tree worktree ledger: appends isolated, shipped path function, cutover classification and physical separation" {
   MAIN="$(gaia_new_main gaia-c404-main)"
   gaia_copy_real "$MAIN" \
     .gaia/scripts/main-root-lib.sh \
@@ -281,6 +277,42 @@ setup_c4_base_sha_pair() {
   gaia_link_worktree "$WORKTREE_A"
   gaia_link_worktree "$WORKTREE_B"
 
+  echo "case: C4-06: per-tree state survives the cutover (classification and linker)"
+  # WHY the worthiness ledger is not symlinked, asked of the shipped code rather than
+  # asserted by hand: the registry classifies it per-tree, and the linker's own
+  # shared-set function is the single thing that decides what gets a symlink. A
+  # registry entry that started calling it shared fails here rather than
+  # silently sharing the ledger.
+  classify="$(run_in "$WORKTREE_A" -- bash -c \
+    '. .gaia/scripts/state-registry-lib.sh; gaia_registry_classify worthiness-ledger/worthiness.jsonl' 2>/dev/null)"
+  [ "$classify" = "per-tree" ]
+
+  linkable="$(run_in "$WORKTREE_A" -- bash -c \
+    '. .gaia/scripts/state-registry-lib.sh; gaia_registry_linkable_paths' 2>/dev/null)"
+  [ -n "$linkable" ]
+  grep -qxF worthiness-ledger <<<"$linkable" && return 1
+
+  # Positive control on the linker itself. link-worktree.sh always exits 0 by
+  # contract (a broken hook must not break worktree creation), so a run that
+  # linked NOTHING -- unreadable registry, no symlink permission -- would leave
+  # worthiness-ledger/ unlinked too and every isolation check below would pass for the
+  # wrong reason. Assert that shared state really is shared, by resolution
+  # rather than by "is a symlink".
+  #
+  # A worktree reaches shared state through the one parent symlink, so the
+  # control asks the parent: it holds for every shared entry at once.
+  # It fails, as it must, on a linker that linked nothing: .gaia/local would
+  # then be each tree's own real directory and resolve somewhere else.
+  MAIN_LOCAL="$(cd "$MAIN/.gaia/local" && pwd -P)"
+  [ "$(cd "$WORKTREE_A/.gaia/local" && pwd -P)" = "$MAIN_LOCAL" ]
+  [ "$(cd "$WORKTREE_B/.gaia/local" && pwd -P)" = "$MAIN_LOCAL" ]
+
+  # No shared-state symlink exists for the per-tree entry in either tree; the
+  # physical-path checks further down carry the guarantee.
+  [ -L "$WORKTREE_A/.gaia/local/worthiness-ledger" ] && return 1
+  [ -L "$WORKTREE_B/.gaia/local/worthiness-ledger" ] && return 1
+
+  echo "case: C4-04: worthiness ledger is per tree"
   mkdir -p "$WORKTREE_A/test" "$WORKTREE_B/test"
   cat > "$WORKTREE_A/test/a.test.ts" <<'JS'
 import { test, expect } from 'vitest';
@@ -349,99 +381,8 @@ JS
     echo "the old shared worthiness path was written in tree B" >&2
     return 1
   fi
-}
 
-# bats test_tags=protected
-@test "C4-05: SPEC/plan locks serialize across worktrees" {
-  MAIN="$(gaia_new_main gaia-c405-main)"
-  notebook_files="$(_notebook_library_files)"
-  [ -n "$notebook_files" ]
-  # shellcheck disable=SC2086  # one repo-relative path per line, none with spaces
-  gaia_copy_real "$MAIN" \
-    .gaia/scripts/spec/plan-allocator.sh \
-    .gaia/scripts/spec/with-ledger-lock.sh \
-    .gaia/scripts/exclusive-lock-lib.sh \
-    .gaia/scripts/spec/title-normalize.sh \
-    .gaia/scripts/main-root-lib.sh \
-    $notebook_files
-  gaia_commit_all "$MAIN" "add plan allocator"
-
-  WORKTREE_A="$(gaia_add_worktree "$MAIN" treeA treeA)"
-  WORKTREE_B="$(gaia_add_worktree "$MAIN" treeB treeB)"
-
-  root_a="$(run_in "$WORKTREE_A" -- git rev-parse --show-toplevel)"
-  root_b="$(run_in "$WORKTREE_B" -- git rev-parse --show-toplevel)"
-
-  id_a="$(bash "$MAIN/.gaia/scripts/spec/plan-allocator.sh" next "$root_a" "feature A")"
-  id_b="$(bash "$MAIN/.gaia/scripts/spec/plan-allocator.sh" next "$root_b" "feature B")"
-
-  # Target: concurrent number allocations never both mint the same id -- the
-  # mint lock (and the catalog it guards) is anchored to main, so the second
-  # waits and reads the first's row. plan-allocator.sh is handed $ROOT = each
-  # tree's own toplevel (see C3-04); the library resolves main from it, so
-  # both trees number against the one catalog instead of two disconnected
-  # per-tree ones that would both mint PLAN-001.
-  [ "$id_a" != "$id_b" ]
-}
-
-@test "C4-06: per-tree state survives the cutover" {
-  MAIN="$(gaia_new_main gaia-c406-main)"
-  gaia_copy_real "$MAIN" \
-    .gaia/scripts/main-root-lib.sh \
-    .gaia/scripts/state-registry-lib.sh \
-    .gaia/scripts/link-worktree.sh \
-    .claude/hooks/lib/worthiness-ledger.sh
-  gaia_copy_registry "$MAIN"
-  gaia_commit_all "$MAIN" "add link-worktree deps"
-
-  WORKTREE_A="$(gaia_add_worktree "$MAIN" treeA treeA)"
-  WORKTREE_B="$(gaia_add_worktree "$MAIN" treeB treeB)"
-  gaia_link_worktree "$WORKTREE_A"
-  gaia_link_worktree "$WORKTREE_B"
-
-  # WHY the worthiness ledger is not symlinked, asked of the shipped code rather than
-  # asserted by hand: the registry classifies it per-tree, and the linker's own
-  # shared-set function is the single thing that decides what gets a symlink. A
-  # registry entry that started calling it shared -- the precise Phase-6
-  # cutover risk this scenario guards -- fails here rather than silently
-  # sharing the ledger.
-  classify="$(run_in "$WORKTREE_A" -- bash -c \
-    '. .gaia/scripts/state-registry-lib.sh; gaia_registry_classify worthiness-ledger/worthiness.jsonl' 2>/dev/null)"
-  [ "$classify" = "per-tree" ]
-
-  linkable="$(run_in "$WORKTREE_A" -- bash -c \
-    '. .gaia/scripts/state-registry-lib.sh; gaia_registry_linkable_paths' 2>/dev/null)"
-  [ -n "$linkable" ]
-  grep -qxF worthiness-ledger <<<"$linkable" && return 1
-
-  # Positive control on the linker itself. link-worktree.sh always exits 0 by
-  # contract (a broken hook must not break worktree creation), so a run that
-  # linked NOTHING -- unreadable registry, no symlink permission -- would leave
-  # worthiness-ledger/ unlinked too and every isolation check below would pass for the
-  # wrong reason. Assert that shared state really is shared, by resolution
-  # rather than by "is a symlink".
-  #
-  # RESTATED AT THE CUTOVER (see README, Published assertion changes). It used
-  # to hunt for the first entry the registry names shared that already existed
-  # as a directory under main, because before the flip "shared" meant six
-  # individually-symlinked entries and the per-entry linker created each one in
-  # main as its symlink's target. The flip removes both the per-entry links and
-  # that side effect: a worktree now creates directories exactly when and how
-  # the main checkout does, through the one parent symlink. So the control asks
-  # the parent, which is simpler and strictly stronger -- it holds for all six
-  # shared entries at once instead of whichever one happened to be pre-created.
-  # It fails, as it must, on a linker that linked nothing: .gaia/local would
-  # then be each tree's own real directory and resolve somewhere else.
-  MAIN_LOCAL="$(cd "$MAIN/.gaia/local" && pwd -P)"
-  [ "$(cd "$WORKTREE_A/.gaia/local" && pwd -P)" = "$MAIN_LOCAL" ]
-  [ "$(cd "$WORKTREE_B/.gaia/local" && pwd -P)" = "$MAIN_LOCAL" ]
-
-  # No shared-state symlink exists for the per-tree entry in either tree. This
-  # is the mechanism check for TODAY's per-entry linking; the physical-path
-  # checks further down are what carry the guarantee across the cutover.
-  [ -L "$WORKTREE_A/.gaia/local/worthiness-ledger" ] && return 1
-  [ -L "$WORKTREE_B/.gaia/local/worthiness-ledger" ] && return 1
-
+  echo "case: C4-06: per-tree state survives the cutover (physical separation)"
   # The shipped path function decides where each tree's ledger lives -- the
   # capture hook and the commit gate both address it through this one function
   # -- so the fixture asks GAIA where to write instead of hand-building a path.
@@ -478,6 +419,39 @@ JS
     echo "a per-tree worthiness observation resolved into main's copy" >&2
     return 1
   fi
+}
+
+# bats test_tags=protected
+@test "C4-05: SPEC/plan locks serialize across worktrees" {
+  MAIN="$(gaia_new_main gaia-c405-main)"
+  notebook_files="$(_notebook_library_files)"
+  [ -n "$notebook_files" ]
+  # shellcheck disable=SC2086  # one repo-relative path per line, none with spaces
+  gaia_copy_real "$MAIN" \
+    .gaia/scripts/spec/plan-allocator.sh \
+    .gaia/scripts/spec/with-ledger-lock.sh \
+    .gaia/scripts/exclusive-lock-lib.sh \
+    .gaia/scripts/spec/title-normalize.sh \
+    .gaia/scripts/main-root-lib.sh \
+    $notebook_files
+  gaia_commit_all "$MAIN" "add plan allocator"
+
+  WORKTREE_A="$(gaia_add_worktree "$MAIN" treeA treeA)"
+  WORKTREE_B="$(gaia_add_worktree "$MAIN" treeB treeB)"
+
+  root_a="$(run_in "$WORKTREE_A" -- git rev-parse --show-toplevel)"
+  root_b="$(run_in "$WORKTREE_B" -- git rev-parse --show-toplevel)"
+
+  id_a="$(bash "$MAIN/.gaia/scripts/spec/plan-allocator.sh" next "$root_a" "feature A")"
+  id_b="$(bash "$MAIN/.gaia/scripts/spec/plan-allocator.sh" next "$root_b" "feature B")"
+
+  # Target: concurrent number allocations never both mint the same id -- the
+  # mint lock (and the catalog it guards) is anchored to main, so the second
+  # waits and reads the first's row. plan-allocator.sh is handed $ROOT = each
+  # tree's own toplevel (see C3-04); the library resolves main from it, so
+  # both trees number against the one catalog instead of two disconnected
+  # per-tree ones that would both mint PLAN-001.
+  [ "$id_a" != "$id_b" ]
 }
 
 @test "C4-08: one tree's forensics reports are not another tree's to read" {

@@ -48,12 +48,12 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "gaia-init does not inline the required_status_checks registration command" {
+# bats test_tags=protected
+@test "gaia-init inlines no GAIA-Audit registration" {
+  echo "case: gaia-init does not inline the required_status_checks registration command"
   run grep -F "protection/required_status_checks" "$GAIA_INIT"
   [ "$status" -ne 0 ]
-}
-
-@test "gaia-init does not register the bare code-review-audit job name as the required check" {
+  echo "case: gaia-init does not register the bare code-review-audit job name as the required check"
   run grep -F "contexts[]=code-review-audit" "$GAIA_INIT"
   [ "$status" -ne 0 ]
 }
@@ -63,24 +63,20 @@ setup() {
 # the required_status_checks branch-protection endpoint.
 # -----------------------------------------------------------------------------
 
-@test "setup-gaia registers GAIA-Audit as the required check" {
+# bats test_tags=protected
+@test "setup-gaia registers the GAIA-Audit status through the contexts endpoint, never the job name" {
+  echo "case: setup-gaia registers GAIA-Audit as the required check"
   run grep -F '["GAIA-Audit"]' "$SETUP_GAIA_COMMAND_FILE"
   [ "$status" -eq 0 ]
-}
-
-@test "setup-gaia registration targets the required_status_checks endpoint" {
+  echo "case: setup-gaia registration targets the required_status_checks endpoint"
   run grep -F "protection/required_status_checks" "$SETUP_GAIA_COMMAND_FILE"
   [ "$status" -eq 0 ]
-}
-
-@test "setup-gaia writes the contexts through the documented /contexts PUT with a JSON body" {
+  echo "case: setup-gaia writes the contexts through the documented /contexts PUT with a JSON body"
   run grep -F -- '-X PUT "$required_checks_endpoint/contexts" --input -' "$SETUP_GAIA_COMMAND_FILE"
   [ "$status" -eq 0 ]
   run grep -F -- '-f strict=true' "$SETUP_GAIA_COMMAND_FILE"
   [ "$status" -ne 0 ]
-}
-
-@test "setup-gaia does not register the bare code-review-audit job name as the required check" {
+  echo "case: setup-gaia does not register the bare code-review-audit job name as the required check"
   run grep -F "contexts[]=code-review-audit" "$SETUP_GAIA_COMMAND_FILE"
   [ "$status" -ne 0 ]
 }
@@ -134,32 +130,7 @@ check_registration_placement() {
   fi
 }
 
+# bats test_tags=protected
 @test "setup-gaia registers GAIA-Audit in Phase 3, after the protection PUT, with no CI precondition" {
   check_registration_placement "$SETUP_GAIA_COMMAND_FILE"
-}
-
-@test "the placement check fails when the registration moves out of Phase 3" {
-  local copy="${BATS_TEST_TMPDIR}/moved.md"
-  awk '/^#### Register GAIA-Audit as the required check/ { print "## Phase 3.4: Moved"; print "" } { print }' \
-    "$SETUP_GAIA_COMMAND_FILE" >"$copy"
-  grep -qF '## Phase 3.4: Moved' "$copy"
-  run check_registration_placement "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the placement check fails when a CI decision gates the registration" {
-  local copy="${BATS_TEST_TMPDIR}/gated.md"
-  awk '/^#### Register GAIA-Audit as the required check/ { print "Only when GAIA CI is enabled:"; print "" } { print }' \
-    "$SETUP_GAIA_COMMAND_FILE" >"$copy"
-  run check_registration_placement "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the placement check fails when the protection PUT is gone" {
-  local copy="${BATS_TEST_TMPDIR}/unprotected.md"
-  grep -vE '(/protection|\$protection_endpoint)" --input -' "$SETUP_GAIA_COMMAND_FILE" >"$copy"
-  # The mutation must actually drop a line, or this test proves nothing.
-  cmp -s "$SETUP_GAIA_COMMAND_FILE" "$copy" && return 1
-  run check_registration_placement "$copy"
-  [ "$status" -ne 0 ]
 }

@@ -129,24 +129,27 @@ broken_copy() {
   chmod +x "$broken"
 }
 
-@test "an applied report older than the drift threshold under audit/ moves to cleanse/ and raises the nudge" {
-  write_report "$REPOSITORY_FIXTURE/.gaia/local/audit" 40
+@test "the cleanse nudge reason by report age and status" {
+  local reports="$REPOSITORY_FIXTURE/.gaia/local"
+
+  echo "case: an applied report older than the drift threshold under audit/ moves to cleanse/ and raises the nudge"
+  write_report "$reports/audit" 40
   refresh
-  [ -f "$REPOSITORY_FIXTURE/.gaia/local/cleanse/KNOWLEDGE-2026-01-01-1200.md" ]
-  [ ! -e "$REPOSITORY_FIXTURE/.gaia/local/audit/KNOWLEDGE-2026-01-01-1200.md" ]
+  [ -f "$reports/cleanse/KNOWLEDGE-2026-01-01-1200.md" ]
+  [ ! -e "$reports/audit/KNOWLEDGE-2026-01-01-1200.md" ]
   [ "$(cache_value cleanseNudge)" = "true" ]
   [ "$(cache_value cleanseNudgeReason)" = "40 days since review" ]
-}
 
-@test "a fresh applied report leaves the cleanse nudge off" {
-  write_report "$REPOSITORY_FIXTURE/.gaia/local/audit" 2
+  echo "case: a fresh applied report leaves the cleanse nudge off"
+  rm -rf "$reports/audit" "$reports/cleanse"
+  write_report "$reports/audit" 2
   refresh
-  [ -f "$REPOSITORY_FIXTURE/.gaia/local/cleanse/KNOWLEDGE-2026-01-01-1200.md" ]
+  [ -f "$reports/cleanse/KNOWLEDGE-2026-01-01-1200.md" ]
   [ "$(cache_value cleanseNudge)" = "false" ]
-}
 
-@test "a draft report in cleanse/ raises the resume nudge" {
-  write_report "$REPOSITORY_FIXTURE/.gaia/local/cleanse" 1 draft
+  echo "case: a draft report in cleanse/ raises the resume nudge"
+  rm -rf "$reports/audit" "$reports/cleanse"
+  write_report "$reports/cleanse" 1 draft
   refresh
   [ "$(cache_value cleanseNudgeReason)" = "resume draft" ]
 }

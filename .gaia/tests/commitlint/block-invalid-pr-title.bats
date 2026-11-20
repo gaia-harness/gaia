@@ -68,20 +68,22 @@ assert_allowed() {
 
 # --- the length boundary: title + " (#2570)" against the 100 limit -----------
 
-@test "a 93-character title with a 4-digit number is blocked" {
+@test "the title length boundary and subject report: 93 blocked, 92 allowed, 120 blocked on create, denial shows the checked subject" {
+  echo "case: a 93-character title with a 4-digit number is blocked"
   run_hook "gh pr edit 2570 --title \"$(title_of_length 93)\""
   assert_blocked
   grep -qF -- 'current length is 101' <<<"$output"
-}
-
-@test "a 92-character title with a 4-digit number is allowed" {
+  echo "case: the denial shows the subject it checked, suffix included"
+  grep -qF -- "Checked as: $(title_of_length 93) (#2570)" <<<"$output"
+  echo "case: a 92-character title with a 4-digit number is allowed"
   run_hook "gh pr edit 2570 --title \"$(title_of_length 92)\""
   assert_allowed
-}
-
-@test "the denial shows the subject it checked, suffix included" {
-  run_hook "gh pr edit 2570 --title \"$(title_of_length 93)\""
-  grep -qF -- "Checked as: $(title_of_length 93) (#2570)" <<<"$output"
+  echo "case: a title far past the limit is blocked on create"
+  run_hook "gh pr create --title \"$(title_of_length 120)\" --body x"
+  assert_blocked
+  echo "case: a short conventional title is allowed on create"
+  run_hook 'gh pr create --title "feat(hooks): add a guard" --body x'
+  assert_allowed
 }
 
 # --- the rest of the lint, not only length ------------------------------------
@@ -93,64 +95,50 @@ assert_allowed() {
   grep -qF -- 'type-enum' <<<"$output"
 }
 
-@test "a short conventional title is allowed on create" {
-  run_hook 'gh pr create --title "feat(hooks): add a guard" --body x'
-  assert_allowed
-}
-
-@test "a title far past the limit is blocked on create" {
-  run_hook "gh pr create --title \"$(title_of_length 120)\" --body x"
-  assert_blocked
-}
-
 # --- title spellings ----------------------------------------------------------
 
-@test "-t is read as the title" {
+@test "title spellings: -t is read, a PR URL supplies the number" {
+  echo "case: -t is read as the title"
   run_hook "gh pr edit 2570 -t '$(title_of_length 93)'"
   assert_blocked
-}
-
-@test "a PR URL supplies the number on edit" {
+  echo "case: a PR URL supplies the number on edit"
   run_hook "gh pr edit https://github.com/o/r/pull/2570 --title \"$(title_of_length 92)\""
   assert_allowed
 }
 
 # --- where the command sits in the tool call ----------------------------------
 
-@test "a create after git push && is read" {
+@test "where the command sits: after &&, after a comment, heredoc body, --body substitution, quoted mention" {
+  echo "case: a create after git push && is read"
   run_hook "git push -u origin feat/x && gh pr create --title \"$(title_of_length 120)\" --body-file b"
   assert_blocked
-}
-
-@test "a create on the line after a comment is read" {
+  echo "case: a create on the line after a comment is read"
   run_hook $'# open the PR\ngh pr create --title "bogus: x"'
   assert_blocked
-}
-
-@test "a create inside a heredoc body is data, not a command" {
+  echo "case: a create inside a heredoc body is data, not a command"
   run_hook $'cat > notes.md <<\'EOF\'\ngh pr create --title "bogus: x"\nEOF'
   assert_allowed
-}
-
-@test "a create inside a --body substitution is data" {
+  echo "case: a create inside a --body substitution is data"
   run_hook $'gh pr create --title "feat: x" --body "$(cat <<\'EOF\'\ngh pr create --title "bogus: y"\nEOF\n)"'
   assert_allowed
-}
-
-@test "a quoted mention of the verb is not a command" {
+  echo "case: a quoted mention of the verb is not a command"
   run_hook "echo 'gh pr create --title \"bogus: x\"'"
   assert_allowed
 }
 
 # --- what is left to CI -------------------------------------------------------
 
-@test "a title the shell expands is allowed" {
+@test "left to CI: a shell-expanded title, other gh pr verbs and a Monitor call stand down" {
+  local payload
+  echo "case: a title the shell expands is allowed"
   run_hook 'gh pr create --title "$(git log -1 --format=%s)" --body x'
   assert_allowed
-}
-
-@test "a PR in another repository is allowed" {
-  run_hook "gh pr create -R other/repo --title \"$(title_of_length 120)\" --body x"
+  echo "case: other gh pr verbs are allowed"
+  run_hook 'gh pr view 12 --json title'
+  assert_allowed
+  echo "case: a Monitor call stands down"
+  payload=$(jq -nc '{tool_name: "Monitor", tool_input: {command: "gh pr create --title \"bogus: x\""}}')
+  run bash -c 'printf %s "$1" | bash "$2"' _ "$payload" "$HOOK"
   assert_allowed
 }
 
@@ -167,52 +155,42 @@ run_hook_in_home() {
   run bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$home_repository" "$payload" "$HOOK"
 }
 
-@test "--repo naming the home repository is checked, another repository is not" {
+@test "repository scope: --repo, -R prefix and another repository" {
+  echo "case: --repo naming the home repository is checked, another repository is not"
   run_hook_in_home "gh pr create --repo acme/widget --title \"bogus: x\" --body x"
   assert_blocked
   run_hook_in_home "gh pr create --repo other/repo --title \"bogus: x\" --body x"
   assert_allowed
-}
-
-@test "the prefix form gh -R <repo> pr create is read" {
+  echo "case: the prefix form gh -R <repo> pr create is read"
   run_hook_in_home "gh -R acme/widget pr create --title \"bogus: x\" --body x"
   assert_blocked
   run_hook_in_home "gh -R other/repo pr create --title \"bogus: x\" --body x"
   assert_allowed
-}
-
-@test "other gh pr verbs are allowed" {
-  run_hook 'gh pr view 12 --json title'
+  echo "case: a PR in another repository is allowed"
+  run_hook "gh pr create -R other/repo --title \"$(title_of_length 120)\" --body x"
   assert_allowed
 }
 
-@test "a Monitor call stands down" {
-  local payload
-  payload=$(jq -nc '{tool_name: "Monitor", tool_input: {command: "gh pr create --title \"bogus: x\""}}')
-  run bash -c 'printf %s "$1" | bash "$2"' _ "$payload" "$HOOK"
-  assert_allowed
-}
-
-@test "with no commitlint installed the hook allows, and blocks the same call with it" {
-  local title
+# One scratch copy of the hook serves both availability cases: first with no
+# node_modules beside it, then with a commitlint stub added.
+@test "fail-open on a missing or unrunnable commitlint, blocked on reported problems" {
+  local title scratch_hook stub
   title=$(title_of_length 120)
-  run_hook "gh pr create --title \"$title\" --body x"
-  assert_blocked
   SCRATCH=$(mktemp -d -t pr-title-hook-XXXXXX)
   mkdir -p "$SCRATCH/.claude/hooks"
   cp -R "$REPO_ROOT/.claude/hooks/lib" "$SCRATCH/.claude/hooks/lib"
   cp "$HOOK" "$SCRATCH/.claude/hooks/"
-  run_hook "gh pr create --title \"$title\" --body x" "$SCRATCH/.claude/hooks/block-invalid-pr-title.sh"
-  assert_allowed
-}
+  scratch_hook="$SCRATCH/.claude/hooks/block-invalid-pr-title.sh"
+  stub="$SCRATCH/node_modules/.bin/commitlint"
 
-@test "a commitlint that cannot run is allowed, one that reports problems is blocked" {
-  SCRATCH=$(mktemp -d -t pr-title-hook-XXXXXX)
-  mkdir -p "$SCRATCH/.claude/hooks" "$SCRATCH/node_modules/.bin"
-  cp -R "$REPO_ROOT/.claude/hooks/lib" "$SCRATCH/.claude/hooks/lib"
-  cp "$HOOK" "$SCRATCH/.claude/hooks/"
-  local scratch_hook="$SCRATCH/.claude/hooks/block-invalid-pr-title.sh"
-  local stub="$SCRATCH/node_modules/.bin/commitlint"
+  echo "case: with no commitlint installed the hook allows, and blocks the same call with it"
+  run_hook "gh pr create --title \"$title\" --body x"
+  assert_blocked
+  run_hook "gh pr create --title \"$title\" --body x" "$scratch_hook"
+  assert_allowed
+
+  echo "case: a commitlint that cannot run is allowed, one that reports problems is blocked"
+  mkdir -p "$SCRATCH/node_modules/.bin"
   printf '#!/bin/sh\necho "env: node: No such file or directory" >&2\nexit 127\n' >"$stub"
   chmod +x "$stub"
   run_hook 'gh pr create --title "feat: ok" --body x' "$scratch_hook"
@@ -224,17 +202,15 @@ run_hook_in_home() {
 
 # --- --fill -------------------------------------------------------------------
 
-@test "--fill without a title is blocked" {
+@test "--fill: without a title is blocked, with a title is checked" {
+  echo "case: --fill without a title is blocked"
   run_hook 'gh pr create --fill'
   assert_blocked
   grep -qF -- '--title' <<<"$output"
-}
-
-@test "--fill with a title is checked on the title and allowed" {
+  echo "case: --fill with a title is checked on the title and allowed"
   run_hook 'gh pr create --fill --title "feat: ok"'
   assert_allowed
 }
-
 # --- registration -------------------------------------------------------------
 
 @test "the hook is registered on the PreToolUse Bash|Monitor matcher" {

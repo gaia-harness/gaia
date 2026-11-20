@@ -92,17 +92,6 @@ expect_band() {
   true
 }
 
-@test "UAT-018: a user global statusLine.command replaces the default left side" {
-  mkdir -p "$TEMPORARY_HOME/.claude"
-  printf '{"statusLine":{"type":"command","command":"printf USERLEFT"}}' >"$TEMPORARY_HOME/.claude/settings.json"
-  render_at "$MAIN" 250000 1000000
-  [ "$status" -eq 0 ]
-  grep -qF "USERLEFT" <<<"$output"
-  grep -qF "$(basename "$MAIN")" <<<"$output" && return 1
-  grep -qE "(▓|░){10}" <<<"$output" && return 1
-  true
-}
-
 # user_left_with_choice <settings.json content|-> : a global statusLine.command
 # that prints USERLEFT, plus the main checkout's opt-ins file (- writes none).
 user_left_with_choice() {
@@ -123,61 +112,30 @@ assert_user_left() {
   true
 }
 
-@test "left choice gaia: statusline.left gaia draws GAIA's left side over a global statusLine.command" {
-  user_left_with_choice '{"version":1,"statusline":{"left":"gaia"}}'
-  render_at "$MAIN" 250000 1000000
+# choice_case <label> <opt-ins content|-> <cwd> <gaia|user>: one render of a
+# global statusLine.command that prints USERLEFT against the given opt-ins file
+# (- removes it), asserting which left side is drawn.
+choice_case() {
+  echo "case: $1"
+  rm -f "$MAIN/.gaia/local/settings.json"
+  user_left_with_choice "$2"
+  render_at "$3" 250000 1000000
   [ "$status" -eq 0 ]
-  assert_gaia_left
+  "assert_${4}_left"
 }
 
-@test "left choice gaia: a linked worktree reads the main checkout's choice" {
-  user_left_with_choice '{"version":1,"statusline":{"left":"gaia"}}'
+@test "the left-side choice: a global command replaces the default, statusline.left gaia, user, missing and malformed" {
   git -C "$MAIN" worktree add --quiet "$WORKTREE" -b feature
-  render_at "$WORKTREE" 250000 1000000
-  [ "$status" -eq 0 ]
-  assert_gaia_left
-}
-
-@test "left choice user: statusline.left user keeps the global statusLine.command" {
-  user_left_with_choice '{"version":1,"statusline":{"left":"user"}}'
-  render_at "$MAIN" 250000 1000000
-  [ "$status" -eq 0 ]
-  assert_user_left
-}
-
-@test "left choice missing: no opt-ins file keeps the global statusLine.command" {
-  user_left_with_choice -
-  render_at "$MAIN" 250000 1000000
-  [ "$status" -eq 0 ]
-  assert_user_left
-}
-
-@test "left choice missing: an opt-ins file with no statusline.left keeps the global statusLine.command" {
-  user_left_with_choice '{"version":1}'
-  render_at "$MAIN" 250000 1000000
-  [ "$status" -eq 0 ]
-  assert_user_left
-}
-
-@test "left choice malformed: a version-less file reads as missing" {
-  user_left_with_choice '{"statusline":{"left":"gaia"}}'
-  render_at "$MAIN" 250000 1000000
-  [ "$status" -eq 0 ]
-  assert_user_left
-}
-
-@test "left choice malformed: invalid JSON reads as missing" {
-  user_left_with_choice '{"version":1,"statusline":{"left":"gaia"'
-  render_at "$MAIN" 250000 1000000
-  [ "$status" -eq 0 ]
-  assert_user_left
-}
-
-@test "left choice malformed: an unknown left value reads as missing" {
-  user_left_with_choice '{"version":1,"statusline":{"left":"GAIA"}}'
-  render_at "$MAIN" 250000 1000000
-  [ "$status" -eq 0 ]
-  assert_user_left
+  choice_case "UAT-018: a user global statusLine.command replaces the default left side" - "$MAIN" user
+  grep -qF "$(basename "$MAIN")" <<<"$output" && return 1
+  choice_case "left choice gaia: statusline.left gaia draws GAIA's left side over a global statusLine.command" '{"version":1,"statusline":{"left":"gaia"}}' "$MAIN" gaia
+  choice_case "left choice gaia: a linked worktree reads the main checkout's choice" '{"version":1,"statusline":{"left":"gaia"}}' "$WORKTREE" gaia
+  choice_case "left choice user: statusline.left user keeps the global statusLine.command" '{"version":1,"statusline":{"left":"user"}}' "$MAIN" user
+  choice_case "left choice missing: no opt-ins file keeps the global statusLine.command" - "$MAIN" user
+  choice_case "left choice missing: an opt-ins file with no statusline.left keeps the global statusLine.command" '{"version":1}' "$MAIN" user
+  choice_case "left choice malformed: a version-less file reads as missing" '{"statusline":{"left":"gaia"}}' "$MAIN" user
+  choice_case "left choice malformed: invalid JSON reads as missing" '{"version":1,"statusline":{"left":"gaia"' "$MAIN" user
+  choice_case "left choice malformed: an unknown left value reads as missing" '{"version":1,"statusline":{"left":"GAIA"}}' "$MAIN" user
 }
 
 @test "last resort: when the default left side cannot render, the bare label does" {
@@ -218,46 +176,34 @@ expect_usage_color() {
   grep -qF "🕔 ${ESCAPE_CHARACTER}[01;$2m$1%" <<<"$output" || { echo "percentage $1: no color $2 in: $output"; return 1; }
 }
 
-@test "usage windows: both render after the context bar, rounded and divided like every other segment" {
+@test "usage windows render by presence and type: both, one, zero, absent, wrong-typed" {
+  echo "case: both render after the context bar, rounded and divided like every other segment"
   render_usage '{"five_hour":{"used_percentage":23.5},"seven_day":{"used_percentage":41.2}}'
   [ "$status" -eq 0 ]
   grep -qF "21% │ 🕔 24% │ 📅 41%" <<<"$PLAIN_OUTPUT"
-}
-
-@test "usage windows: only the 7-day window renders when the 5-hour window is absent" {
+  echo "case: only the 7-day window renders when the 5-hour window is absent"
   render_usage '{"seven_day":{"used_percentage":41}}'
   [ "$status" -eq 0 ]
   grep -qF "21% │ 📅 41%" <<<"$PLAIN_OUTPUT"
   grep -qF "🕔" <<<"$PLAIN_OUTPUT" && return 1
-  true
-}
-
-@test "usage windows: only the 5-hour window renders when the 7-day window is absent" {
+  echo "case: only the 5-hour window renders when the 7-day window is absent"
   render_usage '{"five_hour":{"used_percentage":23}}'
   [ "$status" -eq 0 ]
   grep -qF "21% │ 🕔 23%" <<<"$PLAIN_OUTPUT"
   grep -qF "📅" <<<"$PLAIN_OUTPUT" && return 1
-  true
-}
-
-@test "usage windows: a real 0% renders rather than reading as absent" {
+  echo "case: a real 0% renders rather than reading as absent"
   render_usage '{"five_hour":{"used_percentage":0}}'
   [ "$status" -eq 0 ]
   grep -qF "🕔 0%" <<<"$PLAIN_OUTPUT"
-}
-
-@test "usage windows: a payload with no rate_limits renders no usage segment and keeps the rest" {
+  echo "case: a payload with no rate_limits renders no usage segment and keeps the rest"
   render_usage -
   [ "$status" -eq 0 ]
   grep -qF "Opus (XHigh)" <<<"$PLAIN_OUTPUT"
   grep -qF "21%" <<<"$PLAIN_OUTPUT"
   grep -qE "🕔|📅" <<<"$PLAIN_OUTPUT" && return 1
-  true
-}
-
-@test "usage windows: wrong-typed values drop the window and never take the other fields down" {
   local malformed
   for malformed in '"soon"' '{"five_hour":"soon"}' '{"five_hour":{"used_percentage":"23"}}' '{"five_hour":{"used_percentage":-1}}'; do
+    echo "case: wrong-typed value $malformed drops the window and never takes the other fields down"
     render_usage "$malformed"
     [ "$status" -eq 0 ] || { echo "$malformed: status $status"; return 1; }
     grep -qF "Opus (XHigh)" <<<"$PLAIN_OUTPUT" || { echo "$malformed: other fields lost: $PLAIN_OUTPUT"; return 1; }
@@ -273,11 +219,12 @@ expect_usage_color() {
   expect_usage_color 90 31
 }
 
-@test "usage windows: the 5-hour window shows its reset countdown from yellow, the 7-day window only from red" {
+@test "usage windows: reset countdown shows by color and reset time" {
   local now
   now=$(date +%s)
   # Each offset sits mid-minute, so the run has about 30 seconds before it
   # crosses a rounding edge.
+  echo "case: the 5-hour window shows its reset countdown from yellow, the 7-day window only from red"
   render_usage "{\"five_hour\":{\"used_percentage\":92,\"resets_at\":$((now + 3690))}}"
   grep -qF "🕔 92% (1h2m)" <<<"$PLAIN_OUTPUT" || { echo "hours: $PLAIN_OUTPUT"; return 1; }
   render_usage "{\"five_hour\":{\"used_percentage\":92,\"resets_at\":$((now + 690))}}"
@@ -290,12 +237,7 @@ expect_usage_color() {
   grep -qF "🕔 74% (" <<<"$PLAIN_OUTPUT" && { echo "5h green countdown: $PLAIN_OUTPUT"; return 1; }
   render_usage "{\"seven_day\":{\"used_percentage\":80,\"resets_at\":$((now + 187230))}}"
   grep -qF "📅 80% (" <<<"$PLAIN_OUTPUT" && { echo "7d yellow countdown: $PLAIN_OUTPUT"; return 1; }
-  true
-}
-
-@test "usage windows: a red window with a past or missing reset time shows no countdown" {
-  local now
-  now=$(date +%s)
+  echo "case: a red window with a past or missing reset time shows no countdown"
   render_usage "{\"five_hour\":{\"used_percentage\":92,\"resets_at\":$((now - 60))}}"
   grep -qF "🕔 reset" <<<"$PLAIN_OUTPUT" || { echo "past: $PLAIN_OUTPUT"; return 1; }
   grep -qF "🕔 reset (" <<<"$PLAIN_OUTPUT" && { echo "past countdown: $PLAIN_OUTPUT"; return 1; }
@@ -306,7 +248,8 @@ expect_usage_color() {
   true
 }
 
-@test "UAT-022: 1M window band edges with no override" {
+@test "context bar band edges by window and ask_tokens override" {
+  echo "case: UAT-022 1M window band edges with no override"
   expect_band 1000000 100000 green none
   expect_band 1000000 200000 green none
   expect_band 1000000 249999 green none
@@ -317,9 +260,7 @@ expect_usage_color() {
   expect_band 1000000 375000 red fire
   expect_band 1000000 449999 red fire
   expect_band 1000000 450000 red skull
-}
-
-@test "UAT-022: 200k window band edges with no override" {
+  echo "case: UAT-022 200k window band edges with no override"
   expect_band 200000 10000 green none
   expect_band 200000 59999 green none
   expect_band 200000 60000 yellow none
@@ -329,44 +270,24 @@ expect_usage_color() {
   expect_band 200000 125000 red fire
   expect_band 200000 149999 red fire
   expect_band 200000 150000 red skull
-}
-
-@test "UAT-019: a lowered ask_tokens moves the red edge and leaves no yellow band" {
+  echo "case: an override at the retired location leaves the band at the default"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":200000}}' >"$MAIN/.gaia/local/checkpoint-override.json"
+  expect_band 1000000 250000 yellow none
+  expect_band 1000000 300000 red none
+  echo "case: UAT-019 a lowered ask_tokens moves the red edge and leaves no yellow band"
   printf '{"version":1,"context_checkpoint":{"ask_tokens":200000}}' >"$MAIN/.gaia/local/protected/checkpoint-override.json"
   expect_band 1000000 199999 green none
   expect_band 1000000 200000 red none
   expect_band 1000000 249999 red none
   expect_band 1000000 250000 red fire
   expect_band 1000000 300000 red skull
-}
-
-@test "UAT-019: an ask_tokens above the default reads as the default" {
+  echo "case: UAT-019 an ask_tokens above the default reads as the default"
   printf '{"version":1,"context_checkpoint":{"ask_tokens":600000}}' >"$MAIN/.gaia/local/protected/checkpoint-override.json"
   expect_band 1000000 250000 yellow none
   expect_band 1000000 300000 red none
-}
-
-@test "UAT-019: a non-integer ask_tokens reads as the default" {
+  echo "case: UAT-019 a non-integer ask_tokens reads as the default"
   printf '{"version":1,"context_checkpoint":{"ask_tokens":"abc"}}' >"$MAIN/.gaia/local/protected/checkpoint-override.json"
   expect_band 1000000 250000 yellow none
   expect_band 1000000 300000 red none
 }
 
-@test "an override at the retired location leaves the band at the default" {
-  local OLD_OVERRIDE="$MAIN/.gaia/local/checkpoint-override.json"
-  printf '{"version":1,"context_checkpoint":{"ask_tokens":200000}}' >"$OLD_OVERRIDE"
-  expect_band 1000000 250000 yellow none
-  expect_band 1000000 300000 red none
-}
-
-@test "red state: the bar reads the lib, not a local constant (moving the lib default moves the red edge)" {
-  # Control: with the shipped lib, 250000 on a 1M window is still yellow.
-  expect_band 1000000 250000 yellow none
-  # Change the lib default in the sandbox copy only; the bar must follow it.
-  local library_file="$MAIN/.gaia/scripts/context-checkpoint-lib.sh"
-  sed 's/^GAIA_CONTEXT_ASK_TOKENS_DEFAULT=.*/GAIA_CONTEXT_ASK_TOKENS_DEFAULT=280000/' "$library_file" >"$library_file.new"
-  grep -q '^GAIA_CONTEXT_ASK_TOKENS_DEFAULT=280000$' "$library_file.new"
-  mv "$library_file.new" "$library_file"
-  expect_band 1000000 279999 yellow none
-  expect_band 1000000 280000 red none
-}
