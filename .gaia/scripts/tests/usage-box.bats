@@ -292,6 +292,7 @@ one_space_margins() {
   [ "$stderr" = 'usage initiative: --box and --line are exclusive' ]
 }
 
+# bats test_tags=whole-tree
 @test "the box waits for a running flusher, joins only a full-finish flusher, and notes a timeout" {
   local scratch="$TEMPORARY_DIRECTORY/scripts" file box
   mkdir -p "$scratch/spec" "$scratch/notebook"
