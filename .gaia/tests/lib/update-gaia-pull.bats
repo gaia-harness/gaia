@@ -184,7 +184,7 @@ assert_refused() {
 }
 
 # bats test_tags=protected
-@test "pull and check refuse each unsafe tree state untouched, a local-only commit is not a divergence, and a failed fetch leaves the tree alone" {
+@test "pull and check refuse each unsafe tree state, a local-only commit is not a divergence, and neither a refusal nor a failed fetch changes the tree" {
   build_pristine
 
   pull_case 'refuses on a non-default branch and leaves the tree untouched'
