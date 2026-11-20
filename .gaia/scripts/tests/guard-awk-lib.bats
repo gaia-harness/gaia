@@ -1210,14 +1210,16 @@ strip_full_line_comments() {
 
 # Derived from production_guards() rather than re-listed, so a guard added
 # there is held to the no-basename-list check above without a second edit
-# here. The library itself is checked too and is not a guard, so it is
-# appended.
+# here. The libraries are checked too and are not guards, so they are
+# appended: guard-awk-lib.sh and guard-discovery-lib.sh, which holds the
+# bats-file discovery code split out of it.
 wiki_citing_files() {
   local guard_file
   while IFS= read -r guard_file; do
     guard_text_files "$guard_file"
   done < <(production_guards)
-  printf '%s\n' "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh"
+  printf '%s\n' "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" \
+    "$REPO_ROOT/.gaia/scripts/guard-discovery-lib.sh"
 }
 
 # no_bats_basename_on_code_lines: fail naming the first file of
