@@ -21,6 +21,22 @@ setup() {
   mkdir -p "$FIXTURE_DIRECTORY"
 }
 
+# start_table and begin_case <label>: a case table names each case in its
+# output and gives it its own temporary and fixture directories, so one
+# case's fixture tree or suites never meet another case's.
+start_table() {
+  TABLE_TMPDIR="$BATS_TEST_TMPDIR"
+  CASE_NUMBER=0
+}
+
+begin_case() {
+  printf 'case: %s\n' "$1"
+  CASE_NUMBER=$((CASE_NUMBER + 1))
+  BATS_TEST_TMPDIR="$TABLE_TMPDIR/case-$CASE_NUMBER"
+  FIXTURE_DIRECTORY="$BATS_TEST_TMPDIR/fixture-suites"
+  mkdir -p "$FIXTURE_DIRECTORY"
+}
+
 write_mark() {
   printf '# bats %s\n' 'file_tags=whole-tree'
 }
@@ -105,7 +121,11 @@ SEEDS="dirname filename second-assignment"
   [ "$status" -eq 0 ]
 }
 
-@test "every idiom under every rooting shape, unmarked, is flagged with the suite file, the test and the mark to add" {
+# bats test_tags=protected
+@test "direct tree-enumerating idioms are flagged unmarked and accepted marked, under each rooting, and not flagged on a fixture, a fixtures path or literal listing" {
+  start_table
+
+  begin_case "every idiom under every rooting shape, unmarked, is flagged with the suite file, the test and the mark to add"
   local seed idiom suite
   for seed in $SEEDS; do
     for idiom in $IDIOMS; do
@@ -125,9 +145,8 @@ SEEDS="dirname filename second-assignment"
       esac
     done
   done
-}
 
-@test "the same fixtures carrying the mark pass" {
+  begin_case "the same fixtures carrying the mark pass"
   local seed idiom suite
   for seed in $SEEDS; do
     for idiom in $IDIOMS; do
@@ -140,9 +159,8 @@ SEEDS="dirname filename second-assignment"
       fi
     done
   done
-}
 
-@test "a mark joined into a comma list of tags counts" {
+  begin_case "a mark joined into a comma list of tags counts"
   local suite="$FIXTURE_DIRECTORY/tag-list.bats"
   write_fixture "$suite" dirname find other,whole-tree
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
@@ -150,9 +168,8 @@ SEEDS="dirname filename second-assignment"
   write_fixture "$suite" dirname find other,unrelated
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
   [ "$status" -eq 1 ]
-}
 
-@test "every idiom against a fixture repository under the test temp directory is not flagged" {
+  begin_case "every idiom against a fixture repository under the test temp directory is not flagged"
   local suite="$FIXTURE_DIRECTORY/fixture-repo-only.bats"
   {
     printf '%s\n' '#!/usr/bin/env bats'
@@ -171,9 +188,8 @@ SEEDS="dirname filename second-assignment"
   } >"$suite"
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
   [ "$status" -eq 0 ]
-}
 
-@test "a root under a fixtures directory is not flagged" {
+  begin_case "a root under a fixtures directory is not flagged"
   local suite="$FIXTURE_DIRECTORY/fixtures-root.bats"
   {
     printf '%s\n' '#!/usr/bin/env bats'
@@ -191,9 +207,8 @@ SEEDS="dirname filename second-assignment"
   } >"$suite"
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-}
 
-@test "a listing that names literal paths is not flagged" {
+  begin_case "a listing that names literal paths is not flagged"
   local suite="$FIXTURE_DIRECTORY/named-paths.bats"
   {
     printf '%s\n' '#!/usr/bin/env bats'
@@ -208,9 +223,8 @@ SEEDS="dirname filename second-assignment"
   } >"$suite"
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-}
 
-@test "a listing of a tracked directory, a root-level path, a glob, a magic pathspec or a variable is still flagged" {
+  begin_case "a listing of a tracked directory, a root-level path, a glob, a magic pathspec or a variable is still flagged"
   local repository="$BATS_TEST_TMPDIR/repository" suite operand
   mkdir -p "$repository/.claude/agents"
   printf 'agent\n' >"$repository/.claude/agents/a.md"
@@ -235,7 +249,11 @@ SEEDS="dirname filename second-assignment"
   done
 }
 
-@test "a suite that calls a script that scans the real tree is flagged, and its fixture twin is not" {
+# bats test_tags=protected
+@test "a call hop to a script or helper that scans the real root is flagged, and a fixture, argument, cd or env root is not" {
+  start_table
+
+  begin_case "a suite that calls a script that scans the real tree is flagged, and its fixture twin is not"
   local tree="$BATS_TEST_TMPDIR/tree" suite
   write_tree "$tree"
   suite="$tree/.gaia/scripts/tests/delegated.bats"
@@ -255,18 +273,119 @@ SEEDS="dirname filename second-assignment"
     *"a path this guard cannot see"*"full run on push to main"*) ;;
     *) echo "header omits the residual limit" >&2; return 1 ;;
   esac
-}
 
-@test "the failure output ends by stating the recognized idioms and the residual limit" {
-  local suite="$FIXTURE_DIRECTORY/unmarked-limit.bats"
-  write_fixture "$suite" dirname git-ls-files no
-  run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
-  [ "$status" -eq 1 ]
-  local last_line
-  last_line="$(printf '%s\n' "$output" | tail -n 1)"
-  case "$last_line" in
-    *"Only the idioms and calls in this script's header are recognized"*"a path this guard cannot see"*"full run on push to main"*) ;;
-    *) echo "last line omits the claim: $last_line" >&2; return 1 ;;
+  begin_case "every call hop pointed at the real root, unmarked, is flagged with the test named"
+  local tree="$BATS_TEST_TMPDIR/tree" hop suite checked=0
+  write_tree "$tree"
+  for hop in $HOPS; do
+    suite="$tree/.gaia/scripts/tests/hop-$hop.bats"
+    write_hop_suite "$suite" "$hop" real no || return 1
+    run bash "$GUARD" --root "$tree" "$suite"
+    [ "$status" -eq 1 ] || { echo "expected exit 1 for $hop, got $status: $output" >&2; return 1; }
+    case "$output" in
+      *"hop-$hop.bats: test \"calls\" enumerates the tracked tree ("*"without the whole-tree mark"*) ;;
+      *) echo "test not named for $hop: $output" >&2; return 1 ;;
+    esac
+    checked=$((checked + 1))
+  done
+  [ "$checked" -eq 5 ]
+
+  begin_case "every call hop pointed at the real root passes under the test mark"
+  local tree="$BATS_TEST_TMPDIR/tree" hop suite
+  write_tree "$tree"
+  for hop in $HOPS; do
+    suite="$tree/.gaia/scripts/tests/marked-$hop.bats"
+    write_hop_suite "$suite" "$hop" real yes || return 1
+    run bash "$GUARD" --root "$tree" "$suite"
+    [ "$status" -eq 0 ] || { echo "expected exit 0 for marked $hop, got $status: $output" >&2; return 1; }
+  done
+
+  begin_case "every call hop pointed at a fixture tree by argument, cd or environment is not flagged"
+  local tree="$BATS_TEST_TMPDIR/tree" hop variant suite checked=0
+  write_tree "$tree"
+  for hop in $HOPS; do
+    for variant in argument cd environment; do
+      suite="$tree/.gaia/scripts/tests/hermetic-$hop-$variant.bats"
+      write_hop_suite "$suite" "$hop" "$variant" no || return 1
+      run bash "$GUARD" --root "$tree" "$suite"
+      [ "$status" -eq 0 ] || { echo "expected exit 0 for $hop/$variant, got $status: $output" >&2; return 1; }
+      checked=$((checked + 1))
+    done
+  done
+  [ "$checked" -eq 15 ]
+
+  begin_case "the root handed to a script positionally or as -C is flagged"
+  local tree="$BATS_TEST_TMPDIR/tree" suite line
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/positional.bats"
+  for line in '  run bash "$LINT" "$ROOT"' '  run "$LINT" -C "$ROOT"' '  hits="$("$LINT" --root="$ROOT")"'; do
+    write_call_suite "$suite" no "$line"
+    run bash "$GUARD" --root "$tree" "$suite"
+    [ "$status" -eq 1 ] || { echo "expected exit 1 for [$line], got $status: $output" >&2; return 1; }
+  done
+
+  begin_case "the root handed to a non-script command or a path below the root is not flagged"
+  local tree="$BATS_TEST_TMPDIR/tree" suite line
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/not-a-hop.bats"
+  for line in '  cd "$ROOT"' '  [ -d "$ROOT" ]' '  copy="$ROOT"' '  mkdir -p "$ROOT"' '  run git -C "$ROOT" rev-parse HEAD' \
+    '  run bash "$LINT" --root "$ROOT/.gaia/scripts/tests"' '  printf "%s\n" "$ROOT"'; do
+    write_call_suite "$suite" no "$line"
+    run bash "$GUARD" --root "$tree" "$suite"
+    [ "$status" -eq 0 ] || { echo "expected exit 0 for [$line], got $status: $output" >&2; return 1; }
+  done
+
+  begin_case "a no-argument call is flagged only when the called script resolves its own root and enumerates"
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/no-argument.bats"
+  write_call_suite "$suite" no '  run bash "$LINT"'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 1 ] || { echo "own-root lister not flagged: $output" >&2; return 1; }
+  write_call_suite "$suite" no '  run bash "$REPORT"'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 0 ] || { echo "static reporter flagged: $output" >&2; return 1; }
+
+  begin_case "a hook run with no argument on a fixture payload, enumerating nothing, is not flagged"
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/hook.bats"
+  write_call_suite "$suite" no "  run bash \"\$HOOK\" <<<'{\"tool_name\":\"Bash\"}'"
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+
+  begin_case "a helper that does not scan the root it is given is not flagged, and one the guard cannot read is"
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/helper-kinds.bats"
+  write_call_suite "$suite" no 'top:say_root() {' "top:  printf '%s\\n' \"\$1\"" 'top:}' '  run say_root "$ROOT"'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 0 ] || { echo "non-scanning helper flagged: $output" >&2; return 1; }
+  write_call_suite "$suite" no '  run undefined_helper "$ROOT"'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 1 ] || { echo "unreadable helper not flagged: $output" >&2; return 1; }
+
+  begin_case "a helper defined in a sourced tracked library is followed into the library"
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/sourced-helper.bats"
+  write_call_suite "$suite" no 'setup:  . "$ROOT/.gaia/scripts/fixture-lib.sh"' '  run scan_tree "$ROOT"'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 1 ] || { echo "sourced scanning helper not flagged: $output" >&2; return 1; }
+  write_call_suite "$suite" no 'setup:  . "$ROOT/.gaia/scripts/fixture-lib.sh"' '  run scan_tree "$BATS_TEST_TMPDIR/repo"'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 0 ] || { echo "sourced helper on a fixture flagged: $output" >&2; return 1; }
+
+  begin_case "a call reached only from a helper outside every test body needs the file-level mark"
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/helper-scope.bats"
+  write_call_suite "$suite" no 'top:lint_all() {' 'top:  bash "$LINT" --root "$ROOT"' 'top:}' '  run lint_all'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 1 ] || { echo "$output" >&2; return 1; }
+  case "$output" in
+    *"helper-scope.bats: enumerates the tracked tree outside any test body ("*) ;;
+    *) echo "no outside-body finding: $output" >&2; return 1 ;;
   esac
 }
 
@@ -414,118 +533,11 @@ write_hop_suite() {
 
 HOPS="root-argument working-directory no-argument helper suffix-path"
 
-@test "every call hop pointed at the real root, unmarked, is flagged with the test named" {
-  local tree="$BATS_TEST_TMPDIR/tree" hop suite checked=0
-  write_tree "$tree"
-  for hop in $HOPS; do
-    suite="$tree/.gaia/scripts/tests/hop-$hop.bats"
-    write_hop_suite "$suite" "$hop" real no || return 1
-    run bash "$GUARD" --root "$tree" "$suite"
-    [ "$status" -eq 1 ] || { echo "expected exit 1 for $hop, got $status: $output" >&2; return 1; }
-    case "$output" in
-      *"hop-$hop.bats: test \"calls\" enumerates the tracked tree ("*"without the whole-tree mark"*) ;;
-      *) echo "test not named for $hop: $output" >&2; return 1 ;;
-    esac
-    checked=$((checked + 1))
-  done
-  [ "$checked" -eq 5 ]
-}
+# bats test_tags=protected
+@test "quoting and heredoc parsing: a call in a heredoc body or a quoted literal is data, outside it is a hop" {
+  start_table
 
-@test "every call hop pointed at the real root passes under the test mark" {
-  local tree="$BATS_TEST_TMPDIR/tree" hop suite
-  write_tree "$tree"
-  for hop in $HOPS; do
-    suite="$tree/.gaia/scripts/tests/marked-$hop.bats"
-    write_hop_suite "$suite" "$hop" real yes || return 1
-    run bash "$GUARD" --root "$tree" "$suite"
-    [ "$status" -eq 0 ] || { echo "expected exit 0 for marked $hop, got $status: $output" >&2; return 1; }
-  done
-}
-
-@test "every call hop pointed at a fixture tree by argument, cd or environment is not flagged" {
-  local tree="$BATS_TEST_TMPDIR/tree" hop variant suite checked=0
-  write_tree "$tree"
-  for hop in $HOPS; do
-    for variant in argument cd environment; do
-      suite="$tree/.gaia/scripts/tests/hermetic-$hop-$variant.bats"
-      write_hop_suite "$suite" "$hop" "$variant" no || return 1
-      run bash "$GUARD" --root "$tree" "$suite"
-      [ "$status" -eq 0 ] || { echo "expected exit 0 for $hop/$variant, got $status: $output" >&2; return 1; }
-      checked=$((checked + 1))
-    done
-  done
-  [ "$checked" -eq 15 ]
-}
-
-@test "the root handed to a script positionally or as -C is flagged" {
-  local tree="$BATS_TEST_TMPDIR/tree" suite line
-  write_tree "$tree"
-  suite="$tree/.gaia/scripts/tests/positional.bats"
-  for line in '  run bash "$LINT" "$ROOT"' '  run "$LINT" -C "$ROOT"' '  hits="$("$LINT" --root="$ROOT")"'; do
-    write_call_suite "$suite" no "$line"
-    run bash "$GUARD" --root "$tree" "$suite"
-    [ "$status" -eq 1 ] || { echo "expected exit 1 for [$line], got $status: $output" >&2; return 1; }
-  done
-}
-
-@test "the root handed to a non-script command or a path below the root is not flagged" {
-  local tree="$BATS_TEST_TMPDIR/tree" suite line
-  write_tree "$tree"
-  suite="$tree/.gaia/scripts/tests/not-a-hop.bats"
-  for line in '  cd "$ROOT"' '  [ -d "$ROOT" ]' '  copy="$ROOT"' '  mkdir -p "$ROOT"' '  run git -C "$ROOT" rev-parse HEAD' \
-    '  run bash "$LINT" --root "$ROOT/.gaia/scripts/tests"' '  printf "%s\n" "$ROOT"'; do
-    write_call_suite "$suite" no "$line"
-    run bash "$GUARD" --root "$tree" "$suite"
-    [ "$status" -eq 0 ] || { echo "expected exit 0 for [$line], got $status: $output" >&2; return 1; }
-  done
-}
-
-@test "a no-argument call is flagged only when the called script resolves its own root and enumerates" {
-  local tree="$BATS_TEST_TMPDIR/tree" suite
-  write_tree "$tree"
-  suite="$tree/.gaia/scripts/tests/no-argument.bats"
-  write_call_suite "$suite" no '  run bash "$LINT"'
-  run bash "$GUARD" --root "$tree" "$suite"
-  [ "$status" -eq 1 ] || { echo "own-root lister not flagged: $output" >&2; return 1; }
-  write_call_suite "$suite" no '  run bash "$REPORT"'
-  run bash "$GUARD" --root "$tree" "$suite"
-  [ "$status" -eq 0 ] || { echo "static reporter flagged: $output" >&2; return 1; }
-}
-
-@test "a hook run with no argument on a fixture payload, enumerating nothing, is not flagged" {
-  local tree="$BATS_TEST_TMPDIR/tree" suite
-  write_tree "$tree"
-  suite="$tree/.gaia/scripts/tests/hook.bats"
-  write_call_suite "$suite" no "  run bash \"\$HOOK\" <<<'{\"tool_name\":\"Bash\"}'"
-  run bash "$GUARD" --root "$tree" "$suite"
-  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-}
-
-@test "a helper that does not scan the root it is given is not flagged, and one the guard cannot read is" {
-  local tree="$BATS_TEST_TMPDIR/tree" suite
-  write_tree "$tree"
-  suite="$tree/.gaia/scripts/tests/helper-kinds.bats"
-  write_call_suite "$suite" no 'top:say_root() {' "top:  printf '%s\\n' \"\$1\"" 'top:}' '  run say_root "$ROOT"'
-  run bash "$GUARD" --root "$tree" "$suite"
-  [ "$status" -eq 0 ] || { echo "non-scanning helper flagged: $output" >&2; return 1; }
-  write_call_suite "$suite" no '  run undefined_helper "$ROOT"'
-  run bash "$GUARD" --root "$tree" "$suite"
-  [ "$status" -eq 1 ] || { echo "unreadable helper not flagged: $output" >&2; return 1; }
-}
-
-@test "a helper defined in a sourced tracked library is followed into the library" {
-  local tree="$BATS_TEST_TMPDIR/tree" suite
-  write_tree "$tree"
-  suite="$tree/.gaia/scripts/tests/sourced-helper.bats"
-  write_call_suite "$suite" no 'setup:  . "$ROOT/.gaia/scripts/fixture-lib.sh"' '  run scan_tree "$ROOT"'
-  run bash "$GUARD" --root "$tree" "$suite"
-  [ "$status" -eq 1 ] || { echo "sourced scanning helper not flagged: $output" >&2; return 1; }
-  write_call_suite "$suite" no 'setup:  . "$ROOT/.gaia/scripts/fixture-lib.sh"' '  run scan_tree "$BATS_TEST_TMPDIR/repo"'
-  run bash "$GUARD" --root "$tree" "$suite"
-  [ "$status" -eq 0 ] || { echo "sourced helper on a fixture flagged: $output" >&2; return 1; }
-}
-
-@test "a call written inside an unquoted heredoc body is data, not a hop, and the same call outside it is flagged" {
+  begin_case "a call written inside an unquoted heredoc body is data, not a hop, and the same call outside it is flagged"
   local tree="$BATS_TEST_TMPDIR/tree" suite
   write_tree "$tree"
   suite="$tree/.gaia/scripts/tests/heredoc-body.bats"
@@ -535,9 +547,8 @@ HOPS="root-argument working-directory no-argument helper suffix-path"
   write_call_suite "$suite" no '  cat >"$BATS_TEST_TMPDIR/notes.txt" <<EOF' 'EOF' '  run bash "$LINT" --root "$ROOT"'
   run bash "$GUARD" --root "$tree" "$suite"
   [ "$status" -eq 1 ] || { echo "call after the heredoc closes not flagged: $output" >&2; return 1; }
-}
 
-@test "a << inside a quoted literal opens no heredoc, so the call below it is still flagged" {
+  begin_case "a << inside a quoted literal opens no heredoc, so the call below it is still flagged"
   local tree="$BATS_TEST_TMPDIR/tree" suite
   write_tree "$tree"
   suite="$tree/.gaia/scripts/tests/quoted-heredoc-operator.bats"
@@ -546,9 +557,8 @@ HOPS="root-argument working-directory no-argument helper suffix-path"
   write_call_suite "$suite" no "  local body='cat <<EOF'" '  run bash "$LINT" --root "$ROOT"' "  body='" 'EOF' "'"
   run bash "$GUARD" --root "$tree" "$suite"
   [ "$status" -eq 1 ] || { echo "call below a quoted << not flagged: $output" >&2; return 1; }
-}
 
-@test "a definition written inside a heredoc in a sourced library does not shadow the real one" {
+  begin_case "a definition written inside a heredoc in a sourced library does not shadow the real one"
   local tree="$BATS_TEST_TMPDIR/tree" suite
   write_tree "$tree"
   {
@@ -563,9 +573,8 @@ HOPS="root-argument working-directory no-argument helper suffix-path"
   write_call_suite "$suite" no 'setup:  . "$ROOT/.gaia/scripts/fixture-heredoc-lib.sh"' '  run scan_tree "$ROOT"'
   run bash "$GUARD" --root "$tree" "$suite"
   [ "$status" -eq 1 ] || { echo "scanning helper shadowed by a heredoc line: $output" >&2; return 1; }
-}
 
-@test "a root variable inside a single-quoted literal is not an argument, and the same variable double-quoted is" {
+  begin_case "a root variable inside a single-quoted literal is not an argument, and the same variable double-quoted is"
   local tree="$BATS_TEST_TMPDIR/tree" suite
   write_tree "$tree"
   suite="$tree/.gaia/scripts/tests/single-quoted-root.bats"
@@ -575,9 +584,8 @@ HOPS="root-argument working-directory no-argument helper suffix-path"
   write_call_suite "$suite" no '  run bash "$LINT" "$ROOT"'
   run bash "$GUARD" --root "$tree" "$suite"
   [ "$status" -eq 1 ] || { echo "double-quoted root not read as an argument: $output" >&2; return 1; }
-}
 
-@test "a separator inside a single-quoted literal does not start a command, and the same separator outside it does" {
+  begin_case "a separator inside a single-quoted literal does not start a command, and the same separator outside it does"
   local tree="$BATS_TEST_TMPDIR/tree" suite
   write_tree "$tree"
   suite="$tree/.gaia/scripts/tests/single-quoted-separator.bats"
@@ -587,19 +595,6 @@ HOPS="root-argument working-directory no-argument helper suffix-path"
   write_call_suite "$suite" no "  grep -q 'x'; bash \"\$ROOT\""
   run bash "$GUARD" --root "$tree" "$suite"
   [ "$status" -eq 1 ] || { echo "separator outside the literal did not split the statement: $output" >&2; return 1; }
-}
-
-@test "a call reached only from a helper outside every test body needs the file-level mark" {
-  local tree="$BATS_TEST_TMPDIR/tree" suite
-  write_tree "$tree"
-  suite="$tree/.gaia/scripts/tests/helper-scope.bats"
-  write_call_suite "$suite" no 'top:lint_all() {' 'top:  bash "$LINT" --root "$ROOT"' 'top:}' '  run lint_all'
-  run bash "$GUARD" --root "$tree" "$suite"
-  [ "$status" -eq 1 ] || { echo "$output" >&2; return 1; }
-  case "$output" in
-    *"helper-scope.bats: enumerates the tracked tree outside any test body ("*) ;;
-    *) echo "no outside-body finding: $output" >&2; return 1 ;;
-  esac
 }
 
 # ---- the historical gap tests ------------------------------------------------
@@ -614,7 +609,7 @@ GAP_TESTS='.gaia/scripts/tests/shell-lint.bats|the gate invokes every folded gua
 .gaia/scripts/tests/audit-dirty-tree-posture.bats|
 .gaia/tests/lib/audit-ci-shards.bats|W10: the apt step'"'"'s shard list equals the exchange groups that need zsh or a YAML parser'
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "each historical gap test, its suite copied with every whole-tree mark stripped, is flagged by name" {
   local record suite_path test_name copy checked=0
   # shellcheck source=/dev/null
@@ -645,23 +640,10 @@ GAP_TESTS='.gaia/scripts/tests/shell-lint.bats|the gate invokes every folded gua
   [ "$checked" -eq 6 ]
 }
 
-@test "the guard source names none of the historical gap suites or tests" {
-  local record suite_path test_name checked=0
-  while IFS= read -r record; do
-    suite_path="${record%%|*}"
-    test_name="${record#*|}"
-    grep -qF -- "${suite_path##*/}" "$GUARD" && { echo "guard names $suite_path" >&2; return 1; }
-    if [ -n "$test_name" ]; then
-      grep -qF -- "$test_name" "$GUARD" && { echo "guard names test: $test_name" >&2; return 1; }
-    fi
-    checked=$((checked + 1))
-  done <<<"$GAP_TESTS"
-  [ "$checked" -eq 6 ]
-}
-
 # The source suite enumerates the tracked tree inside a test body. Whichever
 # spelling marks it (file tag or test tags), stripping every mark line from a
 # copy has to leave the copy flagged.
+# bats test_tags=protected
 @test "a copy of a real marked suite with every whole-tree mark stripped is flagged" {
   local source_suite="$REPO_ROOT/.gaia/scripts/tests/check-hook-scope-manifest.bats"
   local copy="$FIXTURE_DIRECTORY/check-hook-scope-manifest.bats"
@@ -700,7 +682,11 @@ write_two_tests() {
   } >"$1"
 }
 
-@test "a marked test and an unmarked enumerating test: only the unmarked test is named" {
+# bats test_tags=protected
+@test "only unmarked enumerating tests are named; test marks and tag lists cover the test they sit on" {
+  start_table
+
+  begin_case "a marked test and an unmarked enumerating test: only the unmarked test is named"
   local suite="$FIXTURE_DIRECTORY/per-test.bats"
   write_two_tests "$suite" yes no
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
@@ -711,25 +697,22 @@ write_two_tests() {
   esac
   grep -qF -- '"carries the mark"' <<<"$output" && return 1
   true
-}
 
-@test "two unmarked enumerating tests are both named, not only the first" {
+  begin_case "two unmarked enumerating tests are both named, not only the first"
   local suite="$FIXTURE_DIRECTORY/both-unmarked.bats"
   write_two_tests "$suite" no no
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
   [ "$status" -eq 1 ]
   grep -qF -- 'both-unmarked.bats: test "carries the mark" enumerates the tracked tree (git -C <root> ls-''files, line 6)' <<<"$output" || return 1
   grep -qF -- 'both-unmarked.bats: test "lacks the mark" enumerates the tracked tree (find <root>, line 9)' <<<"$output"
-}
 
-@test "both tests carrying the test mark pass" {
+  begin_case "both tests carrying the test mark pass"
   local suite="$FIXTURE_DIRECTORY/both-marked.bats"
   write_two_tests "$suite" yes yes
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-}
 
-@test "a test tag list carrying whole-tree beside another tag counts" {
+  begin_case "a test tag list carrying whole-tree beside another tag counts"
   local suite="$FIXTURE_DIRECTORY/tag-list-test.bats"
   {
     printf '%s\n' '#!/usr/bin/env bats'
@@ -775,7 +758,11 @@ write_scoped() {
   } >"$1"
 }
 
-@test "an idiom in setup, setup_file or a helper, with no remedy, needs the file-level mark" {
+# bats test_tags=protected
+@test "an idiom outside every test body needs the file mark, every test marked, or a waiver, and an unused waiver is reported" {
+  start_table
+
+  begin_case "an idiom in setup, setup_file or a helper, with no remedy, needs the file-level mark"
   local scope suite
   for scope in setup setup_file helper; do
     suite="$FIXTURE_DIRECTORY/scoped-$scope.bats"
@@ -787,9 +774,8 @@ write_scoped() {
       *) echo "no outside-body finding for $scope: $output" >&2; return 1 ;;
     esac
   done
-}
 
-@test "an idiom outside every test body passes under the file mark, every test marked, or a waiver" {
+  begin_case "an idiom outside every test body passes under the file mark, every test marked, or a waiver"
   local scope remedy suite
   for scope in setup setup_file helper; do
     for remedy in file every-test waiver; do
@@ -799,15 +785,53 @@ write_scoped() {
       [ "$status" -eq 0 ] || { echo "expected exit 0 for $scope/$remedy, got $status: $output" >&2; return 1; }
     done
   done
-}
 
-@test "one test marked out of two does not cover an idiom outside every test body" {
+  begin_case "one test marked out of two does not cover an idiom outside every test body"
   local suite="$FIXTURE_DIRECTORY/scoped-half.bats"
   write_scoped "$suite" setup every-test
   # Drop the first of the two test marks: the second test alone is marked.
   awk -v mark="$(write_test_mark)" '$0 == mark && !dropped { dropped = 1; next } { print }' "$suite" >"$suite.half"
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite.half"
   [ "$status" -eq 1 ]
+
+  begin_case "a waiver with a wrapped reason above a continued idiom in a helper passes"
+  local suite="$FIXTURE_DIRECTORY/continued.bats"
+  write_continued "$suite" with
+  run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+
+  begin_case "the same suite without its waivers is flagged at both statements"
+  local suite="$FIXTURE_DIRECTORY/continued-bare.bats"
+  write_continued "$suite" with
+  grep -q 'gaia-lint-ignore' "$suite"
+  grep -v -e 'gaia-lint-ignore' -e '# the test mark' "$suite" >"$suite.bare"
+  grep -q 'gaia-lint-ignore' "$suite.bare" && return 1
+  run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite.bare"
+  [ "$status" -eq 1 ]
+  grep -qF -- 'outside any test body (git -C <root> ls-''files, line 8)' <<<"$output" || return 1
+  grep -qF -- 'outside any test body (git -C <root> ls-''files, line 12)' <<<"$output"
+
+  begin_case "a waiver above a line holding no idiom waives nothing and is reported unused"
+  local suite="$FIXTURE_DIRECTORY/continued-misplaced.bats"
+  write_continued "$suite" misplaced
+  run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
+  [ "$status" -eq 1 ]
+  grep -qF -- 'continued-misplaced.bats:7: unused gaia-lint-ignore for whole-tree-mark-guard' <<<"$output"
+
+  begin_case "a waiver above an in-body idiom is honored"
+  local suite="$FIXTURE_DIRECTORY/in-body-waiver.bats"
+  {
+    printf '%s\n' '#!/usr/bin/env bats'
+    printf '%s\n' 'setup() {'
+    printf '%s\n' '  ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"'
+    printf '%s\n' '}'
+    printf '%s\n' '@test "lists a fixture copy" {'
+    write_waiver '  ' 'the operand is not the tracked tree'
+    printf '%s\n' '  run git -C "$ROOT" ls-'files
+    printf '%s\n' '}'
+  } >"$suite"
+  run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
 # ---- waivers over a continued statement --------------------------------------
@@ -841,49 +865,6 @@ write_continued() {
     printf '%s\n' '  run count_shell'
     printf '%s\n' '}'
   } >"$1"
-}
-
-@test "a waiver with a wrapped reason above a continued idiom in a helper passes" {
-  local suite="$FIXTURE_DIRECTORY/continued.bats"
-  write_continued "$suite" with
-  run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
-  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-}
-
-@test "the same suite without its waivers is flagged at both statements" {
-  local suite="$FIXTURE_DIRECTORY/continued-bare.bats"
-  write_continued "$suite" with
-  grep -q 'gaia-lint-ignore' "$suite"
-  grep -v -e 'gaia-lint-ignore' -e '# the test mark' "$suite" >"$suite.bare"
-  grep -q 'gaia-lint-ignore' "$suite.bare" && return 1
-  run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite.bare"
-  [ "$status" -eq 1 ]
-  grep -qF -- 'outside any test body (git -C <root> ls-''files, line 8)' <<<"$output" || return 1
-  grep -qF -- 'outside any test body (git -C <root> ls-''files, line 12)' <<<"$output"
-}
-
-@test "a waiver above a line holding no idiom waives nothing and is reported unused" {
-  local suite="$FIXTURE_DIRECTORY/continued-misplaced.bats"
-  write_continued "$suite" misplaced
-  run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
-  [ "$status" -eq 1 ]
-  grep -qF -- 'continued-misplaced.bats:7: unused gaia-lint-ignore for whole-tree-mark-guard' <<<"$output"
-}
-
-@test "a waiver above an in-body idiom is honored" {
-  local suite="$FIXTURE_DIRECTORY/in-body-waiver.bats"
-  {
-    printf '%s\n' '#!/usr/bin/env bats'
-    printf '%s\n' 'setup() {'
-    printf '%s\n' '  ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"'
-    printf '%s\n' '}'
-    printf '%s\n' '@test "lists a fixture copy" {'
-    write_waiver '  ' 'the operand is not the tracked tree'
-    printf '%s\n' '  run git -C "$ROOT" ls-'files
-    printf '%s\n' '}'
-  } >"$suite"
-  run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$suite"
-  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
 # ---- mark spelling and placement ---------------------------------------------
@@ -921,7 +902,11 @@ write_tag_case_line() {
   esac
 }
 
-@test "a whole-tree tag bats applies or the runner discovers, in a spelling or place they disagree on, is flagged with its line" {
+# bats test_tags=protected
+@test "a mark spelled or placed where bats and the runner disagree is flagged, canonical marks are not" {
+  start_table
+
+  begin_case "a whole-tree tag bats applies or the runner discovers, in a spelling or place they disagree on, is flagged with its line"
   local case_name suite line_number
   for case_name in indented spaced-after-hash no-space-after-hash trailing-blank space-after-equals \
     space-after-comma file-after-test file-overridden test-overridden dangling; do
@@ -933,9 +918,8 @@ write_tag_case_line() {
     grep -qF -- "tag-$case_name.bats:$line_number: " <<<"$output" \
       || { echo "no line-$line_number finding for $case_name: $output" >&2; return 1; }
   done
-}
 
-@test "canonical test and file marks in their places raise no spelling finding" {
+  begin_case "canonical test and file marks in their places raise no spelling finding"
   local suite="$FIXTURE_DIRECTORY/tag-canonical.bats"
   {
     printf '%s\n' '#!/usr/bin/env bats'
@@ -957,22 +941,19 @@ write_tag_case_line() {
   true
 }
 
-@test "a root with no tracked suite exits 2, not 0" {
+# bats test_tags=protected
+@test "the guard refuses to pass over nothing: no tracked suite or no suite operand exits 2" {
+  start_table
+
+  begin_case "a root with no tracked suite exits 2, not 0"
   local empty_repo="$BATS_TEST_TMPDIR/empty-repo"
   mkdir -p "$empty_repo"
   git -C "$empty_repo" init -q
   run bash "$GUARD" --root "$empty_repo"
   [ "$status" -eq 2 ]
-}
 
-@test "a usage error exits 2" {
-  run bash "$GUARD" --no-such-flag
-  [ "$status" -eq 2 ]
-  run bash "$GUARD" --root
-  [ "$status" -eq 2 ]
-}
-
-@test "a missing suite operand exits 2" {
+  begin_case "a missing suite operand exits 2"
   run bash "$GUARD" --root "$FIXTURE_DIRECTORY" "$FIXTURE_DIRECTORY/absent.bats"
   [ "$status" -eq 2 ]
 }
+

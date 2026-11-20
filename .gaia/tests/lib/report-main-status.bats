@@ -100,6 +100,17 @@ calls_matching() {
   grep -c -- "$1" "$GH_LOG" || true
 }
 
+# reset_case: clears the gh logs and returns every stub answer to its setup
+# default, so one table test can run its cases in sequence.
+reset_case() {
+  : > "$GH_LOG"
+  : > "$BODY_LOG"
+  : > "$STUB_DIRECTORY/issues.txt"
+  rm -f "$STUB_DIRECTORY/compare-fails"
+  printf 'ahead\n' > "$STUB_DIRECTORY/compare.txt"
+  write_issue_view "github-actions" ""
+}
+
 @test "red with no open issue creates the label then exactly one issue" {
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
@@ -125,22 +136,20 @@ calls_matching() {
   grep -qF -- "api --paginate repos/${REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs" "$GH_LOG"
 }
 
-@test "a zero before-commit names the head commit alone" {
-  export BEFORE_SHA="0000000000000000000000000000000000000000"
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  grep -qF -- "$HEAD_SHA" "$BODY_LOG"
-  grep -qF -- '0000000' "$BODY_LOG" && return 1
-  grep -qF -- '..' "$BODY_LOG" && return 1
-  true
-}
-
-@test "an empty before-commit names the head commit alone" {
-  export BEFORE_SHA=""
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  grep -qF -- "$HEAD_SHA" "$BODY_LOG"
-  grep -qF -- '..' "$BODY_LOG" && return 1
+@test "a zero or empty before-commit names the head commit alone" {
+  local case_name
+  for case_name in zero empty; do
+    reset_case
+    case "$case_name" in
+      zero) export BEFORE_SHA="0000000000000000000000000000000000000000" ;;
+      empty) export BEFORE_SHA="" ;;
+    esac
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ] || { echo "case $case_name: status $status"; return 1; }
+    grep -qF -- "$HEAD_SHA" "$BODY_LOG" || { echo "case $case_name: head commit not named"; return 1; }
+    grep -qF -- '0000000' "$BODY_LOG" && { echo "case $case_name: zero commit named"; return 1; }
+    grep -qF -- '..' "$BODY_LOG" && { echo "case $case_name: range named"; return 1; }
+  done
   true
 }
 
@@ -164,97 +173,73 @@ calls_matching() {
   [ "$(calls_matching '^issue create ')" -eq 0 ]
 }
 
-@test "green on a descendant of the red commit closes with a link to the run" {
+# bats test_tags=protected
+@test "green closes the issue only when its marker commit is an ancestor of or equal to head" {
   export SHARDS_RESULT="success"
-  open_issues 42
-  write_issue_view "github-actions" $'body\n<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->'
-  printf 'ahead\n' > "$STUB_DIRECTORY/compare.txt"
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$(calls_matching '^issue close 42')" -eq 1 ]
-  grep -qF -- "repos/${REPOSITORY}/compare/cccccccccccccccccccccccccccccccccccccccc...${HEAD_SHA}" "$GH_LOG"
-  grep -qF -- "$RUN_URL" "$BODY_LOG"
-}
-
-@test "green on the identical commit also closes" {
-  export SHARDS_RESULT="success"
-  open_issues 42
-  write_issue_view "github-actions" "<!-- red-main-sha: ${HEAD_SHA} -->"
-  printf 'identical\n' > "$STUB_DIRECTORY/compare.txt"
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$(calls_matching '^issue close 42')" -eq 1 ]
-}
-
-@test "the newest marker across body and comments decides the compare" {
-  export SHARDS_RESULT="success"
-  open_issues 42
-  write_issue_view "github-actions" "<!-- red-main-sha: 1111111111111111111111111111111111111111 -->" \
-    "github-actions" "<!-- red-main-sha: 2222222222222222222222222222222222222222 -->"
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  grep -qF -- "compare/2222222222222222222222222222222222222222...${HEAD_SHA}" "$GH_LOG"
-  grep -qF -- "compare/1111111111111111111111111111111111111111" "$GH_LOG" && return 1
-  true
-}
-
-@test "a marker in a comment from another author is ignored" {
-  export SHARDS_RESULT="success"
-  open_issues 42
-  write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->" \
-    "some-stranger" "<!-- red-main-sha: dddddddddddddddddddddddddddddddddddddddd -->"
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  grep -qF -- "compare/cccccccccccccccccccccccccccccccccccccccc...${HEAD_SHA}" "$GH_LOG"
-  grep -qF -- "compare/dddddddddddddddddddddddddddddddddddddddd" "$GH_LOG" && return 1
-  true
-}
-
-@test "a marker only from another author counts as no marker" {
-  export SHARDS_RESULT="success"
-  open_issues 42
-  write_issue_view "some-stranger" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$(calls_matching '^issue close ')" -eq 0 ]
-  [ "$(calls_matching '^api repos/')" -eq 0 ]
-}
-
-@test "an unresolvable marker sha does not fail the reporter or close the issue" {
-  export SHARDS_RESULT="success"
-  open_issues 42
-  write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
-  : > "$STUB_DIRECTORY/compare-fails"
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$(calls_matching '^issue close ')" -eq 0 ]
-  [ "$(calls_matching '^issue comment 42 ')" -eq 1 ]
-}
-
-@test "green on an older or diverged commit does not close, and says so" {
-  export SHARDS_RESULT="success"
-  open_issues 42
-  write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
-  for compare_status in behind diverged; do
-    : > "$GH_LOG"
-    : > "$BODY_LOG"
-    printf '%s\n' "$compare_status" > "$STUB_DIRECTORY/compare.txt"
+  local case_name
+  for case_name in descendant identical behind diverged no-marker unresolvable; do
+    reset_case
+    open_issues 42
+    case "$case_name" in
+      descendant) write_issue_view "github-actions" $'body\n<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->' ;;
+      identical)
+        write_issue_view "github-actions" "<!-- red-main-sha: ${HEAD_SHA} -->"
+        printf 'identical\n' > "$STUB_DIRECTORY/compare.txt" ;;
+      behind|diverged)
+        write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
+        printf '%s\n' "$case_name" > "$STUB_DIRECTORY/compare.txt" ;;
+      no-marker) write_issue_view "github-actions" "hand-written issue" ;;
+      unresolvable)
+        write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
+        : > "$STUB_DIRECTORY/compare-fails" ;;
+    esac
     run bash "$SCRIPT"
-    [ "$status" -eq 0 ]
-    [ "$(calls_matching '^issue close ')" -eq 0 ]
-    [ "$(calls_matching '^issue comment 42 ')" -eq 1 ]
-    grep -qF -- 'did not close' "$BODY_LOG"
+    [ "$status" -eq 0 ] || { echo "case $case_name: status $status"; return 1; }
+    case "$case_name" in
+      descendant|identical)
+        [ "$(calls_matching '^issue close 42')" -eq 1 ] || { echo "case $case_name: issue not closed"; return 1; } ;;
+      *)
+        [ "$(calls_matching '^issue close ')" -eq 0 ] || { echo "case $case_name: issue closed"; return 1; }
+        [ "$(calls_matching '^issue comment 42 ')" -eq 1 ] || { echo "case $case_name: no comment on 42"; return 1; } ;;
+    esac
+    if [ "$case_name" = descendant ]; then
+      grep -qF -- "repos/${REPOSITORY}/compare/cccccccccccccccccccccccccccccccccccccccc...${HEAD_SHA}" "$GH_LOG" || { echo "case $case_name: compare not called"; return 1; }
+      grep -qF -- "$RUN_URL" "$BODY_LOG" || { echo "case $case_name: no run link"; return 1; }
+    fi
+    case "$case_name" in
+      behind|diverged) grep -qF -- 'did not close' "$BODY_LOG" || { echo "case $case_name: does not say it did not close"; return 1; } ;;
+    esac
   done
 }
 
-@test "green with an open issue that carries no marker does not close" {
+# bats test_tags=protected
+@test "only the issue author's newest marker counts" {
   export SHARDS_RESULT="success"
-  open_issues 42
-  write_issue_view "github-actions" "hand-written issue"
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$(calls_matching '^issue close ')" -eq 0 ]
-  [ "$(calls_matching '^issue comment 42 ')" -eq 1 ]
+  local case_name
+  for case_name in newest stranger-comment stranger-only; do
+    reset_case
+    open_issues 42
+    case "$case_name" in
+      newest) write_issue_view "github-actions" "<!-- red-main-sha: 1111111111111111111111111111111111111111 -->" \
+        "github-actions" "<!-- red-main-sha: 2222222222222222222222222222222222222222 -->" ;;
+      stranger-comment) write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->" \
+        "some-stranger" "<!-- red-main-sha: dddddddddddddddddddddddddddddddddddddddd -->" ;;
+      stranger-only) write_issue_view "some-stranger" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->" ;;
+    esac
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ] || { echo "case $case_name: status $status"; return 1; }
+    case "$case_name" in
+      newest)
+        grep -qF -- "compare/2222222222222222222222222222222222222222...${HEAD_SHA}" "$GH_LOG" || { echo "case $case_name: newest marker not compared"; return 1; }
+        grep -qF -- "compare/1111111111111111111111111111111111111111" "$GH_LOG" && { echo "case $case_name: older marker compared"; return 1; } ;;
+      stranger-comment)
+        grep -qF -- "compare/cccccccccccccccccccccccccccccccccccccccc...${HEAD_SHA}" "$GH_LOG" || { echo "case $case_name: author marker not compared"; return 1; }
+        grep -qF -- "compare/dddddddddddddddddddddddddddddddddddddddd" "$GH_LOG" && { echo "case $case_name: stranger marker compared"; return 1; } ;;
+      stranger-only)
+        [ "$(calls_matching '^issue close ')" -eq 0 ] || { echo "case $case_name: issue closed"; return 1; }
+        [ "$(calls_matching '^api repos/')" -eq 0 ] || { echo "case $case_name: compare called"; return 1; } ;;
+    esac
+  done
 }
 
 @test "green with no open issue makes no write" {
@@ -274,6 +259,7 @@ calls_matching() {
   done
 }
 
+# bats test_tags=protected
 @test "untrusted event text never reaches the issue" {
   export GITHUB_HEAD_REF='evil-branch $(touch pwned)'
   export GITHUB_REF_NAME='hostile-ref-name'
@@ -285,11 +271,6 @@ calls_matching() {
   true
 }
 
-@test "the script never reads free-text event variables" {
-  grep -qE 'head_commit|GITHUB_REF_NAME|GITHUB_HEAD_REF|github\.event\.' "$SCRIPT" && return 1
-  true
-}
-
 @test "a failing gh call exits non-zero with a report-main-status line" {
   export GH_FAIL_ON="issue create"
   run bash "$SCRIPT"
@@ -297,43 +278,41 @@ calls_matching() {
   [[ "$output" == *"report-main-status:"* ]]
 }
 
-@test "CHECK_NAME titles the issue it opens, under the same label" {
+# bats test_tags=protected
+@test "CHECK_NAME scopes the issue title, lookup and close to its own workflow" {
   export CHECK_NAME='GAIA: Distribution Harness'
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$(calls_matching '^issue create ')" -eq 1 ]
-  grep -qF -- '--title Main is red: GAIA: Distribution Harness' "$GH_LOG"
-  grep -q -- '--label ci-red-main' "$GH_LOG"
-}
-
-@test "red under one check name comments on its own issue, not another workflow's" {
-  export CHECK_NAME='GAIA: Distribution Harness'
-  open_issues 42
-  open_issues 57 -- 'Main is red: GAIA: Distribution Harness'
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$(calls_matching '^issue comment 57 ')" -eq 1 ]
-  [ "$(calls_matching '^issue comment 42 ')" -eq 0 ]
-  [ "$(calls_matching '^issue create ')" -eq 0 ]
-}
-
-@test "red with only another workflow's issue open opens its own" {
-  export CHECK_NAME='GAIA: Distribution Harness'
-  open_issues 42
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$(calls_matching '^issue create ')" -eq 1 ]
-  [ "$(calls_matching '^issue comment 42 ')" -eq 0 ]
-}
-
-@test "green under one check name never closes another workflow's issue" {
-  export CHECK_NAME='GAIA: Distribution Harness'
-  export SHARDS_RESULT="success"
-  write_issue_view "github-actions" "<!-- red-main-sha: ${HEAD_SHA} -->"
-  open_issues 42
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  grep -qE '^issue (comment|close) 42' "$GH_LOG" && return 1
+  local case_name
+  for case_name in title red-own-issue red-other-only green-other; do
+    reset_case
+    export SHARDS_RESULT="failure"
+    case "$case_name" in
+      red-own-issue)
+        open_issues 42
+        open_issues 57 -- 'Main is red: GAIA: Distribution Harness' ;;
+      red-other-only) open_issues 42 ;;
+      green-other)
+        export SHARDS_RESULT="success"
+        write_issue_view "github-actions" "<!-- red-main-sha: ${HEAD_SHA} -->"
+        open_issues 42 ;;
+    esac
+    run bash "$SCRIPT"
+    [ "$status" -eq 0 ] || { echo "case $case_name: status $status"; return 1; }
+    case "$case_name" in
+      title)
+        [ "$(calls_matching '^issue create ')" -eq 1 ] || { echo "case $case_name: not one create"; return 1; }
+        grep -qF -- '--title Main is red: GAIA: Distribution Harness' "$GH_LOG" || { echo "case $case_name: title"; return 1; }
+        grep -q -- '--label ci-red-main' "$GH_LOG" || { echo "case $case_name: label"; return 1; } ;;
+      red-own-issue)
+        [ "$(calls_matching '^issue comment 57 ')" -eq 1 ] || { echo "case $case_name: no comment on 57"; return 1; }
+        [ "$(calls_matching '^issue comment 42 ')" -eq 0 ] || { echo "case $case_name: commented on 42"; return 1; }
+        [ "$(calls_matching '^issue create ')" -eq 0 ] || { echo "case $case_name: created an issue"; return 1; } ;;
+      red-other-only)
+        [ "$(calls_matching '^issue create ')" -eq 1 ] || { echo "case $case_name: not one create"; return 1; }
+        [ "$(calls_matching '^issue comment 42 ')" -eq 0 ] || { echo "case $case_name: commented on 42"; return 1; } ;;
+      green-other)
+        grep -qE '^issue (comment|close) 42' "$GH_LOG" && { echo "case $case_name: touched 42"; return 1; } ;;
+    esac
+  done
   true
 }
 

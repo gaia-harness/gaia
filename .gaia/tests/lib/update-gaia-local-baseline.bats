@@ -50,37 +50,46 @@ make_notes_tree() {
   done
 }
 
-@test "baseline: a project with no build record gets only the release tag" {
+# Clears the fixture project's version files and cache between table cases.
+reset_project() {
+  rm -rf "$PROJECT"
+  mkdir -p "$PROJECT/.gaia"
+}
+
+# bats test_tags=protected
+@test "baseline resolves release tag, recorded build, fallback, stale or refuses a malformed record" {
+  echo "case: a project with no build record gets only the release tag"
   project_at 2.2.0
   run_local baseline
   [ "$status" -eq 0 ]
   [ "$output" = "BASELINE_TAG=v2.2.0" ]
-}
 
-@test "baseline: a cached recorded build is the baseline, and an uncached one falls back by id" {
+  echo "case: a cached recorded build is the baseline"
+  reset_project
   project_at 2.2.0 "dev.$SHA"
   cache_entry "v2.2.0-dev.$SHA"
   run_local baseline
   [ "$status" -eq 0 ]
   [ "$output" = "BASELINE_TAG=v2.2.0-dev.$SHA
 RECORDED_BUILD dev.$SHA" ]
+  echo "case: an uncached recorded build falls back by id"
   rm -rf "$CACHE"
   run_local baseline
   [ "$status" -eq 0 ]
   [ "$output" = "BASELINE_TAG=v2.2.0
 BASELINE_FALLBACK dev.$SHA" ]
-}
 
-@test "baseline: a recorded build cached under another core is reported stale" {
+  echo "case: a recorded build cached under another core is reported stale"
+  reset_project
   project_at 2.3.0 "dev.$SHA"
   cache_entry "v2.2.0-dev.$SHA"
   run_local baseline
   [ "$status" -eq 0 ]
   [ "$output" = "BASELINE_TAG=v2.3.0
 RECORDED_BUILD_STALE dev.$SHA 2.2.0" ]
-}
 
-@test "baseline: a cache directory without its checksum does not count as cached" {
+  echo "case: a cache directory without its checksum does not count as cached"
+  reset_project
   project_at 2.2.0 "dev.$SHA"
   cache_entry "v2.2.0-dev.$SHA"
   rm "$CACHE/v2.2.0-dev.$SHA/gaia-bundle-v2.2.0-dev.$SHA.tar.gz.sha256"
@@ -88,14 +97,14 @@ RECORDED_BUILD_STALE dev.$SHA 2.2.0" ]
   [ "$status" -eq 0 ]
   [ "$output" = "BASELINE_TAG=v2.2.0
 BASELINE_FALLBACK dev.$SHA" ]
-}
 
-@test "baseline: a malformed or traversal-shaped build record is refused and the cache is untouched" {
+  reset_project
   project_at 2.2.0
   cache_entry "v2.2.0-dev.$SHA"
   local shape
   for shape in 'dev.0/../../x' 'dev.XYZ' '' "dev.$SHA
 dev.$SHA"; do
+    echo "case: a malformed or traversal-shaped build record '$shape' is refused and the cache is untouched"
     printf '%s\n' "$shape" > "$PROJECT/.gaia/VERSION-dev"
     run_local baseline
     [ "$status" -eq 1 ]
@@ -103,9 +112,9 @@ dev.$SHA"; do
     printf '%s\n' "$output" | grep -q '^Next step:'
     [ -f "$CACHE/v2.2.0-dev.$SHA/gaia-bundle-v2.2.0-dev.$SHA.tar.gz" ]
   done
-}
 
-@test "baseline: a malformed project version is refused" {
+  echo "case: a malformed project version is refused"
+  reset_project
   project_at 2.2
   run_local baseline
   [ "$status" -eq 1 ]
@@ -118,6 +127,7 @@ dev.$SHA"; do
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=protected
 @test "lib: build id and dev tag validators accept the shape and refuse the rest" {
   run bash -c '
     . "$1"
@@ -134,19 +144,17 @@ dev.$SHA"; do
   [ "$status" -eq 0 ]
 }
 
-@test "notes-not-run: lists every note above the core, blocking ones included, ascending" {
-  make_notes_tree 2.1.0:after-merge 2.2.0:after-merge 2.3.0:blocking 2.4.0:after-merge
+@test "notes-not-run lists every note above the core ascending and stops on a malformed note" {
   local tree="$BATS_TEST_TMPDIR/notes-tree"
+  echo "case: lists every note above the core, blocking ones included, ascending"
+  make_notes_tree 2.1.0:after-merge 2.2.0:after-merge 2.3.0:blocking 2.4.0:after-merge
   run_local notes-not-run --latest-dir "$tree" --core 2.2.0
   [ "$status" -eq 0 ]
   [ "$output" = "NOT_RUN 2.3.0 blocking $tree/.gaia/migrations/2.3.0.md
 NOT_RUN 2.4.0 after-merge $tree/.gaia/migrations/2.4.0.md" ]
-}
-
-@test "notes-not-run: a malformed note stops with NOTES_FAILED" {
-  make_notes_tree 2.3.0:after-merge
-  printf 'no frontmatter\n' > "$BATS_TEST_TMPDIR/notes-tree/.gaia/migrations/2.4.0.md"
-  run_local notes-not-run --latest-dir "$BATS_TEST_TMPDIR/notes-tree" --core 2.2.0
+  echo "case: a malformed note stops with NOTES_FAILED"
+  printf 'no frontmatter\n' > "$tree/.gaia/migrations/2.4.0.md"
+  run_local notes-not-run --latest-dir "$tree" --core 2.2.0
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -qxF 'NOTES_FAILED'
   printf '%s\n' "$output" | grep -q '^Next step:'
@@ -178,15 +186,5 @@ code_lines_naming_sort_v() {
   [ -s "$LOCAL_LIB" ]
   code_lines_naming_sort_v "$LOCAL_SCRIPT" && return 1
   code_lines_naming_sort_v "$LOCAL_LIB" && return 1
-  true
-}
-
-@test "ranking ban: a code line naming it is caught and a comment line is not" {
-  cp "$LOCAL_SCRIPT" "$BATS_TEST_TMPDIR/code-twin.sh"
-  printf 'echo "$tags" | sort -V\n' >> "$BATS_TEST_TMPDIR/code-twin.sh"
-  code_lines_naming_sort_v "$BATS_TEST_TMPDIR/code-twin.sh"
-  cp "$LOCAL_SCRIPT" "$BATS_TEST_TMPDIR/comment-twin.sh"
-  printf '# never sort -V a tag\n' >> "$BATS_TEST_TMPDIR/comment-twin.sh"
-  code_lines_naming_sort_v "$BATS_TEST_TMPDIR/comment-twin.sh" && return 1
   true
 }

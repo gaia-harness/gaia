@@ -4,6 +4,5 @@
 # per line. Used by .gaia/tests/lib/wiki-stage-args-retired.bats, which also
 # fails on an entry that matches no hit, so the list never grows stale.
 #
-# The guard and this list.
-.gaia/tests/lib/wiki-stage-args-retired.bats
+# This list.
 .gaia/tests/fixtures/wiki-stage-args-retired.allowlist

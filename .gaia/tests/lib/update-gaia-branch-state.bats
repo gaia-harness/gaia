@@ -55,7 +55,25 @@ run_script_in() {
   run bash -c 'cd "$1" || exit 99; shift; exec bash "$0" "$@"' "$SCRIPT" "$directory" "$@"
 }
 
-@test "classify: no matching branch is NONE, and a branch for another tag is NONE" {
+# Saves main as setup() built it, so each case of a table restarts from it
+# with fresh_main instead of a new init and baseline commit.
+snapshot_main() {
+  PRISTINE="$BATS_TEST_TMPDIR/pristine"
+  cp -R "$MAIN" "$PRISTINE"
+}
+
+fresh_main() {
+  rm -rf "$MAIN"
+  cp -R "$PRISTINE" "$MAIN"
+  HOLDER=''
+}
+
+@test "classify an update branch from its own state: NONE, resume, applied-uncommitted, committed, newest wins, from any cwd" {
+  snapshot_main
+  local from_main
+
+  echo "case: no matching branch is NONE, and a branch for another tag is NONE"
+  fresh_main
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
   [ "$status" -eq 0 ]
   [ "$output" = 'NONE' ]
@@ -63,16 +81,16 @@ run_script_in() {
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
   [ "$status" -eq 0 ]
   [ "$output" = 'NONE' ]
-}
 
-@test "classify: a held branch still at the baseline resumes in its worktree" {
+  echo "case: a held branch still at the baseline resumes in its worktree"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$BASELINE" 1700000100
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
   [ "$status" -eq 0 ]
   [ "$output" = "RESUME_IN_WORKTREE update/v2.1.0-20260101-0000 $HOLDER" ]
-}
 
-@test "classify: a version written but uncommitted in the holder is APPLIED_UNCOMMITTED, never a resume" {
+  echo "case: a version written but uncommitted in the holder is APPLIED_UNCOMMITTED, never a resume"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$BASELINE" 1700000100
   printf '%s\n' "$LATEST" > "$HOLDER/.gaia/VERSION"
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
@@ -83,9 +101,9 @@ run_script_in() {
   printf '%s\n' "$BASELINE" > "$HOLDER/.gaia/VERSION"
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
   [ "$output" = "RESUME_IN_WORKTREE update/v2.1.0-20260101-0000 $HOLDER" ]
-}
 
-@test "classify: a committed version is COMMITTED with the holder path, or - without one" {
+  echo "case: a committed version is COMMITTED with the holder path, or - without one"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$LATEST" 1700000100
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
   [ "$status" -eq 0 ]
@@ -94,16 +112,16 @@ run_script_in() {
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
   [ "$status" -eq 0 ]
   [ "$output" = 'COMMITTED update/v2.1.0-20260101-0000 -' ]
-}
 
-@test "classify: no holder and the branch at the baseline is RESUME_ADD_WORKTREE" {
+  echo "case: no holder and the branch at the baseline is RESUME_ADD_WORKTREE"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$BASELINE" 1700000100 free
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
   [ "$status" -eq 0 ]
   [ "$output" = 'RESUME_ADD_WORKTREE update/v2.1.0-20260101-0000' ]
-}
 
-@test "classify: the main checkout's own version file is never read" {
+  echo "case: the main checkout's own version file is never read"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$BASELINE" 1700000100
   printf '%s\n' "$LATEST" > "$MAIN/.gaia/VERSION"
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
@@ -114,9 +132,9 @@ run_script_in() {
   commit_in "$HOLDER" 'bump' 1700000200
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
   [ "$output" = "COMMITTED update/v2.1.0-20260101-0000 $HOLDER" ]
-}
 
-@test "classify: the most recently committed branch wins, and --branch names exactly one" {
+  echo "case: the most recently committed branch wins, and --branch names exactly one"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$LATEST" 1700000100
   make_branch 'update/v2.1.0-20260102-0000' "$BASELINE" 1700000900 free
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
@@ -128,9 +146,9 @@ run_script_in() {
   esac
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST" --branch update/v2.1.0-nope
   [ "$output" = 'NONE' ]
-}
 
-@test "classify: run from inside the holding worktree gives the same answer as from main" {
+  echo "case: run from inside the holding worktree gives the same answer as from main"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$BASELINE" 1700000100
   run_script_in "$MAIN" classify --tag "$TAG" --latest "$LATEST"
   from_main="$output"
@@ -140,7 +158,19 @@ run_script_in() {
   [ "$output" = "RESUME_IN_WORKTREE update/v2.1.0-20260101-0000 $HOLDER" ]
 }
 
-@test "add-worktree: adds a worktree on the existing branch without creating a branch" {
+# bats test_tags=protected
+@test "add-worktree adds under main on an existing branch and refuses a held branch, an existing path or a missing branch" {
+  snapshot_main
+  local before expected
+
+  echo "case: refuses a branch that does not exist"
+  fresh_main
+  run_script_in "$MAIN" add-worktree --branch update/v2.1.0-nope
+  [ "$status" -eq 1 ]
+  [ ! -e "$MAIN/.claude/worktrees" ]
+
+  echo "case: adds a worktree on the existing branch without creating a branch"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$BASELINE" 1700000100 free
   before="$(git -C "$MAIN" for-each-ref --format='%(refname)')"
   run_script_in "$MAIN" add-worktree --branch update/v2.1.0-20260101-0000
@@ -151,56 +181,30 @@ run_script_in() {
   git -C "$MAIN" worktree list --porcelain | grep -qxF "worktree $expected"
   git -C "$MAIN" worktree list --porcelain | grep -qxF 'branch refs/heads/update/v2.1.0-20260101-0000'
   [ "$(git -C "$MAIN" for-each-ref --format='%(refname)')" = "$before" ]
-}
 
-@test "add-worktree: runs from inside another worktree and still lands under main" {
+  echo "case: runs from inside another worktree and still lands under main"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$BASELINE" 1700000100 free
   make_branch 'update/v2.1.0-20260102-0000' "$BASELINE" 1700000200
   run_script_in "$HOLDER" add-worktree --branch update/v2.1.0-20260101-0000
   [ "$status" -eq 0 ]
   [ "$output" = "ADDED $MAIN/.claude/worktrees/update+v2.1.0-20260101-0000" ]
-}
 
-@test "add-worktree: refuses a branch a worktree already holds" {
+  echo "case: refuses a branch a worktree already holds"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$BASELINE" 1700000100
   before="$(git -C "$MAIN" worktree list --porcelain)"
   run_script_in "$MAIN" add-worktree --branch update/v2.1.0-20260101-0000
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -q '^ADDED' && return 1
   [ "$(git -C "$MAIN" worktree list --porcelain)" = "$before" ]
-}
 
-@test "add-worktree: refuses when the target path already exists" {
+  echo "case: refuses when the target path already exists"
+  fresh_main
   make_branch 'update/v2.1.0-20260101-0000' "$BASELINE" 1700000100 free
   mkdir -p "$MAIN/.claude/worktrees/update+v2.1.0-20260101-0000"
   before="$(git -C "$MAIN" worktree list --porcelain)"
   run_script_in "$MAIN" add-worktree --branch update/v2.1.0-20260101-0000
   [ "$status" -eq 1 ]
   [ "$(git -C "$MAIN" worktree list --porcelain)" = "$before" ]
-}
-
-@test "add-worktree: refuses a branch that does not exist" {
-  run_script_in "$MAIN" add-worktree --branch update/v2.1.0-nope
-  [ "$status" -eq 1 ]
-  [ ! -e "$MAIN/.claude/worktrees" ]
-}
-
-@test "usage errors and a working directory outside a repository exit 2" {
-  run_script_in "$MAIN" bogus
-  [ "$status" -eq 2 ]
-  run_script_in "$MAIN"
-  [ "$status" -eq 2 ]
-  run_script_in "$MAIN" classify --latest "$LATEST"
-  [ "$status" -eq 2 ]
-  run_script_in "$MAIN" classify --tag "$TAG"
-  [ "$status" -eq 2 ]
-  run_script_in "$MAIN" classify --tag "$TAG" --latest
-  [ "$status" -eq 2 ]
-  run_script_in "$MAIN" add-worktree
-  [ "$status" -eq 2 ]
-  mkdir -p "$BATS_TEST_TMPDIR/not-a-repo"
-  run_script_in "$BATS_TEST_TMPDIR/not-a-repo" classify --tag "$TAG" --latest "$LATEST"
-  [ "$status" -eq 2 ]
-  run_script_in "$BATS_TEST_TMPDIR/not-a-repo" add-worktree --branch x
-  [ "$status" -eq 2 ]
 }

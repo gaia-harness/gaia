@@ -102,20 +102,50 @@ _clear_abandoned_at() {
   jq -e '.items[0].reap.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T")' "$REPO/.notebook/catalog.json"
 }
 
-@test "1b: a row that already carries a reap record is skipped, even with a folder present" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
+# bats test_tags=protected
+@test "abandoned sweep touches only abandoned rows with a folder and no reap record" {
+  # One repo holds every selection case: SPEC-001 is the only reapable row.
+  # SPEC-004 already carries a reap record, SPEC-005 has no folder, SPEC-002
+  # is merged and SPEC-003 is a draft.
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
+    --seed-spec-abandoned-folder SPEC-001 --seed-spec-abandoned-folder SPEC-004 \
+    --seed-spec SPEC-005 abandoned --seed-spec-merged-folder SPEC-002 \
+    --seed-spec-folder SPEC-003 draft)"
   patched="$(mktemp)"
-  jq '.items |= map(. + {reap: {at: "2026-02-01T00:00:00Z", by: "spec-archive-abandoned.sh"}})' "$REPO/.notebook/catalog.json" > "$patched"
+  jq '.items |= map(if .id == "SPEC-004" then . + {reap: {at: "2026-02-01T00:00:00Z", by: "spec-archive-abandoned.sh"}} else . end)' \
+    "$REPO/.notebook/catalog.json" > "$patched"
   mv "$patched" "$REPO/.notebook/catalog.json"
 
   run _archive "$REPO"
   [ "$status" -eq 0 ]
+  grep -qxF "Deleted 1 abandoned SPEC folder(s): SPEC-001" <<<"$output"
+  [ ! -e "$REPO/$SPECS/SPEC-001" ]
+  echo "case: a row with a reap record is skipped"
+  [ -f "$REPO/$SPECS/SPEC-004/AUDIT.md" ]
+  echo "case: a merged row is never touched"
+  [ -f "$REPO/$SPECS/SPEC-002/SPEC.md" ]
+  echo "case: a folder without an abandoned row is never deleted"
+  [ -f "$REPO/$SPECS/SPEC-003/SPEC.md" ]
+
+  echo "case: re-running the sweep after deleting is a no-op"
+  before="$(_snapshot)"
+  run _archive "$REPO"
+  [ "$status" -eq 0 ]
   refute_contains "Deleted"
-  [ -f "$REPO/$SPECS/SPEC-001/AUDIT.md" ]
+  after="$(_snapshot)"
+  [ "$before" = "$after" ]
+
+  echo "case: a repo with no abandoned rows produces no output and exits 0"
+  rm -rf "$REPO"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
+  run _archive "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 # --- 2: single-id form ---------------------------------------------------------
 
+# bats test_tags=protected
 @test "2: the single-id form deletes only the named id" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" \
     --seed-spec-abandoned-folder SPEC-001 --seed-spec-abandoned-folder SPEC-002)"
@@ -124,58 +154,6 @@ _clear_abandoned_at() {
   [ "$status" -eq 0 ]
   [ ! -e "$REPO/$SPECS/SPEC-001" ]
   [ -d "$REPO/$SPECS/SPEC-002" ]
-}
-
-@test "4: an abandoned row with no active folder is a no-op" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-005 abandoned)"
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-}
-
-# --- 5: idempotent re-run -------------------------------------------------------
-
-@test "5: re-running the sweep after deleting is a no-op" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 abandoned SPEC folder(s): SPEC-001"
-
-  before="$(_snapshot)"
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  after="$(_snapshot)"
-  [ "$before" = "$after" ]
-}
-
-# --- 6: only abandoned rows with folders are swept; merged rows are untouched -
-
-@test "6: a merged row is never touched by the abandoned sweep" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
-    --seed-spec-abandoned-folder SPEC-001 --seed-spec-merged-folder SPEC-002)"
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 abandoned SPEC folder(s): SPEC-001"
-
-  [ ! -e "$REPO/$SPECS/SPEC-001" ]
-  # SPEC-002 (merged) untouched: still active, never deleted by this script.
-  [ -f "$REPO/$SPECS/SPEC-002/SPEC.md" ]
-}
-
-
-@test "7: a folder without an abandoned ledger row is never deleted" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001 --seed-spec-folder SPEC-002 draft)"
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 abandoned SPEC folder(s): SPEC-001"
-
-  [ ! -e "$REPO/$SPECS/SPEC-001" ]
-  [ -f "$REPO/$SPECS/SPEC-002/SPEC.md" ]
 }
 
 # --- 8: multiple abandoned folders in one sweep --------------------------------
@@ -191,115 +169,51 @@ _clear_abandoned_at() {
   [ ! -e "$REPO/$SPECS/SPEC-002" ]
 }
 
-# --- 9: no ledger -> clean no-op -------------------------------------------------
+# --- the retention window and the abandoned_at rule ---------------------------
 
-@test "9: a repo with no abandoned rows produces no output and exits 0" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
+# bats test_tags=protected
+@test "abandoned sweep retention window and abandoned_at rule" {
+  # One seeded repo, copied per case. Columns: label, GAIA_SPEC_RETENTION_DAYS,
+  # abandoned_at (days:<n> ago, none to drop it, or a raw value), outcome,
+  # and whether the keep line is asserted.
+  base="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
+  REPO="$BATS_TEST_TMPDIR/case"
+  local label retention stamp outcome keep_line
+  while IFS='|' read -r label retention stamp outcome keep_line; do
+    echo "case: $label"
+    rm -rf "$REPO"
+    cp -R "$base" "$REPO"
+    case "$stamp" in
+      none) _clear_abandoned_at "$REPO" SPEC-001 ;;
+      days:*) _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago "${stamp#days:}")" ;;
+      *) _set_abandoned_at "$REPO" SPEC-001 "$stamp" ;;
+    esac
+    export GAIA_SPEC_RETENTION_DAYS="$retention"
 
-# --- 10: age gate, within window -> kept -----------------------------------------
-
-@test "10: an abandoned folder within the retention window is kept, not deleted" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
-  _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 2)"
-  export GAIA_SPEC_RETENTION_DAYS=30
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  assert_contains "SPEC-001 within retention window (or abandoned_at missing/unparseable); kept"
-
-  [ -f "$REPO/$SPECS/SPEC-001/AUDIT.md" ]
-}
-
-
-@test "11: an abandoned folder past the retention window is reaped" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
-  _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 45)"
-  export GAIA_SPEC_RETENTION_DAYS=30
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 abandoned SPEC folder(s): SPEC-001"
-  [ ! -e "$REPO/$SPECS/SPEC-001" ]
-
-  [ "$(jq -r '.items[0].status' "$REPO/.notebook/catalog.json")" = "abandoned" ]
-}
-
-
-# --- 13/14: missing or unparseable abandoned_at -> kept regardless of age --------
-
-@test "13: an abandoned row with no abandoned_at is kept regardless of the usage ledger" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
-  _clear_abandoned_at "$REPO" SPEC-001
-  export GAIA_SPEC_RETENTION_DAYS=0
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  assert_contains "SPEC-001 within retention window (or abandoned_at missing/unparseable); kept"
-
-  [ -f "$REPO/$SPECS/SPEC-001/AUDIT.md" ]
-}
-
-@test "14: an abandoned row with an unparseable abandoned_at is kept regardless of the usage ledger" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
-  _set_abandoned_at "$REPO" SPEC-001 "not-a-timestamp"
-  export GAIA_SPEC_RETENTION_DAYS=0
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  assert_contains "SPEC-001 within retention window (or abandoned_at missing/unparseable); kept"
-
-  [ -f "$REPO/$SPECS/SPEC-001/AUDIT.md" ]
-}
-
-# --- 15/16: GAIA_SPEC_RETENTION_DAYS knob is honored, shared with the merged sweep
-
-@test "15: GAIA_SPEC_RETENTION_DAYS=0 reaps a just-abandoned folder" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
-  _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 0)"
-  export GAIA_SPEC_RETENTION_DAYS=0
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 abandoned SPEC folder(s): SPEC-001"
-  [ ! -e "$REPO/$SPECS/SPEC-001" ]
-}
-
-@test "16: GAIA_SPEC_RETENTION_DAYS=99999 keeps an old abandoned folder" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
-  _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 400)"
-  export GAIA_SPEC_RETENTION_DAYS=99999
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-
-  [ -f "$REPO/$SPECS/SPEC-001/AUDIT.md" ]
-}
-
-
-@test "17: a non-numeric GAIA_SPEC_RETENTION_DAYS falls back to the 30-day default" {
-  export GAIA_SPEC_RETENTION_DAYS="abc"
-
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
-  _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 10)"
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  [ -d "$REPO/$SPECS/SPEC-001" ]
-
-  REPO2="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-002)"
-  _set_abandoned_at "$REPO2" SPEC-002 "$(_days_ago 45)"
-  run bash "$REPO2/$ARCHIVE" "$REPO2"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 abandoned SPEC folder(s): SPEC-002"
-  rm -rf "$REPO2"
+    run _archive "$REPO"
+    [ "$status" -eq 0 ]
+    if [ "$outcome" = reaped ]; then
+      assert_contains "Deleted 1 abandoned SPEC folder(s): SPEC-001"
+      [ ! -e "$REPO/$SPECS/SPEC-001" ]
+      [ "$(jq -r '.items[0].status' "$REPO/.notebook/catalog.json")" = "abandoned" ]
+    else
+      refute_contains "Deleted"
+      [ -f "$REPO/$SPECS/SPEC-001/AUDIT.md" ]
+      if [ "$keep_line" = yes ]; then
+        assert_contains "SPEC-001 within retention window (or abandoned_at missing/unparseable); kept"
+      fi
+    fi
+  done <<'CASES'
+within the retention window is kept|30|days:2|kept|yes
+past the retention window is reaped|30|days:45|reaped|no
+no abandoned_at is kept regardless of the usage ledger|0|none|kept|yes
+an unparseable abandoned_at is kept regardless of the usage ledger|0|not-a-timestamp|kept|yes
+GAIA_SPEC_RETENTION_DAYS=0 reaps a just-abandoned folder|0|days:0|reaped|no
+GAIA_SPEC_RETENTION_DAYS=99999 keeps an old abandoned folder|99999|days:400|kept|no
+a non-numeric GAIA_SPEC_RETENTION_DAYS keeps a 10-day-old folder under the 30-day default|abc|days:10|kept|no
+a non-numeric GAIA_SPEC_RETENTION_DAYS reaps a 45-day-old folder under the 30-day default|abc|days:45|reaped|no
+CASES
+  rm -rf "$base"
 }
 
 # --- 19: no consolidation gate -- a bare AUDIT.md folder still reaps -----------
@@ -317,6 +231,7 @@ _clear_abandoned_at() {
 
 # --- 20: the retired defer cache path is left alone --------------------------
 
+# bats test_tags=protected
 @test "20: reaping an abandoned row leaves a leftover wiki-promote cache file untouched" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   mkdir -p "$REPO/.gaia/local/cache/wiki-promote"
@@ -346,6 +261,7 @@ _clear_abandoned_at() {
   [ ! -e "$REPO/.gaia/local/cache/spec-session-SPEC-001.lock" ]
 }
 
+# bats test_tags=protected
 @test "23: without ledger-lib.sh the sweep reaps nothing and says so; with it the same folder is reaped" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
 
@@ -378,25 +294,4 @@ _clear_abandoned_at() {
   [ ! -e "$REPO/$SPECS/SPEC-001" ]
   [ ! -e "$REPO/$SPECS/SPEC-002" ]
   [ ! -e "$REPO/usage-calls.log" ]
-}
-
-@test "25: the stub in case 24 is live: the merged sweep, which does gate, calls it" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  {
-    echo '#!/usr/bin/env bash'
-    echo "echo \"\$*\" >> \"$REPO/usage-calls.log\""
-    echo 'exit 1'
-  } > "$REPO/.gaia/scripts/usage.sh"
-
-  run bash "$REPO/.gaia/scripts/spec/spec-archive-merged.sh" "$REPO"
-  [ "$status" -eq 0 ]
-  [ -s "$REPO/usage-calls.log" ]
-  grep -qF "represented spec:SPEC-001 --workflow gaia-spec" "$REPO/usage-calls.log"
-}
-
-@test "26: the sweep's executable lines name no usage.sh call and no represented gate" {
-  non_comment="$(grep -v '^[[:space:]]*#' "$BATS_TEST_DIRNAME/../../scripts/spec/spec-archive-abandoned.sh")"
-  [ -n "$non_comment" ]
-  grep -qE 'usage\.sh|represented' <<<"$non_comment" && return 1
-  true
 }

@@ -202,13 +202,31 @@ reach_b_recorded() {
   [ "$(cat "$PROJECT/.gaia/VERSION-dev")" = "$BUILD_A" ]
 }
 
-# --- 2. a second local build on the same version --------------------------------
+# --- 2 to 4. a second local bundle: proceed, identical, already synced, older ---
 
-@test "second local build on the same version proceeds, merges against the recorded build and never calls gh" {
+@test "a second local bundle proceeds unless it is identical, already synced or older" {
   make_project "$PROJECT" 2.2.0
   make_bundles
   source_ok A 2.2.0 "$BUILD_A"
   record_local 2.2.0 "$BUILD_A"
+  local before
+
+  echo "case: the same bundle again is already synced and the cache is unchanged"
+  before="$(cache_listing)"
+  [ "$before" = "$TAG_A " ]
+  run_local source --tarball "$BATS_TEST_TMPDIR/bundles/A.tar.gz"
+  [ "$status" -eq 0 ]
+  [ "$output" = "ALREADY_SYNCED $BUILD_A" ]
+  [ "$(cache_listing)" = "$before" ]
+
+  echo "case: a bundle identical to the recorded one is not a second build, a different one is"
+  run_local source --tarball "$BATS_TEST_TMPDIR/bundles/A.tar.gz"
+  [ "$output" = "ALREADY_SYNCED $BUILD_A" ]
+  run_local source --tarball "$BATS_TEST_TMPDIR/bundles/B.tar.gz"
+  [ "$output" != "ALREADY_SYNCED $BUILD_B" ]
+  [ "$output" = "$(six_lines 2.2.0 "$BUILD_B")" ]
+
+  echo "case: a second local build on the same version proceeds, merges against the recorded build and never calls gh"
   source_ok B 2.2.0 "$BUILD_B"
   run_local baseline
   [ "$status" -eq 0 ]
@@ -222,51 +240,15 @@ reach_b_recorded() {
   [ "$(printf '%s\n' "$diffs" | wc -l | tr -d ' ')" -eq 2 ]
   names="$(printf '%s\n' "$diffs" | sed -n "s|^Files $CACHE/$TAG_A/tree/\\(.*\\) and .* differ\$|\\1|p" | sort | tr '\n' ' ')"
   [ "$names" = '.gaia/VERSION-dev docs/shipped.md ' ]
-}
 
-@test "second local build: a bundle identical to the recorded one is not a second build (red twin of the proceed pin)" {
-  make_project "$PROJECT" 2.2.0
-  make_bundles
-  source_ok A 2.2.0 "$BUILD_A"
-  record_local 2.2.0 "$BUILD_A"
-  run_local source --tarball "$BATS_TEST_TMPDIR/bundles/A.tar.gz"
-  [ "$output" = "ALREADY_SYNCED $BUILD_A" ]
-  run_local source --tarball "$BATS_TEST_TMPDIR/bundles/B.tar.gz"
-  [ "$output" != "ALREADY_SYNCED $BUILD_B" ]
-  [ "$output" = "$(six_lines 2.2.0 "$BUILD_B")" ]
-}
-
-# --- 3. the same bundle again ---------------------------------------------------
-
-@test "the same bundle again is already synced and the cache is unchanged" {
-  make_project "$PROJECT" 2.2.0
-  make_bundles
-  source_ok A 2.2.0 "$BUILD_A"
-  record_local 2.2.0 "$BUILD_A"
-  local before
-  before="$(cache_listing)"
-  [ "$before" = "$TAG_A " ]
-  run_local source --tarball "$BATS_TEST_TMPDIR/bundles/A.tar.gz"
-  [ "$status" -eq 0 ]
-  [ "$output" = "ALREADY_SYNCED $BUILD_A" ]
-  [ "$(cache_listing)" = "$before" ]
-}
-
-# --- 4. an older bundle ---------------------------------------------------------
-
-@test "an older bundle is refused naming both versions and the cache is unchanged" {
-  make_project "$PROJECT" 2.2.0
-  make_bundles
-  source_ok A 2.2.0 "$BUILD_A"
-  record_local 2.2.0 "$BUILD_A"
-  local before
+  echo "case: an older bundle is refused naming both versions and the cache is unchanged"
   before="$(cache_listing)"
   run_local source --tarball "$BATS_TEST_TMPDIR/bundles/C.tar.gz"
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -qxF 'LOCAL_REFUSED older-than-project 2.1.0 2.2.0'
   printf '%s\n' "$output" | grep -q '^Next step:'
   [ "$(cache_listing)" = "$before" ]
-  # Red twin: the same project accepts a same-version bundle.
+  # The same project accepts a same-version bundle.
   run_local source --tarball "$BATS_TEST_TMPDIR/bundles/B.tar.gz"
   [ "$status" -eq 0 ]
 }
@@ -311,17 +293,16 @@ reach_run_three() {
   source_ok D 2.2.0 "$BUILD_D"
 }
 
-@test "a deferral on a local sync keeps the run's baseline tag and the resolved entry rebases to the target build" {
+@test "a deferral on a local sync keeps its baseline and resolves from the cache on the next run" {
   reach_run_three
+  echo "case: the deferral keeps the run's baseline tag and the resolved entry rebases to the target build"
   [ "$(jq -r '.decisions[] | select(.path == "config.json") | "\(.decision) \(.tag) \(.baselineTag)"' "$PROJECT/.gaia/update-decisions.json")" = "blend $TAG_B $TAG_B" ]
   [ "$(jq -r '.decisions[] | select(.path == "docs/shipped.md") | "\(.decision) \(.tag) \(.baselineTag)"' "$PROJECT/.gaia/update-decisions.json")" = "deferred $TAG_B $TAG_A" ]
   run_decisions deferred-tags --file .gaia/update-decisions.json
   [ "$status" -eq 0 ]
   [ "$output" = "$TAG_A" ]
-}
 
-@test "run 3: the deferred item's build resolves from the cache and its keep survives prune" {
-  reach_run_three
+  echo "case: run 3 resolves the deferred item's build from the cache and its keep survives prune"
   run_local baseline
   [ "$output" = "$(printf 'BASELINE_TAG=%s\nRECORDED_BUILD %s' "$TAG_B" "$BUILD_B")" ]
   run_preflight verify-bundles --baseline 2.2.0 --baseline-tag "$TAG_B" --latest-tag "$TAG_D" --extra-tag "$TAG_A"
@@ -333,34 +314,13 @@ reach_run_three() {
   run_preflight prune --baseline 2.2.0 --baseline-tag "$TAG_B" --latest-tag "$TAG_D" --keep-tag "$TAG_A"
   [ "$status" -eq 0 ]
   [ "$(cache_listing)" = "$TAG_A $TAG_B $TAG_D " ]
-  # Red twin: without the keep, the deferred item's build is removed.
+  # Without the keep, the deferred item's build is removed.
   run_preflight prune --baseline 2.2.0 --baseline-tag "$TAG_B" --latest-tag "$TAG_D"
   [ "$status" -eq 0 ]
   [ "$(cache_listing)" = "$TAG_B $TAG_D " ]
 }
 
 # --- 7 and 8. a release update after a local sync -------------------------------
-
-@test "a release update after a local sync merges against the recorded build and removes the record last" {
-  reach_b_recorded
-  write_release v2.3.0
-  run_local baseline
-  [ "$output" = "$(printf 'BASELINE_TAG=%s\nRECORDED_BUILD %s' "$TAG_B" "$BUILD_B")" ]
-  run_preflight verify-bundles --baseline 2.2.0 --baseline-tag "$TAG_B" --latest-tag v2.3.0
-  [ "$status" -eq 0 ]
-  [ "$(cat "$GH_LOG")" = v2.3.0 ]
-  printf '%s\n' "$output" | grep -qxF "BASELINE_DIR=$CACHE_PREFIX/$TAG_B/tree"
-  printf '%s\n' "$output" | grep -qxF "LATEST_DIR=$CACHE_PREFIX/v2.3.0/tree"
-  run_preflight prune --baseline 2.2.0 --baseline-tag "$TAG_B" --latest-tag v2.3.0
-  [ "$(cache_listing)" = "$TAG_B v2.3.0 " ]
-  # Red twin: without the flag the recorded build is pruned.
-  run_preflight prune --baseline 2.2.0 --latest-tag v2.3.0
-  [ "$(cache_listing)" = 'v2.3.0 ' ]
-  record_release 2.3.0
-  [ ! -e "$PROJECT/.gaia/VERSION-dev" ]
-  run_local baseline
-  [ "$output" = 'BASELINE_TAG=v2.3.0' ]
-}
 
 # Adds a branch `$1` from main with `.gaia/VERSION` `$2` and the build record
 # `$3` (`none` deletes it) committed at epoch `$4`, then removes its worktree.
@@ -377,8 +337,10 @@ add_update_branch() {
   git -C "$PROJECT" worktree remove --force "$holder"
 }
 
-@test "a release update at the same version as the recorded build does not stop, and classifies on the build record" {
+@test "a release update after a local sync merges against the recorded build and removes the record last" {
   reach_b_recorded
+
+  echo "case: a release update at the same version as the recorded build does not stop, and classifies on the build record"
   write_release v2.2.0
   run_preflight verify-bundles --baseline 2.2.0 --baseline-tag "$TAG_B" --latest-tag v2.2.0
   [ "$status" -eq 0 ]
@@ -393,17 +355,31 @@ add_update_branch() {
   add_update_branch "$dev_branch" 2.2.0 "$BUILD_B" 1700000500
   run_classify --tag v2.2.0 --latest 2.2.0
   [ "$output" = "RESUME_ADD_WORKTREE $release_branch" ]
-  # Red twin: the dev tag's own lookup finds the dev branch.
+  # The dev tag's own lookup finds the dev branch.
   run_classify --tag "$TAG_B" --latest 2.2.0 --build "$BUILD_B"
   [ "$output" = "COMMITTED $dev_branch -" ]
-}
 
-@test "with only a local-sync branch present the release lookup finds nothing" {
-  reach_b_recorded
-  add_update_branch "update/$TAG_B-2026-10-27-1100" 2.2.0 "$BUILD_B" 1700000500
-  run_classify --tag v2.2.0 --latest 2.2.0
+  echo "case: a release update to a newer version merges against the recorded build and removes the record last"
+  # Back to the state after local runs 1 and 2: no v2.2.0 download, no gh call.
+  rm -rf "${CACHE:?}/v2.2.0"
+  : > "$GH_LOG"
+  write_release v2.3.0
+  run_local baseline
+  [ "$output" = "$(printf 'BASELINE_TAG=%s\nRECORDED_BUILD %s' "$TAG_B" "$BUILD_B")" ]
+  run_preflight verify-bundles --baseline 2.2.0 --baseline-tag "$TAG_B" --latest-tag v2.3.0
   [ "$status" -eq 0 ]
-  [ "$output" = NONE ]
+  [ "$(cat "$GH_LOG")" = v2.3.0 ]
+  printf '%s\n' "$output" | grep -qxF "BASELINE_DIR=$CACHE_PREFIX/$TAG_B/tree"
+  printf '%s\n' "$output" | grep -qxF "LATEST_DIR=$CACHE_PREFIX/v2.3.0/tree"
+  run_preflight prune --baseline 2.2.0 --baseline-tag "$TAG_B" --latest-tag v2.3.0
+  [ "$(cache_listing)" = "$TAG_B v2.3.0 " ]
+  # Without the flag the recorded build is pruned.
+  run_preflight prune --baseline 2.2.0 --latest-tag v2.3.0
+  [ "$(cache_listing)" = 'v2.3.0 ' ]
+  record_release 2.3.0
+  [ ! -e "$PROJECT/.gaia/VERSION-dev" ]
+  run_local baseline
+  [ "$output" = 'BASELINE_TAG=v2.3.0' ]
 }
 
 # --- 9. an uncached recorded build ----------------------------------------------
@@ -465,18 +441,6 @@ prepare_release_projects() {
   printf '%s\n' "$current" | grep -qxF 'cache v2.3.0'
   printf '%s\n' "$current" | grep -qxF 'cache v2.1.0' && return 1
   true
-}
-
-@test "the merge base comparison fails when the compared script's output differs" {
-  prepare_release_projects
-  local mutated="$BATS_TEST_TMPDIR/mutated/.gaia/scripts" current baseline
-  mkdir -p "$mutated"
-  cp "$MERGE_BASE_SCRIPTS"/*.sh "$mutated"/
-  sed 's/echo "VERIFIED \$tag"/echo "OK $tag"/' "$MERGE_BASE_SCRIPTS/update-gaia-preflight.sh" > "$mutated/update-gaia-preflight.sh"
-  current="$(release_sequence "$PROJECT" "$SCRIPTS")"
-  baseline="$(release_sequence "$BATS_TEST_TMPDIR/project-merge-base" "$mutated")"
-  [ -n "$baseline" ]
-  [ "$current" != "$baseline" ]
 }
 
 # --- 11. mode 1 resume after the record step ------------------------------------

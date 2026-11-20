@@ -60,11 +60,12 @@ _row() {
   jq -c --arg id "$1" '.items[] | select(.kind == "spec" and .id == $id)' "$(_catalog)"
 }
 
-# --- 1: renumber-while-live re-keys the .lock, preserving its live pid ------
+# --- the .lock re-key: a live lock follows the id, a missing one is a no-op ---
 
-@test "1: renumbering a draft with a live-shaped .lock re-keys it and keeps the recorded pid" {
-  REPO="$(_fixture_repository --seed-spec-folder SPEC-901 draft)"
+@test "renumber re-keys a live or absent session lock" {
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-901 draft --seed-spec-folder SPEC-903 draft)"
 
+  echo "case: renumbering a draft with a live-shaped .lock re-keys it and keeps the recorded pid"
   # Stand in for a live session-host: a real, long-lived background process
   # whose pid the lock records, so "is the pid still alive" is genuinely true.
   sleep 300 &
@@ -87,13 +88,8 @@ _row() {
   # stranding under the old one.
   [ "$(jq -r '.host_pid' "$REPO/$CACHE/spec-session-SPEC-902.lock")" = "$SPAWN_PID" ]
   [ "$(jq -r '.spec_id' "$REPO/$CACHE/spec-session-SPEC-902.lock")" = "SPEC-902" ]
-}
 
-# --- 2: a missing lock is a normal no-op ------------------------------------
-
-@test "2: renumbering a draft with no .lock file is a no-op for the lock re-key" {
-  REPO="$(_fixture_repository --seed-spec-folder SPEC-903 draft)"
-
+  echo "case: renumbering a draft with no .lock file is a no-op for the lock re-key"
   run _renumber "$REPO" SPEC-903 SPEC-904
   [ "$status" -eq 0 ]
 
@@ -112,15 +108,18 @@ _row() {
   grep -qF "branch -m 'plan/spec-012-cards'" <<<"$output"
 }
 
-# --- 8: renumber a foldered SPEC ---------------------------------------------
+# --- the move: folder, siblings and the re-keyed row --------------------------
 
-@test "8a: renumber renames the folder; SPEC.md keeps its name; siblings ride along" {
-  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft)"
+@test "renumber moves the folder with siblings and re-keys the row, stamping renamed_from" {
+  REPO="$(_fixture_repository --seed-row '{"kind":"spec","id":"SPEC-002","path":"specs/SPEC-002","status":"draft","subject":"keep me","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reservation":"provisional","source":"allocated"}')"
+  mkdir -p "$REPO/.notebook/specs/SPEC-002"
+  printf -- '---\nspec_id: SPEC-002\nstatus: draft\n---\n' > "$REPO/.notebook/specs/SPEC-002/SPEC.md"
   echo "report body" > "$REPO/.notebook/specs/SPEC-002/REPORT.md"
 
   run _renumber "$REPO" SPEC-002 SPEC-005
   [ "$status" -eq 0 ]
 
+  echo "case: renumber renames the folder; SPEC.md keeps its name; siblings ride along"
   [ ! -e "$REPO/.notebook/specs/SPEC-002" ]
   [ -f "$REPO/.notebook/specs/SPEC-005/SPEC.md" ]
   [ -f "$REPO/.notebook/specs/SPEC-005/REPORT.md" ]
@@ -129,44 +128,35 @@ _row() {
   grep -q '^spec_id: SPEC-005$' "$REPO/.notebook/specs/SPEC-005/SPEC.md"
   # Nothing was created in the retired locations.
   [ ! -e "$REPO/.gaia/local/specs" ]
+
+  echo "case: the row id and path change, renamed_from is stamped and other fields are kept"
+  [ -z "$(_row SPEC-002)" ]
+  [ "$(_row SPEC-005 | jq -r '.path')" = "specs/SPEC-005" ]
+  [ "$(_row SPEC-005 | jq -r '.renamed_from')" = "SPEC-002" ]
+  [ "$(_row SPEC-005 | jq -r '.subject')" = "keep me" ]
+  [ "$(_row SPEC-005 | jq -r '.reservation')" = "provisional" ]
+  [ "$(_row SPEC-005 | jq -r '.created_at')" = "2026-01-01T00:00:00Z" ]
+  [ "$(jq '[.items[] | select(.kind == "spec")] | length' "$(_catalog)")" -eq 1 ]
 }
 
-@test "8b: renumber collision guard fires when the target folder exists" {
-  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft --seed-spec-folder SPEC-005 draft)"
+# bats test_tags=protected
+@test "renumber refuses a taken target folder or row and changes nothing" {
+  # SPEC-005 holds a folder and a row; SPEC-006 holds a row only.
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft --seed-spec-folder SPEC-005 draft --seed-spec SPEC-006 ready)"
 
+  echo "case: renumber collision guard fires when the target folder exists"
   run _renumber "$REPO" SPEC-002 SPEC-005
   [ "$status" -eq 4 ]
   # Source folder untouched on a refused renumber.
   [ -f "$REPO/.notebook/specs/SPEC-002/SPEC.md" ]
-}
 
-# --- 9: the catalog row is re-keyed ------------------------------------------
-
-@test "9a: the row id and path change, renamed_from is stamped and other fields are kept" {
-  REPO="$(_fixture_repository --seed-row '{"kind":"spec","id":"SPEC-002","path":"specs/SPEC-002","status":"draft","subject":"keep me","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reservation":"provisional","source":"allocated"}')"
-  mkdir -p "$REPO/.notebook/specs/SPEC-002"
-  printf -- '---\nspec_id: SPEC-002\nstatus: draft\n---\n' > "$REPO/.notebook/specs/SPEC-002/SPEC.md"
-
-  run _renumber "$REPO" SPEC-002 SPEC-007
-  [ "$status" -eq 0 ]
-
-  [ -z "$(_row SPEC-002)" ]
-  [ "$(_row SPEC-007 | jq -r '.path')" = "specs/SPEC-007" ]
-  [ "$(_row SPEC-007 | jq -r '.renamed_from')" = "SPEC-002" ]
-  [ "$(_row SPEC-007 | jq -r '.subject')" = "keep me" ]
-  [ "$(_row SPEC-007 | jq -r '.reservation')" = "provisional" ]
-  [ "$(_row SPEC-007 | jq -r '.created_at')" = "2026-01-01T00:00:00Z" ]
-  [ "$(jq '[.items[] | select(.kind == "spec")] | length' "$(_catalog)")" -eq 1 ]
-}
-
-@test "9b: renumbering onto an id whose row already exists is refused and changes nothing" {
-  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft --seed-spec SPEC-005 ready)"
+  echo "case: renumbering onto an id whose row already exists is refused and changes nothing"
   before_catalog="$(snapshot_file "$(_catalog)")"
   before_listing="$(find "$REPO/.notebook" -type f | LC_ALL=C sort)"
 
-  run _renumber "$REPO" SPEC-002 SPEC-005
+  run _renumber "$REPO" SPEC-002 SPEC-006
   [ "$status" -eq 4 ]
-  grep -qF "SPEC-005" <<<"$output"
+  grep -qF "SPEC-006" <<<"$output"
 
   after_catalog="$(snapshot_file "$(_catalog)")"
   assert_files_identical "$before_catalog" "$after_catalog"
@@ -175,6 +165,7 @@ _row() {
   grep -q '^spec_id: SPEC-002$' "$REPO/.notebook/specs/SPEC-002/SPEC.md"
 }
 
+# bats test_tags=protected
 @test "9c: a catalog write that fails after the folder moved puts the folder back" {
   if [ "$(id -u)" -eq 0 ]; then
     skip "a read-only folder does not stop root"
@@ -215,6 +206,7 @@ _hold_catalog_lock() {
   [ -e "$held_file" ]
 }
 
+# bats test_tags=protected
 @test "10a: while another writer holds the catalog lock the renumber waits, then completes" {
   REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft)"
   _hold_catalog_lock
@@ -237,6 +229,7 @@ _hold_catalog_lock() {
   [ -n "$(_row SPEC-008)" ]
 }
 
+# bats test_tags=protected
 @test "10b: registers racing a renumber lose neither write" {
   REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft)"
   notebook_library="$REPO/.gaia/scripts/notebook/notebook-lib.sh"

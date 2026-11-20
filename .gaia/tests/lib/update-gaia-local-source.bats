@@ -11,8 +11,6 @@
 #
 # Maintainer-only. `.gaia/tests` is wholesale release-excluded.
 
-bats_require_minimum_version 1.5.0
-
 setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
   LOCAL_SCRIPT="$REPO_ROOT/.gaia/scripts/update-gaia-local.sh"
@@ -107,10 +105,21 @@ assert_refused_clean() {
   [ ! -s "$GH_LOG" ]
 }
 
-@test "source: a same-version bundle prints the six lines and fills the cache without touching gh" {
+# Empties the fixture project, its cache and the gh log between table cases.
+reset_project() {
+  rm -rf "$PROJECT"
+  mkdir -p "$PROJECT/.gaia"
+  : > "$GH_LOG"
+}
+
+@test "source proceeds, reports already-synced, or refuses a downgrade by version and build" {
+  make_bundle same 2.2.0 "dev.$SHA"
+  make_bundle newer 2.3.0 "dev.$SHA"
+  make_bundle older 2.1.0 "dev.$SHA"
+
+  echo "case: a same-version bundle prints the six lines and fills the cache without touching gh"
   project_at 2.2.0
-  make_bundle b1 2.2.0 "dev.$SHA"
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+  run_local source --tarball "$BATS_TEST_TMPDIR/same.tar.gz"
   [ "$status" -eq 0 ]
   [ "$output" = "$(six_lines 2.2.0)" ]
   [ -f "$CACHE/v2.2.0-dev.$SHA/gaia-bundle-v2.2.0-dev.$SHA.tar.gz" ]
@@ -119,115 +128,109 @@ assert_refused_clean() {
   (cd "$CACHE/v2.2.0-dev.$SHA" && shasum -a 256 -c "gaia-bundle-v2.2.0-dev.$SHA.tar.gz.sha256" > /dev/null)
   [ ! -s "$GH_LOG" ]
   [ -z "$(ls -A "$SCRATCH_TMP")" ]
-}
 
-@test "source: a newer bundle core proceeds with that core" {
+  echo "case: a newer bundle core proceeds with that core"
+  reset_project
   project_at 2.2.0
-  make_bundle b1 2.3.0 "dev.$SHA"
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+  run_local source --tarball "$BATS_TEST_TMPDIR/newer.tar.gz"
   [ "$status" -eq 0 ]
   [ "$output" = "$(six_lines 2.3.0)" ]
-}
 
-@test "source: the same version with a different build than the record proceeds" {
+  echo "case: the same version with a different build than the record proceeds"
+  reset_project
   project_at 2.2.0 dev.aaaaaaaaaaaa
-  make_bundle b1 2.2.0 "dev.$SHA"
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+  run_local source --tarball "$BATS_TEST_TMPDIR/same.tar.gz"
   [ "$status" -eq 0 ]
   [ "$output" = "$(six_lines 2.2.0)" ]
-}
 
-@test "source: the recorded build is already synced and writes no cache; --resume skips only that check" {
+  echo "case: the recorded build is already synced and writes no cache"
+  reset_project
   project_at 2.2.0 "dev.$SHA"
-  make_bundle b1 2.2.0 "dev.$SHA"
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+  run_local source --tarball "$BATS_TEST_TMPDIR/same.tar.gz"
   [ "$status" -eq 0 ]
   [ "$output" = "ALREADY_SYNCED dev.$SHA" ]
   [ ! -e "$CACHE/v2.2.0-dev.$SHA" ]
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz" --resume
+  echo "case: --resume skips only the already-synced check"
+  run_local source --tarball "$BATS_TEST_TMPDIR/same.tar.gz" --resume
   [ "$status" -eq 0 ]
   [ "$output" = "$(six_lines 2.2.0)" ]
   [ -d "$CACHE/v2.2.0-dev.$SHA/tree" ]
-}
 
-@test "source: --resume still refuses a bundle older than the project" {
+  echo "case: --resume still refuses a bundle older than the project"
+  reset_project
   project_at 2.2.0 "dev.$SHA"
-  make_bundle b1 2.1.0 "dev.$SHA"
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz" --resume
+  run_local source --tarball "$BATS_TEST_TMPDIR/older.tar.gz" --resume
   assert_refused_clean "older-than-project 2.1.0 2.2.0"
-}
 
-@test "source: a bundle older than the project is refused and its same-core twin is not" {
+  echo "case: a bundle older than the project is refused and its same-core twin is not"
+  reset_project
   project_at 2.2.0
-  make_bundle older 2.1.0 "dev.$SHA"
   run_local source --tarball "$BATS_TEST_TMPDIR/older.tar.gz"
   assert_refused_clean "older-than-project 2.1.0 2.2.0"
-  make_bundle same 2.2.0 "dev.$SHA"
   run_local source --tarball "$BATS_TEST_TMPDIR/same.tar.gz"
   [ "$status" -eq 0 ]
 }
 
-@test "source: a bundle without .gaia/VERSION-dev is refused" {
+# bats test_tags=protected
+@test "source refuses a bundle missing its build id, manifest or with a malformed version or build id" {
   project_at 2.2.0
-  make_bundle b1 2.2.0 -
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
-  assert_refused_clean build-id-missing
-}
 
-@test "source: a malformed bundle .gaia/VERSION is refused" {
-  project_at 2.2.0
-  local shape
+  echo "case: a bundle without .gaia/VERSION-dev is refused"
+  make_bundle no-build 2.2.0 -
+  run_local source --tarball "$BATS_TEST_TMPDIR/no-build.tar.gz"
+  assert_refused_clean build-id-missing
+
+  local shape index=0
   for shape in 2.2 2.2.0+dev; do
-    rm -rf "$BATS_TEST_TMPDIR/trees"
-    make_bundle b1 "$shape" "dev.$SHA"
-    run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+    echo "case: a malformed bundle .gaia/VERSION '$shape' is refused"
+    index=$((index + 1))
+    make_bundle "bad-version-$index" "$shape" "dev.$SHA"
+    run_local source --tarball "$BATS_TEST_TMPDIR/bad-version-$index.tar.gz"
     assert_refused_clean version-malformed
   done
-}
 
-@test "source: a malformed bundle build id is refused" {
-  project_at 2.2.0
-  local shape
   for shape in dev.XYZ dev.../../etc "dev.$SHA
 dev.$SHA"; do
-    rm -rf "$BATS_TEST_TMPDIR/trees"
-    make_bundle b1 2.2.0 "$shape"
-    run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+    echo "case: a malformed bundle build id '$shape' is refused"
+    index=$((index + 1))
+    make_bundle "bad-build-$index" 2.2.0 "$shape"
+    run_local source --tarball "$BATS_TEST_TMPDIR/bad-build-$index.tar.gz"
     assert_refused_clean build-id-malformed
   done
-}
 
-@test "source: a bundle without a manifest is refused" {
-  project_at 2.2.0
-  make_bundle b1 2.2.0 "dev.$SHA"
-  rm "$BATS_TEST_TMPDIR/trees/b1/gaia-b1/.gaia/manifest.json"
-  tar -czf "$BATS_TEST_TMPDIR/b1.tar.gz" -C "$BATS_TEST_TMPDIR/trees/b1" gaia-b1
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+  echo "case: a bundle without a manifest is refused"
+  make_bundle no-manifest 2.2.0 "dev.$SHA"
+  rm "$BATS_TEST_TMPDIR/trees/no-manifest/gaia-no-manifest/.gaia/manifest.json"
+  tar -czf "$BATS_TEST_TMPDIR/no-manifest.tar.gz" -C "$BATS_TEST_TMPDIR/trees/no-manifest" gaia-no-manifest
+  run_local source --tarball "$BATS_TEST_TMPDIR/no-manifest.tar.gz"
   assert_refused_clean manifest-missing
 }
 
-@test "source: two top-level directories and files at the archive root are refused as layout" {
+# bats test_tags=protected
+@test "source refuses an unsafe archive layout or member by name" {
   project_at 2.2.0
   make_bundle b1 2.2.0 "dev.$SHA"
+
+  echo "case: two top-level directories are refused as layout"
   mkdir -p "$BATS_TEST_TMPDIR/trees/b1/other"
   tar -czf "$BATS_TEST_TMPDIR/two.tar.gz" -C "$BATS_TEST_TMPDIR/trees/b1" gaia-b1 other
   run_local source --tarball "$BATS_TEST_TMPDIR/two.tar.gz"
   assert_refused_clean "unsafe-entry layout"
+  echo "case: a file alone at the archive root is refused as layout"
   mkdir -p "$BATS_TEST_TMPDIR/rootfiles"
   printf '2.2.0\n' > "$BATS_TEST_TMPDIR/rootfiles/VERSION"
   tar -czf "$BATS_TEST_TMPDIR/rootfile.tar.gz" -C "$BATS_TEST_TMPDIR/rootfiles" VERSION
   run_local source --tarball "$BATS_TEST_TMPDIR/rootfile.tar.gz"
   assert_refused_clean "unsafe-entry layout"
+  echo "case: a loose file beside the top directory is refused as layout"
   printf 'x\n' > "$BATS_TEST_TMPDIR/trees/b1/loose"
   tar -czf "$BATS_TEST_TMPDIR/loose.tar.gz" -C "$BATS_TEST_TMPDIR/trees/b1" gaia-b1 loose
   run_local source --tarball "$BATS_TEST_TMPDIR/loose.tar.gz"
   assert_refused_clean "unsafe-entry layout"
-}
 
-@test "source: absolute, parent, symlink and hardlink members are each refused by name" {
-  project_at 2.2.0
   local kind word
   for kind in absolute:absolute-entry parent:parent-entry symlink:link-entry hardlink:link-entry; do
+    echo "case: a ${kind%%:*} member is refused by name"
     make_hostile "hostile-${kind%%:*}" "${kind%%:*}"
     run_local source --tarball "$BATS_TEST_TMPDIR/hostile-${kind%%:*}.tar.gz"
     word="${kind##*:}"
@@ -237,19 +240,42 @@ dev.$SHA"; do
   [ ! -e "$PROJECT/gaia-evil" ]
 }
 
-@test "source: a directory, a missing path and an unreadable file are refused as tarball-unreadable" {
+# bats test_tags=protected
+@test "source refuses an unreadable tarball or a wrong or foreign checksum" {
   project_at 2.2.0
+  echo "case: a directory is refused as tarball-unreadable"
   run_local source --tarball "$BATS_TEST_TMPDIR"
   assert_refused_clean tarball-unreadable
+  echo "case: a missing path is refused as tarball-unreadable"
   run_local source --tarball "$BATS_TEST_TMPDIR/absent.tar.gz"
   assert_refused_clean tarball-unreadable
+
+  make_bundle b1 2.2.0 "dev.$SHA"
+  local hex
+  hex="$(shasum -a 256 "$BATS_TEST_TMPDIR/b1.tar.gz" | awk '{ print $1 }')"
+  echo "case: a matching sibling checksum is accepted"
+  printf '%s  b1.tar.gz\n' "$hex" > "$BATS_TEST_TMPDIR/b1.tar.gz.sha256"
+  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+  [ "$status" -eq 0 ]
+  rm -rf "$CACHE"
+  echo "case: a wrong sibling checksum is refused"
+  printf '%064d  b1.tar.gz\n' 0 > "$BATS_TEST_TMPDIR/b1.tar.gz.sha256"
+  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+  assert_refused_clean checksum-mismatch
+  echo "case: a sibling checksum naming another file is refused"
+  printf '%s  other.tar.gz\n' "$hex" > "$BATS_TEST_TMPDIR/b1.tar.gz.sha256"
+  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
+  assert_refused_clean checksum-mismatch
+
+  # Last, because the root skip ends the test.
   if [ "$(id -u)" -eq 0 ]; then
     skip "chmod 000 does not make a file unreadable to root"
   fi
-  make_bundle b1 2.2.0 "dev.$SHA"
-  chmod 000 "$BATS_TEST_TMPDIR/b1.tar.gz"
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
-  chmod 644 "$BATS_TEST_TMPDIR/b1.tar.gz"
+  echo "case: an unreadable file is refused as tarball-unreadable"
+  make_bundle unreadable 2.2.0 "dev.$SHA"
+  chmod 000 "$BATS_TEST_TMPDIR/unreadable.tar.gz"
+  run_local source --tarball "$BATS_TEST_TMPDIR/unreadable.tar.gz"
+  chmod 644 "$BATS_TEST_TMPDIR/unreadable.tar.gz"
   assert_refused_clean tarball-unreadable
 }
 
@@ -262,77 +288,59 @@ dev.$SHA"; do
   [ "$output" = "$(six_lines 2.2.0)" ]
 }
 
-@test "source: a matching sibling checksum is accepted and a wrong or foreign one is refused" {
-  project_at 2.2.0
-  make_bundle b1 2.2.0 "dev.$SHA"
-  local hex
-  hex="$(shasum -a 256 "$BATS_TEST_TMPDIR/b1.tar.gz" | awk '{ print $1 }')"
-  printf '%s  b1.tar.gz\n' "$hex" > "$BATS_TEST_TMPDIR/b1.tar.gz.sha256"
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
-  [ "$status" -eq 0 ]
-  rm -rf "$CACHE"
-  printf '%064d  b1.tar.gz\n' 0 > "$BATS_TEST_TMPDIR/b1.tar.gz.sha256"
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
-  assert_refused_clean checksum-mismatch
-  printf '%s  other.tar.gz\n' "$hex" > "$BATS_TEST_TMPDIR/b1.tar.gz.sha256"
-  run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
-  assert_refused_clean checksum-mismatch
-}
-
-@test "source: a traversal-shaped or multi-line project build record is refused and touches nothing outside" {
+# bats test_tags=protected
+@test "source refuses a malformed project version or build record and touches nothing outside" {
   make_bundle b1 2.2.0 "dev.$SHA"
   printf 'keep\n' > "$BATS_TEST_TMPDIR/sentinel"
   printf '2.2.0\n' > "$PROJECT/.gaia/VERSION"
+  echo "case: a traversal-shaped project build record is refused"
   printf 'dev.0/../../x\n' > "$PROJECT/.gaia/VERSION-dev"
   run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
   assert_refused_clean project-build-malformed
+  echo "case: a multi-line project build record is refused"
   printf 'dev.%s\ndev.%s\n' "$SHA" "$SHA" > "$PROJECT/.gaia/VERSION-dev"
   run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
   assert_refused_clean project-build-malformed
   [ "$(cat "$BATS_TEST_TMPDIR/sentinel")" = keep ]
-}
-
-@test "source: a malformed project version is refused" {
+  echo "case: a malformed project version is refused"
+  rm "$PROJECT/.gaia/VERSION-dev"
   printf '2.2\n' > "$PROJECT/.gaia/VERSION"
-  make_bundle b1 2.2.0 "dev.$SHA"
   run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
   assert_refused_clean project-version-malformed
 }
 
-@test "source: a cache entry with different tarball bytes conflicts and is left untouched" {
+# bats test_tags=protected
+@test "source reuses, repairs or replaces a cache entry and refuses a conflicting one" {
   project_at 2.2.0
   make_bundle b1 2.2.0 "dev.$SHA"
-  local directory="$CACHE/v2.2.0-dev.$SHA"
+  local directory="$CACHE/v2.2.0-dev.$SHA" name="gaia-bundle-v2.2.0-dev.$SHA.tar.gz"
+
+  echo "case: a cache entry with different tarball bytes conflicts and is left untouched"
   mkdir -p "$directory"
-  printf 'different bytes\n' > "$directory/gaia-bundle-v2.2.0-dev.$SHA.tar.gz"
+  printf 'different bytes\n' > "$directory/$name"
   run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -qF "LOCAL_REFUSED cache-conflict v2.2.0-dev.$SHA"
-  [ "$(cat "$directory/gaia-bundle-v2.2.0-dev.$SHA.tar.gz")" = "different bytes" ]
+  [ "$(cat "$directory/$name")" = "different bytes" ]
   [ -z "$(ls -A "$SCRATCH_TMP")" ]
-}
 
-@test "source: the same tarball bytes are reused, and a half-populated entry is repaired" {
-  project_at 2.2.0
-  make_bundle b1 2.2.0 "dev.$SHA"
+  echo "case: the same tarball bytes are reused"
+  rm -rf "$CACHE"
   run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
   [ "$status" -eq 0 ]
-  local directory="$CACHE/v2.2.0-dev.$SHA" name="gaia-bundle-v2.2.0-dev.$SHA.tar.gz"
   run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
   [ "$status" -eq 0 ]
   [ "$output" = "$(six_lines 2.2.0)" ]
+  echo "case: a half-populated entry is repaired"
   rm "$directory/$name.sha256"
   rm -rf "$directory/tree"
   run_local source --tarball "$BATS_TEST_TMPDIR/b1.tar.gz"
   [ "$status" -eq 0 ]
   (cd "$directory" && shasum -a 256 -c "$name.sha256" > /dev/null)
   [ -f "$directory/tree/.gaia/VERSION-dev" ]
-}
 
-@test "source: an entry holding only a checksum or only a tree is replaced whole" {
-  project_at 2.2.0
-  make_bundle b1 2.2.0 "dev.$SHA"
-  local directory="$CACHE/v2.2.0-dev.$SHA" name="gaia-bundle-v2.2.0-dev.$SHA.tar.gz"
+  echo "case: an entry holding only a checksum is replaced whole"
+  rm -rf "$CACHE"
   mkdir -p "$directory"
   printf 'stale\n' > "$directory/$name.sha256"
   printf 'stale\n' > "$directory/leftover"
@@ -340,6 +348,7 @@ dev.$SHA"; do
   [ "$status" -eq 0 ]
   [ -f "$directory/$name" ]
   [ ! -e "$directory/leftover" ]
+  echo "case: an entry holding only a tree is replaced whole"
   rm -rf "$CACHE"
   mkdir -p "$directory/tree/.gaia"
   printf 'stale\n' > "$directory/tree/.gaia/VERSION"
@@ -347,17 +356,4 @@ dev.$SHA"; do
   [ "$status" -eq 0 ]
   [ -f "$directory/$name" ]
   [ "$(cat "$directory/tree/.gaia/VERSION")" = 2.2.0 ]
-}
-
-@test "source: bad usage exits 2 with the usage on stderr" {
-  project_at 2.2.0
-  run --separate-stderr env PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash "$LOCAL_SCRIPT" frobnicate
-  [ "$status" -eq 2 ]
-  printf '%s\n' "$stderr" | grep -q '^usage:'
-  run --separate-stderr env PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash "$LOCAL_SCRIPT" source --bogus
-  [ "$status" -eq 2 ]
-  printf '%s\n' "$stderr" | grep -q '^usage:'
-  run --separate-stderr env PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash "$LOCAL_SCRIPT" source
-  [ "$status" -eq 2 ]
-  printf '%s\n' "$stderr" | grep -q '^usage:'
 }

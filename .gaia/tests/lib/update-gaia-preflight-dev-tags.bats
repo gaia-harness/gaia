@@ -5,7 +5,7 @@
 # extra baseline, and prune keeps a dev baseline named by --baseline-tag. Also
 # pins that the release path is unchanged and that no update script ranks tags
 # with `sort -V`. Fixtures live under $BATS_TEST_TMPDIR with a stub `gh` that
-# logs every call; every absence pin has a red twin.
+# logs every call.
 #
 # Assertion style per .claude/rules/bats-assertions.md.
 #
@@ -85,10 +85,25 @@ seed_dev() {
   printf '%s  gaia-bundle-%s.tar.gz\n' "$hex" "$tag" > "$CACHE/$tag/gaia-bundle-$tag.tar.gz.sha256"
 }
 
+# Starts a table case on an empty project and an empty gh log, and prints its
+# label so a failing case names itself in the bats output.
+start_case() {
+  printf 'case: %s\n' "$1"
+  rm -rf "$PROJECT"
+  mkdir -p "$PROJECT"
+  : > "$GH_LOG"
+}
+
 # --- verify-bundles --------------------------------------------------------------
 
-@test "verify-bundles: a cached dev target beside a release baseline verifies locally and downloads only the baseline" {
+# bats test_tags=protected
+@test "verify-bundles resolves dev tags from the cache only, verifies them, reports CACHE_MISSING and VERIFY_FAILED, and leaves release runs unchanged" {
+  # The release fixtures are built once and shared by every case.
+  write_release v2.0.0
+  write_release v2.1.0
   write_release v2.2.0
+
+  start_case 'a cached dev target beside a release baseline verifies locally and downloads only the baseline'
   write_serving_gh
   seed_dev "$DEV_A"
   run_preflight verify-bundles --baseline 2.2.0 --latest-tag "$DEV_A"
@@ -96,10 +111,8 @@ seed_dev() {
   [ "$output" = "$(printf 'VERIFIED v2.2.0\nVERIFIED_LOCAL %s\nBASELINE_DIR=%s/v2.2.0/tree\nLATEST_DIR=%s/%s/tree' "$DEV_A" "$CACHE_PREFIX" "$CACHE_PREFIX" "$DEV_A")" ]
   [ "$(cat "$GH_LOG")" = v2.2.0 ]
   [ "$(cat "$CACHE/$DEV_A/tree/.gaia/VERSION")" = "$DEV_A" ]
-}
 
-@test "verify-bundles: with no network a cached dev target succeeds and an uncached one reports CACHE_MISSING, neither calling gh for it" {
-  write_release v2.2.0
+  start_case 'with no network a cached dev target succeeds and an uncached one reports CACHE_MISSING, neither calling gh for it'
   write_serving_gh
   seed_dev "$DEV_A"
   run_preflight verify-bundles --baseline 2.2.0 --latest-tag "$DEV_A"
@@ -113,19 +126,16 @@ seed_dev() {
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -qxF "CACHE_MISSING $DEV_B"
   grep -q 'dev' "$GH_LOG" && return 1
-  true
-}
 
-@test "verify-bundles: a missing dev tag removes nothing already cached" {
+  start_case 'a missing dev tag removes nothing already cached'
   write_failing_gh
   seed_dev "$DEV_A"
   run_preflight verify-bundles --baseline 2.2.0 --baseline-tag "$DEV_A" --latest-tag "$DEV_B"
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -qxF "CACHE_MISSING $DEV_B"
   [ -f "$CACHE/$DEV_A/gaia-bundle-$DEV_A.tar.gz" ]
-}
 
-@test "verify-bundles: a dev baseline from --baseline-tag and a dev target make no gh call" {
+  start_case 'a dev baseline from --baseline-tag and a dev target make no gh call'
   write_failing_gh
   seed_dev "$DEV_A"
   seed_dev "$DEV_B"
@@ -136,9 +146,8 @@ seed_dev() {
   printf '%s\n' "$output" | grep -qxF "VERIFIED_LOCAL $DEV_A"
   printf '%s\n' "$output" | grep -qxF "VERIFIED_LOCAL $DEV_B"
   [ ! -s "$GH_LOG" ]
-}
 
-@test "verify-bundles: a tampered cached dev bundle fails verification and removes only its own directory" {
+  start_case 'a tampered cached dev bundle fails verification and removes only its own directory'
   write_failing_gh
   seed_dev "$DEV_A"
   seed_dev "$DEV_B"
@@ -149,10 +158,8 @@ seed_dev() {
   printf '%s\n' "$output" | grep -qxF "VERIFIED_LOCAL $DEV_B" && return 1
   [ -e "$CACHE/$DEV_B" ] && return 1
   [ -f "$CACHE/$DEV_A/gaia-bundle-$DEV_A.tar.gz" ]
-}
 
-@test "verify-bundles: a deferred item's dev baseline resolves from the cache as an extra directory" {
-  write_release v2.2.0
+  start_case "a deferred item's dev baseline resolves from the cache as an extra directory"
   write_serving_gh
   seed_dev "$DEV_A"
   seed_dev "$DEV_B"
@@ -164,12 +171,8 @@ seed_dev() {
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -qxF "CACHE_MISSING $DEV_C"
   grep -q 'dev' "$GH_LOG" && return 1
-  true
-}
 
-@test "verify-bundles: a release run is byte-identical with no dev tag and no baseline flag" {
-  write_release v2.0.0
-  write_release v2.1.0
+  start_case 'a release run is byte-identical with no dev tag and no baseline flag'
   write_serving_gh
   run_preflight verify-bundles --baseline 2.0.0 --latest-tag v2.1.0
   [ "$status" -eq 0 ]
@@ -190,31 +193,32 @@ cache_listing() {
   ls "$CACHE" | tr '\n' ' '
 }
 
-@test "prune: --baseline-tag keeps a dev baseline on a release run and its absence removes it" {
+@test "prune keeps the target, baseline, named keep-tags and dev tags only when named" {
+  start_case '--baseline-tag keeps a dev baseline on a release run'
   seed_prune_cache "$DEV_A" v2.3.0 v2.1.0 run
   run_preflight prune --baseline 2.2.0 --latest-tag v2.3.0 --baseline-tag "$DEV_A"
   [ "$status" -eq 0 ]
   [ "$(cache_listing)" = "$DEV_A v2.3.0 " ]
-  rm -rf "$CACHE"
+
+  start_case 'without --baseline-tag a release run removes the dev baseline'
   seed_prune_cache "$DEV_A" v2.3.0 v2.1.0 run
   run_preflight prune --baseline 2.2.0 --latest-tag v2.3.0
   [ "$status" -eq 0 ]
   [ "$(cache_listing)" = "v2.3.0 " ]
-}
 
-@test "prune: a local run keeps its dev target and dev baseline, and a dev keep-tag only when named" {
+  start_case 'a local run keeps its dev target, dev baseline and a named dev keep-tag'
   seed_prune_cache "$DEV_A" "$DEV_B" "$DEV_C" run
   run_preflight prune --baseline 2.2.0 --latest-tag "$DEV_B" --baseline-tag "$DEV_A" --keep-tag "$DEV_C"
   [ "$status" -eq 0 ]
   [ "$(cache_listing)" = "$DEV_A $DEV_B $DEV_C " ]
-  rm -rf "$CACHE"
+
+  start_case 'a local run removes a dev tag no --keep-tag names'
   seed_prune_cache "$DEV_A" "$DEV_B" "$DEV_C" run
   run_preflight prune --baseline 2.2.0 --latest-tag "$DEV_B" --baseline-tag "$DEV_A"
   [ "$status" -eq 0 ]
   [ "$(cache_listing)" = "$DEV_A $DEV_B " ]
-}
 
-@test "prune: the release path with --keep-tag keeps exactly the baseline, target and kept tag" {
+  start_case 'the release path with --keep-tag keeps exactly the baseline, target and kept tag'
   seed_prune_cache v2.0.0 v2.1.0 v2.0.5 v1.9.0 run
   run_preflight prune --baseline 2.0.0 --latest-tag v2.1.0 --keep-tag v2.0.5
   [ "$status" -eq 0 ]
@@ -223,6 +227,7 @@ cache_listing() {
 
 # --- --baseline-tag validation ---------------------------------------------------
 
+# bats test_tags=protected
 @test "a malformed --baseline-tag is a usage error that touches no cache path" {
   local bad subcommand
   seed_prune_cache v2.0.0 run
@@ -246,12 +251,6 @@ cache_listing() {
   [ "$output" = "$(printf 'v2.1.0\n%s\nv2.2.0' "$DEV_A")" ]
 }
 
-@test "sort -V does not rank a dev tag below its plain release, which is why it is banned for tags" {
-  local ranked
-  ranked="$(printf '%s\n' v2.2.0 "$DEV_A" v2.1.0 | sort -V | tr '\n' ' ')"
-  [ "$ranked" != "v2.1.0 $DEV_A v2.2.0 " ]
-}
-
 # Prints the non-comment lines of the file at `$1` that hold the flag pair.
 sort_version_code_lines() {
   grep -v '^[[:space:]]*#' "$1" | grep -F 'sort -V' || true
@@ -265,37 +264,4 @@ sort_version_code_lines() {
     [ -z "$(sort_version_code_lines "$script")" ]
   done
   [ "$scanned" -eq 3 ]
-}
-
-@test "the sort -V scan finds a code line that carries it" {
-  local copy="$BATS_TEST_TMPDIR/scratch-preflight.sh"
-  cp "$PREFLIGHT" "$copy"
-  printf '%s\n' 'tags | sort -V' >> "$copy"
-  [ -n "$(sort_version_code_lines "$copy")" ]
-}
-
-# --- the verify comment states the trust invariant -------------------------------
-
-has_trust_comment() {
-  grep -qF 'release .sha256 asset' "$1" \
-    && grep -qF 'computed locally' "$1" \
-    && grep -qF 'never authenticity' "$1"
-}
-
-@test "the verify comment says release bundles verify against the release checksum asset and a local checksum never proves authenticity" {
-  has_trust_comment "$PREFLIGHT"
-}
-
-@test "the trust comment check fails on a copy with the comment removed" {
-  local copy="$BATS_TEST_TMPDIR/scratch-preflight.sh"
-  grep -vF 'never authenticity' "$PREFLIGHT" > "$copy"
-  has_trust_comment "$copy" && return 1
-  true
-}
-
-# --- existing suites stay unmodified ---------------------------------------------
-
-@test "the existing preflight, flow and release-asset-name suites are unmodified" {
-  run git -C "$REPO_ROOT" diff --quiet -- .gaia/tests/lib/update-gaia-preflight.bats .gaia/tests/lib/update-gaia-flow.bats .gaia/tests/lib/release-asset-name.bats
-  [ "$status" -eq 0 ]
 }

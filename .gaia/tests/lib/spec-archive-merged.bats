@@ -21,10 +21,10 @@
 # with no folder is skipped; a gate failure leaves the folder in place. A
 # successful delete records a reap on the row.
 #
-# Each test spins up its own tmp git repo via helpers/tmp-notebook-repo.sh and
-# tears it down; hermetic, no reliance on the real project notebook. The
-# teardown uses the explicit-if form (the && idiom is a bats teardown
-# footgun: a falsy first clause makes teardown itself "fail").
+# Each test spins up its own tmp git repo via helpers/tmp-notebook-repo.sh, or
+# copies the one setup_file seeds, and tears it down; hermetic, no reliance on
+# the real project notebook. The teardown uses the explicit-if form (the &&
+# idiom is a bats teardown footgun: a falsy first clause makes teardown itself "fail").
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -111,6 +111,26 @@ _clear_merged_at() {
   mv "$temporary_file" "$repo/.notebook/catalog.json"
 }
 
+# The case tables copy one seeded repo (a merged SPEC-001 folder, no close
+# recorded) per case instead of building a repo per case.
+setup_file() {
+  BASE="$("$BATS_TEST_DIRNAME/helpers/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+  export BASE
+}
+
+teardown_file() {
+  if [ -n "${BASE:-}" ]; then
+    rm -rf "$BASE"
+  fi
+}
+
+# _fresh_case: points REPO at a fresh copy of the seeded repo.
+_fresh_case() {
+  rm -rf "$REPO"
+  REPO="$BATS_TEST_TMPDIR/case"
+  cp -R "$BASE" "$REPO"
+}
+
 # --- 1: delete happy path (cost represented) ---------------------------------
 
 @test "1: a merged row whose run is on the usage ledger is deleted; ledger stays merged" {
@@ -132,34 +152,67 @@ _clear_merged_at() {
   jq -e '.items[0].reap.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T")' "$REPO/.notebook/catalog.json"
 }
 
-@test "1b: a row that already carries a reap record is skipped, even with a folder present" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+# --- row selection ------------------------------------------------------------
+
+# bats test_tags=protected
+@test "merged sweep touches only merged rows with a folder and no reap record" {
+  # One repo holds every selection case: SPEC-001 is the only reapable row.
+  # SPEC-004 already carries a reap record, SPEC-005 has no folder and
+  # SPEC-002 is a folder with no merged row.
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
+    --seed-spec-merged-folder SPEC-001 --seed-spec-merged-folder SPEC-004 \
+    --seed-spec SPEC-005 merged --seed-spec-folder SPEC-002 draft)"
   _seed_close spec:SPEC-001 gaia-spec
+  _seed_close spec:SPEC-004 gaia-spec
   patched="$(mktemp)"
-  jq '.items |= map(. + {reap: {at: "2026-02-01T00:00:00Z", by: "spec-archive-merged.sh"}})' "$REPO/.notebook/catalog.json" > "$patched"
+  jq '.items |= map(if .id == "SPEC-004" then . + {reap: {at: "2026-02-01T00:00:00Z", by: "spec-archive-merged.sh"}} else . end)' \
+    "$REPO/.notebook/catalog.json" > "$patched"
   mv "$patched" "$REPO/.notebook/catalog.json"
 
   run _archive "$REPO"
   [ "$status" -eq 0 ]
+  grep -qxF "Deleted 1 merged SPEC folder(s): SPEC-001" <<<"$output"
+  [ ! -e "$REPO/$SPECS/SPEC-001" ]
+  echo "case: a row with a reap record is skipped"
+  [ -f "$REPO/$SPECS/SPEC-004/SPEC.md" ]
+  echo "case: a merged row with no active folder is a no-op"
+  [ ! -e "$REPO/$SPECS/archived" ]
+  echo "case: a folder without a merged row is never deleted"
+  [ -f "$REPO/$SPECS/SPEC-002/SPEC.md" ]
+
+  echo "case: re-running the sweep after deleting is a no-op"
+  before="$(_snapshot)"
+  run _archive "$REPO"
+  [ "$status" -eq 0 ]
   refute_contains "Deleted"
-  [ -f "$REPO/$SPECS/SPEC-001/SPEC.md" ]
+  after="$(_snapshot)"
+  [ "$before" = "$after" ]
+
+  echo "case: a repo with no merged rows produces no output and exits 0"
+  rm -rf "$REPO"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
+  run _archive "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
-# --- 2: both entry points delete, neither leaves an archived/ copy ----------
+# --- both entry points delete, neither leaves an archived/ copy ---------------
 
-@test "2: the all-ids sweep and the single-id form both delete with no archived/ copy" {
+# bats test_tags=protected
+@test "all-ids sweep deletes with a combined summary and the single-id form deletes only the named id" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001 --seed-spec-merged-folder SPEC-002)"
   _seed_close spec:SPEC-001 gaia-spec
   _seed_close spec:SPEC-002 gaia-spec
 
-  # All-ids sweep (both runs are on the usage ledger).
+  echo "case: the all-ids sweep deletes both with a combined summary"
   run _archive "$REPO"
   [ "$status" -eq 0 ]
+  assert_contains "Deleted 2 merged SPEC folder(s): SPEC-001, SPEC-002"
   [ ! -e "$REPO/$SPECS/SPEC-001" ]
   [ ! -e "$REPO/$SPECS/SPEC-002" ]
   [ ! -e "$REPO/$SPECS/archived" ]
 
-  # Single-id form, exercised independently on a fresh repo.
+  echo "case: the single-id form deletes only the named id"
   REPO2="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-003 --seed-spec-merged-folder SPEC-004)"
   seed_close_row "$REPO2/.gaia/local/telemetry" spec:SPEC-003 gaia-spec
   seed_close_row "$REPO2/.gaia/local/telemetry" spec:SPEC-004 gaia-spec
@@ -171,8 +224,9 @@ _clear_merged_at() {
   rm -rf "$REPO2"
 }
 
-# --- 6: the retired defer cache no longer blocks a reap ----------------------
+# --- the retired defer cache no longer blocks a reap --------------------------
 
+# bats test_tags=protected
 @test "6: a leftover wiki-promote defer cache file beside a reapable spec no longer blocks its reap" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
   _seed_close spec:SPEC-001 gaia-spec
@@ -188,207 +242,63 @@ _clear_merged_at() {
   [ -f "$REPO/.gaia/local/cache/wiki-promote/SPEC-001.json" ]
 }
 
-@test "7: a merged row with no active folder is a no-op" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-005 merged)"
+# --- the retention window and the merged_at rule ------------------------------
 
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  [ ! -e "$REPO/$SPECS/archived" ]
+# bats test_tags=protected
+@test "merged sweep retention window and merged_at rule" {
+  # Columns: label, GAIA_SPEC_RETENTION_DAYS, merged_at (days:<n> ago, none to
+  # drop it, or a raw value), whether the gaia-spec close is recorded, outcome,
+  # whether the keep line is asserted, and whether a second run with --close
+  # must also keep the folder (--close is accepted and ignored: no early reap).
+  local label retention stamp recorded outcome keep_line with_close
+  while IFS='|' read -r label retention stamp recorded outcome keep_line with_close; do
+    echo "case: $label"
+    _fresh_case
+    case "$stamp" in
+      none) _clear_merged_at "$REPO" SPEC-001 ;;
+      days:*) _set_merged_at "$REPO" SPEC-001 "$(_days_ago "${stamp#days:}")" ;;
+      *) _set_merged_at "$REPO" SPEC-001 "$stamp" ;;
+    esac
+    if [ "$recorded" = yes ]; then _seed_close spec:SPEC-001 gaia-spec; fi
+    export GAIA_SPEC_RETENTION_DAYS="$retention"
+
+    run _archive "$REPO"
+    [ "$status" -eq 0 ]
+    if [ "$outcome" = reaped ]; then
+      assert_contains "Deleted 1 merged SPEC folder(s): SPEC-001"
+      [ ! -e "$REPO/$SPECS/SPEC-001" ]
+      # The row stays merged; merged_at is a precondition, not set by the sweep.
+      [ "$(jq -r '.items[0].status' "$REPO/.notebook/catalog.json")" = "merged" ]
+    else
+      refute_contains "Deleted"
+      [ -f "$REPO/$SPECS/SPEC-001/SPEC.md" ]
+      if [ "$keep_line" = yes ]; then
+        assert_contains "SPEC-001 within retention window (or merged_at missing/unparseable); kept"
+      fi
+    fi
+    if [ "$with_close" = yes ]; then
+      run bash "$REPO/$ARCHIVE" "$REPO" SPEC-001 --close
+      [ "$status" -eq 0 ]
+      refute_contains "Deleted"
+      [ -d "$REPO/$SPECS/SPEC-001" ]
+    fi
+  done <<'CASES'
+within the retention window is kept|30|days:2|no|kept|yes|no
+past the retention window with its run recorded is reaped|30|days:45|yes|reaped|no|no
+no merged_at is kept regardless of representation|0|none|no|kept|yes|no
+an unparseable merged_at is kept regardless of representation|0|not-a-timestamp|no|kept|yes|no
+GAIA_SPEC_RETENTION_DAYS=0 reaps a just-merged recorded folder|0|days:0|yes|reaped|no|no
+GAIA_SPEC_RETENTION_DAYS=99999 keeps an old merged folder|99999|days:400|no|kept|no|no
+a non-numeric GAIA_SPEC_RETENTION_DAYS keeps a 10-day-old folder under the 30-day default|abc|days:10|no|kept|no|no
+a non-numeric GAIA_SPEC_RETENTION_DAYS reaps a 45-day-old recorded folder under the 30-day default|abc|days:45|yes|reaped|no|no
+a within-window consolidated folder stays kept with and without --close|30|days:2|no|kept|no|yes
+CASES
 }
 
-# --- 8: idempotent re-run ----------------------------------------------------
+# --- the consolidation gate ---------------------------------------------------
 
-@test "8: re-running the sweep after deleting is a no-op" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _seed_close spec:SPEC-001 gaia-spec
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 merged SPEC folder(s): SPEC-001"
-
-  before="$(_snapshot)"
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  after="$(_snapshot)"
-  [ "$before" = "$after" ]
-}
-
-# --- 9: only merged rows with folders are swept ------------------------------
-
-@test "9: a folder without a merged ledger row is never deleted" {
-  # SPEC-001: merged row + folder (gets deleted). SPEC-002: folder only, no
-  # ledger row (the sweep is row-driven, so it stays active).
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001 --seed-spec-folder SPEC-002 draft)"
-  _seed_close spec:SPEC-001 gaia-spec
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 merged SPEC folder(s): SPEC-001"
-
-  [ ! -e "$REPO/$SPECS/SPEC-001" ]
-  # SPEC-002 untouched: still active, never deleted.
-  [ -f "$REPO/$SPECS/SPEC-002/SPEC.md" ]
-}
-
-# --- 10: multiple merged folders in one sweep --------------------------------
-
-@test "10: two merged folders are deleted together with a combined summary" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
-    --seed-spec-merged-folder SPEC-001 --seed-spec-merged-folder SPEC-002)"
-  _seed_close spec:SPEC-001 gaia-spec
-  _seed_close spec:SPEC-002 gaia-spec
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 2 merged SPEC folder(s): SPEC-001, SPEC-002"
-  [ ! -e "$REPO/$SPECS/SPEC-001" ]
-  [ ! -e "$REPO/$SPECS/SPEC-002" ]
-}
-
-
-@test "11: no specs/archived/ tree appears across delete and skip paths" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
-    --seed-spec-merged-folder SPEC-001 --seed-spec SPEC-003 merged)"
-  _seed_close spec:SPEC-001 gaia-spec
-  # SPEC-001: run recorded, deletes. SPEC-003: merged row with no folder, skipped.
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-
-  [ ! -e "$REPO/$SPECS/SPEC-001" ]
-  [ ! -e "$REPO/$SPECS/archived" ]
-}
-
-# --- 12: no ledger -> clean no-op --------------------------------------------
-
-@test "12: a repo with no merged rows produces no output and exits 0" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# --- 13: age gate, within window -> kept -------------------------------------
-
-@test "13: a merged folder within the retention window is kept, not deleted" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _set_merged_at "$REPO" SPEC-001 "$(_days_ago 2)"
-  export GAIA_SPEC_RETENTION_DAYS=30
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  assert_contains "SPEC-001 within retention window (or merged_at missing/unparseable); kept"
-
-  [ -f "$REPO/$SPECS/SPEC-001/SPEC.md" ]
-}
-
-
-@test "14: a merged folder past the retention window with its run recorded is reaped" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _seed_close spec:SPEC-001 gaia-spec
-  _set_merged_at "$REPO" SPEC-001 "$(_days_ago 45)"
-  export GAIA_SPEC_RETENTION_DAYS=30
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 merged SPEC folder(s): SPEC-001"
-  [ ! -e "$REPO/$SPECS/SPEC-001" ]
-
-  # Ledger row stays merged; merged_at is a precondition, not set by the sweep.
-  [ "$(jq -r '.items[0].status' "$REPO/.notebook/catalog.json")" = "merged" ]
-}
-
-
-# --- 16/17: missing or unparseable merged_at -> kept regardless of age/rep ---
-
-@test "16: a merged row with no merged_at is kept regardless of representation" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _clear_merged_at "$REPO" SPEC-001
-  export GAIA_SPEC_RETENTION_DAYS=0
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  assert_contains "SPEC-001 within retention window (or merged_at missing/unparseable); kept"
-
-  [ -f "$REPO/$SPECS/SPEC-001/SPEC.md" ]
-}
-
-@test "17: a merged row with an unparseable merged_at is kept regardless of representation" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _set_merged_at "$REPO" SPEC-001 "not-a-timestamp"
-  export GAIA_SPEC_RETENTION_DAYS=0
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  assert_contains "SPEC-001 within retention window (or merged_at missing/unparseable); kept"
-
-  [ -f "$REPO/$SPECS/SPEC-001/SPEC.md" ]
-}
-
-# --- 18/19: GAIA_SPEC_RETENTION_DAYS knob is honored --------------------------
-
-@test "18: GAIA_SPEC_RETENTION_DAYS=0 reaps a just-merged recorded folder" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _seed_close spec:SPEC-001 gaia-spec
-  _set_merged_at "$REPO" SPEC-001 "$(_days_ago 0)"
-  export GAIA_SPEC_RETENTION_DAYS=0
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 merged SPEC folder(s): SPEC-001"
-  [ ! -e "$REPO/$SPECS/SPEC-001" ]
-}
-
-@test "19: GAIA_SPEC_RETENTION_DAYS=99999 keeps an old merged folder" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _set_merged_at "$REPO" SPEC-001 "$(_days_ago 400)"
-  export GAIA_SPEC_RETENTION_DAYS=99999
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-
-  [ -f "$REPO/$SPECS/SPEC-001/SPEC.md" ]
-}
-
-
-@test "20: a non-numeric GAIA_SPEC_RETENTION_DAYS falls back to the 30-day default" {
-  export GAIA_SPEC_RETENTION_DAYS="abc"
-
-  # Within the 30-day fallback: kept (proves the fallback isn't 0).
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _set_merged_at "$REPO" SPEC-001 "$(_days_ago 10)"
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  [ -d "$REPO/$SPECS/SPEC-001" ]
-
-  # Past the 30-day fallback: reaped (proves the fallback isn't unbounded).
-  REPO2="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-002)"
-  seed_close_row "$REPO2/.gaia/local/telemetry" spec:SPEC-002 gaia-spec
-  _set_merged_at "$REPO2" SPEC-002 "$(_days_ago 45)"
-  run bash "$REPO2/$ARCHIVE" "$REPO2"
-  [ "$status" -eq 0 ]
-  assert_contains "Deleted 1 merged SPEC folder(s): SPEC-002"
-  rm -rf "$REPO2"
-}
-
-# --- 21: --close is accepted and ignored: no early reap -----------------------
-
-@test "21: a within-window consolidated folder stays kept with and without --close" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _set_merged_at "$REPO" SPEC-001 "$(_days_ago 2)"
-  export GAIA_SPEC_RETENTION_DAYS=30
-
-  run _archive "$REPO"
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  [ -d "$REPO/$SPECS/SPEC-001" ]
+_consolidation_close_does_not_bypass() {
+  rm -f "$REPO/$SPECS/SPEC-001/SUMMARY.md"
 
   run bash "$REPO/$ARCHIVE" "$REPO" SPEC-001 --close
   [ "$status" -eq 0 ]
@@ -396,22 +306,7 @@ _clear_merged_at() {
   [ -d "$REPO/$SPECS/SPEC-001" ]
 }
 
-# --- 22: --close never bypasses the consolidation gate -----------------------
-
-@test "22: --close does not bypass the consolidation gate" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-002)"
-  rm -f "$REPO/$SPECS/SPEC-002/SUMMARY.md"
-
-  run bash "$REPO/$ARCHIVE" "$REPO" SPEC-002 --close
-  [ "$status" -eq 0 ]
-  refute_contains "Deleted"
-  [ -d "$REPO/$SPECS/SPEC-002" ]
-}
-
-# --- 23: consolidation gate keeps a SPEC.md-only folder regardless of age/cost -
-
-@test "23: a folder holding SPEC.md with no SUMMARY.md is kept past the window even when its run is recorded" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+_consolidation_spec_without_summary_kept() {
   rm -f "$REPO/$SPECS/SPEC-001/SUMMARY.md"
   _seed_close spec:SPEC-001 gaia-spec
   _set_merged_at "$REPO" SPEC-001 "$(_days_ago 45)"
@@ -421,12 +316,10 @@ _clear_merged_at() {
   [ "$status" -eq 0 ]
   refute_contains "Deleted"
   assert_contains "consolidation never ran; kept SPEC-001"
-
   [ -f "$REPO/$SPECS/SPEC-001/SPEC.md" ]
 }
 
-@test "24: a folder holding only AUDIT.md (no SPEC.md, no SUMMARY.md) is kept" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+_consolidation_audit_only_kept() {
   rm -f "$REPO/$SPECS/SPEC-001/SPEC.md" "$REPO/$SPECS/SPEC-001/SUMMARY.md"
   printf '# Audit\n' > "$REPO/$SPECS/SPEC-001/AUDIT.md"
   _set_merged_at "$REPO" SPEC-001 "$(_days_ago 45)"
@@ -436,12 +329,10 @@ _clear_merged_at() {
   [ "$status" -eq 0 ]
   refute_contains "Deleted"
   assert_contains "consolidation never ran; kept SPEC-001"
-
   [ -f "$REPO/$SPECS/SPEC-001/AUDIT.md" ]
 }
 
-@test "25: a folder already reduced to SUMMARY.md (no SPEC.md) passes the consolidation gate" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+_consolidation_summary_only_passes() {
   _seed_close spec:SPEC-001 gaia-spec
   rm -f "$REPO/$SPECS/SPEC-001/SPEC.md"
   _set_merged_at "$REPO" SPEC-001 "$(_days_ago 45)"
@@ -453,14 +344,11 @@ _clear_merged_at() {
   [ ! -e "$REPO/$SPECS/SPEC-001" ]
 }
 
-# --- 26: real delegation to summary-verify.sh, not just the fallback --------
-
-@test "26: prefers summary-verify.sh when present; a malformed but non-empty SUMMARY.md is kept" {
+_consolidation_malformed_summary_kept() {
+  local real_root verify_source
   real_root="$(cd "$BATS_TEST_DIRNAME" && git rev-parse --show-toplevel)"
   verify_source="$real_root/.gaia/scripts/summary-verify.sh"
   [ -f "$verify_source" ]
-
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
   cp "$verify_source" "$REPO/.gaia/scripts/summary-verify.sh"
   # SPEC.md is already seeded; overwrite SUMMARY.md with non-empty but
   # malformed content (no frontmatter/H1). A plain [ -s SUMMARY.md ] fallback
@@ -476,7 +364,24 @@ _clear_merged_at() {
   assert_contains "consolidation never ran; kept SPEC-001"
 }
 
-# --- 27: the liveness lock is reaped with the rest of the merged keyset -----
+# bats test_tags=protected
+@test "consolidation gate keeps unconsolidated folders and --close does not bypass it" {
+  local label function_name
+  while IFS='|' read -r label function_name; do
+    echo "case: $label"
+    _fresh_case
+    export GAIA_SPEC_RETENTION_DAYS=0
+    "$function_name"
+  done <<'CASES'
+--close does not bypass the consolidation gate|_consolidation_close_does_not_bypass
+a folder holding SPEC.md with no SUMMARY.md is kept past the window even when its run is recorded|_consolidation_spec_without_summary_kept
+a folder holding only AUDIT.md (no SPEC.md, no SUMMARY.md) is kept|_consolidation_audit_only_kept
+a folder already reduced to SUMMARY.md (no SPEC.md) passes the consolidation gate|_consolidation_summary_only_passes
+prefers summary-verify.sh when present; a malformed but non-empty SUMMARY.md is kept|_consolidation_malformed_summary_kept
+CASES
+}
+
+# --- the liveness lock is reaped with the rest of the merged keyset -----------
 
 @test "27: a .lock file is reaped alongside the deleted merged folder" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
@@ -491,6 +396,7 @@ _clear_merged_at() {
   [ ! -e "$REPO/.gaia/local/cache/spec-session-SPEC-001.lock" ]
 }
 
+# bats test_tags=protected
 @test "28: without ledger-lib.sh the sweep reaps nothing and says so; with it the same folder is reaped" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
   _seed_close spec:SPEC-001 gaia-spec
@@ -507,7 +413,11 @@ _clear_merged_at() {
   [ ! -e "$REPO/$SPECS/SPEC-001" ]
 }
 
-@test "29: a run missing from the usage ledger leaves its folder, prints the keep line, and the sweep still reaps the next row" {
+# --- the usage-ledger gate over folder shapes ---------------------------------
+
+_close_gate_missing_run() {
+  # This case needs a second reapable row, so it builds its own repo.
+  rm -rf "$REPO"
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001 --seed-spec-merged-folder SPEC-002)"
   _seed_close spec:SPEC-002 gaia-spec
 
@@ -518,8 +428,7 @@ _clear_merged_at() {
   [ ! -e "$REPO/$SPECS/SPEC-002" ]
 }
 
-@test "30: a missing usage ledger keeps the folder and the keep line names the ledger path" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+_close_gate_missing_ledger() {
   rm -f "$REPO/$USAGE_LEDGER"
 
   run _archive "$REPO"
@@ -529,8 +438,7 @@ _clear_merged_at() {
   [ -d "$REPO/$SPECS/SPEC-001" ]
 }
 
-@test "31: a gaia-plan close alone does not clear a folder that needs its gaia-spec run" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+_close_gate_plan_close_alone() {
   _seed_close spec:SPEC-001 gaia-plan
 
   run _archive "$REPO"
@@ -540,8 +448,7 @@ _clear_merged_at() {
   [ -d "$REPO/$SPECS/SPEC-001" ]
 }
 
-@test "32: a folder holding a plan subfolder needs both the gaia-spec and the gaia-plan close" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+_close_gate_plan_subfolder() {
   mkdir -p "$REPO/$SPECS/SPEC-001/plan"
   _seed_close spec:SPEC-001 gaia-spec
 
@@ -558,8 +465,7 @@ _clear_merged_at() {
   [ ! -e "$REPO/$SPECS/SPEC-001" ]
 }
 
-@test "33: a plan-<N> subfolder also requires the gaia-plan close" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+_close_gate_numbered_plan_subfolder() {
   mkdir -p "$REPO/$SPECS/SPEC-001/plan-2"
   _seed_close spec:SPEC-001 gaia-spec
 
@@ -570,8 +476,7 @@ _clear_merged_at() {
   [ -d "$REPO/$SPECS/SPEC-001/plan-2" ]
 }
 
-@test "34: a plan subfolder whose TEST-STAGE ran also needs the gaia-test close" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+_close_gate_test_stage_ran() {
   mkdir -p "$REPO/$SPECS/SPEC-001/plan"
   printf 'status: ran\ndate: 2026-01-01T00:00:00Z\n' > "$REPO/$SPECS/SPEC-001/plan/TEST-STAGE"
   _seed_close spec:SPEC-001 gaia-spec
@@ -590,8 +495,7 @@ _clear_merged_at() {
   [ ! -e "$REPO/$SPECS/SPEC-001" ]
 }
 
-@test "35: a skipped TEST-STAGE owes no gaia-test close" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
+_close_gate_test_stage_skipped() {
   mkdir -p "$REPO/$SPECS/SPEC-001/plan"
   printf 'status: skipped\n' > "$REPO/$SPECS/SPEC-001/plan/TEST-STAGE"
   _seed_close spec:SPEC-001 gaia-spec
@@ -600,4 +504,22 @@ _clear_merged_at() {
   run _archive "$REPO"
   [ "$status" -eq 0 ]
   assert_contains "Deleted 1 merged SPEC folder(s): SPEC-001"
+}
+
+# bats test_tags=protected
+@test "deletion requires the close records the folder shape owes" {
+  local label function_name
+  while IFS='|' read -r label function_name; do
+    echo "case: $label"
+    _fresh_case
+    "$function_name"
+  done <<'CASES'
+a run missing from the usage ledger leaves its folder, prints the keep line, and the sweep still reaps the next row|_close_gate_missing_run
+a missing usage ledger keeps the folder and the keep line names the ledger path|_close_gate_missing_ledger
+a gaia-plan close alone does not clear a folder that needs its gaia-spec run|_close_gate_plan_close_alone
+a folder holding a plan subfolder needs both the gaia-spec and the gaia-plan close|_close_gate_plan_subfolder
+a plan-<N> subfolder also requires the gaia-plan close|_close_gate_numbered_plan_subfolder
+a plan subfolder whose TEST-STAGE ran also needs the gaia-test close|_close_gate_test_stage_ran
+a skipped TEST-STAGE owes no gaia-test close|_close_gate_test_stage_skipped
+CASES
 }

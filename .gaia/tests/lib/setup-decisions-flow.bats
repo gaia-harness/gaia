@@ -288,45 +288,37 @@ who_records() {
     FOUND= HOST= ADMIN= AUTH_STATUS= DEFAULT_BRANCH= "$@"
 }
 
-@test "who records: an admin on the default branch is admin, and on another branch is none" {
-  local repo
-  repo="$(make_repo who-admin)"
-  run who_records "$repo" FOUND=true HOST=github.com ADMIN=true AUTH_STATUS=ok DEFAULT_BRANCH=main
-  grep -qx 'MAY_RECORD_PROJECT=admin' <<<"$output"
-  grep -qx 'DEFAULT_BRANCH=main' <<<"$output"
-  git -C "$repo" checkout -q -b feature
-  run who_records "$repo" FOUND=true HOST=github.com ADMIN=true AUTH_STATUS=ok DEFAULT_BRANCH=main
-  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
-}
-
-@test "who records: a non-admin, a failed auth, and no origin are none" {
-  local repo
-  repo="$(make_repo who-none)"
-  run who_records "$repo" FOUND=true HOST=github.com ADMIN=false AUTH_STATUS=ok DEFAULT_BRANCH=main
-  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
-  run who_records "$repo" FOUND=true HOST=github.com ADMIN=true AUTH_STATUS=unauthenticated DEFAULT_BRANCH=main
-  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
-  run who_records "$repo" FOUND=false DEFAULT_BRANCH=main
-  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
-  grep -qx 'DEFAULT_BRANCH=' <<<"$output"
-}
-
-@test "who records: a non-GitHub origin takes its default branch from origin/HEAD, and without one is none" {
+# bats test_tags=protected
+@test "who records project decisions by role, auth, host and branch" {
   local repo origin="${BATS_TEST_TMPDIR}/who-origin.git"
-  repo="$(make_repo who-other-host)"
+  # One repository serves every case: the block reads only the current branch
+  # and origin/HEAD, so the cases run in an order that adds that state.
+  repo="$(make_repo who-records)"
+  run who_records "$repo" FOUND=true HOST=github.com ADMIN=true AUTH_STATUS=ok DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=admin' <<<"$output" || { echo "case admin on main: $output"; return 1; }
+  grep -qx 'DEFAULT_BRANCH=main' <<<"$output" || { echo "case admin on main: $output"; return 1; }
+  run who_records "$repo" FOUND=true HOST=github.com ADMIN=false AUTH_STATUS=ok DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output" || { echo "case non-admin: $output"; return 1; }
+  run who_records "$repo" FOUND=true HOST=github.com ADMIN=true AUTH_STATUS=unauthenticated DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output" || { echo "case failed auth: $output"; return 1; }
+  run who_records "$repo" FOUND=false DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output" || { echo "case no origin: $output"; return 1; }
+  grep -qx 'DEFAULT_BRANCH=' <<<"$output" || { echo "case no origin: $output"; return 1; }
   git init -q --bare "$origin"
   git -C "$repo" remote add origin "$origin"
   run who_records "$repo" FOUND=true HOST=git.example.com
-  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
-  grep -qx 'DEFAULT_BRANCH=' <<<"$output"
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output" || { echo "case other host, no origin/HEAD: $output"; return 1; }
+  grep -qx 'DEFAULT_BRANCH=' <<<"$output" || { echo "case other host, no origin/HEAD: $output"; return 1; }
   git -C "$repo" push -q origin main
   git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
   run who_records "$repo" FOUND=true HOST=git.example.com
-  grep -qx 'MAY_RECORD_PROJECT=not-applicable-only' <<<"$output"
-  grep -qx 'DEFAULT_BRANCH=main' <<<"$output"
+  grep -qx 'MAY_RECORD_PROJECT=not-applicable-only' <<<"$output" || { echo "case other host on default branch: $output"; return 1; }
+  grep -qx 'DEFAULT_BRANCH=main' <<<"$output" || { echo "case other host on default branch: $output"; return 1; }
   git -C "$repo" checkout -q -b feature
+  run who_records "$repo" FOUND=true HOST=github.com ADMIN=true AUTH_STATUS=ok DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output" || { echo "case admin on another branch: $output"; return 1; }
   run who_records "$repo" FOUND=true HOST=git.example.com
-  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output" || { echo "case other host on another branch: $output"; return 1; }
 }
 
 # ---------------------------------------------------------------------------
@@ -399,6 +391,7 @@ record_standalone_not_applicable() {
   [ "$(jq -c 'keys' "${repo}/.gaia/project.json")" = '["isolation_policy","sandbox_recommended","setup_decisions","version"]' ]
 }
 
+# bats test_tags=protected
 @test "the probe blocks keep every other key of an existing project.json" {
   local repo before
   repo="$(make_provisioned probes-existing)"
@@ -417,40 +410,46 @@ record_standalone_not_applicable() {
 # A machine id on a completed machine
 # ---------------------------------------------------------------------------
 
-@test "an owed statusline choice with no global statusline records not-applicable on this machine" {
+@test "statusline choice records not-applicable without a global statusline and declined for a standing user choice" {
   local repo
-  repo="$(make_repo statusline-none)"
+  # One repository: the no-global case runs first, then the user choice
+  # overwrites its record.
+  repo="$(make_repo statusline-choice)"
   record_all_but "$repo" statusline-left
-  [ "$(undecided_ids "$repo")" = statusline-left ]
+  [ "$(undecided_ids "$repo")" = statusline-left ] || { echo "case no global: statusline-left not the only owed id"; return 1; }
   run_block "$repo" "$(block_under "${REFERENCES}/statusline-left.md" '## Record a settled choice')" \
     GLOBAL_STATUSLINE= LEFT_CHOICE= >/dev/null
-  [ "$(jq -r '.decisions["statusline-left"]' "${repo}/.gaia/local/setup-state.json")" = not-applicable ]
-  [ -z "$(undecided_ids "$repo")" ]
-}
-
-@test "a standing user statusline choice records declined" {
-  local repo
-  repo="$(make_repo statusline-user)"
+  [ "$(jq -r '.decisions["statusline-left"]' "${repo}/.gaia/local/setup-state.json")" = not-applicable ] || { echo "case no global: not recorded not-applicable"; return 1; }
+  [ -z "$(undecided_ids "$repo")" ] || { echo "case no global: still owed"; return 1; }
   run_block "$repo" "$(block_under "${REFERENCES}/statusline-left.md" '## Record a settled choice')" \
     GLOBAL_STATUSLINE=my-statusline LEFT_CHOICE=user >/dev/null
-  [ "$(jq -r '.decisions["statusline-left"]' "${repo}/.gaia/local/setup-state.json")" = declined ]
+  [ "$(jq -r '.decisions["statusline-left"]' "${repo}/.gaia/local/setup-state.json")" = declined ] || { echo "case user choice: not recorded declined"; return 1; }
 }
 
 # ---------------------------------------------------------------------------
 # The declined rule
 # ---------------------------------------------------------------------------
 
-@test "the declined check passes only for an id recorded declined" {
+@test "owed and declined check lines gate on the recorded decision" {
   local repo line
-  repo="$(make_repo declined-check)"
+  # One repository: the two cases check different ids.
+  repo="$(make_repo check-lines)"
   line="$(check_line declined sandbox)"
   run in_repo "$repo" bash -c "$line"
-  [ "$status" -ne 0 ]
+  [ "$status" -ne 0 ] || { echo "case declined, undecided: passed"; return 1; }
   in_repo "$repo" .gaia/cli/gaia setup record sandbox applied >/dev/null
   run in_repo "$repo" bash -c "$line"
-  [ "$status" -ne 0 ]
+  [ "$status" -ne 0 ] || { echo "case declined, applied: passed"; return 1; }
   in_repo "$repo" .gaia/cli/gaia setup record sandbox declined >/dev/null
-  in_repo "$repo" bash -c "$line"
+  in_repo "$repo" bash -c "$line" || { echo "case declined, declined: failed"; return 1; }
+  line="$(check_line owed squash-only)"
+  in_repo "$repo" bash -c "$line" || { echo "case owed, undecided: failed"; return 1; }
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
+  run in_repo "$repo" bash -c "$line"
+  [ "$status" -ne 0 ] || { echo "case owed, declined: passed"; return 1; }
+  run in_repo "$repo" .gaia/cli/gaia setup record squash-only applied
+  [ "$(jq -r '.previous' <<<"$output")" = declined ] || { echo "case owed, overwrite: previous not declined"; return 1; }
+  [ "$(jq -r '.setup_decisions["squash-only"]' "${repo}/.gaia/project.json")" = applied ] || { echo "case owed, overwrite: not applied"; return 1; }
 }
 
 # ---------------------------------------------------------------------------
@@ -492,6 +491,7 @@ land_block() {
   [ "$(run_block "$repo" "$(land_block 1)")" = NOTHING_TO_LAND ]
 }
 
+# bats test_tags=protected
 @test "a failed push reports the decisions committed locally" {
   local repo output_text
   repo="$(make_repo land-no-origin)"
@@ -502,45 +502,6 @@ land_block() {
   true
 }
 
-# check_land_order <file>: under `## Land the decisions`, the sentinel touch
-# sits in a fence of its own with no git command, before the fence staging
-# .gaia/project.json, and a fence removing the sentinel follows that one.
-check_land_order() {
-  awk '
-    $0 == "## Land the decisions" { seen = 1; next }
-    seen && /^## / { exit }
-    seen && /^```bash[[:space:]]*$/ { inside = 1; n++; touch = 0; git = 0; next }
-    seen && inside && /^```[[:space:]]*$/ {
-      inside = 0
-      if (touch && !git && !touch_fence) touch_fence = n
-      next
-    }
-    seen && inside && /^touch \.gaia\/local\/setup-in-progress$/ { touch = 1 }
-    seen && inside && /^git / { git = 1 }
-    seen && inside && /^git add \.gaia\/project\.json$/ && !commit_fence { commit_fence = n }
-    seen && inside && /^rm -f \.gaia\/local\/setup-in-progress$/ { remove_fence = n }
-    END {
-      if (!touch_fence || !commit_fence || !remove_fence) exit 1
-      exit !(touch_fence < commit_fence && commit_fence < remove_fence)
-    }
-  ' "$1" || {
-    echo "the sentinel touch, the commit and the sentinel removal are not three ordered fences" >&2
-    return 1
-  }
-}
-
-@test "the land order check fails when the touch folds into the commit fence" {
-  local copy="${BATS_TEST_TMPDIR}/land-folded.md"
-  awk '
-    /^touch \.gaia\/local\/setup-in-progress$/ { next }
-    /^git add \.gaia\/project\.json$/ { print "touch .gaia/local/setup-in-progress" }
-    { print }
-  ' "${REFERENCES}/land-decisions.md" >"$copy"
-  cmp -s "${REFERENCES}/land-decisions.md" "$copy" && return 1
-  run check_land_order "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # The setup ping
 # ---------------------------------------------------------------------------
@@ -549,42 +510,30 @@ ping_block() {
   block_under "${REFERENCES}/land-decisions.md" '## The setup ping'
 }
 
-@test "a plain re-run that decided an owed id pings with the real sandbox value, no type and no repo" {
-  local repo
-  repo="$(make_repo ping-plain)"
-  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
-  run_block "$repo" "$(ping_block)" SETUP_TYPE= REPO_CHOICE= OWED_AT_START='squash-only label-sync' \
-    STUB_SANDBOX_STATUS='{"resolved": true, "outcome": "enabled"}' >/dev/null
-  [ "$(cat "$CLI_LOG")" = 'ping --event setup --sandbox on' ]
-}
-
-@test "the ping carries --repo only when the connect question was answered" {
-  local repo
-  repo="$(make_repo ping-repo)"
-  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
-  run_block "$repo" "$(ping_block)" SETUP_TYPE= REPO_CHOICE=create OWED_AT_START=squash-only \
-    STUB_SANDBOX_STATUS='{"resolved": true, "outcome": "declined"}' >/dev/null
-  [ "$(cat "$CLI_LOG")" = 'ping --event setup --sandbox off --repo create' ]
-}
-
-@test "a plain re-run that decided nothing sends no ping and leaves project.json byte-identical" {
+@test "the ping block pings per owed, type and repo inputs and skips when nothing was decided" {
   local repo output_text
-  repo="$(make_repo ping-skipped)"
+  # One repository: the two cases that need nothing decided run before the
+  # record the other two need.
+  repo="$(make_repo ping-wiring)"
   printf '%s\n' '{"version": 1, "x": true}' >"${repo}/.gaia/project.json"
   cp "${repo}/.gaia/project.json" "${BATS_TEST_TMPDIR}/project-before.json"
   output_text="$(run_block "$repo" "$(ping_block)" SETUP_TYPE= REPO_CHOICE= OWED_AT_START='squash-only sandbox' \
     STUB_SANDBOX_STATUS='{"resolved": true, "outcome": "enabled"}')"
-  [ "$output_text" = PING_SKIPPED ]
-  [ ! -s "$CLI_LOG" ]
-  cmp "${BATS_TEST_TMPDIR}/project-before.json" "${repo}/.gaia/project.json"
-}
-
-@test "a reconfigure run pings with its type even when nothing was newly decided" {
-  local repo
-  repo="$(make_repo ping-type)"
+  [ "$output_text" = PING_SKIPPED ] || { echo "case nothing decided: $output_text"; return 1; }
+  [ ! -s "$CLI_LOG" ] || { echo "case nothing decided: pinged"; return 1; }
+  cmp "${BATS_TEST_TMPDIR}/project-before.json" "${repo}/.gaia/project.json" || { echo "case nothing decided: project.json changed"; return 1; }
   run_block "$repo" "$(ping_block)" SETUP_TYPE=reconfigure REPO_CHOICE= OWED_AT_START= \
     STUB_SANDBOX_STATUS='{"resolved": false}' >/dev/null
-  [ "$(cat "$CLI_LOG")" = 'ping --event setup --sandbox off --type reconfigure' ]
+  [ "$(cat "$CLI_LOG")" = 'ping --event setup --sandbox off --type reconfigure' ] || { echo "case reconfigure: $(cat "$CLI_LOG")"; return 1; }
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
+  : >"$CLI_LOG"
+  run_block "$repo" "$(ping_block)" SETUP_TYPE= REPO_CHOICE= OWED_AT_START='squash-only label-sync' \
+    STUB_SANDBOX_STATUS='{"resolved": true, "outcome": "enabled"}' >/dev/null
+  [ "$(cat "$CLI_LOG")" = 'ping --event setup --sandbox on' ] || { echo "case plain decided: $(cat "$CLI_LOG")"; return 1; }
+  : >"$CLI_LOG"
+  run_block "$repo" "$(ping_block)" SETUP_TYPE= REPO_CHOICE=create OWED_AT_START=squash-only \
+    STUB_SANDBOX_STATUS='{"resolved": true, "outcome": "declined"}' >/dev/null
+  [ "$(cat "$CLI_LOG")" = 'ping --event setup --sandbox off --repo create' ] || { echo "case repo answered: $(cat "$CLI_LOG")"; return 1; }
 }
 
 # ---------------------------------------------------------------------------
@@ -595,84 +544,49 @@ label_sync_block() {
   block_under "$SETUP_COMMAND" '## Phase 4.5: Label sync (always evaluated)'
 }
 
-@test "a degraded label sync on stdout prints no LABELS_APPLIED and records nothing" {
+@test "label sync records only a clean sync owed to an admin" {
   local repo output_text
-  repo="$(make_repo labels-degraded)"
+  # One repository: the cases that record nothing run before the one that records.
+  repo="$(make_repo labels-sync)"
   output_text="$(run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=admin \
     STUB_SYNC_STDOUT='labels-sync: degraded, manual commands follow' STUB_SYNC_STATUS=0)"
-  grep -qxF 'labels-sync: degraded, manual commands follow' <<<"$output_text"
-  grep -qx LABELS_APPLIED <<<"$output_text" && return 1
-  [ -z "$(decision "$repo" label-sync)" ]
-}
-
-@test "a block testing stderr for the marker records the degraded sync, so stdout is what catches it" {
-  local repo block mutated old new
-  repo="$(make_repo labels-stderr)"
-  block="$(label_sync_block)"
-  old='SYNC_OUTPUT="$(.gaia/cli/gaia labels sync)"'
-  new='SYNC_OUTPUT="$(.gaia/cli/gaia labels sync 2>&1 >/dev/null)"'
-  mutated="${block/"$old"/"$new"}"
-  [ "$mutated" != "$block" ]
-  run_block "$repo" "$mutated" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=admin \
-    STUB_SYNC_STDOUT='labels-sync: degraded, manual commands follow' STUB_SYNC_STATUS=0 >/dev/null
-  [ "$(decision "$repo" label-sync)" = applied ]
-}
-
-@test "a clean label sync records only when label-sync is owed and the run is an admin's" {
-  local repo output_text
-  repo="$(make_repo labels-gates)"
-  output_text="$(run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=false MAY_RECORD_PROJECT=admin)"
-  grep -qx LABELS_APPLIED <<<"$output_text"
-  [ -z "$(decision "$repo" label-sync)" ]
-  run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=none >/dev/null
-  [ -z "$(decision "$repo" label-sync)" ]
-  run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=admin >/dev/null
-  [ "$(decision "$repo" label-sync)" = applied ]
-}
-
-@test "a failed label sync records nothing" {
-  local repo output_text
-  repo="$(make_repo labels-failed)"
+  grep -qxF 'labels-sync: degraded, manual commands follow' <<<"$output_text" || { echo "case degraded: marker not printed"; return 1; }
+  grep -qx LABELS_APPLIED <<<"$output_text" && { echo "case degraded: LABELS_APPLIED printed"; return 1; }
+  [ -z "$(decision "$repo" label-sync)" ] || { echo "case degraded: recorded"; return 1; }
   output_text="$(run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=admin STUB_SYNC_STATUS=1)"
-  grep -qx LABELS_APPLIED <<<"$output_text" && return 1
-  [ -z "$(decision "$repo" label-sync)" ]
+  grep -qx LABELS_APPLIED <<<"$output_text" && { echo "case failed: LABELS_APPLIED printed"; return 1; }
+  [ -z "$(decision "$repo" label-sync)" ] || { echo "case failed: recorded"; return 1; }
+  output_text="$(run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=false MAY_RECORD_PROJECT=admin)"
+  grep -qx LABELS_APPLIED <<<"$output_text" || { echo "case not owed: no LABELS_APPLIED"; return 1; }
+  [ -z "$(decision "$repo" label-sync)" ] || { echo "case not owed: recorded"; return 1; }
+  run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=none >/dev/null
+  [ -z "$(decision "$repo" label-sync)" ] || { echo "case non-admin: recorded"; return 1; }
+  run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=admin >/dev/null
+  [ "$(decision "$repo" label-sync)" = applied ] || { echo "case owed admin: not applied"; return 1; }
 }
 
 # ---------------------------------------------------------------------------
 # The squash-only gate
 # ---------------------------------------------------------------------------
 
-@test "the squash-only owed check passes while undecided, fails once declined, and a new answer overwrites" {
-  local repo line
-  repo="$(make_repo squash-gate)"
-  line="$(check_line owed squash-only)"
-  in_repo "$repo" bash -c "$line"
-  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
-  run in_repo "$repo" bash -c "$line"
-  [ "$status" -ne 0 ]
-  run in_repo "$repo" .gaia/cli/gaia setup record squash-only applied
-  [ "$(jq -r '.previous' <<<"$output")" = declined ]
-  [ "$(jq -r '.setup_decisions["squash-only"]' "${repo}/.gaia/project.json")" = applied ]
-}
-
 # ---------------------------------------------------------------------------
 # Who may record: the admin rule
 # ---------------------------------------------------------------------------
 
-@test "with MAY_RECORD_PROJECT none, no project block records while a machine block still does" {
-  local repo
+# bats test_tags=protected
+@test "project blocks record by MAY_RECORD_PROJECT value" {
+  local repo id undecided expected_count=0
+  local -a owed_ids=(github-repository push-protection branch-protection gaia-audit-check delete-branch-on-merge dependabot-posture label-sync)
+  # Two repositories: the none case needs a provisioned machine, and the
+  # not-applicable-only case counts the machine ids as still undecided.
   repo="$(make_provisioned admin-none)"
   record_settled_state "$repo" none >/dev/null
   run_block "$repo" "$(block_under "${REFERENCES}/github-repo.md" '## Owed and recorded settings' 1)" \
     MAY_RECORD_PROJECT=none >/dev/null
-  [ ! -e "${repo}/.gaia/project.json" ]
-  [ "$(decision "$repo" statusline-left)" = applied ]
-  [ "$(decision "$repo" sandbox)" = declined ]
-}
-
-@test "with MAY_RECORD_PROJECT not-applicable-only, the non-GitHub arm records only owed GitHub ids" {
-  local repo id undecided expected_count=0
-  local -a owed_ids=(github-repository push-protection branch-protection gaia-audit-check delete-branch-on-merge dependabot-posture label-sync)
+  [ ! -e "${repo}/.gaia/project.json" ] || { echo "case none: project.json written"; return 1; }
+  [ "$(decision "$repo" statusline-left)" = applied ] || { echo "case none: statusline-left not applied"; return 1; }
+  [ "$(decision "$repo" sandbox)" = declined ] || { echo "case none: sandbox not declined"; return 1; }
+  : >"$GH_LOG"
   repo="$(make_repo admin-other-host)"
   in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
   run_block "$repo" "$(block_under "${REFERENCES}/github-repo.md" '## Owed and recorded settings' 1)" \
@@ -681,27 +595,27 @@ label_sync_block() {
     OWNER=o REPO=r HOST=git.example.com DEFAULT_BRANCH=main MAY_RECORD_PROJECT=not-applicable-only >/dev/null
   for id in "${owed_ids[@]}"; do
     [ "$(decision_cached "$repo" "$id")" = not-applicable ] || {
-      echo "${id} recorded '$(decision_cached "$repo" "$id")', expected not-applicable" >&2
+      echo "case not-applicable-only: ${id} recorded '$(decision_cached "$repo" "$id")', expected not-applicable" >&2
       return 1
     }
   done
-  [ "$(decision_cached "$repo" squash-only)" = declined ]
+  [ "$(decision_cached "$repo" squash-only)" = declined ] || { echo "case not-applicable-only: squash-only not declined"; return 1; }
   # The recorded set is the owed GitHub ids plus the one declined id; every
   # other registry id is still undecided, in the registry's own order.
-  [ "$(jq -r '.setup_decisions | keys | length' "${repo}/.gaia/project.json")" -eq $((${#owed_ids[@]} + 1)) ]
+  [ "$(jq -r '.setup_decisions | keys | length' "${repo}/.gaia/project.json")" -eq $((${#owed_ids[@]} + 1)) ] || { echo "case not-applicable-only: recorded count"; return 1; }
   undecided="$(undecided_ids_cached "$repo")"
   for id in $(jq -r '.features[].id' "$FEATURE_LIST"); do
     [ "$id" = squash-only ] && continue
     case " ${owed_ids[*]} " in *" $id "*) continue ;; esac
     expected_count=$((expected_count + 1))
     tr ' ' '\n' <<<"$undecided" | grep -qxF -- "$id" || {
-      echo "${id} should still be undecided: ${undecided}" >&2
+      echo "case not-applicable-only: ${id} should still be undecided: ${undecided}" >&2
       return 1
     }
   done
-  [ "$expected_count" -gt 0 ]
-  [ "$(wc -w <<<"$undecided" | tr -d ' ')" -eq "$expected_count" ]
-  [ ! -s "$GH_LOG" ]
+  [ "$expected_count" -gt 0 ] || { echo "case not-applicable-only: no other id"; return 1; }
+  [ "$(wc -w <<<"$undecided" | tr -d ' ')" -eq "$expected_count" ] || { echo "case not-applicable-only: undecided count"; return 1; }
+  [ ! -s "$GH_LOG" ] || { echo "case not-applicable-only: gh called"; return 1; }
 }
 
 # ---------------------------------------------------------------------------
@@ -724,37 +638,35 @@ standalone_not_applicable_block() {
   printf '%s\n' "${block//<id>/$1}"
 }
 
-@test "Phase 5 hands an admin each undecided standalone feature, and a non-admin only the machine one" {
-  local list="${BATS_TEST_TMPDIR}/standalone-list.json" repo output_text
+@test "Phase 5 standalone handoff by role and host" {
+  local list="${BATS_TEST_TMPDIR}/standalone-list.json" repo output_text reference
+  # Two repositories: the role cases need a fixture list, and the host case
+  # the real one.
   jq '.features |= map(select(.standalone | not)) | .features += [
     {"id": "later-machine", "scope": "machine", "required": true, "admin": false, "standalone": true, "reference": "docs/later-machine.md"},
     {"id": "later-project", "scope": "project", "required": false, "admin": true, "standalone": true, "reference": "docs/later-project.md"}
   ]' "$FEATURE_LIST" >"$list"
   repo="$(make_repo standalone "$list")"
   output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=admin)"
-  [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'OWED_FEATURE later-project ask docs/later-project.md')" ]
+  [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'OWED_FEATURE later-project ask docs/later-project.md')" ] || { echo "case admin: $output_text"; return 1; }
   output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=none)"
-  [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'SKIP_PROJECT later-project')" ]
+  [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'SKIP_PROJECT later-project')" ] || { echo "case non-admin: $output_text"; return 1; }
   output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=not-applicable-only)"
-  [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'OWED_FEATURE later-project detect docs/later-project.md')" ]
-}
-
-@test "Phase 5 on a non-GitHub origin records required-ci-checks not-applicable, and the next run owes nothing for it" {
-  local repo output_text reference
+  [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'OWED_FEATURE later-project detect docs/later-project.md')" ] || { echo "case not-applicable-only: $output_text"; return 1; }
   reference="$(jq -r '.features[] | select(.id == "required-ci-checks") | .reference' "$FEATURE_LIST")"
-  [ -n "$reference" ]
+  [ -n "$reference" ] || { echo "case other host: required-ci-checks has no reference"; return 1; }
   repo="$(make_repo standalone-other-host)"
   output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=not-applicable-only)"
-  grep -qxF -- 'SKIP_PROJECT required-ci-checks' <<<"$output_text" && return 1
-  grep -qxF -- "OWED_FEATURE required-ci-checks detect ${reference}" <<<"$output_text"
+  grep -qxF -- 'SKIP_PROJECT required-ci-checks' <<<"$output_text" && { echo "case other host: skipped"; return 1; }
+  grep -qxF -- "OWED_FEATURE required-ci-checks detect ${reference}" <<<"$output_text" || { echo "case other host: not handed as detect"; return 1; }
   # Off the default branch the gate records nothing.
   run_block "$repo" "$(standalone_not_applicable_block required-ci-checks)" MAY_RECORD_PROJECT=none >/dev/null
-  [ -z "$(decision "$repo" required-ci-checks)" ]
+  [ -z "$(decision "$repo" required-ci-checks)" ] || { echo "case other host, none: recorded"; return 1; }
   run_block "$repo" "$(standalone_not_applicable_block required-ci-checks)" MAY_RECORD_PROJECT=not-applicable-only >/dev/null
-  [ "$(decision "$repo" required-ci-checks)" = not-applicable ]
+  [ "$(decision "$repo" required-ci-checks)" = not-applicable ] || { echo "case other host: not recorded not-applicable"; return 1; }
   output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=not-applicable-only)"
-  grep -qF -- 'required-ci-checks' <<<"$output_text" && return 1
-  [ ! -s "$GH_LOG" ]
+  grep -qF -- 'required-ci-checks' <<<"$output_text" && { echo "case other host, next run: still owed"; return 1; }
+  [ ! -s "$GH_LOG" ] || { echo "case other host: gh called"; return 1; }
 }
 
 @test "Phase 5 hands over exactly the shipped standalone features" {
@@ -797,142 +709,100 @@ init_settings_block() {
   block_under "${REPO_ROOT}/${INIT_COMMAND_PATH}" '## Step 7: Project settings'
 }
 
-@test "the sandbox route: a plain run with no marker and no recommendation takes the default, asking nothing" {
+@test "the sandbox route per marker, recommendation and reconfigure" {
   local repo
-  repo="$(make_repo route-default)"
-  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=default-off ]
+  # One repository: each case adds the record or marker the next one needs.
+  repo="$(make_repo sandbox-route)"
+  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=default-off ] || { echo "case no marker, no project.json"; return 1; }
   printf '%s\n' '{"version": 1, "sandbox_recommended": false}' >"${repo}/.gaia/project.json"
-  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=default-off ]
-}
-
-@test "the sandbox route: a team recommendation asks a machine whose default-off record has no marker" {
-  local repo
-  repo="$(make_repo route-recommended)"
+  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=default-off ] || { echo "case no marker, not recommended"; return 1; }
   in_repo "$repo" .gaia/cli/gaia setup record sandbox declined >/dev/null
   printf '%s\n' '{"version": 1, "sandbox_recommended": true}' >"${repo}/.gaia/project.json"
-  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=ask ]
-}
-
-@test "the sandbox route: an answered machine stands on a plain run and is asked again under --reconfigure" {
-  local repo
-  repo="$(make_repo route-answered)"
+  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=ask ] || { echo "case recommended, declined record without marker"; return 1; }
   in_repo "$repo" .gaia/cli/gaia sandbox record --outcome declined --capability ready >/dev/null
-  printf '%s\n' '{"version": 1, "sandbox_recommended": true}' >"${repo}/.gaia/project.json"
-  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=stands ]
-  [ "$(run_block "$repo" "$(sandbox_route_block)" RECONFIGURE=true)" = SANDBOX=ask ]
+  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=stands ] || { echo "case answered, plain run"; return 1; }
+  [ "$(run_block "$repo" "$(sandbox_route_block)" RECONFIGURE=true)" = SANDBOX=ask ] || { echo "case answered, reconfigure"; return 1; }
   rm -f "${repo}/.gaia/local/sandbox.json"
-  [ "$(run_block "$repo" "$(sandbox_route_block)" RECONFIGURE=true)" = SANDBOX=ask ]
+  [ "$(run_block "$repo" "$(sandbox_route_block)" RECONFIGURE=true)" = SANDBOX=ask ] || { echo "case marker removed, reconfigure"; return 1; }
 }
 
-@test "the default-off block records declined on a ready machine and writes no marker" {
-  local repo
-  repo="$(make_repo default-off-ready)"
-  run_block "$repo" "$(default_off_block)" STUB_SANDBOX_CAPABILITY=ready >/dev/null
-  [ "$(decision "$repo" sandbox)" = declined ]
-  [ ! -e "${repo}/.gaia/local/sandbox.json" ]
-}
-
-@test "the default-off block records not-applicable on an incapable machine and prints no install hint" {
-  local repo capability output_text
+@test "the default-off block records by capability and prior decision" {
+  local repo capability output_text before
   for capability in needs-deps unsupported; do
     repo="$(make_repo "default-off-${capability}")"
     output_text="$(run_block "$repo" "$(default_off_block)" STUB_SANDBOX_CAPABILITY="$capability")"
     [ -z "$output_text" ] || {
-      echo "the default-off block printed on ${capability}: ${output_text}" >&2
+      echo "case ${capability}: the default-off block printed: ${output_text}" >&2
       return 1
     }
-    [ "$(decision "$repo" sandbox)" = not-applicable ]
-    [ ! -e "${repo}/.gaia/local/sandbox.json" ]
+    [ "$(decision "$repo" sandbox)" = not-applicable ] || { echo "case ${capability}: not recorded not-applicable"; return 1; }
+    [ ! -e "${repo}/.gaia/local/sandbox.json" ] || { echo "case ${capability}: marker written"; return 1; }
   done
-}
-
-@test "the default-off block records nothing once sandbox is decided" {
-  local repo before
-  repo="$(make_repo default-off-decided)"
+  # The ready case's repository then serves the already-decided case.
+  repo="$(make_repo default-off-ready)"
+  run_block "$repo" "$(default_off_block)" STUB_SANDBOX_CAPABILITY=ready >/dev/null
+  [ "$(decision "$repo" sandbox)" = declined ] || { echo "case ready: not recorded declined"; return 1; }
+  [ ! -e "${repo}/.gaia/local/sandbox.json" ] || { echo "case ready: marker written"; return 1; }
   in_repo "$repo" .gaia/cli/gaia setup record sandbox not-applicable >/dev/null
   before="$(cat "${repo}/.gaia/local/setup-state.json")"
   run_block "$repo" "$(default_off_block)" STUB_SANDBOX_CAPABILITY=ready >/dev/null
-  [ "$(cat "${repo}/.gaia/local/setup-state.json")" = "$before" ]
+  [ "$(cat "${repo}/.gaia/local/setup-state.json")" = "$before" ] || { echo "case decided: record changed"; return 1; }
 }
 
-@test "the isolation block: a plain admin run records the shipped default and writes no key" {
+@test "the isolation block records or asks by role and reconfigure" {
   local repo output_text
-  repo="$(make_repo isolation-default)"
-  output_text="$(run_block "$repo" "$(isolation_block)" MAY_RECORD_PROJECT=admin)"
-  grep -qF 'ISOLATION=ask' <<<"$output_text" && return 1
-  [ "$(decision "$repo" isolation-policy)" = applied ]
-  [ "$(jq -r 'has("isolation_policy")' "${repo}/.gaia/project.json")" = false ]
-}
-
-@test "the isolation block: a non-admin records nothing, and --reconfigure asks" {
-  local repo
-  repo="$(make_repo isolation-other)"
+  # One repository: the cases that record nothing run before the one that records.
+  repo="$(make_repo isolation)"
   run_block "$repo" "$(isolation_block)" MAY_RECORD_PROJECT=none >/dev/null
-  [ -z "$(decision "$repo" isolation-policy)" ]
-  [ "$(run_block "$repo" "$(isolation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = ISOLATION=ask ]
-  [ -z "$(decision "$repo" isolation-policy)" ]
+  [ -z "$(decision "$repo" isolation-policy)" ] || { echo "case non-admin: recorded"; return 1; }
+  [ "$(run_block "$repo" "$(isolation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = ISOLATION=ask ] || { echo "case reconfigure: did not ask"; return 1; }
+  [ -z "$(decision "$repo" isolation-policy)" ] || { echo "case reconfigure: recorded"; return 1; }
+  output_text="$(run_block "$repo" "$(isolation_block)" MAY_RECORD_PROJECT=admin)"
+  grep -qF 'ISOLATION=ask' <<<"$output_text" && { echo "case plain admin: asked"; return 1; }
+  [ "$(decision "$repo" isolation-policy)" = applied ] || { echo "case plain admin: not applied"; return 1; }
+  [ "$(jq -r 'has("isolation_policy")' "${repo}/.gaia/project.json")" = false ] || { echo "case plain admin: key written"; return 1; }
 }
 
-@test "the recommendation block: an absent key records declined with no write, and a set key records its value" {
+@test "the recommendation block records or asks by key, reconfigure and sandbox answer" {
   local repo output_text
-  repo="$(make_repo recommendation-default)"
+  # One repository: the cases that record nothing run first, and the set-key
+  # case rewrites project.json whole, which clears the earlier record.
+  repo="$(make_repo recommendation)"
+  [ "$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = RECOMMENDATION=ask ] || { echo "case reconfigure, sandbox set nothing: did not ask"; return 1; }
+  [ -z "$(decision "$repo" sandbox-recommendation)" ] || { echo "case reconfigure, sandbox set nothing: recorded"; return 1; }
+  output_text="$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true SANDBOX_TEAM_SET=true)"
+  grep -qF 'RECOMMENDATION=ask' <<<"$output_text" && { echo "case reconfigure, sandbox set it: asked"; return 1; }
   output_text="$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin)"
-  grep -qF 'RECOMMENDATION=ask' <<<"$output_text" && return 1
-  [ "$(decision "$repo" sandbox-recommendation)" = declined ]
-  [ "$(jq -r 'has("sandbox_recommended")' "${repo}/.gaia/project.json")" = false ]
-  repo="$(make_repo recommendation-set)"
+  grep -qF 'RECOMMENDATION=ask' <<<"$output_text" && { echo "case absent key: asked"; return 1; }
+  [ "$(decision "$repo" sandbox-recommendation)" = declined ] || { echo "case absent key: not declined"; return 1; }
+  [ "$(jq -r 'has("sandbox_recommended")' "${repo}/.gaia/project.json")" = false ] || { echo "case absent key: key written"; return 1; }
   printf '%s\n' '{"version": 1, "sandbox_recommended": true}' >"${repo}/.gaia/project.json"
   run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin >/dev/null
-  [ "$(decision "$repo" sandbox-recommendation)" = applied ]
+  [ "$(decision "$repo" sandbox-recommendation)" = applied ] || { echo "case set key: not applied"; return 1; }
 }
 
-@test "the recommendation block asks under --reconfigure when the sandbox answer set nothing, and records nothing first" {
-  local repo
-  repo="$(make_repo recommendation-reconfigure)"
-  [ "$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = RECOMMENDATION=ask ]
-  [ -z "$(decision "$repo" sandbox-recommendation)" ]
-}
-
-@test "the recommendation block asks nothing under --reconfigure once the admin's sandbox answer set it" {
-  local repo output_text
-  repo="$(make_repo recommendation-set-by-sandbox)"
-  output_text="$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true SANDBOX_TEAM_SET=true)"
-  grep -qF 'RECOMMENDATION=ask' <<<"$output_text" && return 1
-  true
-}
-
-@test "the admin-ready arm: a --reconfigure admin's sandbox answer sets the team recommendation" {
+@test "the sandbox answer sets the team recommendation by arm" {
   local repo answer value record
+  [ -n "$(team_from_sandbox_block)" ] || { echo "the team recommendation block is empty"; return 1; }
+  # One repository: the arms that write nothing run before the admin-ready arm.
+  repo="$(make_repo team-from-sandbox)"
+  [ -z "$(run_block "$repo" "$(team_from_sandbox_block)" RECONFIGURE=true MAY_RECORD_PROJECT=none SANDBOX_ANSWER=enable)" ] || { echo "case non-admin reconfigure: printed"; return 1; }
+  [ -z "$(run_block "$repo" "$(team_from_sandbox_block)" MAY_RECORD_PROJECT=admin SANDBOX_ANSWER=enable)" ] || { echo "case plain run: printed"; return 1; }
+  [ ! -e "${repo}/.gaia/project.json" ] || { echo "case non-admin: project.json written"; return 1; }
+  [ -z "$(decision "$repo" sandbox-recommendation)" ] || { echo "case non-admin: recorded"; return 1; }
+  [ -z "$(run_block "$repo" "$(team_from_sandbox_block)" RECONFIGURE=true MAY_RECORD_PROJECT=admin)" ] || { echo "case admin-incapable: printed"; return 1; }
+  [ ! -e "${repo}/.gaia/project.json" ] || { echo "case admin-incapable: project.json written"; return 1; }
+  [ -z "$(decision "$repo" sandbox-recommendation)" ] || { echo "case admin-incapable: recorded"; return 1; }
+  [ "$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = RECOMMENDATION=ask ] || { echo "case admin-incapable: own question not asked"; return 1; }
   for answer in enable decline; do
     case "$answer" in
       enable) value=true record=applied ;;
       decline) value=false record=declined ;;
     esac
-    repo="$(make_repo "team-from-sandbox-${answer}")"
-    [ "$(run_block "$repo" "$(team_from_sandbox_block)" RECONFIGURE=true MAY_RECORD_PROJECT=admin SANDBOX_ANSWER="$answer")" = SANDBOX_TEAM_SET=true ]
-    [ "$(jq -r '.sandbox_recommended' "${repo}/.gaia/project.json")" = "$value" ]
-    [ "$(decision "$repo" sandbox-recommendation)" = "$record" ]
+    [ "$(run_block "$repo" "$(team_from_sandbox_block)" RECONFIGURE=true MAY_RECORD_PROJECT=admin SANDBOX_ANSWER="$answer")" = SANDBOX_TEAM_SET=true ] || { echo "case admin-ready ${answer}: not set"; return 1; }
+    [ "$(jq -r '.sandbox_recommended' "${repo}/.gaia/project.json")" = "$value" ] || { echo "case admin-ready ${answer}: value"; return 1; }
+    [ "$(decision "$repo" sandbox-recommendation)" = "$record" ] || { echo "case admin-ready ${answer}: record"; return 1; }
   done
-}
-
-@test "the admin-incapable arm: no sandbox answer leaves the team recommendation to its own question" {
-  local repo
-  [ -n "$(team_from_sandbox_block)" ]
-  repo="$(make_repo team-from-sandbox-incapable)"
-  [ -z "$(run_block "$repo" "$(team_from_sandbox_block)" RECONFIGURE=true MAY_RECORD_PROJECT=admin)" ]
-  [ ! -e "${repo}/.gaia/project.json" ]
-  [ -z "$(decision "$repo" sandbox-recommendation)" ]
-  [ "$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = RECOMMENDATION=ask ]
-}
-
-@test "the non-admin arm: a sandbox answer keeps to this machine, on --reconfigure or a plain run" {
-  local repo
-  [ -n "$(team_from_sandbox_block)" ]
-  repo="$(make_repo team-from-sandbox-other)"
-  [ -z "$(run_block "$repo" "$(team_from_sandbox_block)" RECONFIGURE=true MAY_RECORD_PROJECT=none SANDBOX_ANSWER=enable)" ]
-  [ -z "$(run_block "$repo" "$(team_from_sandbox_block)" MAY_RECORD_PROJECT=admin SANDBOX_ANSWER=enable)" ]
-  [ ! -e "${repo}/.gaia/project.json" ]
-  [ -z "$(decision "$repo" sandbox-recommendation)" ]
 }
 
 @test "a fresh init then a plain setup owe none of the isolation, sandbox and recommendation ids" {

@@ -47,48 +47,39 @@ _run_parallel_next() {
 
 # --- Test 8: N-parallel next → N distinct ids, zero lost rows -----------------
 
-@test "8a: N-parallel next (real flock if present); N distinct ids, N rows, no dupes" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
-  cd "$REPO"
+# bats test_tags=protected
+@test "8: N-parallel next yields N distinct ids and N rows under flock and under the mkdir fallback" {
+  local lock_label printed distinct rows id
   PARALLEL_JOB_COUNT=10
-  LOCK_ENV="" _run_parallel_next "$PARALLEL_JOB_COUNT"
+  # Each lock variant needs an empty catalog, so each builds its own repo.
+  for lock_label in flock mkdir-fallback; do
+    if [ -n "${REPO:-}" ]; then rm -rf "$REPO"; fi
+    REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+    cd "$REPO"
+    case "$lock_label" in
+      flock) LOCK_ENV="" _run_parallel_next "$PARALLEL_JOB_COUNT" ;;
+      mkdir-fallback) LOCK_ENV="GAIA_LEDGER_LOCK_FORCE_FALLBACK=1" _run_parallel_next "$PARALLEL_JOB_COUNT" ;;
+    esac
 
-  printed="$(cat "$REPO"/out.* | sort)"
-  distinct="$(printf '%s\n' "$printed" | sort -u)"
-  [ "$(printf '%s\n' "$printed" | grep -c '^SPEC-[0-9]\{3\}$')" -eq "$PARALLEL_JOB_COUNT" ]
-  [ "$(printf '%s\n' "$distinct" | wc -l | tr -d ' ')" -eq "$PARALLEL_JOB_COUNT" ]
+    printed="$(cat "$REPO"/out.* | sort)"
+    distinct="$(printf '%s\n' "$printed" | sort -u)"
+    [ "$(printf '%s\n' "$printed" | grep -c '^SPEC-[0-9]\{3\}$')" -eq "$PARALLEL_JOB_COUNT" ] || { echo "case $lock_label: printed ids $printed"; return 1; }
+    [ "$(printf '%s\n' "$distinct" | wc -l | tr -d ' ')" -eq "$PARALLEL_JOB_COUNT" ] || { echo "case $lock_label: distinct ids $distinct"; return 1; }
 
-  rows="$(catalog_ids)"
-  [ "$(printf '%s\n' "$rows" | wc -l | tr -d ' ')" -eq "$PARALLEL_JOB_COUNT" ]
-  # No duplicate ids in the ledger.
-  [ "$(printf '%s\n' "$rows" | sort | uniq -d | wc -l | tr -d ' ')" -eq 0 ]
-  # Every printed id appears in the ledger.
-  while IFS= read -r id; do
-    printf '%s\n' "$rows" | grep -qx "$id"
-  done <<< "$distinct"
-}
-
-@test "8b: N-parallel next (forced mkdir fallback); N distinct ids, N rows, no dupes" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
-  cd "$REPO"
-  PARALLEL_JOB_COUNT=10
-  LOCK_ENV="GAIA_LEDGER_LOCK_FORCE_FALLBACK=1" _run_parallel_next "$PARALLEL_JOB_COUNT"
-
-  printed="$(cat "$REPO"/out.* | sort)"
-  distinct="$(printf '%s\n' "$printed" | sort -u)"
-  [ "$(printf '%s\n' "$printed" | grep -c '^SPEC-[0-9]\{3\}$')" -eq "$PARALLEL_JOB_COUNT" ]
-  [ "$(printf '%s\n' "$distinct" | wc -l | tr -d ' ')" -eq "$PARALLEL_JOB_COUNT" ]
-
-  rows="$(catalog_ids)"
-  [ "$(printf '%s\n' "$rows" | wc -l | tr -d ' ')" -eq "$PARALLEL_JOB_COUNT" ]
-  [ "$(printf '%s\n' "$rows" | sort | uniq -d | wc -l | tr -d ' ')" -eq 0 ]
-  while IFS= read -r id; do
-    printf '%s\n' "$rows" | grep -qx "$id"
-  done <<< "$distinct"
+    rows="$(catalog_ids)"
+    [ "$(printf '%s\n' "$rows" | wc -l | tr -d ' ')" -eq "$PARALLEL_JOB_COUNT" ] || { echo "case $lock_label: rows $rows"; return 1; }
+    # No duplicate ids in the ledger.
+    [ "$(printf '%s\n' "$rows" | sort | uniq -d | wc -l | tr -d ' ')" -eq 0 ] || { echo "case $lock_label: duplicate rows"; return 1; }
+    # Every printed id appears in the ledger.
+    while IFS= read -r id; do
+      printf '%s\n' "$rows" | grep -qx "$id" || { echo "case $lock_label: $id not in the ledger"; return 1; }
+    done <<< "$distinct"
+  done
 }
 
 # --- Test 9: stale-lock recovery in `next` -----------------------------------
 
+# bats test_tags=protected
 @test "9: stale-lock recovery in next; reclaims stale dir, allocates next id" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
   cd "$REPO"
@@ -102,34 +93,30 @@ _run_parallel_next() {
 
 # --- Test 10–12: in_progress contract ----------------------------------------
 
-@test "10: in_progress surfaces a draft ledger row (defect-2 regression)" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-007 draft)"
-  cd "$REPO"
-  run bash -c "bash '$REPO/$ALLOCATOR' in_progress '$REPO'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "SPEC-007" ]
-}
-
-@test "11: in_progress no fallback; folder file without a catalog row is not surfaced" {
-  # The SPEC-file frontmatter fallback is intentionally gone: in_progress
-  # sources the catalog only. A foldered SPEC.md with no catalog row must NOT be
-  # surfaced as in-flight, otherwise finalized work re-flags as resumable
-  # forever (the staleness test 10 guards).
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" )"
-  cd "$REPO"
-  mkdir -p "$REPO/.notebook/specs/SPEC-013"
-  printf '# SPEC-013\n' > "$REPO/.notebook/specs/SPEC-013/SPEC.md"
-  run bash -c "bash '$REPO/$ALLOCATOR' in_progress '$REPO'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "none" ]
-}
-
-@test "12: in_progress none; empty ledger, no files" {
+@test "10-12: in_progress surfaces a draft ledger row and nothing else" {
+  # One unseeded repo serves the empty case and then the folder-only case; the
+  # draft-row case needs a seeded catalog.
   REPO="$("$HELPERS/tmp-notebook-repo.sh")"
   cd "$REPO"
   run bash -c "bash '$REPO/$ALLOCATOR' in_progress '$REPO'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "none" ]
+  [ "$status" -eq 0 ] || { echo "case empty ledger: status $status"; return 1; }
+  [ "$output" = "none" ] || { echo "case empty ledger: $output"; return 1; }
+  # The SPEC-file frontmatter fallback is intentionally gone: in_progress
+  # sources the catalog only. A foldered SPEC.md with no catalog row must NOT be
+  # surfaced as in-flight, otherwise finalized work re-flags as resumable
+  # forever.
+  mkdir -p "$REPO/.notebook/specs/SPEC-013"
+  printf '# SPEC-013\n' > "$REPO/.notebook/specs/SPEC-013/SPEC.md"
+  run bash -c "bash '$REPO/$ALLOCATOR' in_progress '$REPO'"
+  [ "$status" -eq 0 ] || { echo "case folder without row: status $status"; return 1; }
+  [ "$output" = "none" ] || { echo "case folder without row: $output"; return 1; }
+  rm -rf "$REPO"
+  # Defect-2 regression: a draft ledger row is surfaced.
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-007 draft)"
+  cd "$REPO"
+  run bash -c "bash '$REPO/$ALLOCATOR' in_progress '$REPO'"
+  [ "$status" -eq 0 ] || { echo "case draft row: status $status"; return 1; }
+  [ "$output" = "SPEC-007" ] || { echo "case draft row: $output"; return 1; }
 }
 
 # --- Test 13: read-only modes take no lock -----------------------------------
@@ -147,22 +134,22 @@ _run_parallel_next() {
 
 # --- Test 14: exit-code preservation -----------------------------------------
 
-@test "14a: non-git dir; next exits 3" {
-  # Build a tmp repo via the helper (so the scripts + sibling source resolve),
-  # then strip .git so require_git fails. REPO is set so teardown cleans up.
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
-  rm -rf "$REPO/.git"
-  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO'"
-  [ "$status" -eq 3 ]
-}
+@test "14: allocator refusals map to exit codes 3, 4 and 5" {
+  local realjq stub_directory before
+  # One seeded repo serves every case; the non-git case strips .git, so it runs last.
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
+  cd "$REPO"
 
-@test "14b: forced jq failure; next exits 4 (exit code propagates THROUGH the lock)" {
+  # A bad patch must pass its 5 through the catalog lock and ledger-update.sh
+  # must exit 5 (NOT 0, and NOT the 4 reserved for lock timeout / missing row).
+  run bash -c "bash '$REPO/$LEDGER_UPDATE' '$REPO' SPEC-001 'not-json'"
+  [ "$status" -eq 5 ] || { echo "case invalid patch JSON: status $status"; return 1; }
+
   # Load-bearing negative assertion for a swallowed exit code: the catalog row
   # write returns 4 on jq failure; the mint lock must pass that 4 through
   # unchanged, and `next` must exit 4 (NOT 0). A failing `jq` is forced by
   # shadowing it with a stub early on PATH.
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
-  cd "$REPO"
+  before="$(catalog_ids | wc -l | tr -d ' ')"
   realjq="$(command -v jq)"
   stub_directory="$REPO/stubbin"
   mkdir -p "$stub_directory"
@@ -180,11 +167,17 @@ exec "$realjq" "\$@"
 EOF
   chmod +x "$stub_directory/jq"
   run bash -c "PATH='$stub_directory:$PATH' bash '$REPO/$ALLOCATOR' next '$REPO'"
-  [ "$status" -eq 4 ]
+  [ "$status" -eq 4 ] || { echo "case forced jq failure: status $status"; return 1; }
   # Catalog left unchanged; no row appended on the failed write.
-  [ "$(catalog_ids | wc -l | tr -d ' ')" -eq 0 ]
+  [ "$(catalog_ids | wc -l | tr -d ' ')" -eq "$before" ] || { echo "case forced jq failure: a row was appended"; return 1; }
+
+  # Strip .git so require_git fails.
+  rm -rf "$REPO/.git"
+  run bash -c "bash '$REPO/$ALLOCATOR' next '$REPO'"
+  [ "$status" -eq 3 ] || { echo "case non-git dir: status $status"; return 1; }
 }
 
+# bats test_tags=protected
 @test "14c: lock timeout; next exits 4, catalog unchanged (75 maps to 4)" {
   # Hold the spec mint lock with a slow background job, then a real `next` with
   # a tiny timeout cannot acquire it. The helper returns 75; `next` maps that
@@ -213,18 +206,9 @@ EOF
   [ "$before" -eq "$after" ]
 }
 
-@test "14d: ledger-update invalid patch JSON exits 5 (propagates THROUGH the lock)" {
-  # Companion negative assertion: a bad patch must pass its 5 through the
-  # catalog lock and ledger-update.sh must exit 5 (NOT 0, and NOT the 4
-  # reserved for lock timeout / missing row).
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
-  cd "$REPO"
-  run bash -c "bash '$REPO/$LEDGER_UPDATE' '$REPO' SPEC-001 'not-json'"
-  [ "$status" -eq 5 ]
-}
-
 # --- Test 15: ledger-update racing next ---------------------------------------
 
+# bats test_tags=protected
 @test "15: ledger-update racing N-parallel next; catalog valid, no row lost" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
   cd "$REPO"
@@ -288,6 +272,7 @@ EOF
   [ "$output" = "SPEC-011" ]
 }
 
+# bats test_tags=protected
 @test "16b: a missing branch-naming library refuses to allocate rather than under-count" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh")"
   cd "$REPO"

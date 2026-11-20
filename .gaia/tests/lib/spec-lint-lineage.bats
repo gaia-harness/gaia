@@ -22,26 +22,32 @@ make_spec() {
   fi
 }
 
-@test "the template carries the lineage line" {
-  grep -q '^lineage: \[\]$' "$TEMPLATE"
+# _lint_case <label> [make_spec replacement]: names the case, writes the SPEC
+# and runs lint; the caller asserts the result.
+_lint_case() {
+  echo "case: $1"
+  shift
+  make_spec "$BATS_TEST_TMPDIR/s.md" "$@"
+  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
 }
 
-@test "filled template with lineage: [] lints clean" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 'lineage: []'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
+@test "valid or absent lineage lints clean without extra findings" {
+  # make_spec swaps the template's lineage line; without it every case below
+  # would lint the template's own line instead of the entry under test.
+  grep -q '^lineage: \[\]$' "$TEMPLATE"
+
+  _lint_case "filled template with lineage: [] lints clean" 'lineage: []'
   [ "$status" -eq 0 ]
   [ "$output" = '{"ok":true,"findings":[]}' ]
-}
 
-@test "absent lineage key passes and adds no missing_field finding" {
+  echo "case: absent lineage key passes and adds no missing_field finding"
   make_spec "$BATS_TEST_TMPDIR/s.md"
   grep -q '^lineage:' "$BATS_TEST_TMPDIR/s.md" && return 1
   run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 0 ]
   [ "$output" = '{"ok":true,"findings":[]}' ]
-}
 
-@test "absent lineage key: missing_field findings equal those of a fixture with it" {
+  echo "case: absent lineage key: missing_field findings equal those of a fixture with it"
   make_spec "$BATS_TEST_TMPDIR/with.md" 'lineage: []'
   make_spec "$BATS_TEST_TMPDIR/without.md"
   # Drop a required key from both so missing_field findings exist to compare.
@@ -54,80 +60,55 @@ make_spec() {
   [ "$with_lineage_findings" = "$without_lineage_findings" ]
   [ "$(printf '%s' "$with_lineage_findings" | jq 'length')" -ge 1 ]
   printf '%s' "$with_lineage_findings" | grep -q 'lineage' && return 1
-  true
-}
 
-@test "positive: flow list of research, issue, init passes" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 'lineage: [research:release-2.0.0-readiness, issue:200, init:cost-work]'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
+  _lint_case "positive: flow list of research, issue, init passes" \
+    'lineage: [research:release-2.0.0-readiness, issue:200, init:cost-work]'
   [ "$status" -eq 0 ]
   [ "$output" = '{"ok":true,"findings":[]}' ]
-}
 
-@test "positive: block list of the same entries passes" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 'lineage:
+  _lint_case "positive: block list of the same entries passes" 'lineage:
   - research:release-2.0.0-readiness
   - issue:200
   - init:cost-work'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 0 ]
   [ "$output" = '{"ok":true,"findings":[]}' ]
-}
 
-@test "positive: spec and plan parents pass" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 'lineage: [spec:SPEC-086, plan:PLAN-091]'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
+  _lint_case "positive: spec and plan parents pass" 'lineage: [spec:SPEC-086, plan:PLAN-091]'
   [ "$status" -eq 0 ]
 }
 
-@test "guard: one bad entry yields exactly one invalid_lineage naming it" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 'lineage: [research:topic-a, bogus]'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
+@test "an invalid lineage entry yields one invalid_lineage naming it" {
+  _lint_case "guard: one bad entry yields exactly one invalid_lineage naming it" \
+    'lineage: [research:topic-a, bogus]'
   [ "$status" -eq 1 ]
   [ "$(printf '%s' "$output" | jq '[.findings[] | select(.code == "invalid_lineage")] | length')" -eq 1 ]
   [ "$(printf '%s' "$output" | jq '.findings | length')" -eq 1 ]
   [ "$(printf '%s' "$output" | jq -r '.findings[0].where')" = "frontmatter.lineage" ]
   printf '%s' "$output" | jq -r '.findings[0].message' | grep -q 'bogus'
-}
 
-@test "guard: branch is not an allowed parent kind" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 'lineage: [branch:fix/foo]'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
+  _lint_case "guard: branch is not an allowed parent kind" 'lineage: [branch:fix/foo]'
   [ "$status" -eq 1 ]
   printf '%s' "$output" | jq -e '[.findings[] | select(.code == "invalid_lineage")] | length == 1' >/dev/null
-}
 
-@test "guard: pr, session, and command kinds are refused" {
-  local kind
-  for kind in pr:12 session:abc command:run-1; do
-    make_spec "$BATS_TEST_TMPDIR/s.md" "lineage: [$kind]"
-    run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-    [ "$status" -eq 1 ] || return 1
+  local entry
+  for entry in pr:12 session:abc command:run-1; do
+    _lint_case "guard: the $entry kind is refused" "lineage: [$entry]"
+    [ "$status" -eq 1 ]
   done
-}
 
-@test "guard: lowercase spec id is refused" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 'lineage: [spec:spec-001]'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
+  _lint_case "guard: lowercase spec id is refused" 'lineage: [spec:spec-001]'
   [ "$status" -eq 1 ]
   printf '%s' "$output" | jq -e '[.findings[] | select(.code == "invalid_lineage")] | length == 1' >/dev/null
-}
 
-@test "guard: issue zero and leading-zero numbers are refused" {
-  local bad
-  for bad in issue:0 issue:007 issue:abc; do
-    make_spec "$BATS_TEST_TMPDIR/s.md" "lineage: [$bad]"
-    run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
-    [ "$status" -eq 1 ] || return 1
+  for entry in issue:0 issue:007 issue:abc; do
+    _lint_case "guard: $entry (issue zero, leading zero or not a number) is refused" "lineage: [$entry]"
+    [ "$status" -eq 1 ]
   done
-}
 
-@test "guard: block list with one bad entry is refused, naming only it" {
-  make_spec "$BATS_TEST_TMPDIR/s.md" 'lineage:
+  _lint_case "guard: block list with one bad entry is refused, naming only it" 'lineage:
   - research:topic-a
   - bogus-entry
   - issue:200'
-  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
   [ "$status" -eq 1 ]
   [ "$(printf '%s' "$output" | jq '[.findings[] | select(.code == "invalid_lineage")] | length')" -eq 1 ]
   printf '%s' "$output" | jq -r '.findings[0].message' | grep -q 'bogus-entry'
