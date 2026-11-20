@@ -166,7 +166,7 @@ type SourceCase = {
   classification: Classification['classification'];
   file: string;
   name: string;
-  reason?: RegExp;
+  reasons?: RegExp[];
   source: string;
 };
 
@@ -179,8 +179,9 @@ const eachSourceCase = (cases: SourceCase[]): void => {
 
       expect(result.classification).toBe(row.classification);
 
-      // A row with no reason pattern matches any reasons.
-      expect(result.reasons.join(' ')).toMatch(row.reason ?? /^/);
+      for (const pattern of row.reasons ?? []) {
+        expect(result.reasons.join(' ')).toMatch(pattern);
+      }
     }
   );
 };
@@ -206,7 +207,7 @@ describe('classify-determinism', () => {
         classification: 'emergent',
         file: 'apps/web/app/routes/_index.tsx',
         name: 'classifies a pure file outside the candidate paths EMERGENT',
-        reason: /path/i,
+        reasons: [/path/i],
         source: ADD_SOURCE,
       },
       {
@@ -237,7 +238,7 @@ describe('classify-determinism', () => {
         classification: 'emergent',
         file: 'apps/web/app/utils/date.ts',
         name: 'classifies a default-parameter new Date() EMERGENT (the FI-3 fix)',
-        reason: /new Date/,
+        reasons: [/new Date/],
         source:
           "import {format} from 'date-fns';\n" +
           "export const formatMY = (date = new Date()): string => format(date, 'MM/yy');\n",
@@ -253,7 +254,7 @@ describe('classify-determinism', () => {
         classification: 'emergent',
         file: 'apps/web/app/utils/id.ts',
         name: 'classifies a class-field Math.random() initializer EMERGENT',
-        reason: /Math\.random/,
+        reasons: [/Math\.random/],
         source: 'export class Id {\n  value = Math.random();\n}\n',
       },
       {
@@ -284,7 +285,7 @@ describe('classify-determinism', () => {
         classification: 'emergent',
         file: 'apps/web/app/hooks/useThing.ts',
         name: 'classifies a hook reading a react-router runtime hook EMERGENT',
-        reason: /useNavigate/,
+        reasons: [/useNavigate/],
         source:
           "import {useNavigate} from 'react-router';\n" +
           'export const useThing = () => {\n  const navigate = useNavigate();\n  return navigate;\n};\n',
@@ -334,7 +335,7 @@ describe('classify-determinism', () => {
         classification: 'emergent',
         file: 'apps/web/app/hooks/useBattery.ts',
         name: 'classifies a hook calling a DOM API absent from the allowlist EMERGENT',
-        reason: /unknown DOM API|allowlist/i,
+        reasons: [/unknown DOM API|allowlist/i],
         source:
           'export const useBattery = () => {\n' +
           '  return globalThis.navigator.getBattery();\n};\n',
@@ -372,7 +373,7 @@ describe('classify-determinism', () => {
         classification: 'route',
         file: 'apps/web/app/route-tests/orders/tests/refuses-anonymous.test.ts',
         name: 'classifies a test in a route-tests tests folder as ROUTE with a reason',
-        reason: /route test/,
+        reasons: [/route test/],
         source: testSource,
       },
       ...[
@@ -403,14 +404,14 @@ describe('classify-determinism', () => {
         classification: 'emergent' as const,
         file: storyPath,
         name: `classifies ${storyPath} EMERGENT with the story reason`,
-        reason: STORY_REASON,
+        reasons: [STORY_REASON],
         source: pureSource,
       })),
       {
         classification: 'emergent',
         file: 'apps/web/app/utils/tests/pure.stories.ts',
         name: 'classifies a .stories.ts file EMERGENT',
-        reason: STORY_REASON,
+        reasons: [STORY_REASON],
         source: pureSource,
       },
     ]);

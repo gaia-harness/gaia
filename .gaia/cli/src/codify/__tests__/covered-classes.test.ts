@@ -19,8 +19,6 @@ describe('coveredClassesFromRules', () => {
   const earlierTail =
     '<!-- gaia-harden: promoted from recurring finding_class rule/earlier-tail; pruned by /gaia-audit on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->';
 
-  // The abbreviated-tail row proves the binder is prefix-bound and tail-agnostic
-  // on purpose; every other fixture uses markerComment(...) so it cannot drift.
   const cases: {
     expected: string[];
     files: Record<string, string>;
@@ -55,6 +53,9 @@ describe('coveredClassesFromRules', () => {
     {
       expected: ['axe/color-contrast', 'knip/exports'],
       files: {
+        // The one marker with a shortened tail, on purpose: the binder is
+        // prefix-bound and tail-agnostic. Every other fixture uses
+        // markerComment(...) so it cannot drift.
         'a.md':
           '<!-- gaia-harden: promoted from recurring finding_class axe/color-contrast; never for non-recurrence -->',
         'b.md': markerComment('knip/exports'),

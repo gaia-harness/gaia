@@ -182,8 +182,8 @@ describe('computeTally', () => {
       'major',
     ],
   ] as const)('%s', (_label, severities, expected) => {
-    // Each PR contributes one finding list; the core never sees the auditor,
-    // so CI versus local origin cannot change eligibility.
+    // The core never sees the auditor, so CI versus local origin cannot change
+    // eligibility.
     const result = computeTally({
       coveredClass: noCover,
       prs: severities.map((severity, index) =>
