@@ -2870,8 +2870,16 @@ case_reason_token_member_refusal() {
   require_jq
   run_cases \
     "refusal anchor: a linked refusal anchors the member at the refused commit" 'case_refusal_anchor_a_linked_refusal_anchors_the_member_at_the_re' \
-    "reason token: member-refusal" 'case_reason_token_member_refusal' \
     "refusal link: the ledger is read with GITHUB_ACTIONS and CI exported" 'case_refusal_link_the_ledger_is_read_with_github_actions_and_ci_e' \
     "refusal link: CI=true outside GitHub Actions still reads the ledger" 'case_refusal_link_ci_true_outside_github_actions_still_reads_the' \
     "refusal link: a co-member advancing the ledger's head and round leaves the link intact" 'case_refusal_link_a_co_member_advancing_the_ledger_s_head_and_rou'
+}
+
+# .claude/agents/code-audit-frontend.md names this test as its member-refusal
+# enforcer, and .gaia/tests/lib/doc-audit-prose-enforcers.bats requires exactly
+# one @test carrying this name: keep it a standalone @test.
+# bats test_tags=protected
+@test "reason token: member-refusal" {
+  require_jq
+  run_cases "reason token: member-refusal" 'case_reason_token_member_refusal'
 }
