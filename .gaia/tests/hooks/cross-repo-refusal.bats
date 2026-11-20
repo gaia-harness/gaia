@@ -215,6 +215,9 @@ refusal_message() {
     mgf_run_merge "${row#*|}"
     if [ "$label" = same-repo ]; then
       grep -qF -- 'comes from a fork' <<<"$output" && { echo "case $label: refused as a fork"; return 1; }
+      # Positive control: the canary paths are paths the gate runs once the fork check passes.
+      [ -e "$CANARY_LOG" ] || { echo "case $label: no canary ran, so the absence checks above prove nothing"; return 1; }
+      grep -qxF -- '.gaia/scripts/resolve-audit-members.sh' "$CANARY_LOG" || { echo "case $label: resolve-audit-members.sh canary not run: $(cat "$CANARY_LOG")"; return 1; }
       continue
     fi
     [ "$status" -eq 0 ] || { echo "case $label: status=$status"; return 1; }
