@@ -49,25 +49,33 @@ describe('reduceDump (pure algorithm)', () => {
       expect(summary.totals.frameworkFiltered).toBeGreaterThan(0);
     });
 
-    test('reports zero memoDefeated and the matching stop signal', () => {
-      expect(summary.totals.memoDefeated).toBe(0);
-      expect(summary.stopSignal.zeroAppMemoDefeated).toBe(true);
-    });
-
-    test('has no app component over the default 16ms budget', () => {
-      expect(summary.stopSignal.noAppFrameBudgetBreach).toBe(true);
-      expect(summary.findings).toHaveLength(0);
-    });
-
-    test('defaults the strictMode caveat to true and meta fields from defaults', () => {
-      // Legacy meta is {installed, commits, errors} only.
-      expect(summary.strictModeTimingCaveat).toBe(true);
-      expect(summary.rendererVersion).toBeNull();
-      expect(summary.profilingAvailable).toBe(false);
-    });
-
-    test('buckets null-name renders into unknownNameCount (zero here)', () => {
-      expect(summary.unknownNameCount).toBe(0);
+    test.each<{expected: Record<string, unknown>; name: string}>([
+      {
+        expected: {
+          stopSignal: {zeroAppMemoDefeated: true},
+          totals: {memoDefeated: 0},
+        },
+        name: 'reports zero memoDefeated and the matching stop signal',
+      },
+      {
+        expected: {findings: [], stopSignal: {noAppFrameBudgetBreach: true}},
+        name: 'has no app component over the default 16ms budget',
+      },
+      {
+        // Legacy meta is {installed, commits, errors} only.
+        expected: {
+          profilingAvailable: false,
+          rendererVersion: null,
+          strictModeTimingCaveat: true,
+        },
+        name: 'defaults the strictMode caveat to true and meta fields from defaults',
+      },
+      {
+        expected: {unknownNameCount: 0},
+        name: 'buckets null-name renders into unknownNameCount (zero here)',
+      },
+    ])('$name', ({expected}) => {
+      expect(summary).toMatchObject(expected);
     });
   });
 
@@ -76,26 +84,36 @@ describe('reduceDump (pure algorithm)', () => {
       frameBudgetMs: 16,
     });
 
-    test('produces exactly one memoDefeated finding for StatusBadge, ranked #1', () => {
-      expect(summary.findings).toHaveLength(1);
-      expect(summary.findings[0]).toMatchObject({
-        componentName: 'StatusBadge',
-        isMemo: true,
-        memoDefeatedCount: 2,
-        rank: 1,
-        reactDoctorRule: 'jsx-no-new-object-as-prop',
-        unstableInputs: ['prop:status'],
-      });
+    test.each<{expected: Record<string, unknown>; name: string}>([
+      {
+        expected: {
+          findings: [
+            {
+              componentName: 'StatusBadge',
+              isMemo: true,
+              memoDefeatedCount: 2,
+              rank: 1,
+              reactDoctorRule: 'jsx-no-new-object-as-prop',
+              unstableInputs: ['prop:status'],
+            },
+          ],
+        },
+        name: 'produces exactly one memoDefeated finding for StatusBadge, ranked #1',
+      },
+      {
+        expected: {
+          stopSignal: {zeroAppMemoDefeated: false},
+          totals: {memoDefeated: 2},
+        },
+        name: 'flips zeroAppMemoDefeated to false',
+      },
+    ])('$name', ({expected}) => {
+      expect(summary).toMatchObject(expected);
     });
 
     test('does NOT flag the legitimate parent state change (SpikePanel)', () => {
       const names = summary.findings.map((finding) => finding.componentName);
       expect(names).not.toContain('SpikePanel');
-    });
-
-    test('flips zeroAppMemoDefeated to false', () => {
-      expect(summary.totals.memoDefeated).toBe(2);
-      expect(summary.stopSignal.zeroAppMemoDefeated).toBe(false);
     });
   });
 
@@ -136,13 +154,23 @@ describe('run (CLI handler)', () => {
     vi.restoreAllMocks();
   });
 
-  test('prints a schema-valid summary and exits 0', () => {
-    const code = run([fixturePath('bippy-renders-dump.json')]);
-
-    expect(code).toBe(EXIT_CODES.OK);
+  test.each<{args: string[]; expected: Record<string, unknown>; name: string}>([
+    {
+      args: [fixturePath('bippy-renders-dump.json')],
+      expected: {totals: {records: 248}},
+      name: 'prints a schema-valid summary and exits 0',
+    },
+    {
+      args: [fixturePath('bippy-renders-dump.json'), '--frame-budget-ms', '1'],
+      expected: {stopSignal: {noAppFrameBudgetBreach: false}},
+      name: 'honors --frame-budget-ms when reducing',
+    },
+  ])('$name', ({args, expected}) => {
+    expect(run(args)).toBe(EXIT_CODES.OK);
     expect(stderr).toBe('');
-    const parsed = ReducedSummarySchema.parse(JSON.parse(stdout));
-    expect(parsed.totals.records).toBe(248);
+    expect(ReducedSummarySchema.parse(JSON.parse(stdout))).toMatchObject(
+      expected
+    );
   });
 
   test('is deterministic: same input yields byte-identical stdout', () => {
@@ -154,48 +182,44 @@ describe('run (CLI handler)', () => {
     expect(stdout).toBe(first);
   });
 
-  test('rejects the alien react-scan dump with a clear error', () => {
-    const code = run([fixturePath('renders-dump.json')]);
-
-    expect(code).toBe(EXIT_CODES.PAYLOAD_VALIDATION_FAILED);
+  test.each<{
+    args: string[];
+    code: number;
+    name: string;
+    payloadCode: string;
+  }>([
+    {
+      args: [fixturePath('renders-dump.json')],
+      code: EXIT_CODES.PAYLOAD_VALIDATION_FAILED,
+      name: 'rejects the alien react-scan dump with a clear error',
+      payloadCode: 'invalid_dump',
+    },
+    {
+      args: [fixturePath('does-not-exist.json')],
+      code: EXIT_CODES.STORAGE_INACCESSIBLE,
+      name: 'errors on a missing input file',
+      payloadCode: 'input_unreadable',
+    },
+    {
+      args: [],
+      code: EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      name: 'errors on a missing path argument',
+      payloadCode: 'invalid_arguments',
+    },
+    {
+      args: [
+        fixturePath('bippy-renders-dump.json'),
+        '--frame-budget-ms',
+        'nope',
+      ],
+      code: EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      name: 'errors on a non-numeric --frame-budget-ms',
+      payloadCode: 'invalid_arguments',
+    },
+  ])('$name', ({args, code, payloadCode}) => {
+    expect(run(args)).toBe(code);
     expect(stdout).toBe('');
     const payload = JSON.parse(stderr) as {code: string};
-    expect(payload.code).toBe('invalid_dump');
-  });
-
-  test('errors on a missing input file', () => {
-    const code = run([fixturePath('does-not-exist.json')]);
-
-    expect(code).toBe(EXIT_CODES.STORAGE_INACCESSIBLE);
-    expect(stdout).toBe('');
-    const payload = JSON.parse(stderr) as {code: string};
-    expect(payload.code).toBe('input_unreadable');
-  });
-
-  test('errors on a missing path argument', () => {
-    const code = run([]);
-
-    expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    const payload = JSON.parse(stderr) as {code: string};
-    expect(payload.code).toBe('invalid_arguments');
-  });
-
-  test('errors on a non-numeric --frame-budget-ms', () => {
-    const code = run([
-      fixturePath('bippy-renders-dump.json'),
-      '--frame-budget-ms',
-      'nope',
-    ]);
-
-    expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    const payload = JSON.parse(stderr) as {code: string};
-    expect(payload.code).toBe('invalid_arguments');
-  });
-
-  test('honors --frame-budget-ms when reducing', () => {
-    run([fixturePath('bippy-renders-dump.json'), '--frame-budget-ms', '1']);
-    const parsed = ReducedSummarySchema.parse(JSON.parse(stdout));
-
-    expect(parsed.stopSignal.noAppFrameBudgetBreach).toBe(false);
+    expect(payload.code).toBe(payloadCode);
   });
 });

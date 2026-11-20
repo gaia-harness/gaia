@@ -34,75 +34,67 @@ describe('ProjectConfigSchema', () => {
     });
   });
 
-  test('an empty object parses, with version degrading to 1', () => {
-    expect(ProjectConfigSchema.parse({})).toEqual({version: 1});
-  });
-
-  test('invalid or wrong-typed values degrade to undefined instead of malforming', () => {
-    const parsed = ProjectConfigSchema.parse({
-      isolation_policy: 'worktree-ish',
-      sandbox_recommended: 'yes',
-      version: 9,
-    });
-
-    expect(parsed.isolation_policy).toBeUndefined();
-    expect(parsed.sandbox_recommended).toBeUndefined();
-    expect(parsed.version).toBe(1);
-  });
-
-  test('setup_decisions drops an unknown value and keeps the rest', () => {
-    expect(
-      ProjectConfigSchema.parse({setup_decisions: {a: 'applied', b: 'maybe'}})
-        .setup_decisions
-    ).toEqual({a: 'applied'});
-  });
-
-  test.each([['applied'], ['x'], [['applied']], [null], [3]])(
-    'a non-object setup_decisions (%j) reads as absent without malforming',
-    (value) => {
-      const parsed = ProjectConfigSchema.parse({
-        isolation_policy: 'prefer-branch',
-        setup_decisions: value,
-      });
-
-      expect(parsed.setup_decisions).toBeUndefined();
-      expect(parsed.isolation_policy).toBe('prefer-branch');
-    }
-  );
-
-  test.each([[25], [1]])(
-    'fitness_commit_threshold %j reads as itself',
-    (value) => {
-      expect(
-        ProjectConfigSchema.parse({fitness_commit_threshold: value})
-          .fitness_commit_threshold
-      ).toBe(value);
-    }
-  );
-
-  test.each([[0], [-3], [15.5], ['25'], [true], [null], [{}]])(
-    'fitness_commit_threshold %j reads as absent without malforming',
-    (value) => {
-      const parsed = ProjectConfigSchema.parse({
+  test.each([
+    {
+      expected: {version: 1},
+      input: {},
+      name: 'an empty object parses, with version degrading to 1',
+    },
+    {
+      expected: {version: 1},
+      input: {
+        isolation_policy: 'worktree-ish',
+        sandbox_recommended: 'yes',
+        version: 9,
+      },
+      name: 'invalid or wrong-typed values degrade to undefined instead of malforming',
+    },
+    {
+      expected: {setup_decisions: {a: 'applied'}, version: 1},
+      input: {setup_decisions: {a: 'applied', b: 'maybe'}},
+      name: 'setup_decisions drops an unknown value and keeps the rest',
+    },
+    ...['applied', 'x', ['applied'], null, 3].map((value) => ({
+      expected: {isolation_policy: 'prefer-branch', version: 1},
+      input: {isolation_policy: 'prefer-branch', setup_decisions: value},
+      name: `a non-object setup_decisions (${JSON.stringify(value)}) reads as absent without malforming`,
+    })),
+    ...[25, 1].map((value) => ({
+      expected: {fitness_commit_threshold: value, version: 1},
+      input: {fitness_commit_threshold: value},
+      name: `fitness_commit_threshold ${JSON.stringify(value)} reads as itself`,
+    })),
+    ...[0, -3, 15.5, '25', true, null, {}].map((value) => ({
+      expected: {isolation_policy: 'prefer-branch', version: 1},
+      input: {
         fitness_commit_threshold: value,
         isolation_policy: 'prefer-branch',
-      });
+      },
+      name: `fitness_commit_threshold ${JSON.stringify(value)} reads as absent without malforming`,
+    })),
+    ...[true, false].map((value) => ({
+      expected: {shellcheck: value, version: 1},
+      input: {shellcheck: value},
+      name: `${JSON.stringify(value)} reads as itself`,
+    })),
+    ...['false', 0, null].map((value) => ({
+      expected: {isolation_policy: 'prefer-branch', version: 1},
+      input: {isolation_policy: 'prefer-branch', shellcheck: value},
+      name: `${JSON.stringify(value)} reads as absent without malforming`,
+    })),
+  ])('ProjectConfigSchema: $name', ({expected, input}) => {
+    expect(ProjectConfigSchema.parse(input)).toEqual(expected);
+  });
 
-      expect(parsed.fitness_commit_threshold).toBeUndefined();
-      expect(parsed.isolation_policy).toBe('prefer-branch');
+  test.each([
+    {expected: true, value: 'always-worktree'},
+    {expected: false, value: 'worktree'},
+  ])(
+    'the guards accept only the known literals: $value',
+    ({expected, value}) => {
+      expect(isIsolationPolicy(value)).toBe(expected);
     }
   );
-
-  test('an absent fitness_commit_threshold reads as undefined', () => {
-    expect(
-      ProjectConfigSchema.parse({}).fitness_commit_threshold
-    ).toBeUndefined();
-  });
-
-  test('the guards accept only the known literals', () => {
-    expect(isIsolationPolicy('always-worktree')).toBe(true);
-    expect(isIsolationPolicy('worktree')).toBe(false);
-  });
 });
 
 describe('readProjectConfig', () => {
@@ -121,102 +113,98 @@ describe('readProjectConfig', () => {
     writeFileSync(projectConfigPath(root), text, 'utf8');
   };
 
+  const writeIfPresent = (text: string | undefined): void => {
+    if (text !== undefined) {
+      write(text);
+    }
+  };
+
   test('projectConfigPath names .gaia/project.json under the root', () => {
     expect(projectConfigPath(root)).toBe(
       path.join(root, '.gaia', 'project.json')
     );
   });
 
-  test('reports missing when the file is absent', () => {
-    expect(readProjectConfig(root)).toEqual({status: 'missing'});
-  });
-
-  test('reports ok with the unstripped raw object', () => {
-    write(JSON.stringify({isolation_policy: 'prefer-worktree', other: 1}));
-
-    expect(readProjectConfig(root)).toEqual({
-      config: {isolation_policy: 'prefer-worktree', version: 1},
-      raw: {isolation_policy: 'prefer-worktree', other: 1},
-      status: 'ok',
-    });
-  });
-
-  test('narrows an unknown isolation value to undefined while keeping it in raw', () => {
-    write(JSON.stringify({isolation_policy: 'bogus'}));
-
-    const result = readProjectConfig(root);
-
-    expect(result.status).toBe('ok');
-    expect(result).toMatchObject({
-      config: {isolation_policy: undefined},
-      raw: {isolation_policy: 'bogus'},
-    });
-  });
-
-  test.each(['on', 'off', 'maybe'])(
-    'a retired dependabot_security_updates value %j reads ok and stays in raw',
-    (value) => {
-      write(JSON.stringify({dependabot_security_updates: value, version: 1}));
-
-      const result = readProjectConfig(root);
-
-      expect(result.status).toBe('ok');
-      expect(result).toMatchObject({
+  test.each([
+    {
+      content: undefined,
+      expected: {status: 'missing'},
+      name: 'reports missing when the file is absent',
+    },
+    {
+      content: JSON.stringify({
+        isolation_policy: 'prefer-worktree',
+        other: 1,
+      }),
+      expected: {
+        config: {isolation_policy: 'prefer-worktree', version: 1},
+        raw: {isolation_policy: 'prefer-worktree', other: 1},
+        status: 'ok',
+      },
+      name: 'reports ok with the unstripped raw object',
+    },
+    {
+      content: JSON.stringify({isolation_policy: 'bogus'}),
+      expected: {
+        config: {isolation_policy: undefined, version: 1},
+        raw: {isolation_policy: 'bogus'},
+        status: 'ok',
+      },
+      name: 'narrows an unknown isolation value to undefined while keeping it in raw',
+    },
+    ...['on', 'off', 'maybe'].map((value) => ({
+      content: JSON.stringify({dependabot_security_updates: value, version: 1}),
+      expected: {
         config: {version: 1},
-        raw: {dependabot_security_updates: value},
-      });
-      expect(result).not.toHaveProperty('config.dependabot_security_updates');
-    }
-  );
+        raw: {dependabot_security_updates: value, version: 1},
+        status: 'ok',
+      },
+      name: `a retired dependabot_security_updates value ${JSON.stringify(value)} reads ok and stays in raw`,
+    })),
+    ...[0, -3, 15.5, '25', true, null, {}].map((value) => ({
+      content: JSON.stringify({
+        fitness_commit_threshold: value,
+        sandbox_recommended: true,
+      }),
+      expected: {
+        config: {sandbox_recommended: true, version: 1},
+        raw: {fitness_commit_threshold: value, sandbox_recommended: true},
+        status: 'ok',
+      },
+      name: `readProjectConfig reads an invalid fitness_commit_threshold ${JSON.stringify(value)} as undefined and still ok`,
+    })),
+    {
+      content: JSON.stringify({fitness_commit_threshold: 25}),
+      expected: {
+        config: {fitness_commit_threshold: 25, version: 1},
+        raw: {fitness_commit_threshold: 25},
+        status: 'ok',
+      },
+      name: 'readProjectConfig reads a valid fitness_commit_threshold',
+    },
+  ])('$name', ({content, expected}) => {
+    writeIfPresent(content);
 
-  test.each([0, -3, 15.5, '25', true, null, {}])(
-    'readProjectConfig reads an invalid fitness_commit_threshold %j as undefined and still ok',
-    (value) => {
-      write(
-        JSON.stringify({
-          fitness_commit_threshold: value,
-          sandbox_recommended: true,
-        })
-      );
-
-      const result = readProjectConfig(root);
-
-      expect(result.status).toBe('ok');
-      expect(result).toMatchObject({
-        config: {
-          fitness_commit_threshold: undefined,
-          sandbox_recommended: true,
-        },
-      });
-    }
-  );
-
-  test('readProjectConfig reads a valid fitness_commit_threshold', () => {
-    write(JSON.stringify({fitness_commit_threshold: 25}));
-
-    expect(readProjectConfig(root)).toMatchObject({
-      config: {fitness_commit_threshold: 25},
-      status: 'ok',
-    });
+    expect(readProjectConfig(root)).toEqual(expected);
   });
 
-  test('reports malformed for invalid JSON, naming the file', () => {
-    write('{not json');
+  test.each([
+    {
+      name: 'reports malformed for invalid JSON, naming the file',
+      text: '{not json',
+    },
+    {name: 'reports malformed when the JSON is not an object', text: '[]'},
+  ])('$name', ({text}) => {
+    write(text);
 
     const result = readProjectConfig(root);
 
     expect(result).toMatchObject({status: 'malformed'});
     expect(JSON.stringify(result)).toContain('project.json');
   });
-
-  test('reports malformed when the JSON is not an object', () => {
-    write('[]');
-
-    expect(readProjectConfig(root).status).toBe('malformed');
-  });
 });
 
-describe('setup_decisions at the write boundary', () => {
+describe('updateProjectConfig at the write boundary', () => {
   let root: string;
 
   beforeEach(() => {
@@ -228,93 +216,59 @@ describe('setup_decisions at the write boundary', () => {
     rmSync(root, {force: true, recursive: true});
   });
 
-  test('a value a newer binary wrote does not make another writer fail', () => {
-    writeFileSync(
-      projectConfigPath(root),
-      JSON.stringify({setup_decisions: {x: 'future-value'}, version: 1}),
-      'utf8'
+  test.each([
+    {
+      expected: {
+        isolation_policy: 'prefer-branch',
+        setup_decisions: {x: 'future-value'},
+        version: 1,
+      },
+      initial: {setup_decisions: {x: 'future-value'}, version: 1},
+      name: 'a value a newer binary wrote does not make another writer fail',
+      patch: {isolation_policy: 'prefer-branch'},
+    },
+    {
+      expected: {shellcheck: false, version: 1},
+      initial: {version: 1},
+      name: 'the write boundary accepts a boolean',
+      patch: {shellcheck: false},
+    },
+    {
+      expected: {
+        isolation_policy: 'prefer-branch',
+        shellcheck: false,
+        version: 1,
+      },
+      initial: {shellcheck: false, version: 1},
+      name: 'another writer keeps the opt-out',
+      patch: {isolation_policy: 'prefer-branch'},
+    },
+  ])('$name', ({expected, initial, patch}) => {
+    writeFileSync(projectConfigPath(root), JSON.stringify(initial), 'utf8');
+
+    updateProjectConfig(root, patch);
+
+    expect(JSON.parse(readFileSync(projectConfigPath(root), 'utf8'))).toEqual(
+      expected
     );
-
-    updateProjectConfig(root, {isolation_policy: 'prefer-branch'});
-
-    const written = JSON.parse(
-      readFileSync(projectConfigPath(root), 'utf8')
-    ) as Record<string, unknown>;
-
-    expect(written.setup_decisions).toEqual({x: 'future-value'});
-    expect(written.isolation_policy).toBe('prefer-branch');
   });
 
-  test('a non-object setup_decisions is refused and nothing is written', () => {
+  test.each([
+    {
+      name: 'a non-object setup_decisions is refused and nothing is written',
+      patch: {setup_decisions: 'applied'},
+    },
+    {
+      name: 'the write boundary refuses a shellcheck value that is not a boolean',
+      patch: {shellcheck: 'off'},
+    },
+  ])('$name', ({patch}) => {
     const before = JSON.stringify({version: 1});
     writeFileSync(projectConfigPath(root), before, 'utf8');
 
     expect(() => {
-      updateProjectConfig(root, {setup_decisions: 'applied'});
+      updateProjectConfig(root, patch);
     }).toThrow(ProjectConfigError);
     expect(readFileSync(projectConfigPath(root), 'utf8')).toBe(before);
-  });
-});
-
-describe('shellcheck', () => {
-  let root: string;
-
-  beforeEach(() => {
-    root = mkdtempSync(path.join(tmpdir(), 'gaia-project-config-shellcheck-'));
-    mkdirSync(path.join(root, '.gaia'), {recursive: true});
-  });
-
-  afterEach(() => {
-    rmSync(root, {force: true, recursive: true});
-  });
-
-  test.each([[true], [false]])('%j reads as itself', (value) => {
-    expect(ProjectConfigSchema.parse({shellcheck: value}).shellcheck).toBe(
-      value
-    );
-  });
-
-  test.each([['false'], [0], [null]])(
-    '%j reads as absent without malforming',
-    (value) => {
-      const parsed = ProjectConfigSchema.parse({
-        isolation_policy: 'prefer-branch',
-        shellcheck: value,
-      });
-
-      expect(parsed.shellcheck).toBeUndefined();
-      expect(parsed.isolation_policy).toBe('prefer-branch');
-    }
-  );
-
-  test('the write boundary accepts a boolean and refuses anything else', () => {
-    writeFileSync(
-      projectConfigPath(root),
-      JSON.stringify({version: 1}),
-      'utf8'
-    );
-
-    updateProjectConfig(root, {shellcheck: false});
-
-    expect(
-      JSON.parse(readFileSync(projectConfigPath(root), 'utf8')).shellcheck
-    ).toBe(false);
-    expect(() => {
-      updateProjectConfig(root, {shellcheck: 'off'});
-    }).toThrow(ProjectConfigError);
-  });
-
-  test('another writer keeps the opt-out', () => {
-    writeFileSync(
-      projectConfigPath(root),
-      JSON.stringify({shellcheck: false, version: 1}),
-      'utf8'
-    );
-
-    updateProjectConfig(root, {isolation_policy: 'prefer-branch'});
-
-    expect(
-      JSON.parse(readFileSync(projectConfigPath(root), 'utf8')).shellcheck
-    ).toBe(false);
   });
 });

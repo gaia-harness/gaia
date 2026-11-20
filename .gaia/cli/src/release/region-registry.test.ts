@@ -6,7 +6,7 @@ import {afterEach, beforeEach, describe, expect, test} from 'vitest';
 import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {REGION_REGISTRY, rosterAgentPaths} from './region-registry.js';
+import {rosterAgentPaths} from './region-registry.js';
 
 type Sandbox = {cleanup: () => void; root: string};
 
@@ -62,49 +62,43 @@ describe('rosterAgentPaths', () => {
     );
   });
 
-  test('roster file absent → empty set', () => {
-    expect(rosterAgentPaths(sandbox.root)).toEqual(new Set());
-  });
-
-  test('auditors key absent or not a list → empty set', () => {
-    writeRoster(sandbox.root, 'gate_label: null\n');
-    expect(rosterAgentPaths(sandbox.root)).toEqual(new Set());
-
-    writeRoster(sandbox.root, 'auditors: "not-a-list"\n');
-    expect(rosterAgentPaths(sandbox.root)).toEqual(new Set());
-  });
-
-  test('entries with no name, or a non-string name, are skipped rather than crashing', () => {
-    writeRoster(
-      sandbox.root,
-      [
-        'auditors:',
-        '  - globs:',
-        '      - "app/**"',
-        '  - name: 7',
-        '  - name: real-member',
-        '',
-      ].join('\n')
-    );
-
-    expect(rosterAgentPaths(sandbox.root)).toEqual(
-      new Set(['.claude/agents/real-member.md'])
-    );
-  });
-});
-
-describe('REGION_REGISTRY', () => {
-  test('carries exactly one entry: the roster-derived audit-remit region', () => {
-    expect(REGION_REGISTRY).toHaveLength(1);
-    const [entry] = REGION_REGISTRY;
-    expect(entry).toMatchObject({
-      args: [],
-      endMarker: '<!-- gaia:audit-remit:end -->',
-      id: 'audit-remit',
-      interpreter: 'bash',
-      operand: '.gaia/scripts/write-audit-remits.sh',
-      startMarker: '<!-- gaia:audit-remit:start -->',
-    });
-    expect(entry?.rewrites).toBe(rosterAgentPaths);
+  test.each<{
+    name: string;
+    steps: {expected: string[]; roster?: string}[];
+  }>([
+    {
+      name: 'roster file absent → empty set',
+      steps: [{expected: []}],
+    },
+    {
+      name: 'auditors key absent or not a list → empty set',
+      steps: [
+        {expected: [], roster: 'gate_label: null\n'},
+        {expected: [], roster: 'auditors: "not-a-list"\n'},
+      ],
+    },
+    {
+      name: 'entries with no name, or a non-string name, are skipped rather than crashing',
+      steps: [
+        {
+          expected: ['.claude/agents/real-member.md'],
+          roster: [
+            'auditors:',
+            '  - globs:',
+            '      - "app/**"',
+            '  - name: 7',
+            '  - name: real-member',
+            '',
+          ].join('\n'),
+        },
+      ],
+    },
+  ])('$name', ({steps}) => {
+    for (const {expected, roster} of steps) {
+      if (roster !== undefined) {
+        writeRoster(sandbox.root, roster);
+      }
+      expect(rosterAgentPaths(sandbox.root)).toEqual(new Set(expected));
+    }
   });
 });

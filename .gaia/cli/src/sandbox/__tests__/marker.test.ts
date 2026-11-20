@@ -29,21 +29,53 @@ describe('sandbox marker', () => {
     rmSync(repoRoot, {force: true, recursive: true});
   });
 
-  test('readSandboxMarker returns null when the file is absent', () => {
-    expect(readSandboxMarker(repoRoot)).toBeNull();
-  });
+  const enabledMarker: SandboxMarker = {
+    capability: 'ready',
+    outcome: 'enabled',
+    resolved_at: '2026-01-01T00:00:00.000Z',
+    version: 1,
+  };
 
-  test('writeSandboxMarker then readSandboxMarker round-trips', () => {
-    const marker: SandboxMarker = {
-      capability: 'ready',
-      outcome: 'enabled',
-      resolved_at: '2026-01-01T00:00:00.000Z',
-      version: 1,
-    };
+  test.each([
+    {
+      expected: null,
+      name: 'readSandboxMarker returns null when the file is absent',
+      writes: [] as SandboxMarker[],
+    },
+    {
+      expected: enabledMarker,
+      name: 'writeSandboxMarker then readSandboxMarker round-trips',
+      writes: [enabledMarker],
+    },
+    {
+      expected: {
+        capability: 'ready',
+        outcome: 'enabled',
+        resolved_at: '2026-06-01T00:00:00.000Z',
+        version: 1,
+      },
+      name: 'overwrites the previous marker (write-temp-and-rename)',
+      writes: [
+        {
+          capability: 'ready',
+          outcome: 'declined',
+          resolved_at: '2026-01-01T00:00:00.000Z',
+          version: 1,
+        },
+        {
+          capability: 'ready',
+          outcome: 'enabled',
+          resolved_at: '2026-06-01T00:00:00.000Z',
+          version: 1,
+        },
+      ] as SandboxMarker[],
+    },
+  ])('$name', ({expected, writes}) => {
+    for (const marker of writes) {
+      writeSandboxMarker(repoRoot, marker);
+    }
 
-    writeSandboxMarker(repoRoot, marker);
-
-    expect(readSandboxMarker(repoRoot)).toEqual(marker);
+    expect(readSandboxMarker(repoRoot)).toEqual(expected);
   });
 
   test('writes at .gaia/local/sandbox.json with mode 644', () => {
@@ -75,81 +107,29 @@ describe('sandbox marker', () => {
     expect(entries.some((entry) => entry.includes('.tmp.'))).toBe(false);
   });
 
-  test('throws on an unexpected version (fail loud, not silent default)', () => {
+  test.each([
+    {
+      contents: {...enabledMarker, version: 2},
+      error: /version/u,
+      name: 'throws on an unexpected version (fail loud, not silent default)',
+    },
+    {
+      contents: {version: 1},
+      error: /missing required fields/u,
+      name: 'throws on a malformed shape missing required fields',
+    },
+    {
+      contents: {...enabledMarker, outcome: 'garbage'},
+      error: /unknown outcome or capability/u,
+      name: 'throws on a present-but-off-vocabulary outcome/capability',
+    },
+  ])('$name', ({contents, error}) => {
     // First write ensures the parent dir exists, then corrupt the file.
-    writeSandboxMarker(repoRoot, {
-      capability: 'ready',
-      outcome: 'enabled',
-      resolved_at: '2026-01-01T00:00:00.000Z',
-      version: 1,
-    });
-    writeFileSync(
-      resolveMarkerPath(repoRoot),
-      JSON.stringify({
-        capability: 'ready',
-        outcome: 'enabled',
-        resolved_at: '2026-01-01T00:00:00.000Z',
-        version: 2,
-      }),
-      {mode: 0o644}
-    );
-
-    expect(() => readSandboxMarker(repoRoot)).toThrow(/version/u);
-  });
-
-  test('throws on a malformed shape missing required fields', () => {
-    writeSandboxMarker(repoRoot, {
-      capability: 'ready',
-      outcome: 'enabled',
-      resolved_at: '2026-01-01T00:00:00.000Z',
-      version: 1,
-    });
-    writeFileSync(resolveMarkerPath(repoRoot), JSON.stringify({version: 1}), {
+    writeSandboxMarker(repoRoot, enabledMarker);
+    writeFileSync(resolveMarkerPath(repoRoot), JSON.stringify(contents), {
       mode: 0o644,
     });
 
-    expect(() => readSandboxMarker(repoRoot)).toThrow(
-      /missing required fields/u
-    );
-  });
-
-  test('throws on a present-but-off-vocabulary outcome/capability', () => {
-    writeSandboxMarker(repoRoot, {
-      capability: 'ready',
-      outcome: 'enabled',
-      resolved_at: '2026-01-01T00:00:00.000Z',
-      version: 1,
-    });
-    writeFileSync(
-      resolveMarkerPath(repoRoot),
-      JSON.stringify({
-        capability: 'ready',
-        outcome: 'garbage',
-        resolved_at: '2026-01-01T00:00:00.000Z',
-        version: 1,
-      }),
-      {mode: 0o644}
-    );
-
-    expect(() => readSandboxMarker(repoRoot)).toThrow(
-      /unknown outcome or capability/u
-    );
-  });
-
-  test('overwrites the previous marker (write-temp-and-rename)', () => {
-    writeSandboxMarker(repoRoot, {
-      capability: 'ready',
-      outcome: 'declined',
-      resolved_at: '2026-01-01T00:00:00.000Z',
-      version: 1,
-    });
-    writeSandboxMarker(repoRoot, {
-      capability: 'ready',
-      outcome: 'enabled',
-      resolved_at: '2026-06-01T00:00:00.000Z',
-      version: 1,
-    });
-
-    expect(readSandboxMarker(repoRoot)?.outcome).toBe('enabled');
+    expect(() => readSandboxMarker(repoRoot)).toThrow(error);
   });
 });

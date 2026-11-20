@@ -166,44 +166,40 @@ describe('setup configure-dependabot-alerts', () => {
   const readOutput = (): Record<string, unknown> =>
     JSON.parse(stdio.out.join('').trim()) as Record<string, unknown>;
 
-  test('turns automated security fixes off and verifies both settings', async () => {
-    const exit = await runWithShim({
-      exitCodeQueue: [0, 0, 0, 0, 0],
-      stdoutQueue: ['', FIXES_ON, '', '', FIXES_OFF],
-    });
-
-    expect(exit).toBe(EXIT_CODES.OK);
-    expect(readRecordedArgv(sandbox)).toEqual([
-      ENABLE_ALERTS,
-      READ_FIXES,
-      DISABLE_FIXES,
-      VERIFY_ALERTS,
-      READ_FIXES,
-    ]);
-    expect(readOutput()).toEqual({
-      alerts_enabled: true,
-      automated_security_fixes_enabled: false,
+  test.each([
+    {
+      calls: [
+        ENABLE_ALERTS,
+        READ_FIXES,
+        DISABLE_FIXES,
+        VERIFY_ALERTS,
+        READ_FIXES,
+      ],
       changed: ['automated security fixes disabled'],
-    });
-  });
-
-  test('sends no disable call and reports no change when fixes are already off', async () => {
-    const exit = await runWithShim({
-      exitCodeQueue: [0, 0, 0, 0],
-      stdoutQueue: ['', FIXES_OFF, '', FIXES_OFF],
-    });
+      name: 'turns automated security fixes off and verifies both settings',
+      shim: {
+        exitCodeQueue: [0, 0, 0, 0, 0],
+        stdoutQueue: ['', FIXES_ON, '', '', FIXES_OFF],
+      },
+    },
+    {
+      calls: [ENABLE_ALERTS, READ_FIXES, VERIFY_ALERTS, READ_FIXES],
+      changed: [],
+      name: 'sends no disable call and reports no change when fixes are already off',
+      shim: {
+        exitCodeQueue: [0, 0, 0, 0],
+        stdoutQueue: ['', FIXES_OFF, '', FIXES_OFF],
+      },
+    },
+  ])('$name', async ({calls, changed, shim}) => {
+    const exit = await runWithShim(shim);
 
     expect(exit).toBe(EXIT_CODES.OK);
-    expect(readRecordedArgv(sandbox)).toEqual([
-      ENABLE_ALERTS,
-      READ_FIXES,
-      VERIFY_ALERTS,
-      READ_FIXES,
-    ]);
+    expect(readRecordedArgv(sandbox)).toEqual(calls);
     expect(readOutput()).toEqual({
       alerts_enabled: true,
       automated_security_fixes_enabled: false,
-      changed: [],
+      changed,
     });
   });
 
@@ -238,18 +234,33 @@ describe('setup configure-dependabot-alerts', () => {
     }
   );
 
-  test('exits non-zero when --owner missing', async () => {
-    const exit = await run(['--repo', 'bar'], {cwd: sandbox.root});
-    expect(exit).not.toBe(0);
-    expect(stdio.err.join('')).toContain('missing_required_arg');
-  });
+  test.each([
+    {
+      args: ['--repo', 'bar'],
+      name: 'exits non-zero when --owner missing',
+      stream: 'err',
+      succeeds: false,
+      text: 'missing_required_arg',
+    },
+    {
+      args: ['--owner', 'foo', '--repo', 'bar', '--bogus'],
+      name: 'rejects unknown flags',
+      stream: 'err',
+      succeeds: false,
+      text: 'unknown flag',
+    },
+    {
+      args: ['--help'],
+      name: '--help exits 0',
+      stream: 'out',
+      succeeds: true,
+      text: 'Usage:',
+    },
+  ] as const)('$name', async ({args, stream, succeeds, text}) => {
+    const exit = await run([...args], {cwd: sandbox.root});
 
-  test('rejects unknown flags', async () => {
-    const exit = await run(['--owner', 'foo', '--repo', 'bar', '--bogus'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).not.toBe(0);
-    expect(stdio.err.join('')).toContain('unknown flag');
+    expect(exit === 0).toBe(succeeds);
+    expect(stdio[stream].join('')).toContain(text);
   });
 
   test('accepts --json without changing the output shape', async () => {
@@ -262,11 +273,5 @@ describe('setup configure-dependabot-alerts', () => {
       cwd: sandbox.root,
     });
     expect(exit).toBe(EXIT_CODES.OK);
-  });
-
-  test('--help exits 0', async () => {
-    const exit = await run(['--help'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-    expect(stdio.out.join('')).toContain('Usage:');
   });
 });

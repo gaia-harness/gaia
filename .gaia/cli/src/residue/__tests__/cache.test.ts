@@ -18,6 +18,9 @@ import {
   writeCursor,
 } from '../cache.js';
 
+const cacheFilePath = (root: string): string =>
+  path.join(root, '.gaia', 'local', 'cache', 'residual-attribution.json');
+
 describe('attribution cache', () => {
   const dirs: string[] = [];
 
@@ -34,74 +37,68 @@ describe('attribution cache', () => {
       rmSync(dir, {force: true, recursive: true});
   });
 
-  test('a missing cache file reads as empty, no throw', () => {
+  test.each<{setup: (root: string) => void; title: string}>([
+    {
+      setup: () => {},
+      title: 'a missing cache file reads as empty, no throw',
+    },
+    {
+      setup: (root) => {
+        mkdirSync(path.join(root, '.gaia', 'local', 'cache'), {
+          recursive: true,
+        });
+        writeFileSync(cacheFilePath(root), '{"schema":"v2","prs":{"1":', {
+          flag: 'w',
+        });
+      },
+      title: 'a corrupt (truncated) cache file reads as empty, no throw',
+    },
+    {
+      // v2 attributions carry a failure_mode cut at the bullet's first line,
+      // so a v2 cache must re-attribute rather than serve that text forever.
+      setup: (root) => {
+        writeAttributionCache(root, {
+          ...emptyAttributionCache(),
+          high_water_merged_at: '2026-01-01T00:00:00Z',
+        });
+        writeFileSync(
+          cacheFilePath(root),
+          readFileSync(cacheFilePath(root), 'utf8').replace(
+            '"schema":"v3"',
+            '"schema":"v2"'
+          )
+        );
+      },
+      title: 'a cache stamped v2 reads as empty',
+    },
+  ])('$title', ({setup}) => {
     const root = makeRoot();
 
-    expect(readAttributionCache(root)).toEqual(emptyAttributionCache());
-  });
-
-  test('a corrupt (truncated) cache file reads as empty, no throw', () => {
-    const root = makeRoot();
-
-    mkdirSync(path.join(root, '.gaia', 'local', 'cache'), {recursive: true});
-    writeFileSync(
-      path.join(root, '.gaia', 'local', 'cache', 'residual-attribution.json'),
-      '{"schema":"v2","prs":{"1":',
-      {flag: 'w'}
-    );
+    setup(root);
 
     expect(() => readAttributionCache(root)).not.toThrow();
     expect(readAttributionCache(root)).toEqual(emptyAttributionCache());
   });
 
-  // v2 attributions carry a failure_mode cut at the bullet's first line, so a
-  // v2 cache must re-attribute rather than serve that text forever.
-  test('a cache stamped v2 reads as empty', () => {
+  test.each([
+    {
+      cache: {
+        ...emptyAttributionCache(),
+        high_water_merged_at: '2026-01-01T00:00:00Z',
+      },
+      title: 'writeAttributionCache then readAttributionCache round-trips',
+    },
+    {
+      cache: emptyAttributionCache(),
+      title: 'an unwritten cache directory is created on write',
+    },
+  ])('$title', ({cache}) => {
     const root = makeRoot();
-
-    writeAttributionCache(root, {
-      ...emptyAttributionCache(),
-      high_water_merged_at: '2026-01-01T00:00:00Z',
-    });
-
-    const cachePath = path.join(
-      root,
-      '.gaia',
-      'local',
-      'cache',
-      'residual-attribution.json'
-    );
-
-    writeFileSync(
-      cachePath,
-      readFileSync(cachePath, 'utf8').replace('"schema":"v3"', '"schema":"v2"')
-    );
-
-    expect(readAttributionCache(root)).toEqual(emptyAttributionCache());
-  });
-
-  test('writeAttributionCache then readAttributionCache round-trips', () => {
-    const root = makeRoot();
-    const cache = {
-      ...emptyAttributionCache(),
-      high_water_merged_at: '2026-01-01T00:00:00Z',
-    };
 
     writeAttributionCache(root, cache);
 
+    expect(existsSync(cacheFilePath(root))).toBe(true);
     expect(readAttributionCache(root)).toEqual(cache);
-  });
-
-  test('an unwritten cache directory is created on write', () => {
-    const root = makeRoot();
-
-    writeAttributionCache(root, emptyAttributionCache());
-
-    expect(
-      existsSync(
-        path.join(root, '.gaia', 'local', 'cache', 'residual-attribution.json')
-      )
-    ).toBe(true);
   });
 });
 

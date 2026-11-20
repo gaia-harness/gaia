@@ -149,53 +149,42 @@ describe('residue-record', () => {
     expect(readStoreLines(root)).toHaveLength(1);
   });
 
-  test('a malformed token exits non-zero and writes nothing', () => {
-    const root = makeRoot();
-    const reasonFile = writeReasonFile(root, 'reason');
-
-    const exitCode = run(
-      [
+  test.each<{argv: (root: string) => string[]; title: string}>([
+    {
+      argv: (root) => [
         '--disposition',
         'kept',
         '--token',
         'not a token',
         '--reason-file',
-        reasonFile,
+        writeReasonFile(root, 'reason'),
       ],
-      {cwd: root}
-    );
-
-    expect(exitCode).not.toBe(0);
-    expect(readStoreLines(root)).toHaveLength(0);
-  });
-
-  test('an absent --reason-file exits non-zero and writes nothing', () => {
-    const root = makeRoot();
-    const token = encodeToken({line: 1, path: 'app/a.ts', pr_number: 1});
-
-    const exitCode = run(['--disposition', 'kept', '--token', token], {
-      cwd: root,
-    });
-
-    expect(exitCode).not.toBe(0);
-    expect(readStoreLines(root)).toHaveLength(0);
-  });
-
-  test('an unreadable reason file exits non-zero and writes nothing', () => {
-    const root = makeRoot();
-    const token = encodeToken({line: 1, path: 'app/a.ts', pr_number: 1});
-
-    const exitCode = run(
-      [
+      title: 'a malformed token exits non-zero and writes nothing',
+    },
+    {
+      argv: () => [
         '--disposition',
         'kept',
         '--token',
-        token,
+        encodeToken({line: 1, path: 'app/a.ts', pr_number: 1}),
+      ],
+      title: 'an absent --reason-file exits non-zero and writes nothing',
+    },
+    {
+      argv: (root) => [
+        '--disposition',
+        'kept',
+        '--token',
+        encodeToken({line: 1, path: 'app/a.ts', pr_number: 1}),
         '--reason-file',
         path.join(root, 'does-not-exist.txt'),
       ],
-      {cwd: root}
-    );
+      title: 'an unreadable reason file exits non-zero and writes nothing',
+    },
+  ])('$title', ({argv}) => {
+    const root = makeRoot();
+
+    const exitCode = run(argv(root), {cwd: root});
 
     expect(exitCode).not.toBe(0);
     expect(readStoreLines(root)).toHaveLength(0);

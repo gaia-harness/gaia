@@ -8,7 +8,6 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {
   NON_ASCII_STEM,
-  QUOTED_FIRST_BYTE,
   QUOTEPATH_PIN_ARGS,
 } from '../util/non-ascii-path-fixture.js';
 import {
@@ -64,141 +63,196 @@ const setupSandbox = (): Sandbox => {
 };
 
 describe('classifyPath', () => {
-  test('treats the local build record as adopter-owned', () => {
-    expect(classifyPath('.gaia/VERSION-dev')).toBeNull();
-  });
-
-  test('adopter sentinels return null', () => {
-    expect(classifyPath('wiki/log.md')).toBeNull();
-    expect(classifyPath('.gaia/VERSION')).toBeNull();
-    expect(classifyPath('.gaia/manifest.json')).toBeNull();
-    expect(classifyPath('.gaia/packages.json')).toBeNull();
-    expect(classifyPath('.gaia/finding-classes.json')).toBeNull();
-  });
-
   test('wiki/hot.md is not an adopter-owned sentinel', () => {
     expect(ADOPTER_OWNED_SENTINELS.has('wiki/hot.md')).toBe(false);
     expect(ADOPTER_OWNED_SENTINELS.has('wiki/log.md')).toBe(true);
   });
 
-  test('a registered package settings file is generated and has no class', () => {
-    expect(classifyPath('apps/web/.claude/settings.json')).toBeNull();
-    // The root settings file has no package prefix and stays shared.
-    expect(classifyPath('.claude/settings.json')).toBe('shared');
-    // The overlay is the hand-edited input, so it is shared, not generated.
-    expect(classifyPath('apps/web/.claude/settings.overlay.json')).toBe(
-      'shared'
-    );
-  });
-
-  test('frontend package descriptor, manifest, and CLAUDE.md are shared', () => {
-    expect(classifyPath('apps/web/package.json')).toBe('shared');
-    expect(classifyPath('apps/web/gaia.package.json')).toBe('shared');
-    expect(classifyPath('apps/web/CLAUDE.md')).toBe('shared');
-    expect(classifyPath('apps/web/app/root.tsx')).toBe('owned');
-  });
-
-  test('frontend token values and shadcn config are shared; vendored ui stays owned', () => {
-    expect(classifyPath('apps/web/app/styles/theme.css')).toBe('shared');
-    expect(classifyPath('apps/web/components.json')).toBe('shared');
-    expect(classifyPath('apps/web/app/styles/tailwind.css')).toBe('owned');
-    expect(classifyPath('apps/web/app/components/ui/button.tsx')).toBe('owned');
-    expect(
-      classifyPath('apps/web/app/components/ui/tests/button.test.tsx')
-    ).toBe('owned');
-  });
-
-  test('shared exact and prefix matches', () => {
-    expect(classifyPath('.claude/settings.json')).toBe('shared');
-    expect(classifyPath('package.json')).toBe('shared');
-    expect(classifyPath('pnpm-workspace.yaml')).toBe('shared');
-    expect(classifyPath('CLAUDE.md')).toBe('shared');
-    expect(classifyPath('wiki/index.md')).toBe('shared');
-    expect(classifyPath('.github/workflows/release.yml')).toBe('shared');
-    expect(classifyPath('.github/FUNDING.yml')).toBe('shared');
-  });
-
-  test('the TypeScript rule is shared, since a newly owned path would overwrite an adopter rule already there', () => {
-    expect(classifyPath('.claude/rules/typescript.md')).toBe('shared');
-  });
-
-  test('wiki-owned exact and prefix matches', () => {
-    expect(classifyPath('wiki/concepts/Foo.md')).toBe('wiki-owned');
-    expect(classifyPath('wiki/decisions/Bar.md')).toBe('wiki-owned');
-    expect(classifyPath('wiki/modules/Baz.md')).toBe('wiki-owned');
-    expect(classifyPath('wiki/flows/Qux.md')).toBe('wiki-owned');
-    expect(classifyPath('wiki/dependencies/Quux.md')).toBe('wiki-owned');
-    expect(classifyPath('wiki/components/Component.md')).toBe('wiki-owned');
-    expect(classifyPath('wiki/sources/Source.md')).toBe('wiki-owned');
-    expect(classifyPath('wiki/overview.md')).toBe('wiki-owned');
-    expect(classifyPath('wiki/README.md')).toBe('wiki-owned');
-  });
-
-  test('default fallback is owned', () => {
-    expect(classifyPath('app/components/Foo/index.tsx')).toBe('owned');
-    expect(classifyPath('.claude/skills/tdd/SKILL.md')).toBe('owned');
-    expect(classifyPath('tsconfig.json')).toBe('owned');
-    // Root governance files reach the classifier as 'owned' but are
-    // filtered out earlier in `buildManifest` by `.gaia/release-exclude`
-    // category 11 (maintainer-only project governance).
-    expect(classifyPath('CHANGELOG.md')).toBe('owned');
-    expect(classifyPath('README.md')).toBe('owned');
-    expect(classifyPath('LICENSE')).toBe('owned');
+  test.each<{cases: [string, ReturnType<typeof classifyPath>][]; name: string}>(
+    [
+      {
+        cases: [['.gaia/VERSION-dev', null]],
+        name: 'treats the local build record as adopter-owned',
+      },
+      {
+        cases: [
+          ['wiki/log.md', null],
+          ['.gaia/VERSION', null],
+          ['.gaia/manifest.json', null],
+          ['.gaia/packages.json', null],
+          ['.gaia/finding-classes.json', null],
+        ],
+        name: 'adopter sentinels return null',
+      },
+      {
+        // The root settings file has no package prefix and stays shared. The
+        // overlay is the hand-edited input, so it is shared, not generated.
+        cases: [
+          ['apps/web/.claude/settings.json', null],
+          ['.claude/settings.json', 'shared'],
+          ['apps/web/.claude/settings.overlay.json', 'shared'],
+        ],
+        name: 'a registered package settings file is generated and has no class',
+      },
+      {
+        cases: [
+          ['apps/web/package.json', 'shared'],
+          ['apps/web/gaia.package.json', 'shared'],
+          ['apps/web/CLAUDE.md', 'shared'],
+          ['apps/web/app/root.tsx', 'owned'],
+        ],
+        name: 'frontend package descriptor, manifest, and CLAUDE.md are shared',
+      },
+      {
+        cases: [
+          ['apps/web/app/styles/theme.css', 'shared'],
+          ['apps/web/components.json', 'shared'],
+          ['apps/web/app/styles/tailwind.css', 'owned'],
+          ['apps/web/app/components/ui/button.tsx', 'owned'],
+          ['apps/web/app/components/ui/tests/button.test.tsx', 'owned'],
+        ],
+        name: 'frontend token values and shadcn config are shared; vendored ui stays owned',
+      },
+      {
+        cases: [
+          ['.claude/settings.json', 'shared'],
+          ['package.json', 'shared'],
+          ['pnpm-workspace.yaml', 'shared'],
+          ['CLAUDE.md', 'shared'],
+          ['wiki/index.md', 'shared'],
+          ['.github/workflows/release.yml', 'shared'],
+          ['.github/FUNDING.yml', 'shared'],
+        ],
+        name: 'shared exact and prefix matches',
+      },
+      {
+        cases: [['.claude/rules/typescript.md', 'shared']],
+        name: 'the TypeScript rule is shared, since a newly owned path would overwrite an adopter rule already there',
+      },
+      {
+        cases: [
+          ['wiki/concepts/Foo.md', 'wiki-owned'],
+          ['wiki/decisions/Bar.md', 'wiki-owned'],
+          ['wiki/modules/Baz.md', 'wiki-owned'],
+          ['wiki/flows/Qux.md', 'wiki-owned'],
+          ['wiki/dependencies/Quux.md', 'wiki-owned'],
+          ['wiki/components/Component.md', 'wiki-owned'],
+          ['wiki/sources/Source.md', 'wiki-owned'],
+          ['wiki/overview.md', 'wiki-owned'],
+          ['wiki/README.md', 'wiki-owned'],
+        ],
+        name: 'wiki-owned exact and prefix matches',
+      },
+      {
+        // Root governance files reach the classifier as 'owned' but are
+        // filtered out earlier in `buildManifest` by `.gaia/release-exclude`
+        // category 11 (maintainer-only project governance).
+        cases: [
+          ['app/components/Foo/index.tsx', 'owned'],
+          ['.claude/skills/tdd/SKILL.md', 'owned'],
+          ['tsconfig.json', 'owned'],
+          ['CHANGELOG.md', 'owned'],
+          ['README.md', 'owned'],
+          ['LICENSE', 'owned'],
+        ],
+        name: 'default fallback is owned',
+      },
+    ]
+  )('$name', ({cases}) => {
+    for (const [filePath, expected] of cases) {
+      expect(classifyPath(filePath)).toBe(expected);
+    }
   });
 });
 
 describe('parseExcludePatterns', () => {
-  test('strips comments and blank lines', () => {
-    const patterns = parseExcludePatterns(
-      '# comment\n\n.gaia/scripts\n\n# another\nwiki/entities\n'
-    );
-    expect(patterns).toHaveLength(2);
-    expect(patterns[0]?.test('.gaia/scripts/foo.mjs')).toBe(true);
-    expect(patterns[1]?.test('wiki/entities/Foo.md')).toBe(true);
+  test.each<{
+    count: number;
+    matches: [number, string, boolean][];
+    name: string;
+    text: string;
+  }>([
+    {
+      count: 2,
+      matches: [
+        [0, '.gaia/scripts/foo.mjs', true],
+        [1, 'wiki/entities/Foo.md', true],
+      ],
+      name: 'strips comments and blank lines',
+      text: '# comment\n\n.gaia/scripts\n\n# another\nwiki/entities\n',
+    },
+  ])('$name', ({count, matches, text}) => {
+    const patterns = parseExcludePatterns(text);
+
+    expect(patterns).toHaveLength(count);
+
+    for (const [index, candidate, expected] of matches) {
+      expect(patterns[index]?.test(candidate)).toBe(expected);
+    }
   });
 
-  test('matches the literal path and its directory-prefix form, not a glob', () => {
-    const patterns = parseExcludePatterns('.claude/commands/gaia-release.md\n');
-    expect(patterns[0]?.test('.claude/commands/gaia-release.md')).toBe(true);
-    expect(patterns[0]?.test('.claude/commands/other.md')).toBe(false);
-  });
+  test.each<{
+    matches: [number, string, boolean][];
+    name: string;
+    text: string;
+  }>([
+    {
+      matches: [
+        [0, '.claude/commands/gaia-release.md', true],
+        [0, '.claude/commands/other.md', false],
+      ],
+      name: 'matches the literal path and its directory-prefix form, not a glob',
+      text: '.claude/commands/gaia-release.md\n',
+    },
+    {
+      matches: [
+        [0, 'foo*bar', true],
+        [0, 'fooXbar', false],
+      ],
+      name: 'treats a literal * as a literal character, never a glob wildcard',
+      text: 'foo*bar\n',
+    },
+  ])('$name', ({matches, text}) => {
+    const patterns = parseExcludePatterns(text);
 
-  test('treats a literal * as a literal character, never a glob wildcard', () => {
-    const patterns = parseExcludePatterns('foo*bar\n');
-    expect(patterns[0]?.test('foo*bar')).toBe(true);
-    expect(patterns[0]?.test('fooXbar')).toBe(false);
+    expect(patterns.length).toBeGreaterThan(0);
+
+    for (const [index, candidate, expected] of matches) {
+      expect(patterns[index]?.test(candidate)).toBe(expected);
+    }
   });
 });
 
 describe('validateExcludeText', () => {
-  test('accepts an all-literal, unindented exclude body', () => {
-    expect(() =>
-      validateExcludeText('# comment\n\n.gaia/scripts\nwiki/entities\n')
-    ).not.toThrow();
+  test.each<{name: string; text: string}>([
+    {
+      name: 'rejects a line containing a glob metacharacter',
+      text: 'wiki/meta*\n',
+    },
+    {
+      name: 'rejects a line containing a regex character-class bracket',
+      text: 'docs/notes[1]\n',
+    },
+    {name: 'rejects an indented line', text: '  wiki/meta\n'},
+  ])('$name', ({text}) => {
+    expect(() => validateExcludeText(text)).toThrow(/literal/);
   });
 
-  test('rejects a line containing a glob metacharacter', () => {
-    expect(() => validateExcludeText('wiki/meta*\n')).toThrow(/literal/);
-  });
-
-  test('rejects a line containing a regex character-class bracket', () => {
-    expect(() => validateExcludeText('docs/notes[1]\n')).toThrow(/literal/);
-  });
-
-  test('rejects an indented line', () => {
-    expect(() => validateExcludeText('  wiki/meta\n')).toThrow(/literal/);
-  });
-
-  test('tolerates CRLF line endings on otherwise-valid literal paths', () => {
-    expect(() =>
-      validateExcludeText('.gaia/cli/src\r\nwiki/entities\r\n')
-    ).not.toThrow();
-  });
-
-  test('ignores metacharacters inside a comment line', () => {
-    expect(() =>
-      validateExcludeText('# foo* [bar]\nwiki/entities\n')
-    ).not.toThrow();
+  test.each<{name: string; text: string}>([
+    {
+      name: 'accepts an all-literal, unindented exclude body',
+      text: '# comment\n\n.gaia/scripts\nwiki/entities\n',
+    },
+    {
+      name: 'tolerates CRLF line endings on otherwise-valid literal paths',
+      text: '.gaia/cli/src\r\nwiki/entities\r\n',
+    },
+    {
+      name: 'ignores metacharacters inside a comment line',
+      text: '# foo* [bar]\nwiki/entities\n',
+    },
+  ])('$name', ({text}) => {
+    expect(() => validateExcludeText(text)).not.toThrow();
   });
 });
 
@@ -277,59 +331,51 @@ describe('buildManifest', () => {
     expect(manifest.files['app/keep.ts']).toBe('owned');
   });
 
-  test('the fixture path really is C-quoted, so the assertion below can fail', () => {
-    sandbox.commit('seed', {
-      '.gaia/VERSION': '0.1.0\n',
-      [`wiki/${NON_ASCII_STEM}.md`]: '# nihongo\n',
-    });
-
-    // Deliberately unrouted: runs without -z on purpose, since
-    // the quoted output is what proves the fixture can fail the assertion.
-    const listed = execFileSync('git', ['ls-files'], {
-      cwd: sandbox.root,
-      encoding: 'utf8',
-    });
-
-    expect(listed).toContain(QUOTED_FIRST_BYTE);
-    expect(listed).not.toContain(NON_ASCII_STEM);
-  });
-
-  test('excludes a non-ASCII path, which git C-quotes under its default core.quotePath', () => {
-    sandbox.commit('seed', {
-      '.gaia/release-exclude': `wiki/${NON_ASCII_STEM}.md\n`,
-      '.gaia/VERSION': '0.1.0\n',
-      [`wiki/${NON_ASCII_STEM}.md`]: '# nihongo\n',
-      'app/keep.ts': 'export {};\n',
-    });
-
-    const manifest = buildManifest(sandbox.root, {
-      generatedAt: '2026-05-07T00:00:00.000Z',
-    });
-
-    expect(manifest.files[`wiki/${NON_ASCII_STEM}.md`]).toBeUndefined();
-    // The C-quoted spelling names no file on disk, so it must not appear
-    // under any key: reading it would ship a path the tarball never carries.
-    expect(
-      Object.keys(manifest.files).filter((key) => key.includes('\\'))
-    ).toEqual([]);
-    expect(manifest.files['app/keep.ts']).toBe('owned');
-  });
-
-  test('reads a path carrying a literal newline by its real name', () => {
-    sandbox.commit('seed', {
-      '.gaia/release-exclude': '# none\n',
-      '.gaia/VERSION': '0.1.0\n',
-      'app/two\nlines.ts': 'export {};\n',
-    });
+  // Both rows also assert that no key carries a C-quoted backslash: the quoted
+  // spelling names no file on disk, so reading it would ship a path the
+  // tarball never carries.
+  test.each<{
+    absent: string[];
+    files: Record<string, string>;
+    name: string;
+    owned: string[];
+  }>([
+    {
+      absent: [`wiki/${NON_ASCII_STEM}.md`],
+      files: {
+        '.gaia/release-exclude': `wiki/${NON_ASCII_STEM}.md\n`,
+        [`wiki/${NON_ASCII_STEM}.md`]: '# nihongo\n',
+        'app/keep.ts': 'export {};\n',
+      },
+      name: 'excludes a non-ASCII path, which git C-quotes under its default core.quotePath',
+      owned: ['app/keep.ts'],
+    },
+    {
+      // This case pins `-z` specifically, where the non-ASCII one does not:
+      // git C-quotes a control character whatever `core.quotePath` says, so
+      // the quotepath setting alone would not recover the real spelling.
+      absent: [],
+      files: {
+        '.gaia/release-exclude': '# none\n',
+        'app/two\nlines.ts': 'export {};\n',
+      },
+      name: 'reads a path carrying a literal newline by its real name',
+      owned: ['app/two\nlines.ts'],
+    },
+  ])('$name', ({absent, files, owned}) => {
+    sandbox.commit('seed', {'.gaia/VERSION': '0.1.0\n', ...files});
 
     const manifest = buildManifest(sandbox.root, {
       generatedAt: '2026-05-07T00:00:00.000Z',
     });
 
-    // This case pins `-z` specifically, where the non-ASCII one above does
-    // not: git C-quotes a control character whatever `core.quotePath` says,
-    // so the quotepath setting alone would not recover the real spelling.
-    expect(manifest.files['app/two\nlines.ts']).toBe('owned');
+    for (const key of absent) {
+      expect(manifest.files[key]).toBeUndefined();
+    }
+
+    for (const key of owned) {
+      expect(manifest.files[key]).toBe('owned');
+    }
     expect(
       Object.keys(manifest.files).filter((key) => key.includes('\\'))
     ).toEqual([]);
@@ -355,14 +401,17 @@ describe('ManifestSchema: regions', () => {
     version: '1.0.0',
   };
 
-  test('accepts a manifest object with no `regions` key', () => {
-    expect(() => ManifestSchema.parse(baseFields)).not.toThrow();
-  });
-
-  test('accepts a manifest object with `regions: []`', () => {
-    expect(() =>
-      ManifestSchema.parse({...baseFields, regions: []})
-    ).not.toThrow();
+  test.each<{input: Record<string, unknown>; name: string}>([
+    {
+      input: baseFields,
+      name: 'accepts a manifest object with no `regions` key',
+    },
+    {
+      input: {...baseFields, regions: []},
+      name: 'accepts a manifest object with `regions: []`',
+    },
+  ])('$name', ({input}) => {
+    expect(() => ManifestSchema.parse(input)).not.toThrow();
   });
 
   test('rejects a declaration with an empty startMarker', () => {
@@ -405,53 +454,56 @@ describe('computeDrift: regionDrift', () => {
     startMarker: '<!-- gaia:test:start -->',
   };
 
-  test('a committed manifest missing one region path reports it as missing for that region id', () => {
-    const expected = manifestWithRegions([region]);
-    const actual = manifestWithRegions([
-      {...region, paths: ['.claude/agents/a.md']},
-    ]);
+  const onlyA = ['.claude/agents/a.md'];
 
-    expect(regionDrift(expected, actual)).toEqual([
-      {extra: [], missing: ['.claude/agents/b.md'], regionId: 'test-region'},
-    ]);
-  });
-
-  test('a committed manifest carrying an extra region path reports it in `extra`', () => {
-    const expected = manifestWithRegions([
-      {...region, paths: ['.claude/agents/a.md']},
-    ]);
-    const actual = manifestWithRegions([region]);
-
-    expect(regionDrift(expected, actual)).toEqual([
-      {extra: ['.claude/agents/b.md'], missing: [], regionId: 'test-region'},
-    ]);
-  });
-
-  test('a committed manifest whose startMarker differs reports contractDrift', () => {
-    const expected = manifestWithRegions([region]);
-    const actual = manifestWithRegions([
-      {...region, startMarker: '<!-- gaia:other:start -->'},
-    ]);
-
-    const result = regionDrift(expected, actual);
-    expect(result).toHaveLength(1);
-    expect(result[0]?.contractDrift).toContain('startMarker');
-  });
-
-  test('identical declarations report an empty regionDrift', () => {
-    const expected = manifestWithRegions([region]);
-    const actual = manifestWithRegions([region]);
-
-    expect(regionDrift(expected, actual)).toEqual([]);
-  });
-
-  test('a committed manifest with no `regions` key against an expected manifest that has one reports the id-only-in-expected case', () => {
-    const expected = manifestWithRegions([region]);
-    const actual = manifestWithRegions(undefined);
-
-    expect(regionDrift(expected, actual)).toEqual([
-      {extra: [], missing: region.paths, regionId: 'test-region'},
-    ]);
+  test.each<{
+    actual: ManifestShape['regions'];
+    expected: ManifestShape['regions'];
+    name: string;
+    result: unknown[];
+  }>([
+    {
+      actual: [{...region, paths: onlyA}],
+      expected: [region],
+      name: 'a committed manifest missing one region path reports it as missing for that region id',
+      result: [
+        {extra: [], missing: ['.claude/agents/b.md'], regionId: 'test-region'},
+      ],
+    },
+    {
+      actual: [region],
+      expected: [{...region, paths: onlyA}],
+      name: 'a committed manifest carrying an extra region path reports it in `extra`',
+      result: [
+        {extra: ['.claude/agents/b.md'], missing: [], regionId: 'test-region'},
+      ],
+    },
+    {
+      actual: [{...region, startMarker: '<!-- gaia:other:start -->'}],
+      expected: [region],
+      name: 'a committed manifest whose startMarker differs reports contractDrift',
+      result: [
+        expect.objectContaining({
+          contractDrift: expect.stringContaining('startMarker'),
+        }),
+      ],
+    },
+    {
+      actual: [region],
+      expected: [region],
+      name: 'identical declarations report an empty regionDrift',
+      result: [],
+    },
+    {
+      actual: undefined,
+      expected: [region],
+      name: 'a committed manifest with no `regions` key against an expected manifest that has one reports the id-only-in-expected case',
+      result: [{extra: [], missing: region.paths, regionId: 'test-region'}],
+    },
+  ])('$name', ({actual, expected, result}) => {
+    expect(
+      regionDrift(manifestWithRegions(expected), manifestWithRegions(actual))
+    ).toEqual(result);
   });
 });
 

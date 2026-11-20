@@ -1,7 +1,6 @@
 import {dump as dumpYaml, load as parseYaml} from 'js-yaml';
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {execFileSync} from 'node:child_process';
-import {createHash} from 'node:crypto';
 import {
   chmodSync,
   mkdirSync,
@@ -172,31 +171,153 @@ transforms:
           - ".github/workflows/**"
 `;
 
+// One scrub run over a mkdtemp sandbox, described by a case row. Rows differ
+// only in data (config, files, expected exit and output), so each describe
+// below is a single `test.each` table. Optional columns default to "no
+// assertion"; `seed` is a setup function for fixtures built from code.
+type ScrubCase = {
+  after?: Record<string, string[]>;
+  afterJson?: Record<string, unknown>;
+  afterRaw?: Record<string, string>;
+  args?: string[];
+  config: string;
+  deps?: NonNullable<Parameters<typeof run>[1]>;
+  err?: string[];
+  exit: number;
+  name: string;
+  notAfter?: Record<string, string[]>;
+  notOut?: string[];
+  out?: string[];
+  outMatch?: RegExp[];
+  report?: Record<string, unknown>;
+  seed?: (target: Sandbox) => void;
+  source?: Record<string, string>;
+  staged?: Record<string, string>;
+};
+
+const readStaged = (target: Sandbox, file: string): string =>
+  readFileSync(path.join(target.stagingDir, file), 'utf8');
+
+const expectStagedFiles = (target: Sandbox, row: ScrubCase): void => {
+  const {after = {}, afterJson = {}, afterRaw = {}, notAfter = {}} = row;
+
+  for (const [file, needles] of Object.entries(after)) {
+    for (const needle of needles) {
+      expect(readStaged(target, file)).toContain(needle);
+    }
+  }
+
+  for (const [file, needles] of Object.entries(notAfter)) {
+    for (const needle of needles) {
+      expect(readStaged(target, file)).not.toContain(needle);
+    }
+  }
+
+  for (const [file, contents] of Object.entries(afterRaw)) {
+    expect(readStaged(target, file)).toBe(contents);
+  }
+
+  for (const [file, value] of Object.entries(afterJson)) {
+    expect(JSON.parse(readStaged(target, file))).toEqual(value);
+  }
+};
+
+const runScrubCase = (row: ScrubCase): void => {
+  const {
+    args = [],
+    config,
+    deps = {},
+    err = [],
+    exit,
+    notOut = [],
+    out = [],
+    outMatch = [],
+    report = {},
+    seed,
+    source = {},
+    staged = {},
+  } = row;
+  const target = setupSandbox({config});
+  const stdio = captureStdio();
+
+  try {
+    seed?.(target);
+
+    for (const [file, contents] of Object.entries(source)) {
+      target.writeSource(file, contents);
+    }
+
+    for (const [file, contents] of Object.entries(staged)) {
+      target.writeStaged(file, contents);
+    }
+
+    const code = run(
+      [target.stagingDir, '--config', target.configPath, ...args],
+      {cwd: target.rootDir, ...deps}
+    );
+    const stdout = stdio.outputs.join('');
+    const stderr = stdio.errors.join('');
+
+    expect(code).toBe(exit);
+
+    for (const needle of out) expect(stdout).toContain(needle);
+    for (const needle of notOut) expect(stdout).not.toContain(needle);
+    for (const pattern of outMatch) expect(stdout).toMatch(pattern);
+
+    for (const needle of err) {
+      expect(stderr).toContain(
+        needle.replaceAll('<staging>', target.stagingDir)
+      );
+    }
+
+    expectStagedFiles(target, row);
+
+    const parsedReport = (
+      Object.keys(report).length > 0 ?
+        JSON.parse(stdout)
+      : {}) as Record<string, unknown>;
+
+    for (const [key, value] of Object.entries(report)) {
+      expect(parsedReport[key]).toEqual(value);
+    }
+  } finally {
+    stdio.restore();
+    target.cleanup();
+    vi.restoreAllMocks();
+  }
+};
+
 describe('globToRegex', () => {
-  test('matches single-segment files', () => {
-    expect(globToRegex('CLAUDE.md').test('CLAUDE.md')).toBe(true);
-    expect(globToRegex('CLAUDE.md').test('foo/CLAUDE.md')).toBe(false);
-  });
+  test.each([
+    {
+      glob: 'CLAUDE.md',
+      matches: ['CLAUDE.md'],
+      misses: ['foo/CLAUDE.md'],
+      name: 'matches single-segment files',
+    },
+    {
+      glob: 'wiki/**/*.md',
+      matches: ['wiki/foo.md', 'wiki/sub/foo.md', 'wiki/a/b/c/foo.md'],
+      misses: ['other/foo.md'],
+      name: '** matches zero or more segments',
+    },
+    {
+      glob: '.claude/**',
+      matches: ['.claude/skills/foo.md', '.claude/rules/wiki-style.md'],
+      misses: ['app/components/Foo.tsx'],
+      name: 'trailing /** matches everything below the prefix',
+    },
+    {
+      glob: 'wiki/*.md',
+      matches: ['wiki/foo.md'],
+      misses: ['wiki/sub/foo.md'],
+      name: '* matches a single segment only',
+    },
+  ])('$name', ({glob, matches, misses}) => {
+    const re = globToRegex(glob);
 
-  test('** matches zero or more segments', () => {
-    const re = globToRegex('wiki/**/*.md');
-    expect(re.test('wiki/foo.md')).toBe(true);
-    expect(re.test('wiki/sub/foo.md')).toBe(true);
-    expect(re.test('wiki/a/b/c/foo.md')).toBe(true);
-    expect(re.test('other/foo.md')).toBe(false);
-  });
-
-  test('trailing /** matches everything below the prefix', () => {
-    const re = globToRegex('.claude/**');
-    expect(re.test('.claude/skills/foo.md')).toBe(true);
-    expect(re.test('.claude/rules/wiki-style.md')).toBe(true);
-    expect(re.test('app/components/Foo.tsx')).toBe(false);
-  });
-
-  test('* matches a single segment only', () => {
-    const re = globToRegex('wiki/*.md');
-    expect(re.test('wiki/foo.md')).toBe(true);
-    expect(re.test('wiki/sub/foo.md')).toBe(false);
+    for (const candidate of matches) expect(re.test(candidate)).toBe(true);
+    for (const candidate of misses) expect(re.test(candidate)).toBe(false);
   });
 });
 
@@ -297,187 +418,129 @@ transforms:
     expect(statSync(hookPath).mode % 0o1000).toBe(0o755);
   });
 
-  test('refuses on unbalanced start without end', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-    sandbox.writeStaged(
-      'wiki/broken.md',
-      [
+  test.each([
+    {
+      content: [
         '# Broken',
         '<!-- gaia:maintainer-only:start -->',
         'never closed',
         '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('start_without_end');
-  });
-
-  test('--json reports an unbalanced marker with file, line, and reason', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-    sandbox.writeStaged(
-      'wiki/broken.md',
-      [
-        '# Broken',
-        '<!-- gaia:maintainer-only:start -->',
-        'never closed',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir, '--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const report = JSON.parse(stdio.outputs.join('')) as {
-      unbalanced_markers: {file: string; line: number; reason: string}[];
-    };
-    expect(report.unbalanced_markers).toEqual([
-      {file: 'wiki/broken.md', line: 2, reason: 'start_without_end'},
-    ]);
-  });
-
-  test('refuses on unbalanced end without start', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-    sandbox.writeStaged(
-      'wiki/broken.md',
-      ['# Broken', '', '<!-- gaia:maintainer-only:end -->', ''].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('end_without_start');
-  });
-
-  test('refuses an end marker line that carries prose after the marker', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-    sandbox.writeStaged(
-      'wiki/broken.md',
-      [
-        '# Broken',
-        '<!-- gaia:maintainer-only:start -->',
-        'maintainer note',
-        '<!-- gaia:maintainer-only:end --> Adopter prose the strip would drop.',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir, '--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const report = JSON.parse(stdio.outputs.join('')) as {
-      unbalanced_markers: {file: string; line: number; reason: string}[];
-    };
-    expect(report.unbalanced_markers).toEqual([
-      {file: 'wiki/broken.md', line: 4, reason: 'marker_line_has_text'},
-    ]);
-  });
-
-  test('refuses a start marker line that carries prose before the marker', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-    sandbox.writeStaged(
-      'wiki/broken.md',
-      [
+      ].join('\n'),
+      name: 'refuses on unbalanced start without end',
+      needles: ['start_without_end'],
+    },
+    {
+      content: ['# Broken', '', '<!-- gaia:maintainer-only:end -->', ''].join(
+        '\n'
+      ),
+      name: 'refuses on unbalanced end without start',
+      needles: ['end_without_start'],
+    },
+    {
+      content: [
         '# Broken',
         'Adopter prose the strip would drop. <!-- gaia:maintainer-only:start -->',
         'maintainer note',
         '<!-- gaia:maintainer-only:end -->',
         '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('wiki/broken.md:2');
-    expect(stdio.outputs.join('')).toContain('marker_line_has_text');
-  });
-
-  test('refuses a single-line block with prose outside its markers', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-    sandbox.writeStaged(
-      'wiki/broken.md',
-      [
+      ].join('\n'),
+      name: 'refuses a start marker line that carries prose before the marker',
+      needles: ['wiki/broken.md:2', 'marker_line_has_text'],
+    },
+    {
+      content: [
         '# Broken',
         '<!-- gaia:maintainer-only:start --> note <!-- gaia:maintainer-only:end --> Adopter prose.',
         '',
-      ].join('\n')
-    );
+      ].join('\n'),
+      name: 'refuses a single-line block with prose outside its markers',
+      needles: ['marker_line_has_text'],
+    },
+  ])('$name', ({content, needles}) => {
+    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
+    sandbox.writeStaged('wiki/broken.md', content);
 
     const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
     expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('marker_line_has_text');
+
+    for (const needle of needles) {
+      expect(stdio.outputs.join('')).toContain(needle);
+    }
   });
 
-  test('accepts a single-line block with nothing outside its markers', () => {
+  test.each([
+    {
+      content: [
+        '# Broken',
+        '<!-- gaia:maintainer-only:start -->',
+        'never closed',
+        '',
+      ].join('\n'),
+      expected: {file: 'wiki/broken.md', line: 2, reason: 'start_without_end'},
+      name: '--json reports an unbalanced marker with file, line, and reason',
+    },
+    {
+      content: [
+        '# Broken',
+        '<!-- gaia:maintainer-only:start -->',
+        'maintainer note',
+        '<!-- gaia:maintainer-only:end --> Adopter prose the strip would drop.',
+        '',
+      ].join('\n'),
+      expected: {
+        file: 'wiki/broken.md',
+        line: 4,
+        reason: 'marker_line_has_text',
+      },
+      name: 'refuses an end marker line that carries prose after the marker',
+    },
+  ])('$name', ({content, expected}) => {
     sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-    sandbox.writeStaged(
-      'wiki/single.md',
-      [
+    sandbox.writeStaged('wiki/broken.md', content);
+
+    const exit = run([sandbox.stagingDir, '--json'], {cwd: sandbox.rootDir});
+    expect(exit).toBe(1);
+
+    const report = JSON.parse(stdio.outputs.join('')) as {
+      unbalanced_markers: {file: string; line: number; reason: string}[];
+    };
+    expect(report.unbalanced_markers).toEqual([expected]);
+  });
+
+  test.each([
+    {
+      content: [
         '# Single',
         '  <!-- gaia:maintainer-only:start --> note <!-- gaia:maintainer-only:end -->',
         'public',
         '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const after = readFileSync(
-      path.join(sandbox.stagingDir, 'wiki/single.md'),
-      'utf8'
-    );
-    expect(after).toBe('# Single\npublic\n');
-  });
-
-  test('accepts indented marker lines and strips their block', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-    sandbox.writeStaged(
-      'wiki/indented.md',
-      [
+      ].join('\n'),
+      expected: '# Single\npublic\n',
+      file: 'wiki/single.md',
+      name: 'accepts a single-line block with nothing outside its markers',
+    },
+    {
+      content: [
         '- a list item',
         '  <!-- gaia:maintainer-only:start -->',
         '  maintainer note',
         '  <!-- gaia:maintainer-only:end -->',
         '- another item',
         '',
-      ].join('\n')
-    );
+      ].join('\n'),
+      expected: '- a list item\n- another item\n',
+      file: 'wiki/indented.md',
+      name: 'accepts indented marker lines and strips their block',
+    },
+  ])('$name', ({content, expected, file}) => {
+    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
+    sandbox.writeStaged(file, content);
 
     const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
     expect(exit).toBe(0);
 
-    const after = readFileSync(
-      path.join(sandbox.stagingDir, 'wiki/indented.md'),
-      'utf8'
-    );
-    expect(after).toBe('- a list item\n- another item\n');
-  });
-
-  test('flags FLOW-NNN narrative in shipped instruction surfaces', () => {
-    sandbox = setupSandbox({config: LEAK_ONLY_CONFIG});
-    sandbox.writeStaged(
-      '.claude/skills/foo/SKILL.md',
-      '# Foo\n\nImplements FLOW-007 (working-doc reference).\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('flow-narrative');
-    expect(out).toContain('FLOW-007');
-  });
-
-  test('exempts lines with structural identifier fragments', () => {
-    sandbox = setupSandbox({config: LEAK_ONLY_CONFIG});
-    sandbox.writeStaged(
-      '.claude/skills/foo/SKILL.md',
-      '# Foo\n\nUse `--flow-id FLOW-099` to filter; the `flow_id` field is required.\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
+    const after = readFileSync(path.join(sandbox.stagingDir, file), 'utf8');
+    expect(after).toBe(expected);
   });
 
   test('exempts allowlisted paths from leak-check', () => {
@@ -558,584 +621,467 @@ transforms:
     expect(exit).toBe(0);
   });
 
-  test('exits 1 when staging dir does not exist', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-
-    const exit = run([path.join(sandbox.rootDir, 'no-such')], {
-      cwd: sandbox.rootDir,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('staging_dir_missing');
-  });
-
-  test('exits 1 when staging dir argument is missing', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-
-    const exit = run([], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('missing_staging_dir');
-  });
-
-  test('exits 2 on malformed config', () => {
-    sandbox = setupSandbox({config: 'transforms:\n  - type: marker-strip\n'});
+  test.each([
+    {
+      args: (target: Sandbox) => [path.join(target.rootDir, 'no-such')],
+      config: MARKER_ONLY_CONFIG,
+      exit: 1,
+      name: 'exits 1 when staging dir does not exist',
+      needle: 'staging_dir_missing',
+    },
+    {
+      args: () => [] as string[],
+      config: MARKER_ONLY_CONFIG,
+      exit: 1,
+      name: 'exits 1 when staging dir argument is missing',
+      needle: 'missing_staging_dir',
+    },
+    {
+      args: (target: Sandbox) => [target.stagingDir],
+      config: 'transforms:\n  - type: marker-strip\n',
+      exit: 2,
+      name: 'exits 2 on malformed config',
+      needle: 'config_load_failed',
+    },
+    {
+      args: (target: Sandbox) => [target.stagingDir, '--bogus'],
+      config: MARKER_ONLY_CONFIG,
+      exit: 1,
+      name: 'rejects unknown flags',
+      needle: 'unknown flag',
+    },
+  ])('$name', ({args, config, exit: expectedExit, needle}) => {
+    sandbox = setupSandbox({config});
     sandbox.writeStaged('wiki/index.md', '# x\n');
 
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(2);
-    expect(stdio.errors.join('')).toContain('config_load_failed');
-  });
-
-  test('rejects unknown flags', () => {
-    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
-
-    const exit = run([sandbox.stagingDir, '--bogus'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
+    const exit = run(args(sandbox), {cwd: sandbox.rootDir});
+    expect(exit).toBe(expectedExit);
+    expect(stdio.errors.join('')).toContain(needle);
   });
 });
 
 describe('workflow-denylist leak-check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-  });
-
-  test('flags an inverted entry in an inline flow array', () => {
-    sandbox = setupSandbox({config: WORKFLOW_DENYLIST_CONFIG});
-    sandbox.writeStaged(
-      '.github/workflows/tests.yml',
-      ['on:', '  push:', '    paths: ["src/**", "!*.md"]', ''].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('workflow-denylist');
-    expect(out).toContain('.github/workflows/tests.yml');
-  });
-
-  test('flags a block-list inverted entry and a paths-ignore key', () => {
-    sandbox = setupSandbox({config: WORKFLOW_DENYLIST_CONFIG});
-    sandbox.writeStaged(
-      '.github/workflows/chromatic.yml',
-      ['on:', '  push:', '    paths-ignore:', '      - "!*.md"', ''].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('workflow-denylist');
-  });
-
-  test('does not flag a pure allowlist inline array (quote-anchored FP guard)', () => {
-    sandbox = setupSandbox({config: WORKFLOW_DENYLIST_CONFIG});
-    sandbox.writeStaged(
-      '.github/workflows/tests.yml',
-      [
-        'on:',
-        '  push:',
-        '    paths: ["src/**", "app/**"]',
-        'jobs:',
-        '  build:',
-        '    steps:',
-        '      - run: echo "[!warn] no bang leak here"',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('leaks: none');
+  test.each<ScrubCase>([
+    {
+      config: WORKFLOW_DENYLIST_CONFIG,
+      exit: 1,
+      name: 'flags an inverted entry in an inline flow array',
+      out: ['workflow-denylist', '.github/workflows/tests.yml'],
+      staged: {
+        '.github/workflows/tests.yml': [
+          'on:',
+          '  push:',
+          '    paths: ["src/**", "!*.md"]',
+          '',
+        ].join('\n'),
+      },
+    },
+    {
+      config: WORKFLOW_DENYLIST_CONFIG,
+      exit: 1,
+      name: 'flags a block-list inverted entry and a paths-ignore key',
+      out: ['workflow-denylist'],
+      staged: {
+        '.github/workflows/chromatic.yml': [
+          'on:',
+          '  push:',
+          '    paths-ignore:',
+          '      - "!*.md"',
+          '',
+        ].join('\n'),
+      },
+    },
+    {
+      config: WORKFLOW_DENYLIST_CONFIG,
+      exit: 0,
+      name: 'does not flag a pure allowlist inline array (quote-anchored FP guard)',
+      out: ['leaks: none'],
+      staged: {
+        '.github/workflows/tests.yml': [
+          'on:',
+          '  push:',
+          '    paths: ["src/**", "app/**"]',
+          'jobs:',
+          '  build:',
+          '    steps:',
+          '      - run: echo "[!warn] no bang leak here"',
+          '',
+        ].join('\n'),
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
 describe('json-strip transform', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
+  const BIN = {gaia: './.gaia/cli/gaia'};
+  const FORENSICS = 'bats .gaia/tests/forensics/unit.bats';
+  const noopOriginal = JSON.stringify(
+    {name: 'my-app', scripts: {build: 'react-router build'}},
+    null,
+    2
+  );
+  const untouchedOther = JSON.stringify({bin: BIN}, null, 2);
 
-  beforeEach(() => {
-    stdio = captureStdio();
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('removes a top-level key', () => {
-    sandbox = setupSandbox({config: JSON_STRIP_CONFIG});
-    sandbox.writeStaged(
-      'package.json',
-      JSON.stringify(
-        {bin: {gaia: './.gaia/cli/gaia'}, name: 'my-app', scripts: {}},
-        null,
-        2
-      )
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const after = JSON.parse(
-      readFileSync(path.join(sandbox.stagingDir, 'package.json'), 'utf8')
-    );
-    expect(after).not.toHaveProperty('bin');
-    expect(after.name).toBe('my-app');
-  });
-
-  test('removes a nested key via dot-notation', () => {
-    sandbox = setupSandbox({config: JSON_STRIP_CONFIG});
-    sandbox.writeStaged(
-      'package.json',
-      JSON.stringify(
-        {
-          scripts: {
-            build: 'react-router build',
-            'test:forensics': 'bats .gaia/tests/forensics/unit.bats',
+  test.each<ScrubCase>([
+    {
+      afterJson: {'package.json': {name: 'my-app', scripts: {}}},
+      config: JSON_STRIP_CONFIG,
+      exit: 0,
+      name: 'removes a top-level key',
+      staged: {
+        'package.json': JSON.stringify(
+          {bin: BIN, name: 'my-app', scripts: {}},
+          null,
+          2
+        ),
+      },
+    },
+    {
+      afterJson: {
+        'package.json': {scripts: {build: 'react-router build'}},
+      },
+      config: JSON_STRIP_CONFIG,
+      exit: 0,
+      name: 'removes a nested key via dot-notation',
+      staged: {
+        'package.json': JSON.stringify(
+          {
+            scripts: {
+              build: 'react-router build',
+              'test:forensics': FORENSICS,
+            },
           },
-        },
-        null,
-        2
-      )
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const after = JSON.parse(
-      readFileSync(path.join(sandbox.stagingDir, 'package.json'), 'utf8')
-    );
-    expect(after.scripts).not.toHaveProperty('test:forensics');
-    expect(after.scripts.build).toBe('react-router build');
-  });
-
-  test('removes multiple keys in one pass', () => {
-    sandbox = setupSandbox({config: JSON_STRIP_CONFIG});
-    sandbox.writeStaged(
-      'package.json',
-      JSON.stringify(
-        {
-          bin: {gaia: './.gaia/cli/gaia'},
+          null,
+          2
+        ),
+      },
+    },
+    {
+      afterJson: {
+        'package.json': {
           name: 'my-app',
-          scripts: {
-            build: 'react-router build',
-            'test:forensics': 'bats .gaia/tests/forensics/unit.bats',
-          },
+          scripts: {build: 'react-router build'},
         },
-        null,
-        2
-      )
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const after = JSON.parse(
-      readFileSync(path.join(sandbox.stagingDir, 'package.json'), 'utf8')
-    );
-    expect(after).not.toHaveProperty('bin');
-    expect(after.scripts).not.toHaveProperty('test:forensics');
-    expect(after.name).toBe('my-app');
-    expect(after.scripts.build).toBe('react-router build');
-  });
-
-  test('no-ops when key does not exist', () => {
-    sandbox = setupSandbox({config: JSON_STRIP_CONFIG});
-    const original = JSON.stringify(
-      {name: 'my-app', scripts: {build: 'react-router build'}},
-      null,
-      2
-    );
-    sandbox.writeStaged('package.json', original);
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const after = readFileSync(
-      path.join(sandbox.stagingDir, 'package.json'),
-      'utf8'
-    );
-    expect(JSON.parse(after)).toEqual(JSON.parse(original));
-  });
-
-  test('only processes files matching the paths glob', () => {
-    sandbox = setupSandbox({config: JSON_STRIP_CONFIG});
-    const untouched = JSON.stringify(
-      {bin: {gaia: './.gaia/cli/gaia'}},
-      null,
-      2
-    );
-    sandbox.writeStaged('other.json', untouched);
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const after = readFileSync(
-      path.join(sandbox.stagingDir, 'other.json'),
-      'utf8'
-    );
-    expect(after).toBe(untouched);
-  });
-
-  test('exits 2 on invalid JSON', () => {
-    sandbox = setupSandbox({config: JSON_STRIP_CONFIG});
-    sandbox.writeStaged('package.json', 'not { valid json');
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(2);
-    expect(stdio.errors.join('')).toContain('transform_failed');
-  });
-
-  test('--json report includes json_strip section', () => {
-    sandbox = setupSandbox({config: JSON_STRIP_CONFIG});
-    sandbox.writeStaged(
-      'package.json',
-      JSON.stringify({bin: {gaia: './.gaia/cli/gaia'}, scripts: {}}, null, 2)
-    );
-
-    const exit = run([sandbox.stagingDir, '--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const report = JSON.parse(stdio.outputs.join('')) as {
-      json_strip: {files_touched: string[]; keys_removed: number};
-    };
-    expect(report.json_strip.keys_removed).toBe(1);
-    expect(report.json_strip.files_touched).toContain('package.json');
-  });
-
-  test('no-op when no matching files produces zero counts', () => {
-    sandbox = setupSandbox({config: JSON_STRIP_CONFIG});
-
-    const exit = run([sandbox.stagingDir, '--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const report = JSON.parse(stdio.outputs.join('')) as {
-      json_strip: {files_touched: string[]; keys_removed: number};
-    };
-    expect(report.json_strip.keys_removed).toBe(0);
-    expect(report.json_strip.files_touched).toHaveLength(0);
+      },
+      config: JSON_STRIP_CONFIG,
+      exit: 0,
+      name: 'removes multiple keys in one pass',
+      staged: {
+        'package.json': JSON.stringify(
+          {
+            bin: BIN,
+            name: 'my-app',
+            scripts: {
+              build: 'react-router build',
+              'test:forensics': FORENSICS,
+            },
+          },
+          null,
+          2
+        ),
+      },
+    },
+    {
+      afterJson: {'package.json': JSON.parse(noopOriginal)},
+      config: JSON_STRIP_CONFIG,
+      exit: 0,
+      name: 'no-ops when key does not exist',
+      staged: {'package.json': noopOriginal},
+    },
+    {
+      afterRaw: {'other.json': untouchedOther},
+      config: JSON_STRIP_CONFIG,
+      exit: 0,
+      name: 'only processes files matching the paths glob',
+      staged: {'other.json': untouchedOther},
+    },
+    {
+      config: JSON_STRIP_CONFIG,
+      err: ['transform_failed'],
+      exit: 2,
+      name: 'exits 2 on invalid JSON',
+      staged: {'package.json': 'not { valid json'},
+    },
+    {
+      args: ['--json'],
+      config: JSON_STRIP_CONFIG,
+      exit: 0,
+      name: '--json report includes json_strip section',
+      report: {
+        json_strip: {files_touched: ['package.json'], keys_removed: 1},
+      },
+      staged: {
+        'package.json': JSON.stringify({bin: BIN, scripts: {}}, null, 2),
+      },
+    },
+    {
+      args: ['--json'],
+      config: JSON_STRIP_CONFIG,
+      exit: 0,
+      name: 'no-op when no matching files produces zero counts',
+      report: {json_strip: {files_touched: [], keys_removed: 0}},
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
-type HookEntry = {hooks?: {command: string}[]; matcher: string};
-type Settings = {
-  env?: Record<string, string>;
-  hooks?: {PreToolUse?: HookEntry[]; Stop?: HookEntry[]};
-};
+const hook = (command: string): {command: string; type: string} => ({
+  command,
+  type: 'command',
+});
+const settingsJson = (value: unknown): string => JSON.stringify(value, null, 2);
 
 describe('json-strip-array-element transform', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
   const TARGET_HOOK = '.claude/hooks/pr-merge-audit-check.sh';
-
-  const writeSettings = (value: unknown): void => {
-    sandbox.writeStaged(
-      '.claude/settings.json',
-      JSON.stringify(value, null, 2)
-    );
+  const SETTINGS_PATH = '.claude/settings.json';
+  const TARGET_ENTRY = {
+    command: TARGET_HOOK,
+    statusMessage: 'Checking PR-merge audit gate…',
+    type: 'command',
   };
-
-  const readRaw = (): string =>
-    readFileSync(
-      path.join(sandbox.stagingDir, '.claude/settings.json'),
-      'utf8'
-    );
-
-  const readSettings = (): Settings => JSON.parse(readRaw()) as Settings;
-
-  const commandsIn = (entryIndex: number): string[] =>
-    (readSettings().hooks?.PreToolUse?.[entryIndex]?.hooks ?? []).map(
-      (hook) => hook.command
-    );
-
-  beforeEach(() => {
-    stdio = captureStdio();
+  const staleSelector = settingsJson({
+    hooks: {
+      PreToolUse: [
+        {
+          hooks: [
+            hook('.claude/hooks/block-bare-test.sh'),
+            hook('.claude/hooks/block-rm-rf.sh'),
+          ],
+          matcher: 'Bash',
+        },
+      ],
+    },
   });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
+  const missingPath = settingsJson({
+    permissions: {allow: ['Bash(pnpm test:*)']},
   });
+  // PreToolUse is an object, not the array the selector expects.
+  const wrongShape = settingsJson({hooks: {PreToolUse: {matcher: 'Bash'}}});
 
-  test('removes the matching element and leaves a well-formed array', () => {
-    sandbox = setupSandbox({config: ARRAY_ELEMENT_CONFIG});
-    writeSettings({
-      hooks: {
-        PreToolUse: [
-          {
-            hooks: [
-              {command: '.claude/hooks/block-bare-test.sh', type: 'command'},
+  test.each<ScrubCase>([
+    {
+      // The array stays well-formed: the surviving sibling remains, the
+      // target hook is gone.
+      afterJson: {
+        [SETTINGS_PATH]: {
+          hooks: {
+            PreToolUse: [
               {
-                command: TARGET_HOOK,
-                statusMessage: 'Checking PR-merge audit gate…',
-                type: 'command',
+                hooks: [hook('.claude/hooks/block-bare-test.sh')],
+                matcher: 'Bash',
               },
             ],
-            matcher: 'Bash',
           },
-        ],
-      },
-    });
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    // Array stays well-formed: the surviving sibling remains, the target hook is gone.
-    expect(commandsIn(0)).toEqual(['.claude/hooks/block-bare-test.sh']);
-  });
-
-  test('no-ops when the predicate matches nothing (stale selector safety)', () => {
-    sandbox = setupSandbox({config: ARRAY_ELEMENT_CONFIG});
-    const original = JSON.stringify(
-      {
-        hooks: {
-          PreToolUse: [
-            {
-              hooks: [
-                {command: '.claude/hooks/block-bare-test.sh', type: 'command'},
-                {command: '.claude/hooks/block-rm-rf.sh', type: 'command'},
-              ],
-              matcher: 'Bash',
-            },
-          ],
         },
       },
-      null,
-      2
-    );
-    sandbox.writeStaged('.claude/settings.json', original);
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    // A no-op must leave the shipped settings byte-for-byte untouched.
-    expect(readRaw()).toBe(original);
-  });
-
-  test('leaves an emptied hooks[] as [] and keeps its matcher entry', () => {
-    sandbox = setupSandbox({config: ARRAY_ELEMENT_CONFIG});
-    writeSettings({
-      hooks: {
-        PreToolUse: [
-          {
-            hooks: [
+      config: ARRAY_ELEMENT_CONFIG,
+      exit: 0,
+      name: 'removes the matching element and leaves a well-formed array',
+      staged: {
+        [SETTINGS_PATH]: settingsJson({
+          hooks: {
+            PreToolUse: [
               {
-                command: '.claude/hooks/audit-loop-bound.sh',
-                type: 'command',
+                hooks: [hook('.claude/hooks/block-bare-test.sh'), TARGET_ENTRY],
+                matcher: 'Bash',
               },
             ],
-            matcher: 'Skill',
           },
-          {
-            hooks: [
-              {
-                command: TARGET_HOOK,
-                statusMessage: 'Checking PR-merge audit gate…',
-                type: 'command',
-              },
-            ],
-            matcher: 'Bash',
-          },
-        ],
+        }),
       },
-    });
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const preToolUse = readSettings().hooks?.PreToolUse ?? [];
-    // The emptied matcher entry survives with a well-formed empty hooks array;
-    // it is neither collapsed nor removed.
-    expect(preToolUse).toHaveLength(2);
-    expect(preToolUse[1]?.matcher).toBe('Bash');
-    expect(preToolUse[1]?.hooks).toEqual([]);
-    // Sibling matcher entry is untouched.
-    expect(commandsIn(0)).toEqual(['.claude/hooks/audit-loop-bound.sh']);
-  });
-
-  test('removes only the targeted element across multiple matcher entries', () => {
-    sandbox = setupSandbox({config: ARRAY_ELEMENT_CONFIG});
-    writeSettings({
-      env: {CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1'},
-      hooks: {
-        PreToolUse: [
-          {
-            hooks: [
-              {command: '.claude/hooks/block-env-write.sh', type: 'command'},
+    },
+    {
+      // A no-op must leave the shipped settings byte-for-byte untouched.
+      afterRaw: {[SETTINGS_PATH]: staleSelector},
+      config: ARRAY_ELEMENT_CONFIG,
+      exit: 0,
+      name: 'no-ops when the predicate matches nothing (stale selector safety)',
+      staged: {[SETTINGS_PATH]: staleSelector},
+    },
+    {
+      // The emptied matcher entry survives with a well-formed empty hooks
+      // array; it is neither collapsed nor removed, and its sibling is
+      // untouched.
+      afterJson: {
+        [SETTINGS_PATH]: {
+          hooks: {
+            PreToolUse: [
               {
-                command: '.claude/hooks/block-manifest-write.sh',
-                type: 'command',
+                hooks: [hook('.claude/hooks/audit-loop-bound.sh')],
+                matcher: 'Skill',
+              },
+              {hooks: [], matcher: 'Bash'},
+            ],
+          },
+        },
+      },
+      config: ARRAY_ELEMENT_CONFIG,
+      exit: 0,
+      name: 'leaves an emptied hooks[] as [] and keeps its matcher entry',
+      staged: {
+        [SETTINGS_PATH]: settingsJson({
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [hook('.claude/hooks/audit-loop-bound.sh')],
+                matcher: 'Skill',
+              },
+              {hooks: [TARGET_ENTRY], matcher: 'Bash'},
+            ],
+          },
+        }),
+      },
+    },
+    {
+      // Non-targeted entries are untouched; only the target hook's element is
+      // removed from the Bash entry; unrelated sections survive.
+      afterJson: {
+        [SETTINGS_PATH]: {
+          env: {CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1'},
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [
+                  hook('.claude/hooks/block-env-write.sh'),
+                  hook('.claude/hooks/block-manifest-write.sh'),
+                ],
+                matcher: 'Edit|Write',
+              },
+              {
+                hooks: [
+                  hook('.claude/hooks/block-no-verify.sh'),
+                  hook('.claude/hooks/block-rm-rf.sh'),
+                ],
+                matcher: 'Bash',
               },
             ],
-            matcher: 'Edit|Write',
-          },
-          {
-            hooks: [
-              {command: '.claude/hooks/block-no-verify.sh', type: 'command'},
+            Stop: [
               {
-                command: TARGET_HOOK,
-                statusMessage: 'Checking PR-merge audit gate…',
-                type: 'command',
-              },
-              {command: '.claude/hooks/block-rm-rf.sh', type: 'command'},
-            ],
-            matcher: 'Bash',
-          },
-        ],
-        Stop: [
-          {
-            hooks: [
-              {command: '.claude/hooks/wiki-session-stop.sh', type: 'command'},
-            ],
-            matcher: '',
-          },
-        ],
-      },
-    });
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const after = readSettings();
-    // Non-targeted entry is untouched; only the target hook's element is
-    // removed from the Bash entry; unrelated sections survive.
-    expect(commandsIn(0)).toEqual([
-      '.claude/hooks/block-env-write.sh',
-      '.claude/hooks/block-manifest-write.sh',
-    ]);
-    expect(commandsIn(1)).toEqual([
-      '.claude/hooks/block-no-verify.sh',
-      '.claude/hooks/block-rm-rf.sh',
-    ]);
-    expect(after.env).toEqual({CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1'});
-    expect(after.hooks?.Stop?.[0]?.hooks?.[0]?.command).toBe(
-      '.claude/hooks/wiki-session-stop.sh'
-    );
-  });
-
-  test('no-ops without throwing when the selector path is missing', () => {
-    sandbox = setupSandbox({config: ARRAY_ELEMENT_CONFIG});
-    const original = JSON.stringify(
-      {permissions: {allow: ['Bash(pnpm test:*)']}},
-      null,
-      2
-    );
-    sandbox.writeStaged('.claude/settings.json', original);
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    expect(readRaw()).toBe(original);
-  });
-
-  test('no-ops without throwing when a path segment has the wrong shape', () => {
-    sandbox = setupSandbox({config: ARRAY_ELEMENT_CONFIG});
-    // PreToolUse is an object, not the array the selector expects.
-    const original = JSON.stringify(
-      {hooks: {PreToolUse: {matcher: 'Bash'}}},
-      null,
-      2
-    );
-    sandbox.writeStaged('.claude/settings.json', original);
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    expect(readRaw()).toBe(original);
-  });
-
-  test('exits 2 on invalid JSON', () => {
-    sandbox = setupSandbox({config: ARRAY_ELEMENT_CONFIG});
-    sandbox.writeStaged('.claude/settings.json', 'not { valid json');
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(2);
-    expect(stdio.errors.join('')).toContain('transform_failed');
-  });
-
-  test('--json report includes the json_strip_array_element section', () => {
-    sandbox = setupSandbox({config: ARRAY_ELEMENT_CONFIG});
-    writeSettings({
-      hooks: {
-        PreToolUse: [
-          {
-            hooks: [
-              {
-                command: TARGET_HOOK,
-                statusMessage: 'Checking PR-merge audit gate…',
-                type: 'command',
+                hooks: [hook('.claude/hooks/wiki-session-stop.sh')],
+                matcher: '',
               },
             ],
-            matcher: 'Bash',
           },
-        ],
+        },
       },
-    });
-
-    const exit = run([sandbox.stagingDir, '--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const report = JSON.parse(stdio.outputs.join('')) as {
-      json_strip_array_element: {
-        elements_removed: number;
-        files_touched: string[];
-      };
-    };
-    expect(report.json_strip_array_element.elements_removed).toBe(1);
-    expect(report.json_strip_array_element.files_touched).toContain(
-      '.claude/settings.json'
-    );
-  });
-
-  test('--json report reports zero when no element matches', () => {
-    sandbox = setupSandbox({config: ARRAY_ELEMENT_CONFIG});
-    writeSettings({
-      hooks: {
-        PreToolUse: [
-          {
-            hooks: [
-              {command: '.claude/hooks/block-bare-test.sh', type: 'command'},
+      config: ARRAY_ELEMENT_CONFIG,
+      exit: 0,
+      name: 'removes only the targeted element across multiple matcher entries',
+      staged: {
+        [SETTINGS_PATH]: settingsJson({
+          env: {CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1'},
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [
+                  hook('.claude/hooks/block-env-write.sh'),
+                  hook('.claude/hooks/block-manifest-write.sh'),
+                ],
+                matcher: 'Edit|Write',
+              },
+              {
+                hooks: [
+                  hook('.claude/hooks/block-no-verify.sh'),
+                  TARGET_ENTRY,
+                  hook('.claude/hooks/block-rm-rf.sh'),
+                ],
+                matcher: 'Bash',
+              },
             ],
-            matcher: 'Bash',
+            Stop: [
+              {
+                hooks: [hook('.claude/hooks/wiki-session-stop.sh')],
+                matcher: '',
+              },
+            ],
           },
-        ],
+        }),
       },
-    });
-
-    const exit = run([sandbox.stagingDir, '--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const report = JSON.parse(stdio.outputs.join('')) as {
-      json_strip_array_element: {
-        elements_removed: number;
-        files_touched: string[];
-      };
-    };
-    expect(report.json_strip_array_element.elements_removed).toBe(0);
-    expect(report.json_strip_array_element.files_touched).toHaveLength(0);
+    },
+    {
+      afterRaw: {[SETTINGS_PATH]: missingPath},
+      config: ARRAY_ELEMENT_CONFIG,
+      exit: 0,
+      name: 'no-ops without throwing when the selector path is missing',
+      staged: {[SETTINGS_PATH]: missingPath},
+    },
+    {
+      afterRaw: {[SETTINGS_PATH]: wrongShape},
+      config: ARRAY_ELEMENT_CONFIG,
+      exit: 0,
+      name: 'no-ops without throwing when a path segment has the wrong shape',
+      staged: {[SETTINGS_PATH]: wrongShape},
+    },
+    {
+      config: ARRAY_ELEMENT_CONFIG,
+      err: ['transform_failed'],
+      exit: 2,
+      name: 'exits 2 on invalid JSON',
+      staged: {[SETTINGS_PATH]: 'not { valid json'},
+    },
+    {
+      args: ['--json'],
+      config: ARRAY_ELEMENT_CONFIG,
+      exit: 0,
+      name: '--json report includes the json_strip_array_element section',
+      report: {
+        json_strip_array_element: {
+          elements_removed: 1,
+          files_touched: [SETTINGS_PATH],
+        },
+      },
+      staged: {
+        [SETTINGS_PATH]: settingsJson({
+          hooks: {PreToolUse: [{hooks: [TARGET_ENTRY], matcher: 'Bash'}]},
+        }),
+      },
+    },
+    {
+      args: ['--json'],
+      config: ARRAY_ELEMENT_CONFIG,
+      exit: 0,
+      name: '--json report reports zero when no element matches',
+      report: {
+        json_strip_array_element: {elements_removed: 0, files_touched: []},
+      },
+      staged: {
+        [SETTINGS_PATH]: settingsJson({
+          hooks: {
+            PreToolUse: [
+              {
+                hooks: [hook('.claude/hooks/block-bare-test.sh')],
+                matcher: 'Bash',
+              },
+            ],
+          },
+        }),
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
 describe('parseKeyPath', () => {
-  test('splits on unescaped dots', () => {
-    expect(parseKeyPath('scripts.test:forensics')).toEqual([
-      'scripts',
-      'test:forensics',
-    ]);
-  });
-
-  test('returns a single segment for a plain key', () => {
-    expect(parseKeyPath('bin')).toEqual(['bin']);
+  test.each([
+    {
+      expected: ['scripts', 'test:forensics'],
+      input: 'scripts.test:forensics',
+      name: 'splits on unescaped dots',
+    },
+    {
+      expected: ['bin'],
+      input: 'bin',
+      name: 'returns a single segment for a plain key',
+    },
+  ])('$name', ({expected, input}) => {
+    expect(parseKeyPath(input)).toEqual(expected);
   });
 });
 
@@ -1183,140 +1129,7 @@ const seedExcludedSource = (sandbox: Sandbox): void => {
 };
 
 describe('wikilink-to-excluded derived check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('derives the slug set from cwd release-exclude, not the staging tree', () => {
-    // The #1 trap: `.gaia/release-exclude` excludes itself, so it is absent
-    // from the staging tree every other check scans. An implementation that
-    // reads it from staging finds nothing and silently passes.
-    sandbox = setupSandbox({config: WIKILINK_DERIVED_CONFIG});
-    seedExcludedSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Foo.md',
-      '# Foo\n\nSee [[Bundle-time Scrub]] for the rationale.\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('wikilink-to-excluded');
-    expect(out).toContain('Bundle-time Scrub');
-  });
-
-  test('flags a wikilink to a page inside a bare-directory exclude', () => {
-    sandbox = setupSandbox({config: WIKILINK_DERIVED_CONFIG});
-    seedExcludedSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Bar.md',
-      '# Bar\n\nBuilt on [[GAIA]] and [[Steven Sacks]].\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('GAIA');
-    expect(out).toContain('Steven Sacks');
-  });
-
-  test('flags a wikilink to a dated artifact inside an excluded directory', () => {
-    sandbox = setupSandbox({config: WIKILINK_DERIVED_CONFIG});
-    seedExcludedSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Baz.md',
-      '# Baz\n\nSee [[lint-report-2026-06-25]].\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('lint-report-2026-06-25');
-  });
-
-  test('flags a newly excluded page with no config change (drift-proof)', () => {
-    sandbox = setupSandbox({config: WIKILINK_DERIVED_CONFIG});
-    seedExcludedSource(sandbox);
-    // A slug that never appeared in the old hand-maintained alternation.
-    sandbox.writeSource(
-      '.gaia/release-exclude',
-      `${EXCLUDE_FIXTURE}\nwiki/decisions/Brand New Decision.md\n`
-    );
-    sandbox.writeStaged(
-      'wiki/concepts/Qux.md',
-      '# Qux\n\nSee [[Brand New Decision]].\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('Brand New Decision');
-  });
-
-  test('does not flag wikilinks to shipped (non-excluded) pages', () => {
-    sandbox = setupSandbox({config: WIKILINK_DERIVED_CONFIG});
-    seedExcludedSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Quux.md',
-      '# Quux\n\nSee [[Some Shipped Concept]] and [[Another Page]].\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('exempts allowlisted hot.md / log.md from the derived check', () => {
-    sandbox = setupSandbox({config: WIKILINK_DERIVED_CONFIG});
-    seedExcludedSource(sandbox);
-    sandbox.writeStaged('wiki/hot.md', '# Hot\n\n[[Bundle-time Scrub]]\n');
-    sandbox.writeStaged('wiki/log.md', '# Log\n\n[[GAIA]]\n');
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('flags an aliased or anchored wikilink to an excluded slug', () => {
-    // The old regex required `]]` immediately after the slug, so it missed
-    // `[[GAIA|alias]]` and `[[Bundle-time Scrub#anchor]]`. extractWikilinks
-    // normalizes both away before the Set test.
-    sandbox = setupSandbox({config: WIKILINK_DERIVED_CONFIG});
-    seedExcludedSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Aliased.md',
-      '# Aliased\n\nSee [[Bundle-time Scrub|the scrub ADR]] and [[Release Workflow#Step 3]].\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('Bundle-time Scrub');
-    expect(out).toContain('Release Workflow');
-  });
-
-  test('flags a wikilink to an excluded directory name (case-insensitive)', () => {
-    sandbox = setupSandbox({config: WIKILINK_DERIVED_CONFIG});
-    seedExcludedSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/DirLink.md',
-      '# DirLink\n\nSee [[Entities]] and [[meta]].\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-  });
-
-  test('runs a static check and the derived check in one config', () => {
-    const mixedConfig = `
+  const MIXED_CONFIG = `
 transforms:
   - type: leak-check
     checks:
@@ -1331,17 +1144,115 @@ transforms:
         path-allowlist:
           - "wiki/hot.md"
 `;
-    sandbox = setupSandbox({config: mixedConfig});
-    seedExcludedSource(sandbox);
-    sandbox.writeStaged('wiki/a.md', '# A\n\nFLOW-007 reference.\n');
-    sandbox.writeStaged('wiki/b.md', '# B\n\n[[Bundle-time Scrub]]\n');
 
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('flow-narrative');
-    expect(out).toContain('wikilink-to-excluded');
+  test.each<ScrubCase>([
+    {
+      // The #1 trap: `.gaia/release-exclude` excludes itself, so it is absent
+      // from the staging tree every other check scans. An implementation that
+      // reads it from staging finds nothing and silently passes.
+      config: WIKILINK_DERIVED_CONFIG,
+      exit: 1,
+      name: 'derives the slug set from cwd release-exclude, not the staging tree',
+      out: ['wikilink-to-excluded', 'Bundle-time Scrub'],
+      seed: seedExcludedSource,
+      staged: {
+        'wiki/concepts/Foo.md':
+          '# Foo\n\nSee [[Bundle-time Scrub]] for the rationale.\n',
+      },
+    },
+    {
+      config: WIKILINK_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a wikilink to a page inside a bare-directory exclude',
+      out: ['GAIA', 'Steven Sacks'],
+      seed: seedExcludedSource,
+      staged: {
+        'wiki/concepts/Bar.md':
+          '# Bar\n\nBuilt on [[GAIA]] and [[Steven Sacks]].\n',
+      },
+    },
+    {
+      config: WIKILINK_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a wikilink to a dated artifact inside an excluded directory',
+      out: ['lint-report-2026-06-25'],
+      seed: seedExcludedSource,
+      staged: {
+        'wiki/concepts/Baz.md': '# Baz\n\nSee [[lint-report-2026-06-25]].\n',
+      },
+    },
+    {
+      config: WIKILINK_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a newly excluded page with no config change (drift-proof)',
+      out: ['Brand New Decision'],
+      seed: seedExcludedSource,
+      // A slug that never appeared in the old hand-maintained alternation.
+      source: {
+        '.gaia/release-exclude': `${EXCLUDE_FIXTURE}\nwiki/decisions/Brand New Decision.md\n`,
+      },
+      staged: {
+        'wiki/concepts/Qux.md': '# Qux\n\nSee [[Brand New Decision]].\n',
+      },
+    },
+    {
+      config: WIKILINK_DERIVED_CONFIG,
+      exit: 0,
+      name: 'does not flag wikilinks to shipped (non-excluded) pages',
+      seed: seedExcludedSource,
+      staged: {
+        'wiki/concepts/Quux.md':
+          '# Quux\n\nSee [[Some Shipped Concept]] and [[Another Page]].\n',
+      },
+    },
+    {
+      config: WIKILINK_DERIVED_CONFIG,
+      exit: 0,
+      name: 'exempts allowlisted hot.md / log.md from the derived check',
+      seed: seedExcludedSource,
+      staged: {
+        'wiki/hot.md': '# Hot\n\n[[Bundle-time Scrub]]\n',
+        'wiki/log.md': '# Log\n\n[[GAIA]]\n',
+      },
+    },
+    {
+      // The old regex required `]]` immediately after the slug, so it missed
+      // `[[GAIA|alias]]` and `[[Bundle-time Scrub#anchor]]`. extractWikilinks
+      // normalizes both away before the Set test.
+      config: WIKILINK_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags an aliased or anchored wikilink to an excluded slug',
+      out: ['Bundle-time Scrub', 'Release Workflow'],
+      seed: seedExcludedSource,
+      staged: {
+        'wiki/concepts/Aliased.md':
+          '# Aliased\n\nSee [[Bundle-time Scrub|the scrub ADR]] and [[Release Workflow#Step 3]].\n',
+      },
+    },
+    {
+      config: WIKILINK_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a wikilink to an excluded directory name (case-insensitive)',
+      seed: seedExcludedSource,
+      staged: {
+        'wiki/concepts/DirLink.md':
+          '# DirLink\n\nSee [[Entities]] and [[meta]].\n',
+      },
+    },
+    {
+      config: MIXED_CONFIG,
+      exit: 1,
+      name: 'runs a static check and the derived check in one config',
+      out: ['flow-narrative', 'wikilink-to-excluded'],
+      seed: seedExcludedSource,
+      staged: {
+        'wiki/a.md': '# A\n\nFLOW-007 reference.\n',
+        'wiki/b.md': '# B\n\n[[Bundle-time Scrub]]\n',
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -1403,130 +1314,73 @@ transforms:
 `;
 
 describe('audit-ci.yml / shipped-shell marker-strip', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('strips a marker-wrapped roster entry from a .gaia/audit-ci.yml-shaped fixture', () => {
-    sandbox = setupSandbox({config: AUDIT_CI_MARKER_CONFIG});
-    sandbox.writeStaged(
-      '.gaia/audit-ci.yml',
-      [
-        'auditors:',
-        '  - name: code-audit-frontend',
-        '    globs:',
-        '      - "app/**"',
-        '    audience: adopter',
-        '    default: true',
-        '  # gaia:maintainer-only:start',
-        '  - name: code-audit-maintainer-shell',
-        '    globs:',
-        '      - ".gaia/**/*.sh"',
-        '    audience: maintainer',
-        '  # gaia:maintainer-only:end',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const after = readFileSync(
-      path.join(sandbox.stagingDir, '.gaia/audit-ci.yml'),
-      'utf8'
-    );
-    expect(after).not.toContain('code-audit-maintainer-shell');
-    expect(after).not.toContain('gaia:maintainer-only');
-    expect(after).toContain('code-audit-frontend');
-  });
-
-  test('strips a marker-wrapped block from a shipped .sh fixture', () => {
-    sandbox = setupSandbox({config: AUDIT_CI_MARKER_CONFIG});
-    sandbox.writeStaged(
-      '.gaia/scripts/resolve-audit-members.sh',
-      [
-        '#!/usr/bin/env bash',
-        'builtin_roster() {',
-        '  cat <<YAML',
-        'auditors:',
-        '  - name: code-audit-frontend',
-        '    default: true',
-        '  # gaia:maintainer-only:start',
-        '  - name: code-audit-maintainer-shell',
-        '  # gaia:maintainer-only:end',
-        'YAML',
-        '}',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-
-    const after = readFileSync(
-      path.join(sandbox.stagingDir, '.gaia/scripts/resolve-audit-members.sh'),
-      'utf8'
-    );
-    expect(after).not.toContain('code-audit-maintainer-shell');
-    expect(after).toContain('code-audit-frontend');
+  test.each<ScrubCase>([
+    {
+      after: {'.gaia/audit-ci.yml': ['code-audit-frontend']},
+      config: AUDIT_CI_MARKER_CONFIG,
+      exit: 0,
+      name: 'strips a marker-wrapped roster entry from a .gaia/audit-ci.yml-shaped fixture',
+      notAfter: {
+        '.gaia/audit-ci.yml': [
+          'code-audit-maintainer-shell',
+          'gaia:maintainer-only',
+        ],
+      },
+      staged: {
+        '.gaia/audit-ci.yml': [
+          'auditors:',
+          '  - name: code-audit-frontend',
+          '    globs:',
+          '      - "app/**"',
+          '    audience: adopter',
+          '    default: true',
+          '  # gaia:maintainer-only:start',
+          '  - name: code-audit-maintainer-shell',
+          '    globs:',
+          '      - ".gaia/**/*.sh"',
+          '    audience: maintainer',
+          '  # gaia:maintainer-only:end',
+          '',
+        ].join('\n'),
+      },
+    },
+    {
+      after: {
+        '.gaia/scripts/resolve-audit-members.sh': ['code-audit-frontend'],
+      },
+      config: AUDIT_CI_MARKER_CONFIG,
+      exit: 0,
+      name: 'strips a marker-wrapped block from a shipped .sh fixture',
+      notAfter: {
+        '.gaia/scripts/resolve-audit-members.sh': [
+          'code-audit-maintainer-shell',
+        ],
+      },
+      staged: {
+        '.gaia/scripts/resolve-audit-members.sh': [
+          '#!/usr/bin/env bash',
+          'builtin_roster() {',
+          '  cat <<YAML',
+          'auditors:',
+          '  - name: code-audit-frontend',
+          '    default: true',
+          '  # gaia:maintainer-only:start',
+          '  - name: code-audit-maintainer-shell',
+          '  # gaia:maintainer-only:end',
+          'YAML',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
 describe('maintainer-audit-members leak-check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('flags an un-wrapped code-audit-maintainer- reference in a scoped path', () => {
-    sandbox = setupSandbox({config: MAINTAINER_AUDIT_MEMBERS_LEAK_CONFIG});
-    sandbox.writeStaged(
-      '.gaia/scripts/some-script.sh',
-      '#!/usr/bin/env bash\necho "dispatching code-audit-maintainer-shell"\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('maintainer-audit-members');
-    expect(out).toContain('code-audit-maintainer-');
-  });
-
-  test('passes a clean tree with no code-audit-maintainer- references', () => {
-    sandbox = setupSandbox({config: MAINTAINER_AUDIT_MEMBERS_LEAK_CONFIG});
-    sandbox.writeStaged(
-      '.gaia/scripts/some-script.sh',
-      '#!/usr/bin/env bash\necho "dispatching code-audit-frontend"\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('DP-003 tripwire: a literal in a header comment outside the markers survives the strip and trips the leak-check', () => {
-    // Guards the exact collision between the resolver's own documentation and
-    // the strip boundary: a code-audit-maintainer-* literal named in prose
-    // ABOVE the markers (not inside a wrapped block) is never stripped, so it
-    // must be caught by the leak-check instead.
-    const config = `
+  const HEADER_TRIPWIRE_CONFIG = `
 transforms:
   - type: marker-strip
     paths:
@@ -1541,150 +1395,157 @@ transforms:
         scope:
           - ".gaia/scripts/**"
 `;
-    sandbox = setupSandbox({config});
-    sandbox.writeStaged(
-      '.gaia/scripts/resolve-audit-members.sh',
-      [
-        '#!/usr/bin/env bash',
-        '# resolve-audit-members.sh: dispatches to code-audit-maintainer-shell',
-        '# and code-audit-maintainer-node when present.',
-        '',
-        'builtin_roster() {',
-        '  cat <<YAML',
-        'auditors:',
-        '  - name: code-audit-frontend',
-        '    default: true',
-        '  # gaia:maintainer-only:start',
-        '  - name: code-audit-maintainer-shell',
-        '  # gaia:maintainer-only:end',
-        'YAML',
-        '}',
-        '',
-      ].join('\n')
-    );
 
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const after = readFileSync(
-      path.join(sandbox.stagingDir, '.gaia/scripts/resolve-audit-members.sh'),
-      'utf8'
-    );
-    // The header comment (outside the markers) survives the strip...
-    expect(after).toContain(
-      '# resolve-audit-members.sh: dispatches to code-audit-maintainer-shell'
-    );
-    // ...but the wrapped roster entry (inside the markers) is gone.
-    expect(after).not.toContain('  - name: code-audit-maintainer-shell');
-    expect(after).not.toContain('gaia:maintainer-only');
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('maintainer-audit-members');
+  test.each<ScrubCase>([
+    {
+      config: MAINTAINER_AUDIT_MEMBERS_LEAK_CONFIG,
+      exit: 1,
+      name: 'flags an un-wrapped code-audit-maintainer- reference in a scoped path',
+      out: ['maintainer-audit-members', 'code-audit-maintainer-'],
+      staged: {
+        '.gaia/scripts/some-script.sh':
+          '#!/usr/bin/env bash\necho "dispatching code-audit-maintainer-shell"\n',
+      },
+    },
+    {
+      config: MAINTAINER_AUDIT_MEMBERS_LEAK_CONFIG,
+      exit: 0,
+      name: 'passes a clean tree with no code-audit-maintainer- references',
+      staged: {
+        '.gaia/scripts/some-script.sh':
+          '#!/usr/bin/env bash\necho "dispatching code-audit-frontend"\n',
+      },
+    },
+    {
+      // Guards the exact collision between the resolver's own documentation
+      // and the strip boundary: a code-audit-maintainer-* literal named in
+      // prose ABOVE the markers (not inside a wrapped block) is never
+      // stripped, so it must be caught by the leak-check instead. The header
+      // comment (outside the markers) survives the strip, and the wrapped
+      // roster entry (inside the markers) is gone.
+      after: {
+        '.gaia/scripts/resolve-audit-members.sh': [
+          '# resolve-audit-members.sh: dispatches to code-audit-maintainer-shell',
+        ],
+      },
+      config: HEADER_TRIPWIRE_CONFIG,
+      exit: 1,
+      name: 'DP-003 tripwire: a literal in a header comment outside the markers survives the strip and trips the leak-check',
+      notAfter: {
+        '.gaia/scripts/resolve-audit-members.sh': [
+          '  - name: code-audit-maintainer-shell',
+          'gaia:maintainer-only',
+        ],
+      },
+      out: ['maintainer-audit-members'],
+      staged: {
+        '.gaia/scripts/resolve-audit-members.sh': [
+          '#!/usr/bin/env bash',
+          '# resolve-audit-members.sh: dispatches to code-audit-maintainer-shell',
+          '# and code-audit-maintainer-node when present.',
+          '',
+          'builtin_roster() {',
+          '  cat <<YAML',
+          'auditors:',
+          '  - name: code-audit-frontend',
+          '    default: true',
+          '  # gaia:maintainer-only:start',
+          '  - name: code-audit-maintainer-shell',
+          '  # gaia:maintainer-only:end',
+          'YAML',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
 describe('excluded-workflow-ref derived check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('flags a reference to a never-present excluded workflow', () => {
-    sandbox = setupSandbox({config: WORKFLOW_DERIVED_CONFIG});
-    seedWorkflowSource(sandbox);
-    sandbox.writeStaged(
-      '.claude/commands/pinned-note.md',
-      '# Pinned SHAs match `.github/workflows/forensics-triage.yml`:\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('excluded-workflow-ref');
-    expect(out).toContain('.github/workflows/forensics-triage.yml');
-  });
-
-  test.each<[string, string, string]>([
-    [
-      'exempts a `[ -f ]` existence guard via the line-allowlist',
-      '.claude/commands/setup-gaia.md',
-      'elif [ -f .github/workflows/forensics-triage.yml ] && gh repo view; then\n',
-    ],
-    [
-      'does not flag a shipped (non-excluded) workflow reference',
-      '.claude/agents/foo.md',
-      'All gating mirrors .github/workflows/tests.yml at the step level.\n',
-    ],
-  ])('%s', (_label, stagedPath, contents) => {
-    sandbox = setupSandbox({config: WORKFLOW_DERIVED_CONFIG});
-    seedWorkflowSource(sandbox);
-    sandbox.writeStaged(stagedPath, contents);
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('flags an excluded workflow whatever else exists in the source tree', () => {
-    // No excluded workflow is installed from a template, so a stray template
-    // file never exempts a reference to it.
-    sandbox = setupSandbox({config: WORKFLOW_DERIVED_CONFIG});
-    seedWorkflowSource(sandbox);
-    sandbox.writeSource(
-      '.gaia/cli/templates/maintainer-only.yml.tmpl',
-      'name: Maintainer Only\n'
-    );
-    sandbox.writeStaged(
-      '.claude/commands/setup-gaia.md',
-      'It installs `.github/workflows/maintainer-only.yml` (the PR gate).\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain(
-      '.github/workflows/maintainer-only.yml'
-    );
-  });
-
-  test('flags a newly excluded workflow with no config change (drift-proof)', () => {
-    sandbox = setupSandbox({config: WORKFLOW_DERIVED_CONFIG});
-    seedWorkflowSource(sandbox);
-    // A workflow that never appeared in any hand-maintained alternation.
-    sandbox.writeSource(
-      '.gaia/release-exclude',
-      `${WORKFLOW_EXCLUDE_FIXTURE}\n.github/workflows/brand-new-maintainer.yml\n`
-    );
-    sandbox.writeStaged(
-      '.claude/agents/foo.md',
-      'Pinned SHAs match .github/workflows/brand-new-maintainer.yml.\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('brand-new-maintainer.yml');
-  });
-
-  test('derives the workflow set from cwd release-exclude, not staging', () => {
-    // `.gaia/release-exclude` excludes itself, so it never reaches staging. An
-    // implementation reading it from the staging tree finds nothing and passes.
-    sandbox = setupSandbox({config: WORKFLOW_DERIVED_CONFIG});
-    seedWorkflowSource(sandbox);
-    sandbox.writeStaged(
-      '.claude/agents/bar.md',
-      'See .github/workflows/release.yml for the tag trigger.\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('.github/workflows/release.yml');
+  test.each<ScrubCase>([
+    {
+      config: WORKFLOW_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a reference to a never-present excluded workflow',
+      out: ['excluded-workflow-ref', '.github/workflows/forensics-triage.yml'],
+      seed: seedWorkflowSource,
+      staged: {
+        '.claude/commands/pinned-note.md':
+          '# Pinned SHAs match `.github/workflows/forensics-triage.yml`:\n',
+      },
+    },
+    {
+      config: WORKFLOW_DERIVED_CONFIG,
+      exit: 0,
+      name: 'exempts a `[ -f ]` existence guard via the line-allowlist',
+      seed: seedWorkflowSource,
+      staged: {
+        '.claude/commands/setup-gaia.md':
+          'elif [ -f .github/workflows/forensics-triage.yml ] && gh repo view; then\n',
+      },
+    },
+    {
+      config: WORKFLOW_DERIVED_CONFIG,
+      exit: 0,
+      name: 'does not flag a shipped (non-excluded) workflow reference',
+      seed: seedWorkflowSource,
+      staged: {
+        '.claude/agents/foo.md':
+          'All gating mirrors .github/workflows/tests.yml at the step level.\n',
+      },
+    },
+    {
+      // No excluded workflow is installed from a template, so a stray
+      // template file never exempts a reference to it.
+      config: WORKFLOW_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags an excluded workflow whatever else exists in the source tree',
+      out: ['.github/workflows/maintainer-only.yml'],
+      seed: seedWorkflowSource,
+      source: {
+        '.gaia/cli/templates/maintainer-only.yml.tmpl':
+          'name: Maintainer Only\n',
+      },
+      staged: {
+        '.claude/commands/setup-gaia.md':
+          'It installs `.github/workflows/maintainer-only.yml` (the PR gate).\n',
+      },
+    },
+    {
+      config: WORKFLOW_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a newly excluded workflow with no config change (drift-proof)',
+      out: ['brand-new-maintainer.yml'],
+      seed: seedWorkflowSource,
+      // A workflow that never appeared in any hand-maintained alternation.
+      source: {
+        '.gaia/release-exclude': `${WORKFLOW_EXCLUDE_FIXTURE}\n.github/workflows/brand-new-maintainer.yml\n`,
+      },
+      staged: {
+        '.claude/agents/foo.md':
+          'Pinned SHAs match .github/workflows/brand-new-maintainer.yml.\n',
+      },
+    },
+    {
+      // `.gaia/release-exclude` excludes itself, so it never reaches staging.
+      // An implementation reading it from the staging tree finds nothing and
+      // passes.
+      config: WORKFLOW_DERIVED_CONFIG,
+      exit: 1,
+      name: 'derives the workflow set from cwd release-exclude, not staging',
+      out: ['.github/workflows/release.yml'],
+      seed: seedWorkflowSource,
+      staged: {
+        '.claude/agents/bar.md':
+          'See .github/workflows/release.yml for the tag trigger.\n',
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -1766,262 +1627,18 @@ const seedTitleSource = (sandbox: Sandbox): void => {
   );
 };
 
+const NON_TITLE_CHECK_CONFIG = (check: string): string => `
+transforms:
+  - type: leak-check
+    checks:
+${check}
+        title-opt-out:
+          - "GAIA"
+`;
+
 describe('excluded-titles derived check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('flags a bare-prose title, derived from cwd, with file/line/match', () => {
-    // The #1 trap: `.gaia/release-exclude` excludes itself and never reaches the
-    // staging tree, so the set must be derived from cwd.
-    sandbox = setupSandbox({config: TITLE_DERIVED_CONFIG});
-    seedTitleSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Foo.md',
-      [
-        '# Foo',
-        '',
-        'The Forensics Triage Workflow governs incident capture.',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir, '--json'], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const report = JSON.parse(stdio.outputs.join('')) as {
-      leaks: {check: string; file: string; line: number; match: string}[];
-    };
-    expect(report.leaks).toEqual([
-      {
-        check: 'excluded-titles',
-        file: 'wiki/concepts/Foo.md',
-        line: 3,
-        match: 'Forensics Triage Workflow',
-      },
-    ]);
-  });
-
-  test.each<[string, string]>([
-    [
-      'does not flag a title that appears only as a wikilink',
-      '# Foo\n\nSee [[Forensics Triage Workflow]] for the details.\n',
-    ],
-    [
-      'does not flag a title inside an inline-code span or a fenced block',
-      [
-        '# Foo',
-        '',
-        'Inline `Bundle-time Scrub` reference.',
-        '',
-        '```',
-        'Bundle-time Scrub inside a fenced block.',
-        '```',
-        '',
-      ].join('\n'),
-    ],
-    [
-      'does not flag a lowercase concept-prose mention that is not the exact title',
-      '# Foo\n\nConfigure the bundle-time scrub before shipping.\n',
-    ],
-    // The directory basenames `meta` / `entities` are deliberately NOT in the
-    // set; a naive `buildExcludedSlugSet`-style derivation would flag them.
-    [
-      'does not flag the excluded directory basenames themselves',
-      '# Foo\n\nThe meta directory and the entities folder hold working notes.\n',
-    ],
-    [
-      'does not fire on a title abutted by an extra word char or hyphen',
-      [
-        '# Foo',
-        '',
-        'We finished Bundle-time Scrubbing last week.',
-        'The CLI-Binary-Split-Extra step and the Pre-CLI-Binary-Split step differ.',
-        '',
-      ].join('\n'),
-    ],
-  ])('%s', (_label, contents) => {
-    sandbox = setupSandbox({config: TITLE_DERIVED_CONFIG});
-    seedTitleSource(sandbox);
-    sandbox.writeStaged('wiki/concepts/Foo.md', contents);
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('does not flag a bare title inside a stripped maintainer-only block', () => {
-    // marker-strip runs before leak-check and re-reads the file fresh, so the
-    // wrapped mention is gone before the title check ever sees the line.
-    sandbox = setupSandbox({config: TITLE_WITH_MARKER_CONFIG});
-    seedTitleSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Foo.md',
-      [
-        '# Foo',
-        '',
-        'Public prose.',
-        '<!-- gaia:maintainer-only:start -->',
-        'The Forensics Triage Workflow handles this internally.',
-        '<!-- gaia:maintainer-only:end -->',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('subtracts an opted-out title while flagging a non-opted-out one on the same page', () => {
-    sandbox = setupSandbox({config: TITLE_DERIVED_CONFIG});
-    seedTitleSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Foo.md',
-      [
-        '# Foo',
-        '',
-        'The Release Workflow and the Bundle-time Scrub both run at release time.',
-        '',
-      ].join('\n')
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('Bundle-time Scrub');
-    expect(out).not.toContain('Release Workflow');
-  });
-
-  test('flags a newly excluded title with no config change (drift-proof)', () => {
-    sandbox = setupSandbox({config: TITLE_DERIVED_CONFIG});
-    seedTitleSource(sandbox);
-    sandbox.writeSource(
-      '.gaia/release-exclude',
-      `${TITLE_EXCLUDE_FIXTURE}\nwiki/decisions/Newly Excluded Decision.md\n`
-    );
-    sandbox.writeStaged(
-      'wiki/concepts/Foo.md',
-      '# Foo\n\nThe Newly Excluded Decision changed our approach.\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('Newly Excluded Decision');
-  });
-
-  test('flags a bare title on a line that also carries a wikilink to a different excluded title', () => {
-    // Span-level, not line-level: the `[[wikilink]]` span is removed, but the
-    // bare mention of a different excluded title on the same line still fires.
-    sandbox = setupSandbox({config: TITLE_DERIVED_CONFIG});
-    seedTitleSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Foo.md',
-      '# Foo\n\nSee [[Bundle-time Scrub]] and the Forensics Triage Workflow config.\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('Forensics Triage Workflow');
-    expect(out).not.toContain('Bundle-time Scrub');
-  });
-
-  test('flags a page beneath a bare-directory exclude by its basename', () => {
-    // The directory contributes its pages (Distinctive Meta Page) even though
-    // the directory name (meta) itself is never contributed.
-    sandbox = setupSandbox({config: TITLE_DERIVED_CONFIG});
-    seedTitleSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Foo.md',
-      '# Foo\n\nThe Distinctive Meta Page documents the layout.\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('Distinctive Meta Page');
-  });
-
-  test('fires on a standalone hyphenated title', () => {
-    sandbox = setupSandbox({config: TITLE_DERIVED_CONFIG});
-    seedTitleSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/concepts/Foo.md',
-      '# Foo\n\nThe CLI-Binary-Split boundary is deliberate.\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('CLI-Binary-Split');
-  });
-
-  test('exits 2 when title-opt-out is placed on a non-title derived check', () => {
-    const config = `
-transforms:
-  - type: leak-check
-    checks:
-      - id: wikilink-to-excluded
-        derive: excluded-slugs
-        scope:
-          - "wiki/**/*.md"
-        title-opt-out:
-          - "GAIA"
-`;
-    sandbox = setupSandbox({config});
-    sandbox.writeStaged('wiki/index.md', '# x\n');
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(2);
-    expect(stdio.errors.join('')).toContain('config_load_failed');
-  });
-
-  test('exits 2 when title-opt-out is placed on a static check', () => {
-    const config = `
-transforms:
-  - type: leak-check
-    checks:
-      - id: flow-narrative
-        pattern: "FLOW-[0-9]{3}"
-        scope:
-          - "wiki/**"
-        title-opt-out:
-          - "GAIA"
-`;
-    sandbox = setupSandbox({config});
-    sandbox.writeStaged('wiki/index.md', '# x\n');
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(2);
-    expect(stdio.errors.join('')).toContain('config_load_failed');
-  });
-
-  test('exempts allowlisted hot.md / log.md from the title check', () => {
-    sandbox = setupSandbox({config: TITLE_DERIVED_CONFIG});
-    seedTitleSource(sandbox);
-    sandbox.writeStaged(
-      'wiki/hot.md',
-      '# Hot\n\nThe Forensics Triage Workflow is next.\n'
-    );
-    sandbox.writeStaged(
-      'wiki/log.md',
-      '# Log\n\nThe Bundle-time Scrub landed.\n'
-    );
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(0);
-  });
-
-  test('runs a static check and the title derived check in one config', () => {
-    const mixedConfig = `
+  const FOO = 'wiki/concepts/Foo.md';
+  const MIXED_CONFIG = `
 transforms:
   - type: leak-check
     checks:
@@ -2038,20 +1655,236 @@ transforms:
         title-opt-out:
           - "Release Workflow"
 `;
-    sandbox = setupSandbox({config: mixedConfig});
-    seedTitleSource(sandbox);
-    sandbox.writeStaged('wiki/a.md', '# A\n\nFLOW-007 reference.\n');
-    sandbox.writeStaged(
-      'wiki/b.md',
-      '# B\n\nThe Bundle-time Scrub runs here.\n'
-    );
 
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-    expect(exit).toBe(1);
-
-    const out = stdio.outputs.join('');
-    expect(out).toContain('flow-narrative');
-    expect(out).toContain('excluded-titles');
+  test.each<ScrubCase>([
+    {
+      // The #1 trap: `.gaia/release-exclude` excludes itself and never reaches
+      // the staging tree, so the set must be derived from cwd.
+      args: ['--json'],
+      config: TITLE_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a bare-prose title, derived from cwd, with file/line/match',
+      report: {
+        leaks: [
+          {
+            check: 'excluded-titles',
+            file: FOO,
+            line: 3,
+            match: 'Forensics Triage Workflow',
+          },
+        ],
+      },
+      seed: seedTitleSource,
+      staged: {
+        [FOO]: [
+          '# Foo',
+          '',
+          'The Forensics Triage Workflow governs incident capture.',
+          '',
+        ].join('\n'),
+      },
+    },
+    {
+      config: TITLE_DERIVED_CONFIG,
+      exit: 0,
+      name: 'does not flag a title that appears only as a wikilink',
+      seed: seedTitleSource,
+      staged: {
+        [FOO]: '# Foo\n\nSee [[Forensics Triage Workflow]] for the details.\n',
+      },
+    },
+    {
+      config: TITLE_DERIVED_CONFIG,
+      exit: 0,
+      name: 'does not flag a title inside an inline-code span or a fenced block',
+      seed: seedTitleSource,
+      staged: {
+        [FOO]: [
+          '# Foo',
+          '',
+          'Inline `Bundle-time Scrub` reference.',
+          '',
+          '```',
+          'Bundle-time Scrub inside a fenced block.',
+          '```',
+          '',
+        ].join('\n'),
+      },
+    },
+    {
+      config: TITLE_DERIVED_CONFIG,
+      exit: 0,
+      name: 'does not flag a lowercase concept-prose mention that is not the exact title',
+      seed: seedTitleSource,
+      staged: {
+        [FOO]: '# Foo\n\nConfigure the bundle-time scrub before shipping.\n',
+      },
+    },
+    {
+      // The directory basenames `meta` / `entities` are deliberately NOT in
+      // the set; a naive `buildExcludedSlugSet`-style derivation would flag
+      // them.
+      config: TITLE_DERIVED_CONFIG,
+      exit: 0,
+      name: 'does not flag the excluded directory basenames themselves',
+      seed: seedTitleSource,
+      staged: {
+        [FOO]:
+          '# Foo\n\nThe meta directory and the entities folder hold working notes.\n',
+      },
+    },
+    {
+      config: TITLE_DERIVED_CONFIG,
+      exit: 0,
+      name: 'does not fire on a title abutted by an extra word char or hyphen',
+      seed: seedTitleSource,
+      staged: {
+        [FOO]: [
+          '# Foo',
+          '',
+          'We finished Bundle-time Scrubbing last week.',
+          'The CLI-Binary-Split-Extra step and the Pre-CLI-Binary-Split step differ.',
+          '',
+        ].join('\n'),
+      },
+    },
+    {
+      // marker-strip runs before leak-check and re-reads the file fresh, so
+      // the wrapped mention is gone before the title check ever sees the line.
+      config: TITLE_WITH_MARKER_CONFIG,
+      exit: 0,
+      name: 'does not flag a bare title inside a stripped maintainer-only block',
+      seed: seedTitleSource,
+      staged: {
+        [FOO]: [
+          '# Foo',
+          '',
+          'Public prose.',
+          '<!-- gaia:maintainer-only:start -->',
+          'The Forensics Triage Workflow handles this internally.',
+          '<!-- gaia:maintainer-only:end -->',
+          '',
+        ].join('\n'),
+      },
+    },
+    {
+      config: TITLE_DERIVED_CONFIG,
+      exit: 1,
+      name: 'subtracts an opted-out title while flagging a non-opted-out one on the same page',
+      notOut: ['Release Workflow'],
+      out: ['Bundle-time Scrub'],
+      seed: seedTitleSource,
+      staged: {
+        [FOO]: [
+          '# Foo',
+          '',
+          'The Release Workflow and the Bundle-time Scrub both run at release time.',
+          '',
+        ].join('\n'),
+      },
+    },
+    {
+      config: TITLE_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a newly excluded title with no config change (drift-proof)',
+      out: ['Newly Excluded Decision'],
+      seed: seedTitleSource,
+      source: {
+        '.gaia/release-exclude': `${TITLE_EXCLUDE_FIXTURE}\nwiki/decisions/Newly Excluded Decision.md\n`,
+      },
+      staged: {
+        [FOO]: '# Foo\n\nThe Newly Excluded Decision changed our approach.\n',
+      },
+    },
+    {
+      // Span-level, not line-level: the `[[wikilink]]` span is removed, but
+      // the bare mention of a different excluded title on the same line still
+      // fires.
+      config: TITLE_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a bare title on a line that also carries a wikilink to a different excluded title',
+      notOut: ['Bundle-time Scrub'],
+      out: ['Forensics Triage Workflow'],
+      seed: seedTitleSource,
+      staged: {
+        [FOO]:
+          '# Foo\n\nSee [[Bundle-time Scrub]] and the Forensics Triage Workflow config.\n',
+      },
+    },
+    {
+      // The directory contributes its pages (Distinctive Meta Page) even
+      // though the directory name (meta) itself is never contributed.
+      config: TITLE_DERIVED_CONFIG,
+      exit: 1,
+      name: 'flags a page beneath a bare-directory exclude by its basename',
+      out: ['Distinctive Meta Page'],
+      seed: seedTitleSource,
+      staged: {
+        [FOO]: '# Foo\n\nThe Distinctive Meta Page documents the layout.\n',
+      },
+    },
+    {
+      config: TITLE_DERIVED_CONFIG,
+      exit: 1,
+      name: 'fires on a standalone hyphenated title',
+      out: ['CLI-Binary-Split'],
+      seed: seedTitleSource,
+      staged: {
+        [FOO]: '# Foo\n\nThe CLI-Binary-Split boundary is deliberate.\n',
+      },
+    },
+    {
+      config: NON_TITLE_CHECK_CONFIG(
+        [
+          '      - id: wikilink-to-excluded',
+          '        derive: excluded-slugs',
+          '        scope:',
+          '          - "wiki/**/*.md"',
+        ].join('\n')
+      ),
+      err: ['config_load_failed'],
+      exit: 2,
+      name: 'exits 2 when title-opt-out is placed on a non-title derived check',
+      staged: {'wiki/index.md': '# x\n'},
+    },
+    {
+      config: NON_TITLE_CHECK_CONFIG(
+        [
+          '      - id: flow-narrative',
+          '        pattern: "FLOW-[0-9]{3}"',
+          '        scope:',
+          '          - "wiki/**"',
+        ].join('\n')
+      ),
+      err: ['config_load_failed'],
+      exit: 2,
+      name: 'exits 2 when title-opt-out is placed on a static check',
+      staged: {'wiki/index.md': '# x\n'},
+    },
+    {
+      config: TITLE_DERIVED_CONFIG,
+      exit: 0,
+      name: 'exempts allowlisted hot.md / log.md from the title check',
+      seed: seedTitleSource,
+      staged: {
+        'wiki/hot.md': '# Hot\n\nThe Forensics Triage Workflow is next.\n',
+        'wiki/log.md': '# Log\n\nThe Bundle-time Scrub landed.\n',
+      },
+    },
+    {
+      config: MIXED_CONFIG,
+      exit: 1,
+      name: 'runs a static check and the title derived check in one config',
+      out: ['flow-narrative', 'excluded-titles'],
+      seed: seedTitleSource,
+      staged: {
+        'wiki/a.md': '# A\n\nFLOW-007 reference.\n',
+        'wiki/b.md': '# B\n\nThe Bundle-time Scrub runs here.\n',
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -2181,122 +2014,119 @@ const seedRefsSource = (sandbox: Sandbox): void => {
 };
 
 describe('excluded-refs derived check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox({config: REFS_CONFIG});
-    seedRefsSource(sandbox);
+  const flagsRow = (
+    label: string,
+    stagedPath: string,
+    contents: string,
+    expected: string
+  ): ScrubCase => ({
+    config: REFS_CONFIG,
+    exit: 1,
+    name: `flags ${label}`,
+    out: [`[excluded-refs] ${stagedPath}:1  ${expected}`],
+    seed: seedRefsSource,
+    staged: {[stagedPath]: contents},
+  });
+  const passesRow = (
+    label: string,
+    stagedPath: string,
+    contents: string
+  ): ScrubCase => ({
+    config: REFS_CONFIG,
+    exit: 0,
+    name: `does not flag ${label}`,
+    seed: seedRefsSource,
+    staged: {[stagedPath]: contents},
   });
 
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test.each<[string, string, string, string]>([
-    [
+  test.each<ScrubCase>([
+    flagsRow(
       'a slash command',
       'wiki/concepts/A.md',
       'Run `/gaia-release` first.\n',
-      '/gaia-release',
-    ],
-    [
+      '/gaia-release'
+    ),
+    flagsRow(
       'an excluded script path',
       '.claude/hooks/a.sh',
       '# see .gaia/scripts/lint-hook-jq-availability.sh\n',
-      '.gaia/scripts/lint-hook-jq-availability.sh',
-    ],
-    [
+      '.gaia/scripts/lint-hook-jq-availability.sh'
+    ),
+    flagsRow(
       'a code basename in Markdown',
       'wiki/concepts/B.md',
       'It comes from `chain.ts`.\n',
-      'chain.ts',
-    ],
-  ])('flags %s', (_label, stagedPath, contents, expected) => {
-    sandbox.writeStaged(stagedPath, contents);
-
-    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
-
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain(
-      `[excluded-refs] ${stagedPath}:1  ${expected}`
-    );
-  });
-
-  test.each<[string, string, string]>([
-    [
+      'chain.ts'
+    ),
+    passesRow(
       'an opted-out path',
       'wiki/concepts/A.md',
-      'Write `.github/CODEOWNERS` yourself.\n',
-    ],
-    [
+      'Write `.github/CODEOWNERS` yourself.\n'
+    ),
+    passesRow(
       'an untracked excluded entry',
       'wiki/concepts/A.md',
-      'The tool reads `.tool-state/config.yml`.\n',
-    ],
-    [
+      'The tool reads `.tool-state/config.yml`.\n'
+    ),
+    passesRow(
       'a nested untracked excluded entry',
       'wiki/concepts/A.md',
-      'Plans live under `.gaia/local/plans/`.\n',
-    ],
-    [
+      'Plans live under `.gaia/local/plans/`.\n'
+    ),
+    passesRow(
       'a code basename outside Markdown',
       '.claude/hooks/a.sh',
-      '# mirrors chain.ts\n',
-    ],
-    [
+      '# mirrors chain.ts\n'
+    ),
+    passesRow(
       'a line-allowlisted config glob',
       '.claude/rules/a.md',
-      "  - '.gaia/cli/src/**'\n",
-    ],
-  ])('does not flag %s', (_label, stagedPath, contents) => {
-    sandbox.writeStaged(stagedPath, contents);
-
-    expect(run([sandbox.stagingDir], {cwd: sandbox.rootDir})).toBe(0);
-  });
-
-  test('flags a newly excluded path with no config change (drift-proof)', () => {
-    sandbox.writeSource(
-      '.gaia/release-exclude',
-      `${REFS_EXCLUDE_FIXTURE}\n.gaia/scripts/brand-new-lint.sh\n`
-    );
-    sandbox.writeSource('.gaia/scripts/brand-new-lint.sh', '#!/bin/sh\n');
-    execFileSync('git', ['add', '.'], {cwd: sandbox.rootDir});
-    sandbox.writeStaged(
-      'wiki/concepts/A.md',
-      'See .gaia/scripts/brand-new-lint.sh.\n'
-    );
-
-    expect(run([sandbox.stagingDir], {cwd: sandbox.rootDir})).toBe(1);
-    expect(stdio.outputs.join('')).toContain('.gaia/scripts/brand-new-lint.sh');
-  });
-
-  test('does not warn about allowlist and opt-out entries that are in use', () => {
-    sandbox.writeStaged('.claude/rules/a.md', "  - '.gaia/cli/src/**'\n");
-
-    expect(run([sandbox.stagingDir], {cwd: sandbox.rootDir})).toBe(0);
-    expect(stdio.outputs.join('')).not.toContain('unused allowlist entries');
-  });
-
-  test('warns, without failing, on unused allowlist and opt-out entries', () => {
-    writeFileSync(
-      sandbox.configPath,
-      REFS_CONFIG.replace('".github/CODEOWNERS"', '".github/no-such-file"')
-    );
-    sandbox.writeStaged('wiki/concepts/A.md', 'Nothing to see.\n');
-
-    expect(run([sandbox.stagingDir], {cwd: sandbox.rootDir})).toBe(0);
-
-    const out = stdio.outputs.join('');
-
-    expect(out).toContain('unused allowlist entries (2, warning only):');
-    expect(out).toContain('[excluded-refs] ref-opt-out: .github/no-such-file');
-    expect(out).toContain(
-      String.raw`[excluded-refs] line-allowlist: ^\s*-\s*'\.gaia/cli/src/\*\*'$`
-    );
+      "  - '.gaia/cli/src/**'\n"
+    ),
+    {
+      config: REFS_CONFIG,
+      exit: 1,
+      name: 'flags a newly excluded path with no config change (drift-proof)',
+      out: ['.gaia/scripts/brand-new-lint.sh'],
+      seed: (target) => {
+        seedRefsSource(target);
+        target.writeSource(
+          '.gaia/release-exclude',
+          `${REFS_EXCLUDE_FIXTURE}\n.gaia/scripts/brand-new-lint.sh\n`
+        );
+        target.writeSource('.gaia/scripts/brand-new-lint.sh', '#!/bin/sh\n');
+        execFileSync('git', ['add', '.'], {cwd: target.rootDir});
+      },
+      staged: {
+        'wiki/concepts/A.md': 'See .gaia/scripts/brand-new-lint.sh.\n',
+      },
+    },
+    {
+      config: REFS_CONFIG,
+      exit: 0,
+      name: 'does not warn about allowlist and opt-out entries that are in use',
+      notOut: ['unused allowlist entries'],
+      seed: seedRefsSource,
+      staged: {'.claude/rules/a.md': "  - '.gaia/cli/src/**'\n"},
+    },
+    {
+      config: REFS_CONFIG.replace(
+        '".github/CODEOWNERS"',
+        '".github/no-such-file"'
+      ),
+      exit: 0,
+      name: 'warns, without failing, on unused allowlist and opt-out entries',
+      out: [
+        'unused allowlist entries (2, warning only):',
+        '[excluded-refs] ref-opt-out: .github/no-such-file',
+        String.raw`[excluded-refs] line-allowlist: ^\s*-\s*'\.gaia/cli/src/\*\*'$`,
+      ],
+      seed: seedRefsSource,
+      staged: {'wiki/concepts/A.md': 'Nothing to see.\n'},
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -2317,38 +2147,30 @@ transforms:
 `;
 
 describe('leak-check scope-skip', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox({config: SCOPE_SKIP_CONFIG});
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('skips a file the skip list names even when the scope admits it', () => {
-    sandbox.writeStaged('public/icon.png', 'FLOW-042');
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-    expect(stdio.outputs.join('')).toContain('leaks: none');
-  });
-
-  test('one skip list covers every check in the transform', () => {
-    sandbox.writeStaged('public/icon.png', 'see .gaia/cli/src/scrub.ts');
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-  });
-
-  test('still scans a file the skip list does not name', () => {
-    sandbox.writeStaged('docs/notes.md', 'FLOW-042');
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
-    expect(stdio.outputs.join('')).toContain('docs/notes.md');
+  test.each<ScrubCase>([
+    {
+      config: SCOPE_SKIP_CONFIG,
+      exit: 0,
+      name: 'skips a file the skip list names even when the scope admits it',
+      out: ['leaks: none'],
+      staged: {'public/icon.png': 'FLOW-042'},
+    },
+    {
+      config: SCOPE_SKIP_CONFIG,
+      exit: 0,
+      name: 'one skip list covers every check in the transform',
+      staged: {'public/icon.png': 'see .gaia/cli/src/scrub.ts'},
+    },
+    {
+      config: SCOPE_SKIP_CONFIG,
+      exit: 1,
+      name: 'still scans a file the skip list does not name',
+      out: ['docs/notes.md'],
+      staged: {'docs/notes.md': 'FLOW-042'},
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -2362,118 +2184,102 @@ const shippedAbsolutePathsConfig = (): string => {
 };
 
 describe('shipped absolute-paths check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
+  const config = shippedAbsolutePathsConfig();
 
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox({config: shippedAbsolutePathsConfig()});
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('flags an absolute path anywhere in the shipped tree', () => {
-    // The ban is repo-wide, not `.claude/`-only (gaia-react/gaia#1479), so the
-    // two surfaces are one assertion rather than a rule and an exception.
-    sandbox.writeStaged(
-      '.gaia/scripts/audit-key-lib.sh',
-      'root="/Users/steven/dev/thing"\n'
-    );
-    sandbox.writeStaged('wiki/index.md', 'See /home/steven/notes.md.\n');
-    sandbox.writeStaged(
-      '.claude/hooks/some-hook.sh',
-      'root="/Users/steven/dev/thing"\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
-
-    const out = stdio.outputs.join('');
-
-    expect(out).toContain('.gaia/scripts/audit-key-lib.sh');
-    expect(out).toContain('wiki/index.md');
-    expect(out).toContain('.claude/hooks/some-hook.sh');
-  });
-
-  test('allows each sanctioned placeholder used as a path prefix', () => {
-    // The gate has to permit what Exception 2 tells an author to write, or
-    // following the rule fails the bundle. Prefix use is how every shipped
-    // instance spells them; a bare mention still flags, which
-    // `.gaia/release-scrub.yml` records as the narrower of the two available
-    // edges. `/Users/username` is where they ship today, in the captured
-    // Storybook parser stack trace.
-    sandbox.writeStaged(
-      'app/components/errors/error-stack/tests/index.stories.tsx',
-      '    at constructor (/Users/username/Development/gaia/node_modules/x.cjs:1:2)\n'
-    );
-    sandbox.writeStaged('docs/notes.md', 'Clone into /Users/you/projects.\n');
-    sandbox.writeStaged('docs/linux.md', 'Or into /home/bar/projects.\n');
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-    expect(stdio.outputs.join('')).toContain('leaks: none');
-  });
-
-  test('does not let a placeholder exempt a longer real path that extends it', () => {
-    // Why the trailing `/` is load-bearing rather than incidental: without it
-    // the alternation would release a path of this shape, and that shape names
-    // a real machine. These two are deliberate near-misses of the sanctioned
-    // placeholders, not further placeholders.
-    sandbox.writeStaged('docs/a.md', 'Built at /Users/youngster/dev/thing.\n');
-    sandbox.writeStaged('docs/b.md', 'Built at /home/barbara/dev/thing.\n');
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
-
-    const out = stdio.outputs.join('');
-
-    expect(out).toContain('leaks (2)');
-    expect(out).toContain('docs/a.md');
-    expect(out).toContain('docs/b.md');
-  });
-
-  test('allows the elided /Users/.../ placeholder', () => {
-    sandbox.writeStaged(
-      '.gaia/scripts/spec/spec-session-lock.sh',
-      '#   level 1: /bin/zsh -c source /Users/.../.claude/shell-snapshots/snap\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-    expect(stdio.outputs.join('')).toContain('leaks: none');
-  });
-
-  test('still flags a real machine path on its own line', () => {
-    sandbox.writeStaged(
-      '.gaia/scripts/spec/spec-session-lock.sh',
-      '#   level 1: /bin/zsh -c source /Users/.../.claude/shell-snapshots/snap\n' +
-        'LOCK_DIR="/Users/steven/Development/gaia/.gaia/local/locks"\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
-
-    const out = stdio.outputs.join('');
-
-    // One leak, on line 2: the count is what proves the exemption released the
-    // placeholder and nothing else, since the reporter prints the matched
-    // pattern rather than the offending line.
-    expect(out).toContain('leaks (1)');
-    expect(out).toContain('spec-session-lock.sh:2');
-  });
-
-  test('does not scan a real machine path sharing a line with a placeholder', () => {
-    // The accepted gap, pinned rather than left to be rediscovered: the engine
-    // drops a line-allowlisted line before the pattern runs, so the exemption
-    // releases the line and not just the match it fired on. Narrowing it to
-    // the match is an engine change; `.gaia/release-scrub.yml` records why
-    // that trade is not worth making for the shapes these entries cover.
-    sandbox.writeStaged(
-      'docs/notes.md',
-      'Use /Users/you/projects, not /Users/steven/Development/gaia.\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-    expect(stdio.outputs.join('')).toContain('leaks: none');
+  test.each<ScrubCase>([
+    {
+      // The ban is repo-wide, not `.claude/`-only (gaia-react/gaia#1479), so
+      // the two surfaces are one assertion rather than a rule and an
+      // exception.
+      config,
+      exit: 1,
+      name: 'flags an absolute path anywhere in the shipped tree',
+      out: [
+        '.gaia/scripts/audit-key-lib.sh',
+        'wiki/index.md',
+        '.claude/hooks/some-hook.sh',
+      ],
+      staged: {
+        '.claude/hooks/some-hook.sh': 'root="/Users/steven/dev/thing"\n',
+        '.gaia/scripts/audit-key-lib.sh': 'root="/Users/steven/dev/thing"\n',
+        'wiki/index.md': 'See /home/steven/notes.md.\n',
+      },
+    },
+    {
+      // The gate has to permit what Exception 2 tells an author to write, or
+      // following the rule fails the bundle. Prefix use is how every shipped
+      // instance spells them; a bare mention still flags, which
+      // `.gaia/release-scrub.yml` records as the narrower of the two
+      // available edges. `/Users/username` is where they ship today, in the
+      // captured Storybook parser stack trace.
+      config,
+      exit: 0,
+      name: 'allows each sanctioned placeholder used as a path prefix',
+      out: ['leaks: none'],
+      staged: {
+        'app/components/errors/error-stack/tests/index.stories.tsx':
+          '    at constructor (/Users/username/Development/gaia/node_modules/x.cjs:1:2)\n',
+        'docs/linux.md': 'Or into /home/bar/projects.\n',
+        'docs/notes.md': 'Clone into /Users/you/projects.\n',
+      },
+    },
+    {
+      // Why the trailing `/` is load-bearing rather than incidental: without
+      // it the alternation would release a path of this shape, and that shape
+      // names a real machine. These two are deliberate near-misses of the
+      // sanctioned placeholders, not further placeholders.
+      config,
+      exit: 1,
+      name: 'does not let a placeholder exempt a longer real path that extends it',
+      out: ['leaks (2)', 'docs/a.md', 'docs/b.md'],
+      staged: {
+        'docs/a.md': 'Built at /Users/youngster/dev/thing.\n',
+        'docs/b.md': 'Built at /home/barbara/dev/thing.\n',
+      },
+    },
+    {
+      config,
+      exit: 0,
+      name: 'allows the elided /Users/.../ placeholder',
+      out: ['leaks: none'],
+      staged: {
+        '.gaia/scripts/spec/spec-session-lock.sh':
+          '#   level 1: /bin/zsh -c source /Users/.../.claude/shell-snapshots/snap\n',
+      },
+    },
+    {
+      // One leak, on line 2: the count is what proves the exemption released
+      // the placeholder and nothing else, since the reporter prints the
+      // matched pattern rather than the offending line.
+      config,
+      exit: 1,
+      name: 'still flags a real machine path on its own line',
+      out: ['leaks (1)', 'spec-session-lock.sh:2'],
+      staged: {
+        '.gaia/scripts/spec/spec-session-lock.sh':
+          '#   level 1: /bin/zsh -c source /Users/.../.claude/shell-snapshots/snap\n' +
+          'LOCK_DIR="/Users/steven/Development/gaia/.gaia/local/locks"\n',
+      },
+    },
+    {
+      // The accepted gap, pinned rather than left to be rediscovered: the
+      // engine drops a line-allowlisted line before the pattern runs, so the
+      // exemption releases the line and not just the match it fired on.
+      // Narrowing it to the match is an engine change; `.gaia/release-scrub.yml`
+      // records why that trade is not worth making for the shapes these
+      // entries cover.
+      config,
+      exit: 0,
+      name: 'does not scan a real machine path sharing a line with a placeholder',
+      out: ['leaks: none'],
+      staged: {
+        'docs/notes.md':
+          'Use /Users/you/projects, not /Users/steven/Development/gaia.\n',
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -2488,55 +2294,50 @@ const shippedProjectIssueRefsConfig = (): string => {
 
 describe('shipped project-issue-refs check', () => {
   const oldOwner = ['gaia', 'react'].join('-');
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox({config: shippedProjectIssueRefsConfig()});
+  const config = shippedProjectIssueRefsConfig();
+  const leakRow = (
+    name: string,
+    file: string,
+    reference: string
+  ): ScrubCase => ({
+    config,
+    exit: 1,
+    name,
+    out: [file, reference.replace('https://', '')],
+    staged: {[file]: `See ${reference} for detail.\n`},
   });
 
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  const expectLeak = (file: string, reference: string): void => {
-    sandbox.writeStaged(file, `See ${reference} for detail.\n`);
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
-
-    const out = stdio.outputs.join('');
-
-    expect(out).toContain(file);
-    expect(out).toContain(reference.replace('https://', ''));
-  };
-
-  test('flags a qualified reference under the previous owner', () => {
-    expectLeak('docs/notes.md', `${oldOwner}/gaia#123`);
-  });
-
-  test('flags a qualified reference under the current owner', () => {
-    expectLeak('docs/notes.md', 'gaia-harness/gaia#123');
-  });
-
-  test('flags an issue URL under the previous owner', () => {
-    expectLeak(
+  test.each<ScrubCase>([
+    leakRow(
+      'flags a qualified reference under the previous owner',
+      'docs/notes.md',
+      `${oldOwner}/gaia#123`
+    ),
+    leakRow(
+      'flags a qualified reference under the current owner',
+      'docs/notes.md',
+      'gaia-harness/gaia#123'
+    ),
+    leakRow(
+      'flags an issue URL under the previous owner',
       'docs/issue.md',
       `https://github.com/${oldOwner}/gaia/issues/123`
-    );
-  });
-
-  test('flags a pull request URL under the current owner', () => {
-    expectLeak('docs/pull.md', 'https://github.com/gaia-harness/gaia/pull/123');
-  });
-
-  test('passes a third-party tracker reference', () => {
-    sandbox.writeStaged('docs/notes.md', 'See capricorn86/happy-dom#978.\n');
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-    expect(stdio.outputs.join('')).toContain('leaks: none');
+    ),
+    leakRow(
+      'flags a pull request URL under the current owner',
+      'docs/pull.md',
+      'https://github.com/gaia-harness/gaia/pull/123'
+    ),
+    {
+      config,
+      exit: 0,
+      name: 'passes a third-party tracker reference',
+      out: ['leaks: none'],
+      staged: {'docs/notes.md': 'See capricorn86/happy-dom#978.\n'},
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -2550,88 +2351,65 @@ const shippedAudienceVocabularyConfig = (): string => {
 };
 
 describe('shipped audience-label-vocabulary check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
+  const config = shippedAudienceVocabularyConfig();
 
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox({config: shippedAudienceVocabularyConfig()});
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('flags every spelling the axis actually ships in', () => {
-    // One fixture per branch of the alternation, six in all, each written so
-    // that branch is the only one it matches. Pinning by carrier instead would
-    // leave `maintainer` untested, because the brace-form and AUDIENCE_VALUES
-    // carriers happen to also contain the word: dropping `maintainer|` from
-    // the pattern would keep every fixture matching while a maintainer-side
-    // re-add shipped unflagged. A naive `audience:(adopter|maintainer)` pattern
-    // catches only two of the six (gaia-react/gaia#1437), so a tree still
-    // shipping the whole enforcement block would clear it.
-    sandbox.writeStaged('wiki/page.md', 'exactly one `audience:*` label\n');
-    sandbox.writeStaged(
-      '.claude/skills/file-tech-debt/SKILL.md',
-      '--label audience:<side> \\\n'
-    );
-    sandbox.writeStaged(
-      '.claude/skills/gaia/references/cleanse.md',
-      '  audience: {adopter | maintainer, against the rubric}\n'
-    );
-    sandbox.writeStaged(
-      '.gaia/scripts/check.sh',
-      'readonly AUDIENCE_VALUES="adopter maintainer"\n'
-    );
-    sandbox.writeStaged(
-      '.claude/agents/some-agent.md',
-      'one of `audience:adopter`\n'
-    );
-    sandbox.writeStaged(
-      '.claude/skills/vocabulary.md',
-      '| `audience:maintainer` | observable only in the GAIA repository. |\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
-
-    const out = stdio.outputs.join('');
-
-    expect(out).toContain('wiki/page.md');
-    expect(out).toContain('.claude/skills/file-tech-debt/SKILL.md');
-    expect(out).toContain('.claude/skills/gaia/references/cleanse.md');
-    expect(out).toContain('.gaia/scripts/check.sh');
-    expect(out).toContain('.claude/agents/some-agent.md');
-    expect(out).toContain('.claude/skills/vocabulary.md');
-  });
-
-  test('does not flag the shipped roster field, the registry field, or the CLI flag', () => {
-    // The reason whitespace is allowed only before the brace. The roster's
-    // `audience:` field ships on every adopter member, in the config and in
-    // the built-in fallback roster, and the registry's JSON field ships on
-    // every adopter-audience entry; flagging any of them would fail every
-    // release build on a legitimate file.
-    sandbox.writeStaged(
-      '.gaia/audit-ci.yml',
-      '  - name: code-audit-frontend\n    audience: adopter\n'
-    );
-    sandbox.writeStaged(
-      '.claude/hooks/lib/audit-scope.sh',
-      '    audience: maintainer\n'
-    );
-    sandbox.writeStaged(
-      '.gaia/labels.json',
-      '{"name": "bug", "audience": "adopter"}\n'
-    );
-    sandbox.writeStaged(
-      '.claude/skills/some-skill.md',
-      '.gaia/cli/gaia labels sync --audience maintainer\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-    expect(stdio.outputs.join('')).toContain('leaks: none');
+  test.each<ScrubCase>([
+    {
+      // One fixture per branch of the alternation, six in all, each written so
+      // that branch is the only one it matches. Pinning by carrier instead
+      // would leave `maintainer` untested, because the brace-form and
+      // AUDIENCE_VALUES carriers happen to also contain the word: dropping
+      // `maintainer|` from the pattern would keep every fixture matching while
+      // a maintainer-side re-add shipped unflagged. A naive
+      // `audience:(adopter|maintainer)` pattern catches only two of the six
+      // (gaia-react/gaia#1437), so a tree still shipping the whole
+      // enforcement block would clear it.
+      config,
+      exit: 1,
+      name: 'flags every spelling the axis actually ships in',
+      out: [
+        'wiki/page.md',
+        '.claude/skills/file-tech-debt/SKILL.md',
+        '.claude/skills/gaia/references/cleanse.md',
+        '.gaia/scripts/check.sh',
+        '.claude/agents/some-agent.md',
+        '.claude/skills/vocabulary.md',
+      ],
+      staged: {
+        '.claude/agents/some-agent.md': 'one of `audience:adopter`\n',
+        '.claude/skills/file-tech-debt/SKILL.md':
+          '--label audience:<side> \\\n',
+        '.claude/skills/gaia/references/cleanse.md':
+          '  audience: {adopter | maintainer, against the rubric}\n',
+        '.claude/skills/vocabulary.md':
+          '| `audience:maintainer` | observable only in the GAIA repository. |\n',
+        '.gaia/scripts/check.sh':
+          'readonly AUDIENCE_VALUES="adopter maintainer"\n',
+        'wiki/page.md': 'exactly one `audience:*` label\n',
+      },
+    },
+    {
+      // The reason whitespace is allowed only before the brace. The roster's
+      // `audience:` field ships on every adopter member, in the config and in
+      // the built-in fallback roster, and the registry's JSON field ships on
+      // every adopter-audience entry; flagging any of them would fail every
+      // release build on a legitimate file.
+      config,
+      exit: 0,
+      name: 'does not flag the shipped roster field, the registry field, or the CLI flag',
+      out: ['leaks: none'],
+      staged: {
+        '.claude/hooks/lib/audit-scope.sh': '    audience: maintainer\n',
+        '.claude/skills/some-skill.md':
+          '.gaia/cli/gaia labels sync --audience maintainer\n',
+        '.gaia/audit-ci.yml':
+          '  - name: code-audit-frontend\n    audience: adopter\n',
+        '.gaia/labels.json': '{"name": "bug", "audience": "adopter"}\n',
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -2667,167 +2445,146 @@ transforms:
 const readPnpmFixture = (caseName: string, fileName: string): string =>
   readFileSync(path.join(PNPM_FIXTURE_ROOT, caseName, fileName), 'utf8');
 
-const sha256Of = (absolutePath: string): string =>
-  createHash('sha256').update(readFileSync(absolutePath)).digest('hex');
-
 describe('pnpm-member-strip transform', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
-
-  const stagePnpmCase = (caseName: string): void => {
-    sandbox.writeStaged(
-      STAGED_LOCKFILE,
-      readPnpmFixture(caseName, 'input.lock.fixture.yaml')
-    );
-    sandbox.writeStaged(
-      STAGED_WORKSPACE,
-      readPnpmFixture(caseName, 'input.workspace.fixture.yaml')
-    );
-  };
-
-  const stagedPath = (relativePath: string): string =>
-    path.join(sandbox.stagingDir, relativePath);
-
-  const stagedHashes = (): string[] => [
-    sha256Of(stagedPath(STAGED_LOCKFILE)),
-    sha256Of(stagedPath(STAGED_WORKSPACE)),
-  ];
-
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox({config: PNPM_STRIP_CONFIG});
+  const inputs = (caseName: string): Record<string, string> => ({
+    [STAGED_LOCKFILE]: readPnpmFixture(caseName, 'input.lock.fixture.yaml'),
+    [STAGED_WORKSPACE]: readPnpmFixture(
+      caseName,
+      'input.workspace.fixture.yaml'
+    ),
+  });
+  const refusalRow = (
+    caseName: string,
+    file: string,
+    token: string
+  ): ScrubCase => ({
+    afterRaw: inputs(caseName),
+    config: PNPM_STRIP_CONFIG,
+    err: ['pnpm_member_strip_refused', `"<staging>/${file}"`, token],
+    exit: 1,
+    name: `${caseName} exits non-zero naming ${file} and ${token}, writing neither file`,
+    staged: inputs(caseName),
   });
 
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-  });
-
-  test('strips the member from both staged files and reports the counts', () => {
-    stagePnpmCase('synthetic');
-
-    const exit = run([
-      sandbox.stagingDir,
-      '--config',
-      sandbox.configPath,
-      '--json',
-    ]);
-
-    expect(exit).toBe(0);
-    expect(readFileSync(stagedPath(STAGED_LOCKFILE), 'utf8')).toBe(
-      readPnpmFixture('synthetic', 'expected.lock.fixture.yaml')
-    );
-    expect(readFileSync(stagedPath(STAGED_WORKSPACE), 'utf8')).toBe(
-      readPnpmFixture('synthetic', 'expected.workspace.fixture.yaml')
-    );
-
-    const report = JSON.parse(stdio.outputs.join('')) as {
-      pnpm_member_strip: unknown;
-    };
-    const outcome = stripPnpmMember({
-      lockfile: readPnpmFixture('synthetic', 'input.lock.fixture.yaml'),
-      member: '.gaia/cli',
-      workspace: readPnpmFixture('synthetic', 'input.workspace.fixture.yaml'),
-    });
-    const {removed} = outcome as {
-      removed: {packages: string[]; snapshots: string[]};
-    };
-
-    expect(outcome.kind).toBe('stripped');
-    expect(report.pnpm_member_strip).toEqual({
-      files_touched: [STAGED_WORKSPACE, STAGED_LOCKFILE],
-      importers_removed: 1,
-      packages_removed: removed.packages.length,
-      snapshots_removed: removed.snapshots.length,
-    });
-  });
-
-  test('prints the removal counts in the human report', () => {
-    stagePnpmCase('synthetic');
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-    expect(stdio.outputs.join('')).toMatch(
-      /release scrub: removed 1 pnpm importer\(s\), [1-9]\d* package\(s\), [1-9]\d* snapshot\(s\)/
-    );
-  });
-
-  test('leaves a pair with no member and no importer byte-identical', () => {
-    stagePnpmCase('noop');
-    const before = stagedHashes();
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-    expect(stagedHashes()).toEqual(before);
-    expect(stdio.outputs.join('')).toContain(
-      'release scrub: removed 0 pnpm importer(s), 0 package(s), 0 snapshot(s)'
-    );
-  });
-
-  test.each([
-    ['unknown-version-document-1', STAGED_LOCKFILE, 'unknown-lockfile-version'],
-    ['unknown-version-document-2', STAGED_LOCKFILE, 'unknown-lockfile-version'],
-    ['member-without-importer', STAGED_WORKSPACE, 'member-without-importer'],
-    ['importer-without-member', STAGED_LOCKFILE, 'importer-without-member'],
-    ['missing-snapshot', STAGED_LOCKFILE, 'missing-snapshot'],
-  ])(
-    '%s exits non-zero naming %s and %s, writing neither file',
-    (caseName, file, token) => {
-      stagePnpmCase(caseName);
-      const before = stagedHashes();
-
-      expect(
-        run([sandbox.stagingDir, '--config', sandbox.configPath])
-      ).not.toBe(0);
-      expect(stagedHashes()).toEqual(before);
-
-      const stderr = stdio.errors.join('');
-
-      expect(stderr).toContain('pnpm_member_strip_refused');
-      expect(stderr).toContain(JSON.stringify(stagedPath(file)));
-      expect(stderr).toContain(token);
-    }
+  const variant = 'use-sync-external-store@1.2.2(react@17.0.2)';
+  const syntheticLock = inputs('synthetic')[STAGED_LOCKFILE] ?? '';
+  const blockStart = syntheticLock.indexOf(`\n\n  ${variant}:`);
+  const leftover = syntheticLock.slice(
+    blockStart,
+    syntheticLock.indexOf('\n\n', blockStart + 2)
   );
 
-  test('the self-check refuses a prune that leaves a member-only snapshot', () => {
-    stagePnpmCase('synthetic');
-    const before = stagedHashes();
-    const variant = 'use-sync-external-store@1.2.2(react@17.0.2)';
-    const input = readPnpmFixture('synthetic', 'input.lock.fixture.yaml');
-    const blockStart = input.indexOf(`\n\n  ${variant}:`);
-    const leftover = input.slice(
-      blockStart,
-      input.indexOf('\n\n', blockStart + 2)
-    );
-
-    const exit = run([sandbox.stagingDir, '--config', sandbox.configPath], {
-      stripPnpmMember: (stripInput) => {
-        const outcome = stripPnpmMember(stripInput);
-
-        return outcome.kind === 'stripped' ?
-            {...outcome, lockfile: `${outcome.lockfile}${leftover}\n`}
-          : outcome;
+  test.each<ScrubCase>([
+    {
+      afterRaw: {
+        [STAGED_LOCKFILE]: readPnpmFixture(
+          'synthetic',
+          'expected.lock.fixture.yaml'
+        ),
+        [STAGED_WORKSPACE]: readPnpmFixture(
+          'synthetic',
+          'expected.workspace.fixture.yaml'
+        ),
       },
-    });
+      args: ['--json'],
+      config: PNPM_STRIP_CONFIG,
+      exit: 0,
+      name: 'strips the member from both staged files and reports the counts',
+      // The counts come from a second, direct call of the transform; a getter
+      // keeps a non-stripped outcome a failure of this row, not of the file.
+      get report(): Record<string, unknown> {
+        const outcome = stripPnpmMember({
+          lockfile: readPnpmFixture('synthetic', 'input.lock.fixture.yaml'),
+          member: '.gaia/cli',
+          workspace: readPnpmFixture(
+            'synthetic',
+            'input.workspace.fixture.yaml'
+          ),
+        });
+        const {removed} = outcome as {
+          removed: {packages: string[]; snapshots: string[]};
+        };
 
-    expect(exit).not.toBe(0);
-    expect(stagedHashes()).toEqual(before);
+        expect(outcome.kind).toBe('stripped');
 
-    const stderr = stdio.errors.join('');
+        return {
+          pnpm_member_strip: {
+            files_touched: [STAGED_WORKSPACE, STAGED_LOCKFILE],
+            importers_removed: 1,
+            packages_removed: removed.packages.length,
+            snapshots_removed: removed.snapshots.length,
+          },
+        };
+      },
+      staged: inputs('synthetic'),
+    },
+    {
+      config: PNPM_STRIP_CONFIG,
+      exit: 0,
+      name: 'prints the removal counts in the human report',
+      outMatch: [
+        /release scrub: removed 1 pnpm importer\(s\), [1-9]\d* package\(s\), [1-9]\d* snapshot\(s\)/,
+      ],
+      staged: inputs('synthetic'),
+    },
+    {
+      afterRaw: inputs('noop'),
+      config: PNPM_STRIP_CONFIG,
+      exit: 0,
+      name: 'leaves a pair with no member and no importer byte-identical',
+      out: [
+        'release scrub: removed 0 pnpm importer(s), 0 package(s), 0 snapshot(s)',
+      ],
+      staged: inputs('noop'),
+    },
+    refusalRow(
+      'unknown-version-document-1',
+      STAGED_LOCKFILE,
+      'unknown-lockfile-version'
+    ),
+    refusalRow(
+      'unknown-version-document-2',
+      STAGED_LOCKFILE,
+      'unknown-lockfile-version'
+    ),
+    refusalRow(
+      'member-without-importer',
+      STAGED_WORKSPACE,
+      'member-without-importer'
+    ),
+    refusalRow(
+      'importer-without-member',
+      STAGED_LOCKFILE,
+      'importer-without-member'
+    ),
+    refusalRow('missing-snapshot', STAGED_LOCKFILE, 'missing-snapshot'),
+    {
+      afterRaw: inputs('synthetic'),
+      config: PNPM_STRIP_CONFIG,
+      deps: {
+        stripPnpmMember: (stripInput) => {
+          const outcome = stripPnpmMember(stripInput);
 
-    expect(stderr).toContain('cli-only-key-survives');
-    expect(stderr).toContain(variant);
-  });
-
-  test('the leak check fails the build when the member survives', () => {
-    sandbox.cleanup();
-    sandbox = setupSandbox({config: PNPM_LEAK_ONLY_CONFIG});
-    stagePnpmCase('synthetic');
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).not.toBe(
-      0
-    );
-    expect(stdio.outputs.join('')).toMatch(
-      /\[pnpm-workspace-member\] pnpm-workspace\.yaml:\d+/
-    );
+          return outcome.kind === 'stripped' ?
+              {...outcome, lockfile: `${outcome.lockfile}${leftover}\n`}
+            : outcome;
+        },
+      },
+      err: ['cli-only-key-survives', variant],
+      exit: 1,
+      name: 'the self-check refuses a prune that leaves a member-only snapshot',
+      staged: inputs('synthetic'),
+    },
+    {
+      config: PNPM_LEAK_ONLY_CONFIG,
+      exit: 1,
+      name: 'the leak check fails the build when the member survives',
+      outMatch: [/\[pnpm-workspace-member\] pnpm-workspace\.yaml:\d+/],
+      staged: inputs('synthetic'),
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -2886,47 +2643,41 @@ const shippedLocalArtifactPathsConfig = (): string => {
 };
 
 describe('shipped local-artifact-paths check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
+  const config = shippedLocalArtifactPathsConfig();
 
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox({config: shippedLocalArtifactPathsConfig()});
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('flags a dated notebook research path in a shipped file', () => {
-    sandbox.writeStaged(
-      'wiki/concepts/example.md',
-      'See .notebook/research/2026-10-01-topic/README.md.\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
-    expect(stdio.outputs.join('')).toContain('wiki/concepts/example.md');
-  });
-
-  test('still flags a dated .gaia/local research path', () => {
-    sandbox.writeStaged(
-      'wiki/concepts/example.md',
-      'See .gaia/local/research/2026-10-01-topic/README.md.\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
-    expect(stdio.outputs.join('')).toContain('wiki/concepts/example.md');
-  });
-
-  test('does not flag the date-topic placeholder', () => {
-    sandbox.writeStaged(
-      'wiki/concepts/example.md',
-      'Folders look like .notebook/research/<date>-<topic>/.\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
+  test.each<ScrubCase>([
+    {
+      config,
+      exit: 1,
+      name: 'flags a dated notebook research path in a shipped file',
+      out: ['wiki/concepts/example.md'],
+      staged: {
+        'wiki/concepts/example.md':
+          'See .notebook/research/2026-10-01-topic/README.md.\n',
+      },
+    },
+    {
+      config,
+      exit: 1,
+      name: 'still flags a dated .gaia/local research path',
+      out: ['wiki/concepts/example.md'],
+      staged: {
+        'wiki/concepts/example.md':
+          'See .gaia/local/research/2026-10-01-topic/README.md.\n',
+      },
+    },
+    {
+      config,
+      exit: 0,
+      name: 'does not flag the date-topic placeholder',
+      staged: {
+        'wiki/concepts/example.md':
+          'Folders look like .notebook/research/<date>-<topic>/.\n',
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
 
@@ -2939,41 +2690,50 @@ const shippedFlowNarrativeConfig = (): string => {
 };
 
 describe('shipped flow-narrative check', () => {
-  let sandbox: Sandbox;
-  let stdio: ReturnType<typeof captureStdio>;
+  const config = shippedFlowNarrativeConfig();
 
-  beforeEach(() => {
-    stdio = captureStdio();
-    sandbox = setupSandbox({config: shippedFlowNarrativeConfig()});
-  });
-
-  afterEach(() => {
-    stdio.restore();
-    sandbox.cleanup();
-    vi.restoreAllMocks();
-  });
-
-  test('flags a flow id in a shipped instruction file', () => {
-    sandbox.writeStaged(
-      '.claude/skills/example/SKILL.md',
-      '# Example\n\nImplements FLOW-123 end to end.\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
-
-    const out = stdio.outputs.join('');
-
-    expect(out).toContain('flow-narrative');
-    expect(out).toContain('FLOW-123');
-  });
-
-  test('passes a frontmatter-style flow_id line', () => {
-    sandbox.writeStaged(
-      '.claude/skills/example/SKILL.md',
-      '---\nflow_id: FLOW-123\n---\n\n# Example\n'
-    );
-
-    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
-    expect(stdio.outputs.join('')).toContain('leaks: none');
+  test.each<ScrubCase>([
+    {
+      config: LEAK_ONLY_CONFIG,
+      exit: 1,
+      name: 'flags FLOW-NNN narrative in shipped instruction surfaces',
+      out: ['flow-narrative', 'FLOW-007'],
+      staged: {
+        '.claude/skills/foo/SKILL.md':
+          '# Foo\n\nImplements FLOW-007 (working-doc reference).\n',
+      },
+    },
+    {
+      config: LEAK_ONLY_CONFIG,
+      exit: 0,
+      name: 'exempts lines with structural identifier fragments',
+      staged: {
+        '.claude/skills/foo/SKILL.md':
+          '# Foo\n\nUse `--flow-id FLOW-099` to filter; the `flow_id` field is required.\n',
+      },
+    },
+    {
+      config,
+      exit: 1,
+      name: 'flags a flow id in a shipped instruction file',
+      out: ['flow-narrative', 'FLOW-123'],
+      staged: {
+        '.claude/skills/example/SKILL.md':
+          '# Example\n\nImplements FLOW-123 end to end.\n',
+      },
+    },
+    {
+      config,
+      exit: 0,
+      name: 'passes a frontmatter-style flow_id line',
+      out: ['leaks: none'],
+      staged: {
+        '.claude/skills/example/SKILL.md':
+          '---\nflow_id: FLOW-123\n---\n\n# Example\n',
+      },
+    },
+  ])('$name', (row) => {
+    expect.hasAssertions();
+    runScrubCase(row);
   });
 });
