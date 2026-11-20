@@ -213,6 +213,10 @@ if [ "${#scan_files[@]}" -eq 0 ]; then
   echo "lint-git-path-quoting: ERROR: no tracked files matched the scan surface; nothing was scanned" >&2
   exit 1
 fi
+if [ -n "${GAIA_GUARD_DELTA_FILE:-}" ]; then
+  gaia_guard_delta_intersect lint-git-path-quoting 'shell, git hook, workflow or Markdown' ${scan_files[@]+"${scan_files[@]}"} || exit 1
+  scan_files=(${GAIA_GUARD_DELTA_KEPT[@]+"${GAIA_GUARD_DELTA_KEPT[@]}"})
+fi
 
 # The `*.bats` surface, discovered and hard-errored on separately by the shared
 # library, for the same reason as above: a widened pathspec that quietly missed

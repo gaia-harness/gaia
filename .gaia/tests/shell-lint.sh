@@ -21,9 +21,11 @@
 #
 # `--paths-from` narrows the shellcheck passes and the bash-3.2 parse pass to
 # the tracked files the given NUL-delimited list names; a pass whose set comes
-# back empty is skipped, not failed. The folded guards still scan the whole
-# tree: they take no path list, and most treat an empty surface as a hard
-# error, so a delta holding none of a guard's file types would red them. `verify-harness.sh round` passes the
+# back empty is skipped, not failed. It narrows lint-errexit-status-read,
+# lint-git-path-quoting and lint-sigpipe-readers the same way, through
+# GAIA_GUARD_DELTA_FILE (.gaia/scripts/guard-awk-lib.sh), unless the delta
+# changes that guard's own sources. The other folded guards scan the whole tree.
+# `verify-harness.sh round` passes the
 # round's delta here; branch mode and CI lint the whole tree.
 #
 # `--only bash32-parse` runs the bash-3.2 parse pass and nothing else. That is
@@ -241,7 +243,7 @@ if [ "${#sh_scripts[@]}" -eq 0 ] && [ -z "$PATHS_FROM" ]; then
   exit 1
 fi
 if [ -n "$PATHS_FROM" ]; then
-  echo "    scope: shellcheck and the bash-3.2 parse cover only the files $PATHS_FROM lists; the folded guards scan the whole tree"
+  echo "    scope: shellcheck and the bash-3.2 parse cover only the files $PATHS_FROM lists, as do lint-errexit-status-read, lint-git-path-quoting and lint-sigpipe-readers; the other folded guards scan the whole tree"
 fi
 
 # Concurrent shellcheck workers. One shellcheck invocation is single-threaded and
@@ -525,12 +527,36 @@ guard_script_path() {
   fi
 }
 
+# guard_delta_file <slug>: print the absolute --paths-from list for a guard that
+# takes the delta, or nothing to have it scan the whole tree. Nothing without a
+# list, and nothing when the delta changes one of the guard's own sources, where
+# a change to what it detects has to be judged over every file.
+paths_from_absolute="$PATHS_FROM"
+case "$paths_from_absolute" in
+  '' | /*) ;;
+  *) paths_from_absolute="$PWD/$paths_from_absolute" ;;
+esac
+guard_delta_file() {
+  local slug="$1"
+  [ -n "$PATHS_FROM" ] || return 0
+  case $'\n'"$paths_from_joined"$'\n' in
+    *$'\n'.gaia/scripts/guard-awk-lib.sh$'\n'* | *$'\n'.gaia/scripts/awk-interp-lib.sh$'\n'* | \
+      *$'\n'".gaia/scripts/$slug.sh"$'\n'* | *$'\n'".gaia/scripts/$slug-"*.sh$'\n'*)
+      printf '    scope: %s scans the whole tree, because the delta changes its own sources\n' "$slug" >&2
+      return 0
+      ;;
+  esac
+  printf '%s\n' "$paths_from_absolute"
+}
+
 # Each guard writes straight to the gate's own streams. The `$(...)` captures
 # only guard_script_path's stdout, so its GUARD OVERRIDE notice on stderr still
 # reaches the run output. `</dev/null`: none of these guards read stdin.
+# GAIA_GUARD_DELTA_FILE is set on every call, empty unless a delta is passed, so
+# a value inherited from the caller's environment never narrows a guard.
 run_guard() {
-  local slug="$1"
-  (cd "$REPO_ROOT" && bash "$(guard_script_path "$slug")") </dev/null
+  local slug="$1" delta_file="${2:-}"
+  (cd "$REPO_ROOT" && GAIA_GUARD_DELTA_FILE="$delta_file" bash "$(guard_script_path "$slug")") </dev/null
 }
 
 # Fold in the hook array-guard: shellcheck cannot model the bash-3.2.57
@@ -554,7 +580,7 @@ fi
 # the repo root so its own discovery resolves and the file:line it prints is
 # repo-relative.
 echo "--> lint-git-path-quoting (C-quoted paths from an unquoted diff or ls-files)"
-if ! run_guard lint-git-path-quoting; then
+if ! run_guard lint-git-path-quoting "$(guard_delta_file lint-git-path-quoting)"; then
   status=1
 fi
 
@@ -582,7 +608,7 @@ fi
 # class lived. Run from the repo root so its `git ls-files` discovery resolves
 # and the file:line it prints is repo-relative.
 echo "--> lint-errexit-status-read (\$? read after a command-substitution assignment under set -e)"
-if ! run_guard lint-errexit-status-read; then
+if ! run_guard lint-errexit-status-read "$(guard_delta_file lint-errexit-status-read)"; then
   status=1
 fi
 
@@ -596,7 +622,7 @@ fi
 # Run from the repo root so its `git ls-files` discovery resolves and the
 # file:line it prints is repo-relative.
 echo "--> lint-sigpipe-readers (a short-circuiting reader inverting a pipeline under pipefail)"
-if ! run_guard lint-sigpipe-readers; then
+if ! run_guard lint-sigpipe-readers "$(guard_delta_file lint-sigpipe-readers)"; then
   status=1
 fi
 

@@ -1075,3 +1075,50 @@ EOF
   grep -qF -- "Fix a diff hit:" <<<"$output"
   grep -qF -- "Fix an ls-files hit:" <<<"$output"
 }
+
+# --- delta mode -------------------------------------------------------------
+
+# run_linter_delta <path>...: run the gate with GAIA_GUARD_DELTA_FILE naming a
+# NUL-delimited delta of <path>..., written outside the fixture repo so the
+# delta file is never part of the tracked surface.
+run_linter_delta() {
+  printf '%s\0' "$@" > "$BATS_TEST_TMPDIR/delta"
+  run bash -c "cd '$TEMPORARY_DIRECTORY' && GAIA_GUARD_DELTA_FILE='$BATS_TEST_TMPDIR/delta' bash '$LINTER' 2>&1"
+}
+
+# The violation sits outside the delta, so the clean exit also proves it is
+# not scanned.
+@test "delta mode: a delta holding none of the surface skips each set and exits 0" {
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD")'
+  run_linter_delta notes.txt
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -qF -- 'the delta holds no shell, git hook, workflow or Markdown file; skipped' <<<"$output"
+  grep -qF -- 'the delta holds no *.bats file; skipped' <<<"$output"
+}
+
+@test "delta mode: an empty surface before the intersection or an unreadable delta file exits non-zero" {
+  fixture_repo_bare
+  fixture_file notes.txt 'notes'
+  run_linter_delta notes.txt
+  [ "$status" -ne 0 ] || { echo "empty surface: $output"; return 1; }
+  grep -qF -- 'nothing was scanned' <<<"$output"
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  fixture_repo
+  fixture_file clean.sh $'#!/usr/bin/env bash\ntrue'
+  run bash -c "cd '$TEMPORARY_DIRECTORY' && GAIA_GUARD_DELTA_FILE='$BATS_TEST_TMPDIR/missing' bash '$LINTER' 2>&1"
+  [ "$status" -ne 0 ] || { echo "unreadable delta: $output"; return 1; }
+  grep -qF -- 'could not be read; nothing was scanned' <<<"$output"
+}
+
+@test "delta mode: a delta holding one violating file reds and reports only it" {
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD")'
+  fixture_file other.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only HEAD~1...HEAD)'
+  run_linter_delta probe.sh
+  [ "$status" -eq 1 ] || { echo "$output"; return 1; }
+  grep -qF -- 'probe.sh:2' <<<"$output"
+  grep -qF -- 'other.sh:' <<<"$output" && return 1
+  true
+}
