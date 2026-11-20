@@ -403,8 +403,11 @@ describe('scaffold route: --dry-run', () => {
     {
       args: ['dashboard', '--group', '_session', '--dry-run'],
       barrels: [] as string[],
+      checkStdout: (stdout: string) => {
+        expect(stdout).toContain('dry-run: no files written');
+        expect(stdout).toContain('would write');
+      },
       name: 'reports would-be writes without touching the filesystem',
-      stdoutContains: () => ['dry-run: no files written', 'would write'],
     },
     {
       args: [
@@ -416,11 +419,19 @@ describe('scaffold route: --dry-run', () => {
         '--json',
       ],
       barrels: [INDEX_BARREL],
-      name: '--dry-run is orthogonal to --json and writes nothing',
       // The barrel is reported as a would-be edit but stays untouched on disk.
-      stdoutContains: (barrelPath: string) => ['"written":["', barrelPath],
+      checkStdout: (stdout: string, barrelPath: string) => {
+        const parsed = JSON.parse(stdout.trim()) as {
+          edited: string[];
+          written: string[];
+        };
+
+        expect(parsed.edited).toContain(barrelPath);
+        expect(parsed.written.length).toBeGreaterThan(0);
+      },
+      name: '--dry-run is orthogonal to --json and writes nothing',
     },
-  ])('$name', ({args, barrels, stdoutContains}) => {
+  ])('$name', ({args, barrels, checkStdout}) => {
     const barrelPath = path.join(
       sandbox.root,
       'app',
@@ -438,9 +449,7 @@ describe('scaffold route: --dry-run', () => {
 
     expect(result.exit).toBe(0);
 
-    for (const fragment of stdoutContains(barrelPath)) {
-      expect(result.stdout).toContain(fragment);
-    }
+    checkStdout(result.stdout, barrelPath);
     expect(existsSync(sessionRouteFile(sandbox.root))).toBe(false);
     expect(
       existsSync(
