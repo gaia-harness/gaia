@@ -27,7 +27,7 @@ repeat_char() {
 redact_equals() {
   local result
   echo "case: $1"
-  result="$(redact_body "$FAKE_ROOT" "$2")"
+  result="$(redact_body "$FAKE_ROOT" "$2")" || return 1
   [[ "$result" == "$3" ]]
 }
 
@@ -37,7 +37,7 @@ redact_case() {
   local label="$1" input="$2" leaked="$3" result needle
   shift 3
   echo "case: $label"
-  result="$(redact_body "$FAKE_ROOT" "$input")"
+  result="$(redact_body "$FAKE_ROOT" "$input")" || return 1
   if [[ -n "$leaked" && "$result" == *"$leaked"* ]]; then
     return 1
   fi
@@ -146,6 +146,17 @@ redact_case() {
   [ "$status" -ne 0 ]
   [ -z "$output" ]
   [[ "$stderr" == *"REDACTION BUG"* ]]
+}
+
+# redact_case and redact_equals run under `|| return 1`, where errexit is off,
+# so a halting redact_body must fail them through their own guard.
+@test "redact_case and redact_equals fail when redact_body halts" {
+  sed() { cat; }
+  local fake_token; fake_token="ghp_$(repeat_char Y 24)"
+  run redact_case "halt" "x $fake_token" "$fake_token"
+  [ "$status" -ne 0 ]
+  run redact_equals "halt" "x $fake_token" ""
+  [ "$status" -ne 0 ]
 }
 
 # ---------------------------------------------------------------------------

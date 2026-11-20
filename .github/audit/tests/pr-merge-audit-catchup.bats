@@ -199,13 +199,13 @@ assert_catch_up_leaves_gate_allowing() {
   local base="$1" before after
   before="$(digest_against_origin_tip code-audit-frontend "$base")"
   mgf_run_merge
-  assert_allowed
+  assert_allowed || return 1
 
   catchup_base_commit "base-landed.txt" "landed on the base"
   catchup_merge_base
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   after="$(digest_against_origin_tip code-audit-frontend "$base")"
-  [ "$before" = "$after" ]
+  [ "$before" = "$after" ] || return 1
   mgf_run_merge
   assert_allowed
 }

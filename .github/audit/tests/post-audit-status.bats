@@ -882,9 +882,9 @@ assert_one_success_after_remedy() {
   frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
 
   run run_helper "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || return 1
   grep -qF -- "status: posted GAIA-Audit success " <<<"$output" || return 1
-  [ "$(logged_calls 'state=success')" = 1 ]
+  [ "$(logged_calls 'state=success')" = 1 ] || return 1
   grep -qF -- "description=1.2.3 ${frontend_digest} $(current_tree)" "$GH_STUB_LOG" || return 1
 }
 
