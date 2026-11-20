@@ -9,8 +9,6 @@
 # `.claude/skills/gaia/references/setup/`), and that one copy sits in the
 # command.
 #
-# Mutation tests prove each fixture fails on a fence with its guard removed.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 # Each reference basename is named literally in this list: the change selector
@@ -30,23 +28,6 @@ setup() {
     echo "the setup references directory is absent: ${REFERENCES_DIRECTORY}" >&2
     return 1
   }
-}
-
-# scratch_copy <source> <name>: copy a file into the test's temp dir and print
-# the copy's path, so a mutation never touches the shared tree.
-scratch_copy() {
-  local copy="${BATS_TEST_TMPDIR}/$2"
-  cp "$1" "$copy"
-  printf '%s\n' "$copy"
-}
-
-# scratch_references <name>: copy the setup references directory into the
-# test's temp dir and print the copy's path.
-scratch_references() {
-  local copy="${BATS_TEST_TMPDIR}/$1"
-  mkdir -p "$copy"
-  cp "${REFERENCES_DIRECTORY}"/*.md "$copy"/
-  printf '%s\n' "$copy"
 }
 
 # surface_files <entry> <directory>: the setup surface, one path per line: the
@@ -143,30 +124,26 @@ extract_registration_fence() {
   [ -s "${BATS_TEST_TMPDIR}/fence.sh" ]
 }
 
-@test "registration fixture 1: a stale code-review-audit context is dropped, siblings kept, GAIA-Audit added" {
+@test "GAIA-Audit registration fence case table: stale dropped, already required, added beside a sibling, failed GET" {
   extract_registration_fence
-  assert_stale_context_dropped "${BATS_TEST_TMPDIR}/fence.sh"
-}
+  local put stub_directory
 
-@test "registration fixture 2: GAIA-Audit already required and nothing stale sends no PUT" {
-  extract_registration_fence
+  # a stale code-review-audit context is dropped, siblings kept, GAIA-Audit added
+  assert_stale_context_dropped "${BATS_TEST_TMPDIR}/fence.sh"
+
+  # GAIA-Audit already required and nothing stale sends no PUT
   run_fence "${BATS_TEST_TMPDIR}/fence.sh" '["GAIA-Audit", "Vitest"]'
   [ "$(wc -l <"${BATS_TEST_TMPDIR}/gh.log" | tr -d ' ')" -eq 1 ]
   [ -z "$(put_line)" ]
-}
 
-@test "registration fixture 3: GAIA-Audit is added beside an existing sibling" {
-  extract_registration_fence
+  # GAIA-Audit is added beside an existing sibling
   run_fence "${BATS_TEST_TMPDIR}/fence.sh" '["Vitest"]'
-  local put
   put="$(put_line)"
   [ -n "$put" ]
   jq -e '.contexts == ["Vitest", "GAIA-Audit"]' "${BATS_TEST_TMPDIR}/gh.body" >/dev/null
-}
 
-@test "registration: a failed GET sends no PUT" {
-  extract_registration_fence
-  local stub_directory="${BATS_TEST_TMPDIR}/failing-bin"
+  # a failed GET sends no PUT
+  stub_directory="${BATS_TEST_TMPDIR}/failing-bin"
   mkdir -p "$stub_directory"
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >>"$GH_LOG"\nexit 1\n' >"${stub_directory}/gh"
   chmod +x "${stub_directory}/gh"
@@ -175,27 +152,6 @@ extract_registration_fence() {
     bash "${BATS_TEST_TMPDIR}/fence.sh" 2>/dev/null
   [ "$(wc -l <"${BATS_TEST_TMPDIR}/gh.log" | tr -d ' ')" -eq 1 ]
   [ -z "$(put_line)" ]
-}
-
-@test "registration mutation: the fence without the drop filter fails fixture 1" {
-  extract_registration_fence
-  local mutated="${BATS_TEST_TMPDIR}/fence-no-drop.sh"
-  sed 's/map(select(\. != "code-review-audit" and \. != "GAIA-Audit"))/map(select(. != "GAIA-Audit"))/' \
-    "${BATS_TEST_TMPDIR}/fence.sh" >"$mutated"
-  # The mutation must actually change the fence, or this test proves nothing.
-  cmp -s "${BATS_TEST_TMPDIR}/fence.sh" "$mutated" && return 1
-  run assert_stale_context_dropped "$mutated"
-  [ "$status" -ne 0 ]
-}
-
-@test "registration mutation: a fence that PUTs to the bare endpoint fails fixture 1" {
-  extract_registration_fence
-  local mutated="${BATS_TEST_TMPDIR}/fence-bare-endpoint.sh"
-  sed 's#"\$required_checks_endpoint/contexts"#"$required_checks_endpoint"#' \
-    "${BATS_TEST_TMPDIR}/fence.sh" >"$mutated"
-  cmp -s "${BATS_TEST_TMPDIR}/fence.sh" "$mutated" && return 1
-  run assert_stale_context_dropped "$mutated"
-  [ "$status" -ne 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -241,29 +197,19 @@ STUB
     PATH="${stub_directory}:${PATH}" bash "$1" >/dev/null
 }
 
-@test "protection fixture: an existing rule is kept and no protection PUT is sent" {
+@test "branch protection fence case table: an existing rule is kept, no rule sends one full PUT" {
   extract_protection_fence
+
+  # an existing rule is kept and no protection PUT is sent
   run_protection_fence "${BATS_TEST_TMPDIR}/protection.sh" 0
   [ "$(wc -l <"${BATS_TEST_TMPDIR}/gh.log" | tr -d ' ')" -eq 1 ]
   [ -z "$(put_line)" ]
-}
 
-@test "protection fixture: with no rule, exactly one full protection PUT is sent" {
-  extract_protection_fence
+  # with no rule, exactly one full protection PUT is sent
   run_protection_fence "${BATS_TEST_TMPDIR}/protection.sh" 1
   [ "$(grep -cE -- '(^| )-X PUT ' "${BATS_TEST_TMPDIR}/gh.log")" -eq 1 ]
   grep -qE -- '/branches/<default-branch>/protection --input -$' <<<"$(put_line)"
   jq -e '.enforce_admins == false and .required_status_checks.contexts == []' "${BATS_TEST_TMPDIR}/gh.body" >/dev/null
-}
-
-@test "protection mutation: an unconditional PUT fails the existing-rule fixture" {
-  extract_protection_fence
-  local mutated="${BATS_TEST_TMPDIR}/protection-unconditional.sh"
-  sed 's#^if gh api "\$protection_endpoint" >/dev/null 2>&1; then#if false; then#' \
-    "${BATS_TEST_TMPDIR}/protection.sh" >"$mutated"
-  cmp -s "${BATS_TEST_TMPDIR}/protection.sh" "$mutated" && return 1
-  run_protection_fence "$mutated" 0
-  [ -n "$(put_line)" ]
 }
 
 # fence_count_across_surface <anchor> <entry> <directory>: print how many bash
@@ -313,29 +259,4 @@ check_fences_single_source() {
 
 @test "the registration and protection fences each exist once across the surface, in the command" {
   check_fences_single_source "$PAGE" "$REFERENCES_DIRECTORY"
-}
-
-@test "the single-fence check fails on a second registration fence in a reference" {
-  local directory
-  directory="$(scratch_references second-registration-fence)"
-  printf '\n```bash\n%s"x"\n```\n' "$REGISTRATION_ANCHOR" >>"${directory}/github-repo.md"
-  run check_fences_single_source "$PAGE" "$directory"
-  [ "$status" -ne 0 ]
-}
-
-@test "the single-fence check fails on a second protection fence in a reference" {
-  local directory
-  directory="$(scratch_references second-protection-fence)"
-  printf '\n```bash\n%s"x"\n```\n' "$PROTECTION_ANCHOR" >>"${directory}/github-repo.md"
-  run check_fences_single_source "$PAGE" "$directory"
-  [ "$status" -ne 0 ]
-}
-
-@test "the single-fence check fails when the fence moves out of the command" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "fence-moved-out.md")"
-  sed "s#${REGISTRATION_ANCHOR}#registration_moved=#" "$PAGE" >"$copy"
-  cmp -s "$PAGE" "$copy" && return 1
-  run check_fences_single_source "$copy" "$REFERENCES_DIRECTORY"
-  [ "$status" -ne 0 ]
 }

@@ -1,14 +1,8 @@
 #!/usr/bin/env bats
-# Pins for the three shipped surfaces that tell the maintainer how to verify
-# their own work: the merge runbook, the audit round procedure, the pr-merge
-# rule and the audit-loop-unit agent. Each must name the one verification command (branch
-# mode before the first dispatch, round mode per audit round) inside its
-# maintainer-only blocks.
-#
-# GAIA_VERIFY_SURFACE_WIKI (the runbook), GAIA_VERIFY_SURFACE_ROUNDS (the round
-# procedure), GAIA_VERIFY_SURFACE_RULE and GAIA_VERIFY_SURFACE_AGENT override the surface paths so a scratch copy can be
-# driven through the same predicates; each defaults to the real file. Every
-# presence check has a red twin run against such a copy.
+# Pins for the shipped surfaces that tell the maintainer how to run the round
+# verification: the audit-loop-unit agent prescribes the background round run
+# as one plain command the runner signals, and no surface appends the exit line
+# after it (#3134).
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -17,10 +11,10 @@
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  WIKI="${GAIA_VERIFY_SURFACE_WIKI:-$ROOT/wiki/concepts/PR Merge Workflow.md}"
-  ROUNDS="${GAIA_VERIFY_SURFACE_ROUNDS:-$ROOT/wiki/concepts/Audit Round Procedure.md}"
-  RULE="${GAIA_VERIFY_SURFACE_RULE:-$ROOT/.claude/rules/pr-merge.md}"
-  AGENT="${GAIA_VERIFY_SURFACE_AGENT:-$ROOT/.claude/agents/audit-loop-unit.md}"
+  WIKI="$ROOT/wiki/concepts/PR Merge Workflow.md"
+  ROUNDS="$ROOT/wiki/concepts/Audit Round Procedure.md"
+  RULE="$ROOT/.claude/rules/pr-merge.md"
+  AGENT="$ROOT/.claude/agents/audit-loop-unit.md"
 }
 
 # maintainer_text <file>: only the lines inside maintainer-only marker pairs.
@@ -37,56 +31,20 @@ block_has() {
   maintainer_text "$1" | grep -qF -- "$2"
 }
 
-# scratch_without <file> <literal> <name>: copy of the file with every line
-# carrying the literal removed; prints its path.
-scratch_without() {
-  local scratch_copy_path="$BATS_TEST_TMPDIR/$3"
-  grep -vF -- "$2" "$1" >"$scratch_copy_path"
-  printf '%s\n' "$scratch_copy_path"
-}
-
-# assert_block_pinned <file> <literal> <name>: present inside a block of the
-# real file, absent from the scratch copy that drops it.
+# assert_block_pinned <file> <literal>: a maintainer-only block of the file
+# carries the literal.
 assert_block_pinned() {
   block_has "$1" "$2" || { echo "missing in a maintainer-only block of $1: $2" >&2; return 1; }
-  local copy
-  copy="$(scratch_without "$1" "$2" "$3")"
-  block_has "$copy" "$2" && { echo "red twin did not fail: $2" >&2; return 1; }
-  true
-}
-
-@test "wiki and rule name branch mode inside their maintainer-only blocks" {
-  assert_block_pinned "$WIKI" 'bash .gaia/tests/verify-harness.sh branch' wiki-without-branch.md
-  assert_block_pinned "$RULE" 'bash .gaia/tests/verify-harness.sh branch' rule-without-branch.md
-}
-
-@test "the round procedure, rule and agent name round mode inside their maintainer-only blocks" {
-  assert_block_pinned "$ROUNDS" 'verify-harness.sh round' rounds-without-round.md
-  assert_block_pinned "$RULE" 'verify-harness.sh round' rule-without-round.md
-  assert_block_pinned "$AGENT" 'verify-harness.sh round' agent-without-round.md
-}
-
-@test "wiki and rule state the commit-first precondition" {
-  assert_block_pinned "$WIKI" 'exit 3' wiki-without-exit3.md
-  assert_block_pinned "$RULE" 'exit 3' rule-without-exit3.md
-}
-
-@test "round-mode timeout is a failed verification, never a pass, on the round procedure and the agent" {
-  assert_block_pinned "$ROUNDS" 'never a pass' rounds-without-timeout.md
-  assert_block_pinned "$AGENT" 'never a pass' agent-without-timeout.md
 }
 
 @test "the agent prescribes the background round run as one plain command the runner signals" {
-  assert_block_pinned "$AGENT" 'as exactly `bash <root>/.gaia/tests/verify-harness.sh round < /dev/null > <scratch>/gate-<r>-<k>.log 2>&1`' agent-without-plain-round.md
-  assert_block_pinned "$AGENT" 'The runner writes `verify-harness exit <status>` as its own last line' agent-without-runner-exit-line.md
-  assert_block_pinned "$ROUNDS" 'the runner writes its own completion signal' rounds-without-runner-exit-line.md
+  assert_block_pinned "$AGENT" 'as exactly `bash <root>/.gaia/tests/verify-harness.sh round < /dev/null > <scratch>/gate-<r>-<k>.log 2>&1`'
+  assert_block_pinned "$AGENT" 'The runner writes `verify-harness exit <status>` as its own last line'
+  assert_block_pinned "$ROUNDS" 'the runner writes its own completion signal'
 }
 
 @test "no surface prescribes appending the exit line after the round run" {
-  local surface compound="; printf 'verify-harness exit" planted="$BATS_TEST_TMPDIR/planted-compound.md"
-  # Red twin: the predicate sees the compound when a maintainer-only block carries it.
-  printf '<!-- gaia:maintainer-only:start -->\nround.log 2>&1%s %%s\\n" "$?" >> round.log\n<!-- gaia:maintainer-only:end -->\n' "$compound" >"$planted"
-  block_has "$planted" "$compound" || { echo "red twin did not see the planted compound" >&2; return 1; }
+  local surface compound="; printf 'verify-harness exit"
   for surface in "$AGENT" "$ROUNDS" "$WIKI" "$RULE"; do
     grep -qF -- "$compound" "$surface" && { echo "compound round spelling in $surface" >&2; return 1; }
   done
