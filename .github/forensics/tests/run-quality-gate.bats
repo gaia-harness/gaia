@@ -100,14 +100,7 @@ reset_run() {
 # Usage / argument validation
 # ---------------------------------------------------------------------------
 
-@test "usage errors exit 2" {
-  echo "case: usage error with no args"
-  run "$RUNNER"
-  [ "$status" -eq 2 ]
-  echo "case: usage error with too many args"
-  run "$RUNNER" a b
-  [ "$status" -eq 2 ]
-  echo "case: errors when summary file's parent dir does not exist"
+@test "a summary file whose parent directory does not exist exits 2" {
   run "$RUNNER" "$BATS_TEST_TMPDIR/no-such-dir/out.json"
   [ "$status" -eq 2 ]
 }

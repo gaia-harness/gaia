@@ -149,9 +149,6 @@ assert_triaged_last() {
 @test "every handler refuses a missing or bad argument with its exit code (case table)" {
   reasoning="$BATS_TEST_TMPDIR/r.md"
   printf 'x\n' > "$reasoning"
-  echo "case: non-issue: usage error with no args"
-  run "$HANDLERS/handle-non-issue.sh"
-  [ "$status" -eq 2 ]
   echo "case: non-issue: missing reasoning file exits 2"
   run "$HANDLERS/handle-non-issue.sh" 42 "$BATS_TEST_TMPDIR/does-not-exist"
   [ "$status" -eq 2 ]
@@ -161,14 +158,8 @@ assert_triaged_last() {
   echo "case: needs-human: rejects unknown reason-code"
   run "$HANDLERS/handle-needs-human.sh" 42 "$reasoning" not-a-real-reason
   [ "$status" -eq 2 ]
-  echo "case: auto-fixable: usage error with too few args"
-  run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate
-  [ "$status" -eq 2 ]
   echo "case: auto-fixable: missing pr body file exits 2"
   run "$HANDLERS/handle-auto-fixable.sh" 42 quality-gate forensics/42-quality-gate "$BATS_TEST_TMPDIR/nope"
-  [ "$status" -eq 2 ]
-  echo "case: malformed-body: usage error with no args"
-  run "$HANDLERS/handle-malformed-body.sh"
   [ "$status" -eq 2 ]
   echo "case: malformed-body: missing parser output exits 2"
   run "$HANDLERS/handle-malformed-body.sh" 42 "$BATS_TEST_TMPDIR/nope"

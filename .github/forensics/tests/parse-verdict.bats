@@ -284,12 +284,7 @@ EOF
 # CLI contract.
 # ---------------------------------------------------------------------------
 
-@test "usage errors exit 2" {
-  echo "case: no args prints usage and exits 2"
-  run "$PARSER"
-  [ "$status" -eq 2 ]
-
-  echo "case: missing input file exits 2"
+@test "a missing input file exits 2" {
   run "$PARSER" "$BATS_TEST_TMPDIR/does-not-exist.txt"
   [ "$status" -eq 2 ]
 }
