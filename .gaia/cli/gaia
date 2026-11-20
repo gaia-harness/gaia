@@ -30380,7 +30380,7 @@ var hookEntriesOf = (file2) => Object.entries(eventsOf(file2)).flatMap(([event, 
     });
   });
 });
-var defaultFindScriptProblem = (context, reference, fromFile) => {
+var findScriptProblem = (context, reference, fromFile) => {
   if (reference.kind !== "anchored") return void 0;
   const resolved = context.resolve(fromFile, reference.remainder, "root");
   if (resolved.status === "invalid") return void 0;
@@ -30393,7 +30393,7 @@ var defaultFindScriptProblem = (context, reference, fromFile) => {
   }
   return void 0;
 };
-var defaultIsUnanchored = (reference) => reference.kind === "relative";
+var isUnanchored = (reference) => reference.kind === "relative";
 var eventCheck = (context) => context.settingsFiles.flatMap(
   (file2) => Object.keys(eventsOf(file2)).filter((event) => !KNOWN_HOOK_EVENTS.has(event)).map((event) => ({
     file: file2.path,
@@ -30402,68 +30402,63 @@ var eventCheck = (context) => context.settingsFiles.flatMap(
     remediation: "Rename the key to a documented event such as PreToolUse, or remove it."
   }))
 );
-var createHookRules = (options = {}) => {
-  const findScriptProblem = options.findScriptProblem ?? defaultFindScriptProblem;
-  const isUnanchored = options.isUnanchored ?? defaultIsUnanchored;
-  const pathCheck = (context) => context.settingsFiles.flatMap(
-    (file2) => hookEntriesOf(file2).flatMap((entry) => {
-      const problem = findScriptProblem(
-        context,
-        readScriptReference(entry.command),
-        file2.path
-      );
-      if (problem === void 0) return [];
-      return [
-        {
-          file: file2.path,
-          line: entry.line,
-          message: `The ${entry.event} hook script ${problem}. A hook command that cannot run exits 126 or 127, which neither blocks nor warns, so the guard fails open.`,
-          remediation: "Fix the script path, create the script, or run chmod +x on it."
-        }
-      ];
-    })
-  );
-  const rootedCheck = (context) => context.settingsFiles.flatMap(
-    (file2) => hookEntriesOf(file2).flatMap((entry) => {
-      if (!isUnanchored(readScriptReference(entry.command))) return [];
-      return [
-        {
-          file: file2.path,
-          line: entry.line,
-          message: `The ${entry.event} hook names its script by a repo-relative path, which resolves against the shell's current directory and goes missing after one cd.`,
-          remediation: 'Prefix the script path with the project root, for example "$(git rev-parse --show-toplevel)/".'
-        }
-      ];
-    })
-  );
-  return [
-    {
-      appliesTo: ["settings", "settings-local"],
-      category: "hooks",
-      check: eventCheck,
-      detection: "A key under hooks is not an event Claude Code documents (warning, so a newer event never blocks).",
-      ruleId: "hooks.event-name",
-      severity: "warning"
-    },
-    {
-      appliesTo: ["settings", "settings-local"],
-      category: "hooks",
-      check: pathCheck,
-      detection: "A hook command names a script under a recognized project-root prefix that does not exist or is not executable; the command is read statically and never run.",
-      ruleId: "hooks.path-exists-executable",
-      severity: "error"
-    },
-    {
-      appliesTo: ["settings", "settings-local"],
-      category: "hooks",
-      check: rootedCheck,
-      detection: "A hook command names its script by a repo-relative path instead of an absolute, $-expanded or substituted root.",
-      ruleId: "hooks.rooted-command",
-      severity: "error"
-    }
-  ];
-};
-var HOOKS_RULES = createHookRules();
+var pathCheck = (context) => context.settingsFiles.flatMap(
+  (file2) => hookEntriesOf(file2).flatMap((entry) => {
+    const problem = findScriptProblem(
+      context,
+      readScriptReference(entry.command),
+      file2.path
+    );
+    if (problem === void 0) return [];
+    return [
+      {
+        file: file2.path,
+        line: entry.line,
+        message: `The ${entry.event} hook script ${problem}. A hook command that cannot run exits 126 or 127, which neither blocks nor warns, so the guard fails open.`,
+        remediation: "Fix the script path, create the script, or run chmod +x on it."
+      }
+    ];
+  })
+);
+var rootedCheck = (context) => context.settingsFiles.flatMap(
+  (file2) => hookEntriesOf(file2).flatMap((entry) => {
+    if (!isUnanchored(readScriptReference(entry.command))) return [];
+    return [
+      {
+        file: file2.path,
+        line: entry.line,
+        message: `The ${entry.event} hook names its script by a repo-relative path, which resolves against the shell's current directory and goes missing after one cd.`,
+        remediation: 'Prefix the script path with the project root, for example "$(git rev-parse --show-toplevel)/".'
+      }
+    ];
+  })
+);
+var HOOKS_RULES = [
+  {
+    appliesTo: ["settings", "settings-local"],
+    category: "hooks",
+    check: eventCheck,
+    detection: "A key under hooks is not an event Claude Code documents (warning, so a newer event never blocks).",
+    ruleId: "hooks.event-name",
+    severity: "warning"
+  },
+  {
+    appliesTo: ["settings", "settings-local"],
+    category: "hooks",
+    check: pathCheck,
+    detection: "A hook command names a script under a recognized project-root prefix that does not exist or is not executable; the command is read statically and never run.",
+    ruleId: "hooks.path-exists-executable",
+    severity: "error"
+  },
+  {
+    appliesTo: ["settings", "settings-local"],
+    category: "hooks",
+    check: rootedCheck,
+    detection: "A hook command names its script by a repo-relative path instead of an absolute, $-expanded or substituted root.",
+    ruleId: "hooks.rooted-command",
+    severity: "error"
+  }
+];
 
 // src/fitness/rules/line-limit.ts
 import { readFileSync as readFileSync11 } from "node:fs";
@@ -32416,9 +32411,9 @@ var refuseUnlessFixableAdopter = (options, root, target) => {
   );
   return ownership === "adopter" ? void 0 : refused(`target ownership is ${ownership}, not adopter`);
 };
-var symlinkRefusal = (options, root, target) => {
+var symlinkRefusal = (root, target) => {
   try {
-    const problem = (options.symlinkCheck ?? findSymlinkProblem)(root, target);
+    const problem = findSymlinkProblem(root, target);
     return problem === void 0 ? void 0 : refused(problem);
   } catch {
     return refused("target path cannot be resolved");
@@ -32428,7 +32423,7 @@ var applyProposal = (options) => {
   const validated = validateOptions(options);
   if ("kind" in validated) return validated;
   const { root, target } = validated;
-  const refusal = refuseUnlessFixableAdopter(options, root, target) ?? symlinkRefusal(options, root, target);
+  const refusal = refuseUnlessFixableAdopter(options, root, target) ?? symlinkRefusal(root, target);
   if (refusal !== void 0) return refusal;
   const absolute = path25.join(root, target);
   const base = readBase(absolute);
