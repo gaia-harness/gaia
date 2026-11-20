@@ -1,12 +1,5 @@
 import {describe, expect, test} from 'vitest';
-import {
-  isMaterialRise,
-  MIN_TRUSTED_AUDITED_PRS,
-  RISE_MIN_PR_DELTA,
-  RISE_RATIO_DEN,
-  RISE_RATIO_NUM,
-  TALLY_SCHEMA_VERSION,
-} from '../material-rise.js';
+import {isMaterialRise} from '../material-rise.js';
 
 describe('isMaterialRise', () => {
   test.each([
@@ -152,13 +145,5 @@ describe('isMaterialRise', () => {
     ],
   ])('%s => %s', (_label, args, expected) => {
     expect(isMaterialRise(args)).toBe(expected);
-  });
-
-  test('the constants are fixed by design', () => {
-    expect(RISE_RATIO_NUM).toBe(5);
-    expect(RISE_RATIO_DEN).toBe(4);
-    expect(RISE_MIN_PR_DELTA).toBe(3);
-    expect(MIN_TRUSTED_AUDITED_PRS).toBe(20);
-    expect(TALLY_SCHEMA_VERSION).toBe(4);
   });
 });

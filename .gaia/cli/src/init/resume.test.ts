@@ -61,87 +61,121 @@ const captureStdio = (): {
   };
 };
 
+type StepArgsRow = [
+  name: string,
+  step: Parameters<typeof argvFromStepArgs>[0],
+  saved: Parameters<typeof argvFromStepArgs>[1],
+  expected: null | string[],
+];
+
 describe('argvFromStepArgs', () => {
-  test('reconstructs strip-branding argv', () => {
-    expect(argvFromStepArgs('strip-branding', {title: 'Hello'})).toEqual([
-      '--title',
-      'Hello',
-    ]);
-    expect(argvFromStepArgs('strip-branding', {})).toBeNull();
-  });
+  const stepArgsRows: StepArgsRow[] = [
+    [
+      'strip-branding argv from its title',
+      'strip-branding',
+      {title: 'Hello'},
+      ['--title', 'Hello'],
+    ],
+    ['strip-branding argv is null without a title', 'strip-branding', {}, null],
+    [
+      'configure-i18n argv',
+      'configure-i18n',
+      {locales: ['en', 'es'], strip: false},
+      ['--locales', 'en,es', '--strip', 'false'],
+    ],
+    [
+      'configure-i18n argv is null for a bad locales value',
+      'configure-i18n',
+      {locales: 'bad'},
+      null,
+    ],
+    [
+      'configure-data-layer argv with every key',
+      'configure-data-layer',
+      {casing: 'camel', layer: 'acme', query: true},
+      ['--casing', 'camel', '--query', 'true', '--layer', 'acme'],
+    ],
+    [
+      'configure-data-layer argv round-trips null keys',
+      'configure-data-layer',
+      {casing: null, layer: null, query: false},
+      ['--query', 'false'],
+    ],
+    [
+      'configure-data-layer argv is null when nothing is saved',
+      'configure-data-layer',
+      {casing: null, layer: null, query: null},
+      null,
+    ],
+    [
+      'configure-data-layer argv is null for undefined args',
+      'configure-data-layer',
+      undefined,
+      null,
+    ],
+    [
+      'rename argv',
+      'rename',
+      {kebab: 'hello-world', title: 'Hello World'},
+      ['--title', 'Hello World', '--kebab', 'hello-world'],
+    ],
+    ['wire-statusline argv', 'wire-statusline', {}, []],
+    [
+      'write-project-config argv with the required flag only',
+      'write-project-config',
+      {sandbox_recommended: true},
+      ['--sandbox-recommended', 'true'],
+    ],
+    [
+      'write-project-config argv with both flags',
+      'write-project-config',
+      {isolation_policy: 'always-worktree', sandbox_recommended: false},
+      [
+        '--sandbox-recommended',
+        'false',
+        '--isolation-policy',
+        'always-worktree',
+      ],
+    ],
+    [
+      'write-project-config argv is null for empty saved args',
+      'write-project-config',
+      {},
+      null,
+    ],
+    [
+      'write-project-config argv is null for undefined saved args',
+      'write-project-config',
+      undefined,
+      null,
+    ],
+    [
+      'write-project-config argv is null for a non-boolean sandbox flag',
+      'write-project-config',
+      {sandbox_recommended: 'true'},
+      null,
+    ],
+    [
+      'write-project-config argv is null for a non-string policy',
+      'write-project-config',
+      {isolation_policy: 7, sandbox_recommended: true},
+      null,
+    ],
+    ['finalize requires no args', 'finalize', undefined, []],
+    [
+      'returns null when saved args are missing for a non-finalize step',
+      'strip-branding',
+      undefined,
+      null,
+    ],
+  ];
 
-  test('reconstructs configure-i18n argv', () => {
-    expect(
-      argvFromStepArgs('configure-i18n', {locales: ['en', 'es'], strip: false})
-    ).toEqual(['--locales', 'en,es', '--strip', 'false']);
-    expect(argvFromStepArgs('configure-i18n', {locales: 'bad'})).toBeNull();
-  });
-
-  test('reconstructs configure-data-layer argv and round-trips its saved args', () => {
-    expect(
-      argvFromStepArgs('configure-data-layer', {
-        casing: 'camel',
-        layer: 'acme',
-        query: true,
-      })
-    ).toEqual(['--casing', 'camel', '--query', 'true', '--layer', 'acme']);
-    expect(
-      argvFromStepArgs('configure-data-layer', {
-        casing: null,
-        layer: null,
-        query: false,
-      })
-    ).toEqual(['--query', 'false']);
-    expect(
-      argvFromStepArgs('configure-data-layer', {
-        casing: null,
-        layer: null,
-        query: null,
-      })
-    ).toBeNull();
-    expect(argvFromStepArgs('configure-data-layer', undefined)).toBeNull();
-  });
-
-  test('reconstructs rename argv', () => {
-    expect(
-      argvFromStepArgs('rename', {kebab: 'hello-world', title: 'Hello World'})
-    ).toEqual(['--title', 'Hello World', '--kebab', 'hello-world']);
-  });
-
-  test('reconstructs wire-statusline argv', () => {
-    expect(argvFromStepArgs('wire-statusline', {})).toEqual([]);
-  });
-
-  test('reconstructs write-project-config argv', () => {
-    expect(
-      argvFromStepArgs('write-project-config', {sandbox_recommended: true})
-    ).toEqual(['--sandbox-recommended', 'true']);
-    expect(
-      argvFromStepArgs('write-project-config', {
-        isolation_policy: 'always-worktree',
-        sandbox_recommended: false,
-      })
-    ).toEqual([
-      '--sandbox-recommended',
-      'false',
-      '--isolation-policy',
-      'always-worktree',
-    ]);
-  });
-
-  test('write-project-config argv is null when its saved args cannot replay', () => {
-    expect(argvFromStepArgs('write-project-config', {})).toBeNull();
-    expect(argvFromStepArgs('write-project-config', undefined)).toBeNull();
-    expect(
-      argvFromStepArgs('write-project-config', {sandbox_recommended: 'true'})
-    ).toBeNull();
-    expect(
-      argvFromStepArgs('write-project-config', {
-        isolation_policy: 7,
-        sandbox_recommended: true,
-      })
-    ).toBeNull();
-  });
+  test.each(stepArgsRows)(
+    'reconstructs: %s',
+    (_name, step, saved, expected) => {
+      expect(argvFromStepArgs(step, saved)).toEqual(expected);
+    }
+  );
 
   test('STEP_ORDER places configure-data-layer right after configure-i18n', () => {
     expect(STEP_ORDER).toHaveLength(7);
@@ -152,14 +186,6 @@ describe('argvFromStepArgs', () => {
     expect(STEP_ORDER as readonly string[]).not.toContain(
       ['configure', 'automation'].join('-')
     );
-  });
-
-  test('finalize requires no args', () => {
-    expect(argvFromStepArgs('finalize', undefined)).toEqual([]);
-  });
-
-  test('returns null when saved args are missing for non-finalize steps', () => {
-    expect(argvFromStepArgs('strip-branding', undefined)).toBeNull();
   });
 });
 
@@ -295,18 +321,15 @@ describe('init resume', () => {
     expect(exit).toBe(2);
   });
 
-  test('--from-step out of range exits 1', async () => {
+  test.each([
+    ['99, out of range', '99', '--from-step must be'],
+    ['8, because only seven steps exist', '8', '--from-step must be'],
+    ['0', '0', ''],
+  ])('--from-step %s exits 1', async (_name, value, message) => {
     sandbox = setupSandbox();
-    const exit = await run(['--from-step', '99'], {cwd: sandbox.root});
+    const exit = await run(['--from-step', value], {cwd: sandbox.root});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--from-step must be');
-  });
-
-  test('--from-step 8 is refused because only seven steps exist', async () => {
-    sandbox = setupSandbox();
-    const exit = await run(['--from-step', '8'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--from-step must be');
+    expect(stdio.errors.join('')).toContain(message);
   });
 
   test('--from-step 6 replays write-project-config from its saved args', async () => {
@@ -383,11 +406,5 @@ describe('init resume', () => {
     expect(exit).toBe(0);
     expect(calls[0]?.step).toBe('configure-data-layer');
     expect(calls[0]?.argv).toEqual(['--casing', 'camel', '--query', 'true']);
-  });
-
-  test('--from-step 0 exits 1', async () => {
-    sandbox = setupSandbox();
-    const exit = await run(['--from-step', '0'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
   });
 });

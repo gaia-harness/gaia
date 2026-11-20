@@ -1,6 +1,6 @@
 /* eslint-disable unicorn/prevent-abbreviations -- the module under test is named dev-ports-reuse */
 import {describe, expect, test, vi} from 'vitest';
-import {ASK_FIRST_SENTENCE} from '../dev-ports';
+import {ASK_FIRST_SENTENCE, buildForeignServerMessage} from '../dev-ports';
 import type {ListenerOwner} from '../dev-ports';
 import {decideServerReuse} from '../dev-ports-reuse';
 
@@ -26,49 +26,116 @@ const decideReuseForOwner = (
 };
 
 describe('decideServerReuse', () => {
-  test('reuses a server this tree owns', () => {
-    expect(decideReuseForOwner({kind: 'own', pid: 10}).decision).toBe(true);
-  });
+  test.each(
+    (
+      [
+        {
+          expected: true,
+          isContinuousIntegration: false,
+          name: 'reuses a server this tree owns',
+          owner: {kind: 'own', pid: 10},
+          probeCalls: 1,
+        },
+        {
+          expected: false,
+          isContinuousIntegration: false,
+          name: 'does not reuse a free port',
+          owner: {kind: 'free'},
+          probeCalls: 1,
+        },
+        {
+          expected: false,
+          isContinuousIntegration: false,
+          name: 'does not reuse when ownership is unknown',
+          owner: {kind: 'unknown'},
+          probeCalls: 1,
+        },
+        {
+          expected: false,
+          isContinuousIntegration: true,
+          name: 'in continuous integration never reuses and never probes',
+          owner: {kind: 'own', pid: 10},
+          probeCalls: 0,
+        },
+      ] satisfies readonly {
+        expected: boolean;
+        isContinuousIntegration: boolean;
+        name: string;
+        owner: ListenerOwner;
+        probeCalls: number;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )(
+    'decideServerReuse decides per listener owner: %s',
+    (_name, {expected, isContinuousIntegration, owner, probeCalls}) => {
+      const {decision, probe} = decideReuseForOwner(
+        owner,
+        isContinuousIntegration
+      );
 
-  test('does not reuse a free port', () => {
-    expect(decideReuseForOwner({kind: 'free'}).decision).toBe(false);
-  });
+      expect(decision).toBe(expected);
 
-  test('does not reuse when ownership is unknown', () => {
-    expect(decideReuseForOwner({kind: 'unknown'}).decision).toBe(false);
-  });
+      expect(probe).toHaveBeenCalledTimes(probeCalls);
+    }
+  );
 
-  test('in continuous integration never reuses and never probes', () => {
-    const {decision, probe} = decideReuseForOwner({kind: 'own', pid: 10}, true);
+  test.each(
+    (
+      [
+        {
+          messageParts: ['5180', '/trees/other', ASK_FIRST_SENTENCE],
+          name: 'a foreign server with an owner path throws naming port, path, and the ask-first sentence',
+          owner: {
+            kind: 'foreign',
+            ownerPath: '/trees/other',
+            pid: 11,
+          },
+        },
+        {
+          messageParts: ['owner unknown'],
+          name: 'a foreign server with no owner path throws naming owner unknown',
+          owner: {
+            kind: 'foreign',
+            ownerPath: undefined,
+            pid: 0,
+          },
+        },
+      ] satisfies readonly {
+        messageParts: string[];
+        name: string;
+        owner: ListenerOwner;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )(
+    'decideServerReuse refuses a foreign server naming the owner: %s',
+    (_name, {messageParts, owner}) => {
+      const {decision} = decideReuseForOwner(owner);
 
-    expect(decision).toBe(false);
-    expect(probe).not.toHaveBeenCalled();
-  });
+      expect(decision).toBeInstanceOf(Error);
 
-  test('a foreign server with an owner path throws naming port, path, and the ask-first sentence', () => {
-    const {decision} = decideReuseForOwner({
-      kind: 'foreign',
+      for (const part of messageParts) {
+        expect((decision as Error).message).toContain(part);
+      }
+    }
+  );
+
+  test.each([
+    {
+      expected: `GAIA: port 5180 is held by a server that is not this tree's own (/trees/other), so Playwright will not reuse it. Never stop a process on a port another live tree owns without asking the user first. Run bash .gaia/scripts/ports.sh to see this tree's ports.`,
+      name: 'with an owner path',
       ownerPath: '/trees/other',
-      pid: 11,
-    });
-
-    expect(decision).toBeInstanceOf(Error);
-    const {message} = decision as Error;
-    expect(message).toContain('5180');
-    expect(message).toContain('/trees/other');
-    expect(message).toContain(ASK_FIRST_SENTENCE);
-  });
-
-  test('a foreign server with no owner path throws naming owner unknown', () => {
-    const {decision} = decideReuseForOwner({
-      kind: 'foreign',
+    },
+    {
+      expected: `GAIA: port 5180 is held by a server that is not this tree's own (owner unknown), so Playwright will not reuse it. Never stop a process on a port another live tree owns without asking the user first. Run bash .gaia/scripts/ports.sh to see this tree's ports.`,
+      name: 'without an owner path',
       ownerPath: undefined,
-      pid: 0,
-    });
-
-    expect(decision).toBeInstanceOf(Error);
-    expect((decision as Error).message).toContain('owner unknown');
-  });
+    },
+  ])(
+    'buildForeignServerMessage words the refusal exactly: $name',
+    ({expected, ownerPath}) => {
+      expect(buildForeignServerMessage({ownerPath, port: 5180})).toBe(expected);
+    }
+  );
 
   test('defaults the probe to the real listener lookup, which answers unknown without a tree root', () => {
     expect(

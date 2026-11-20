@@ -109,6 +109,8 @@ describe('declineFileName', () => {
     ['holistic/unclassified', 'holistic-unclassified'],
     ['@@@///', 'class'],
     ['A'.repeat(200), 'a'.repeat(80)],
+    // Truncation lands on a dash, which the slug trims.
+    [`${'a'.repeat(79)}/b`, 'a'.repeat(79)],
   ])('encodes %s', (findingClass, slug) => {
     const name = declineFileName({
       declinedAt,
@@ -118,17 +120,6 @@ describe('declineFileName', () => {
 
     expect(name).toBe(`${slug}-20261027-143200123-deadbeef.json`);
     expect(name).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*\.json$/u);
-  });
-
-  test('trims a trailing dash left by truncation', () => {
-    const findingClass = `${'a'.repeat(79)}/b`;
-    const name = declineFileName({
-      declinedAt,
-      findingClass,
-      suffix: 'deadbeef',
-    });
-
-    expect(name.startsWith(`${'a'.repeat(79)}-2026`)).toBe(true);
   });
 });
 
@@ -228,50 +219,64 @@ describe('readDeclineStore', () => {
 });
 
 describe('governingDeclines', () => {
-  test('compares parsed instants, not strings', () => {
-    putFile('x-1.json', {...validFile, declined_at: '2026-10-01T00:00:00Z'});
-    putFile('x-2.json', {...validFile, declined_at: '2026-10-01T00:00:00.5Z'});
+  test.each([
+    {
+      files: [
+        ['x-1.json', {declined_at: '2026-10-01T00:00:00Z'}],
+        ['x-2.json', {declined_at: '2026-10-01T00:00:00.5Z'}],
+      ],
+      name: 'compares parsed instants, not strings',
+      winner: 'x-2.json',
+    },
+    {
+      files: [
+        ['x-a.json', {}],
+        ['x-b.json', {}],
+        ['X-c.json', {}],
+      ],
+      name: 'a tie goes to the byte-wise last basename',
+      winner: 'x-b.json',
+    },
+    {
+      // Unclamped, x-a would win on its later instant; clamped, the two tie
+      // and the last basename governs.
+      files: [
+        ['x-a.json', {declined_at: '2027-01-01T00:00:00Z'}],
+        ['x-b.json', {declined_at: NOW.toISOString()}],
+      ],
+      name: 'a future timestamp does not outrank a file written at now',
+      winner: 'x-b.json',
+    },
+  ] as {
+    files: [string, Record<string, string>][];
+    name: string;
+    winner: string;
+  }[])('$name', ({files, winner}) => {
+    for (const [fileName, overrides] of files) {
+      putFile(fileName, {...validFile, ...overrides});
+    }
 
     expect(
       governingDeclines(read(), NOW).get(validFile.finding_class)?.relativePath
-    ).toBe(relative('x-2.json'));
-  });
-
-  test('a tie goes to the byte-wise last basename', () => {
-    putFile('x-a.json', validFile);
-    putFile('x-b.json', validFile);
-    putFile('X-c.json', validFile);
-
-    expect(
-      governingDeclines(read(), NOW).get(validFile.finding_class)?.relativePath
-    ).toBe(relative('x-b.json'));
-  });
-
-  test('a future timestamp does not outrank a file written at now', () => {
-    putFile('x-a.json', {...validFile, declined_at: '2027-01-01T00:00:00Z'});
-    putFile('x-b.json', {...validFile, declined_at: NOW.toISOString()});
-
-    // Unclamped, x-a would win on its later instant; clamped, the two tie
-    // and the last basename governs.
-    expect(
-      governingDeclines(read(), NOW).get(validFile.finding_class)?.relativePath
-    ).toBe(relative('x-b.json'));
-  });
-
-  test('a future-dated file is live', () => {
-    expect(isLapsed('2099-01-01T00:00:00Z', NOW, WINDOW_DAYS)).toBe(false);
+    ).toBe(relative(winner));
   });
 });
 
 describe('isLapsed', () => {
-  test('exactly one window old is live, one millisecond older is lapsed', () => {
-    const exact = new Date(NOW.getTime() - WINDOW_DAYS * DAY_MS).toISOString();
-    const older = new Date(
-      NOW.getTime() - WINDOW_DAYS * DAY_MS - 1
-    ).toISOString();
-
-    expect(isLapsed(exact, NOW, WINDOW_DAYS)).toBe(false);
-    expect(isLapsed(older, NOW, WINDOW_DAYS)).toBe(true);
+  test.each([
+    [
+      'exactly one window old is live',
+      new Date(NOW.getTime() - WINDOW_DAYS * DAY_MS).toISOString(),
+      false,
+    ],
+    [
+      'one millisecond older than the window is lapsed',
+      new Date(NOW.getTime() - WINDOW_DAYS * DAY_MS - 1).toISOString(),
+      true,
+    ],
+    ['a future-dated file is live', '2099-01-01T00:00:00Z', false],
+  ])('%s', (_label, declinedAt, expected) => {
+    expect(isLapsed(declinedAt, NOW, WINDOW_DAYS)).toBe(expected);
   });
 });
 

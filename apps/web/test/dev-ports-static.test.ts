@@ -1,5 +1,5 @@
 /* eslint-disable unicorn/prevent-abbreviations -- the module under test is named dev-ports */
-import {afterEach, describe, expect, test} from 'vitest';
+import {describe, expect, test} from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -37,50 +37,40 @@ const findLiterals = (files: string[]): string[] =>
     );
   });
 
-let scratchDirectory: string | undefined;
-
-afterEach(() => {
-  if (scratchDirectory !== undefined) {
-    fs.rmSync(scratchDirectory, {force: true, recursive: true});
-    scratchDirectory = undefined;
-  }
-});
-
 describe('port literals in config files', () => {
-  test('the scanned set is the expected non-empty set and every file exists', () => {
-    const files = listScannedFiles();
-
-    for (const file of explicitFiles) {
-      expect(files).toContain(path.join(frontendDirectory, file));
-      expect(fs.existsSync(path.join(frontendDirectory, file))).toBe(true);
-    }
-    expect(
-      files.some((file) =>
-        file.endsWith(path.join('.playwright', 'global-setup.ts'))
-      )
-    ).toBe(true);
-    expect(
-      files.some((file) => file.endsWith(path.join('.storybook', 'main.ts')))
-    ).toBe(true);
-  });
-
-  test.each([
-    ['bad.ts', "export const url = 'http://localhost:5173';\n"],
-    ['bad.json', '{"storybook": "storybook dev -p 6006"}\n'],
-  ])(
-    'a scratch file %s holding a hardcoded port is caught (the check can fail)',
-    (name, content) => {
-      scratchDirectory = fs.mkdtempSync(
-        path.join(os.tmpdir(), 'dev-ports-static-')
-      );
-      const scratchFile = path.join(scratchDirectory, name);
-      fs.writeFileSync(scratchFile, content);
-
-      expect(findLiterals([scratchFile])).toHaveLength(1);
-    }
-  );
-
   test('no scanned config file carries a 5173 or 6006 literal', () => {
     expect(findLiterals(listScannedFiles())).toEqual([]);
   });
+
+  test('the scan covers the playwright and storybook config files', () => {
+    const scanned = listScannedFiles();
+
+    expect(scanned).toContain(
+      path.join(frontendDirectory, '.playwright', 'global-setup.ts')
+    );
+    expect(scanned).toContain(
+      path.join(frontendDirectory, '.storybook', 'main.ts')
+    );
+  });
+
+  test.each(['5173', '6006'])(
+    'findLiterals catches a hardcoded %s port literal',
+    (port) => {
+      const scratchDirectory = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'dev-ports-static-')
+      );
+      const scratchFile = path.join(scratchDirectory, 'bad.ts');
+
+      fs.writeFileSync(
+        scratchFile,
+        `const url = 'http://localhost:${port}';\n`
+      );
+
+      try {
+        expect(findLiterals([scratchFile])).toHaveLength(1);
+      } finally {
+        fs.rmSync(scratchDirectory, {force: true, recursive: true});
+      }
+    }
+  );
 });

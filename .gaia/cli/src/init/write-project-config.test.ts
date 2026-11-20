@@ -156,60 +156,58 @@ describe('init write-project-config', () => {
     expect(written.some_future_key).toBe('x');
   });
 
-  test('--sandbox-recommended maybe is refused with a structured error and writes nothing', () => {
-    const exit = run(['--sandbox-recommended', 'maybe'], {cwd: sandbox.root});
-    expect(exit).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    expect(stdio.errors.join('')).toContain(
-      '--sandbox-recommended must be one of: true, false'
-    );
-    expect(stdio.errors.join('')).toContain('"code":"invalid_arguments"');
-    expect(stdio.errors.join('')).toContain(
-      '"subcommand":"init write-project-config"'
-    );
-    expect(existsSync(projectConfigPath(sandbox.root))).toBe(false);
-    expect(
-      existsSync(path.join(sandbox.root, '.gaia', 'init-state.json'))
-    ).toBe(false);
-  });
-
-  test('--isolation-policy with an unknown value is refused and writes nothing', () => {
-    const exit = run(
+  test.each([
+    [
+      '--sandbox-recommended maybe is refused with a structured error',
+      ['--sandbox-recommended', 'maybe'],
+      EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      [
+        '--sandbox-recommended must be one of: true, false',
+        '"code":"invalid_arguments"',
+        '"subcommand":"init write-project-config"',
+      ],
+    ],
+    [
+      '--isolation-policy with an unknown value is refused',
       ['--sandbox-recommended', 'true', '--isolation-policy', 'bogus'],
-      {cwd: sandbox.root}
-    );
-    expect(exit).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    expect(stdio.errors.join('')).toContain(
-      '--isolation-policy must be one of: always-worktree, prefer-branch, prefer-worktree'
-    );
-    expect(existsSync(projectConfigPath(sandbox.root))).toBe(false);
-  });
-
-  test('--sandbox-recommended is required', () => {
-    const exit = run([], {cwd: sandbox.root});
-    expect(exit).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    expect(stdio.errors.join('')).toContain(
-      '--sandbox-recommended is required'
-    );
-    expect(existsSync(projectConfigPath(sandbox.root))).toBe(false);
-  });
-
-  test('a repeated flag and an unknown flag are refused', () => {
-    const twice = run(
+      EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      [
+        '--isolation-policy must be one of: always-worktree, prefer-branch, prefer-worktree',
+      ],
+    ],
+    [
+      '--sandbox-recommended is required',
+      [],
+      EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      ['--sandbox-recommended is required'],
+    ],
+    [
+      'a repeated flag is refused',
       ['--sandbox-recommended', 'true', '--sandbox-recommended', 'false'],
-      {cwd: sandbox.root}
-    );
-    expect(twice).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    expect(stdio.errors.join('')).toContain(
-      '--sandbox-recommended specified twice'
-    );
+      EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      ['--sandbox-recommended specified twice'],
+    ],
+    [
+      'an unknown flag is refused',
+      ['--sandbox-recommended', 'true', '--bogus', 'x'],
+      EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      ['unknown flag: --bogus'],
+    ],
+  ])(
+    'refuses bad input and writes nothing: %s',
+    (_name, args, expectedExit, messages) => {
+      expect(run(args, {cwd: sandbox.root})).toBe(expectedExit);
 
-    const unknown = run(['--sandbox-recommended', 'true', '--bogus', 'x'], {
-      cwd: sandbox.root,
-    });
-    expect(unknown).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    expect(stdio.errors.join('')).toContain('unknown flag: --bogus');
-    expect(existsSync(projectConfigPath(sandbox.root))).toBe(false);
-  });
+      for (const message of messages) {
+        expect(stdio.errors.join('')).toContain(message);
+      }
+
+      expect(existsSync(projectConfigPath(sandbox.root))).toBe(false);
+      expect(
+        existsSync(path.join(sandbox.root, '.gaia', 'init-state.json'))
+      ).toBe(false);
+    }
+  );
 
   test('a malformed existing file is refused with a structured error naming it, and left unchanged', () => {
     const malformed = '{not json';

@@ -1,6 +1,5 @@
 import {describe, expect, test} from 'vitest';
 import {
-  lineOf,
   splitFrontmatter,
   stripFencedCode,
   stripInlineCode,
@@ -18,26 +17,17 @@ describe('splitFrontmatter', () => {
     expect(result.bodyStartLine).toBe(5);
   });
 
-  test('is not ok without frontmatter', () => {
-    const result = splitFrontmatter('# Heading\n');
+  test.each<[string, string]>([
+    ['is not ok without frontmatter', '# Heading\n'],
+    ['is not ok for an unclosed block', '---\nname: x\n'],
+    ['reports a YAML error without throwing', '---\nname: [unclosed\n---\n'],
+    ['is not ok when the block is not a mapping', '---\n- a\n- b\n---\n'],
+  ])('%s', (_name, text) => {
+    const result = splitFrontmatter(text);
 
     expect(result.ok).toBe(false);
     expect(result.data).toEqual({});
-  });
-
-  test('is not ok for an unclosed block', () => {
-    expect(splitFrontmatter('---\nname: x\n').ok).toBe(false);
-  });
-
-  test('reports a YAML error without throwing', () => {
-    const result = splitFrontmatter('---\nname: [unclosed\n---\n');
-
-    expect(result.ok).toBe(false);
     expect(result.error).toBeDefined();
-  });
-
-  test('is not ok when the block is not a mapping', () => {
-    expect(splitFrontmatter('---\n- a\n- b\n---\n').ok).toBe(false);
   });
 
   test('treats an empty block as ok with no data', () => {
@@ -49,21 +39,31 @@ describe('splitFrontmatter', () => {
 });
 
 describe('stripFencedCode', () => {
-  test('blanks fenced blocks and keeps the line count', () => {
-    const text = 'before\n```bash\nrm -rf x\n```\nafter';
+  test.each<[string, string, string[], string, string]>([
+    [
+      'blanks fenced blocks and keeps the line count',
+      'before\n```bash\nrm -rf x\n```\nafter',
+      ['rm -rf'],
+      'before',
+      'after',
+    ],
+    [
+      'a longer fence is not closed by a shorter one',
+      '````\n```\ninside\n```\n````\nout',
+      ['inside'],
+      '',
+      'out',
+    ],
+  ])('%s', (_name, text, gone, start, end) => {
     const stripped = stripFencedCode(text);
 
     expect(stripped.split('\n')).toHaveLength(text.split('\n').length);
-    expect(stripped).not.toContain('rm -rf');
-    expect(stripped.startsWith('before')).toBe(true);
-    expect(stripped.endsWith('after')).toBe(true);
-  });
 
-  test('a longer fence is not closed by a shorter one', () => {
-    const stripped = stripFencedCode('````\n```\ninside\n```\n````\nout');
-
-    expect(stripped).not.toContain('inside');
-    expect(stripped.endsWith('out')).toBe(true);
+    for (const fragment of gone) {
+      expect(stripped).not.toContain(fragment);
+    }
+    expect(stripped.startsWith(start)).toBe(true);
+    expect(stripped.endsWith(end)).toBe(true);
   });
 });
 
@@ -75,15 +75,5 @@ describe('stripInlineCode', () => {
     expect(stripped).toHaveLength(line.length);
     expect(stripped).not.toContain('rm');
     expect(stripped.startsWith('run ')).toBe(true);
-  });
-});
-
-describe('lineOf', () => {
-  test('counts lines from 1', () => {
-    const text = 'a\nbb\nccc';
-
-    expect(lineOf(text, 0)).toBe(1);
-    expect(lineOf(text, 2)).toBe(2);
-    expect(lineOf(text, 5)).toBe(3);
   });
 });

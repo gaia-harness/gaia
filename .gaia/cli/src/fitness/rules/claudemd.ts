@@ -19,7 +19,7 @@ export type ClaudeMdBudgets = {
   ruleLines: number;
 };
 
-export const DEFAULT_BUDGETS: ClaudeMdBudgets = {
+const DEFAULT_BUDGETS: ClaudeMdBudgets = {
   nestedWords: NESTED_CLAUDE_MD_WORD_BUDGET,
   rootWords: ROOT_CLAUDE_MD_WORD_BUDGET,
   ruleLines: RULE_LINE_BUDGET,

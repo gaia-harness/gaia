@@ -386,28 +386,31 @@ describe('gaia fitness builtins without claude', () => {
 });
 
 describe('gaia fitness builtins arguments', () => {
-  test('an unknown argument exits 2', async () => {
-    const result = await runFitness(['builtins', '--bogus']);
-
-    expect(result.exitCode).toBe(EXIT_CODES.INVALID_ARGUMENTS);
-  });
-
-  test('--root without a value exits 2', async () => {
-    const result = await runFitness(['builtins', '--root']);
-
-    expect(result.exitCode).toBe(EXIT_CODES.INVALID_ARGUMENTS);
-  });
-
-  test('a root that is not a directory exits 3', async () => {
+  test.each<[string, (root: string) => string[], number, string]>([
+    [
+      'an unknown argument exits 2',
+      () => ['builtins', '--bogus'],
+      EXIT_CODES.INVALID_ARGUMENTS,
+      '',
+    ],
+    [
+      '--root without a value exits 2',
+      () => ['builtins', '--root'],
+      EXIT_CODES.INVALID_ARGUMENTS,
+      '',
+    ],
+    [
+      'a root that is not a directory exits 3',
+      (root) => ['builtins', '--root', path.join(root, 'CLAUDE.md')],
+      EXIT_CODES.COULD_NOT_RUN,
+      'could_not_run',
+    ],
+  ])('%s', async (_name, argumentsFor, exitCode, stderrFragment) => {
     const {root} = scratch(project());
-    const result = await runFitness([
-      'builtins',
-      '--root',
-      path.join(root, 'CLAUDE.md'),
-    ]);
+    const result = await runFitness(argumentsFor(root));
 
-    expect(result.exitCode).toBe(EXIT_CODES.COULD_NOT_RUN);
-    expect(result.stderr).toContain('could_not_run');
+    expect(result.exitCode).toBe(exitCode);
+    expect(result.stderr).toContain(stderrFragment);
   });
 });
 

@@ -633,6 +633,7 @@
     "apps/web/app/services/api/tests/base-url.test.tsx": "owned",
     "apps/web/app/services/api/tests/helpers.test.ts": "owned",
     "apps/web/app/services/api/tests/index.test.ts": "owned",
+    "apps/web/app/services/api/tests/snake-case-layer.test.ts": "owned",
     "apps/web/app/services/api/tests/utils.test.ts": "owned",
     "apps/web/app/services/api/utils.ts": "owned",
     "apps/web/app/services/gaia/api.ts": "owned",
@@ -880,7 +881,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-19T16:46:18.163Z",
+  "generated": "2026-11-20T14:45:18.577Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

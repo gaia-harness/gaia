@@ -51,22 +51,29 @@ const ROOT_SETTINGS = {
 };
 
 describe('reanchoring', () => {
-  test('prepends the prefix, drops a leading ./ or /, leaves ** // ~ alone', () => {
-    expect(reanchorSpec('.env', '../')).toBe('../.env');
-    expect(reanchorSpec('./a/b', '../')).toBe('../a/b');
-    expect(reanchorSpec('/a', '../../')).toBe('../../a');
-    expect(reanchorSpec('**/.env', '../')).toBe('**/.env');
-    expect(reanchorSpec('//abs', '../')).toBe('//abs');
-    expect(reanchorSpec('~/x', '../')).toBe('~/x');
-  });
-
-  test('a rule without a path copies unchanged', () => {
-    expect(reanchorRule('Bash(git status)', '../', 'x')).toBe(
-      'Bash(git status)'
-    );
-    expect(reanchorRule('WebFetch(domain:a.com)', '../', 'x')).toBe(
-      'WebFetch(domain:a.com)'
-    );
+  test.each([
+    [
+      'prepends the prefix to a bare path',
+      () => reanchorSpec('.env', '../'),
+      '../.env',
+    ],
+    ['drops a leading ./', () => reanchorSpec('./a/b', '../'), '../a/b'],
+    ['drops a leading /', () => reanchorSpec('/a', '../../'), '../../a'],
+    ['leaves a ** glob alone', () => reanchorSpec('**/.env', '../'), '**/.env'],
+    ['leaves a // path alone', () => reanchorSpec('//abs', '../'), '//abs'],
+    ['leaves a ~ path alone', () => reanchorSpec('~/x', '../'), '~/x'],
+    [
+      'a rule without a path copies unchanged (Bash)',
+      () => reanchorRule('Bash(git status)', '../', 'x'),
+      'Bash(git status)',
+    ],
+    [
+      'a rule without a path copies unchanged (WebFetch)',
+      () => reanchorRule('WebFetch(domain:a.com)', '../', 'x'),
+      'WebFetch(domain:a.com)',
+    ],
+  ])('%s', (_name, reanchor, expected) => {
+    expect(reanchor()).toBe(expected);
   });
 });
 

@@ -53,21 +53,35 @@ afterEach(() => {
 });
 
 describe('leftover "+" route folder guard', () => {
-  test('throws naming the offending folder when a "+" folder remains', async () => {
-    writeTemporaryApp(path.join('_legacy+', 'page.tsx'));
+  test.each(
+    [
+      {
+        assertOutcome: async (): Promise<void> => {
+          await expect(import('~/routes')).rejects.toThrow(/_legacy\+/);
+        },
+        name: 'throws naming the offending folder when a "+" folder remains',
+        routeFile: path.join('_legacy+', 'page.tsx'),
+      },
+      {
+        assertOutcome: async (): Promise<void> => {
+          const routesModule = await import('~/routes');
 
-    await expect(import('~/routes')).rejects.toThrow(/_legacy\+/);
-  });
+          await expect(routesModule.default).resolves.toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({id: 'routes/_legacy.page'}),
+            ])
+          );
+        },
+        name: 'discovers a flat dot-delimited file when no "+" folder remains',
+        routeFile: '_legacy.page.tsx',
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'the routes module refuses a leftover plus folder and discovers a flat file: %s',
+    async (_name, {assertOutcome, routeFile}) => {
+      writeTemporaryApp(routeFile);
 
-  test('discovers a flat dot-delimited file when no "+" folder remains', async () => {
-    writeTemporaryApp('_legacy.page.tsx');
-
-    const routesModule = await import('~/routes');
-
-    await expect(routesModule.default).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({id: 'routes/_legacy.page'}),
-      ])
-    );
-  });
+      await assertOutcome();
+    }
+  );
 });
