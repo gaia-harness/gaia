@@ -1031,14 +1031,16 @@ guard_text() {
 # The sibling glob is a naming convention, so it is pinned: a guard reading
 # another guard's files, or a piece left unread, would move a text check onto
 # the wrong program while every check still passed.
-@test "a guard's text set is its own: the errexit gate's two detector halves, and no piece for any other guard" {
+@test "a guard's text set is its own: the pieces a split guard sources from beside it, and no piece for any other guard" {
   local guard_file pieces expected guard_count=0
   while IFS= read -r guard_file; do
     guard_count=$((guard_count + 1))
     pieces="$(guard_text_files "$guard_file" | sed 1d)"
     case "$guard_file" in
       */.gaia/scripts/lint-errexit-status-read.sh)
-        expected="$(printf '%s\n' "${guard_file%.sh}-detect.sh" "${guard_file%.sh}-walk.sh")" ;;
+        expected="$(printf '%s\n' "${guard_file%.sh}-detect.sh" "${guard_file%.sh}-surfaces.sh" "${guard_file%.sh}-walk.sh")" ;;
+      */.gaia/scripts/lint-git-path-quoting.sh)
+        expected="${guard_file%.sh}-detect.sh" ;;
       *) expected="" ;;
     esac
     [ "$pieces" = "$expected" ] || { echo "$guard_file: text set is [$pieces], expected [$expected]" >&2; return 1; }
@@ -1160,7 +1162,7 @@ own_awk_functions() {
   # here rather than asserted.
   local actual expected
 
-  actual="$(own_awk_functions "$REPO_ROOT/.gaia/scripts/lint-git-path-quoting.sh")"
+  actual="$(own_awk_functions <(guard_text "$REPO_ROOT/.gaia/scripts/lint-git-path-quoting.sh"))"
   [ "$actual" = "option_walk" ]
 
   # Deviation from the plan's README table, recorded rather than silently
@@ -1208,14 +1210,15 @@ strip_full_line_comments() {
 
 # Derived from production_guards() rather than re-listed, so a guard added
 # there is held to the no-basename-list check above without a second edit
-# here. The library itself is checked too and is not a guard, so it is
+# here. The libraries are checked too and are not guards, so they are
 # appended.
 wiki_citing_files() {
   local guard_file
   while IFS= read -r guard_file; do
     guard_text_files "$guard_file"
   done < <(production_guards)
-  printf '%s\n' "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh"
+  printf '%s\n' "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" \
+    "$REPO_ROOT/.gaia/scripts/guard-discovery-lib.sh"
 }
 
 # no_bats_basename_on_code_lines: fail naming the first file of

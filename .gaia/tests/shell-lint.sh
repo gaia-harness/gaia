@@ -23,7 +23,7 @@
 # the tracked files the given NUL-delimited list names; a pass whose set comes
 # back empty is skipped, not failed. It narrows lint-errexit-status-read,
 # lint-git-path-quoting and lint-sigpipe-readers the same way, through
-# GAIA_GUARD_DELTA_FILE (.gaia/scripts/guard-awk-lib.sh), unless the delta
+# GAIA_GUARD_DELTA_FILE (.gaia/scripts/guard-discovery-lib.sh), unless the delta
 # changes that guard's own sources. The other folded guards scan the whole tree.
 # `verify-harness.sh round` passes the
 # round's delta here; branch mode and CI lint the whole tree.
@@ -541,6 +541,7 @@ guard_delta_file() {
   [ -n "$PATHS_FROM" ] || return 0
   case $'\n'"$paths_from_joined"$'\n' in
     *$'\n'.gaia/scripts/guard-awk-lib.sh$'\n'* | *$'\n'.gaia/scripts/awk-interp-lib.sh$'\n'* | \
+      *$'\n'.gaia/scripts/guard-discovery-lib.sh$'\n'* | \
       *$'\n'".gaia/scripts/$slug.sh"$'\n'* | *$'\n'".gaia/scripts/$slug-"*.sh$'\n'*)
       printf '    scope: %s scans the whole tree, because the delta changes its own sources\n' "$slug" >&2
       return 0

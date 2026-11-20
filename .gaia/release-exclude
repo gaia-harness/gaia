@@ -65,6 +65,8 @@
 # on an adopter clone invokes. It also sources guard-awk-lib.sh, withheld
 # below, so the absent dependency would decide the withhold on its own.
 .gaia/scripts/lint-git-path-quoting.sh
+# That lint's class detector, sourced only by it, withheld with it.
+.gaia/scripts/lint-git-path-quoting-detect.sh
 # The workflow run-interpolation lint guards GAIA's own CI workflow YAML, its
 # and composite actions, against a `${{ }}` expression substituted into a `run:` script body. Withheld
 # on the same reasoning as the diff-quoting lint above: shell-lint.sh, its only
@@ -92,12 +94,18 @@
 # The two halves of that lint's shared detector, sourced only by it, withheld with it.
 .gaia/scripts/lint-errexit-status-read-walk.sh
 .gaia/scripts/lint-errexit-status-read-detect.sh
+# That lint's per-surface scan programs, sourced only by it, withheld with it.
+.gaia/scripts/lint-errexit-status-read-surfaces.sh
 # The SIGPIPE-reader lint flags a short-circuiting reader -- a `grep` or `rg` told to stop early, in whichever spelling the gate's own header enumerates -- standing downstream of a pipe where `pipefail` is armed, in a tracked shell script or in an Actions `run:` body, the shape whose pipeline status inverts on a match because the reader closes the pipe and the upstream dies of SIGPIPE. Withheld on the same reasoning as the lints above: every one of its runners is release-excluded, so shipping this file would ship a check nothing on an adopter clone invokes. Those runners are shell-lint.sh, excluded by the .gaia/tests entry below, and the sibling bats suite .gaia/scripts/tests/lint-sigpipe-readers.bats via the separate .gaia/scripts/tests entry beside it. It also sources guard-awk-lib.sh, withheld just below, so the absent dependency would decide the withhold on its own. An adopter clone does carry a populated scan surface, so neither withhold rests on an empty one.
 .gaia/scripts/lint-sigpipe-readers.sh
+# That lint's class detector, sourced only by it, withheld with it.
+.gaia/scripts/lint-sigpipe-readers-detect.sh
 # The awk-source library the bats-arming shell guards source; every one of those guards is itself withheld above, so nothing on an adopter clone sources it.
 .gaia/scripts/guard-awk-lib.sh
 # The GAIA_AWK interpreter resolver, sourced by guard-awk-lib.sh just above. Withheld on the absent consumer, a stronger ground than the absent-runner reasoning most of the lints above rest on: every file that sources this library, through guard-awk-lib.sh, is itself withheld, so an adopter clone has nothing that would ever source it. What is NOT claimed: the resolver is generic over any awk call site in the tree, not only the surface it currently serves, so shipping it later to widen GAIA_AWK's governed surface would be a re-decision rather than a correction. The consumer set is not counted here, because `git grep -l guard-awk-lib` reads it out of the tree, and a hand-kept cardinal beside it is a second copy that nothing holds to the tree.
 .gaia/scripts/awk-interp-lib.sh
+# The scan-surface discovery guard-awk-lib.sh sources beside it, withheld with it.
+.gaia/scripts/guard-discovery-lib.sh
 # The shipped-tree leak assertion: it proves no release-excluded path survived
 # into the tree that becomes the tarball. Withheld on the absent caller: its one
 # caller is release.yml (category 9), and an adopter clone never stages a GAIA
