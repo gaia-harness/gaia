@@ -16,19 +16,30 @@ describe('env.server', () => {
     vi.unstubAllEnvs();
   });
 
-  test('a 31-character SESSION_SECRET in production is refused', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('SESSION_SECRET', 'x'.repeat(31));
+  test.each([
+    {
+      check: (message: string | undefined) => {
+        expect(message).toContain(refusal);
+      },
+      length: 31,
+      outcome: 'refused',
+    },
+    {
+      check: (message: string | undefined) => {
+        expect(message).toBeUndefined();
+      },
+      length: 32,
+      outcome: 'accepted',
+    },
+  ])(
+    'SESSION_SECRET length in production is refused below 32 and accepted at 32: a $length-character secret is $outcome',
+    async ({check, length}) => {
+      vi.stubEnv('NODE_ENV', 'production');
+      vi.stubEnv('SESSION_SECRET', 'x'.repeat(length));
 
-    expect(await importFailureMessage()).toContain(refusal);
-  });
-
-  test('a 32-character SESSION_SECRET in production is accepted', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('SESSION_SECRET', 'x'.repeat(32));
-
-    expect(await importFailureMessage()).toBeUndefined();
-  });
+      check(await importFailureMessage());
+    }
+  );
 
   test('a short production SESSION_SECRET reports beside another invalid variable', async () => {
     vi.stubEnv('NODE_ENV', 'production');

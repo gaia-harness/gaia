@@ -199,6 +199,8 @@ apps/web/app/utils/tests/csf-shapes.stories.tsx
 apps/web/app/utils/tests/csf-meta-play.stories.tsx
 apps/web/test/dev-ports.test.ts
 apps/web/test/dev-ports-vite-plugin.test.ts
+apps/web/test/dev-ports-vite-plugin-launch.test.ts
+apps/web/test/dev-ports-vite-plugin-helpers.ts
 apps/web/test/dev-ports-reuse.test.ts
 apps/web/test/story-a11y-opt-outs.test.ts
 apps/web/test/playwright-story-index.test.ts

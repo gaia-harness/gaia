@@ -1,11 +1,15 @@
 /* eslint-disable unicorn/prevent-abbreviations -- the module under test is named dev-ports-vite-plugin */
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
-import fs from 'node:fs';
-import net from 'node:net';
-import os from 'node:os';
-import path from 'node:path';
+import type net from 'node:net';
 import {ASK_FIRST_SENTENCE, PORTS_HINT} from '../dev-ports';
-import type {DevPortsResolution} from '../dev-ports';
+import {
+  buildResolvedResolution,
+  closeServer,
+  findFreePort,
+  listenOn,
+  loadPlugin,
+  makeServer,
+} from './dev-ports-vite-plugin-helpers';
 
 const {findListenerOwnerMock, resolveDevPortsMock, spawnMock} = vi.hoisted(
   () => ({
@@ -26,40 +30,6 @@ vi.mock('../dev-ports', async (importOriginal) => ({
   resolveDevPorts: resolveDevPortsMock,
 }));
 
-type PluginHooks = {
-  config: (
-    configuration: unknown,
-    environment: {command: string}
-  ) => undefined | {server?: {port?: number; strictPort?: boolean}};
-  configureServer: (server: unknown) => Promise<void>;
-};
-
-const loadPlugin = async (): Promise<PluginHooks> => {
-  const {devPortsPlugin} = await import('../dev-ports-vite-plugin');
-
-  return devPortsPlugin('/package') as unknown as PluginHooks;
-};
-
-const listenOn = async (port: number, host: string): Promise<net.Server> =>
-  new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once('error', reject);
-    server.listen({exclusive: true, host, port}, () => resolve(server));
-  });
-
-const closeServer = async (server: net.Server): Promise<void> =>
-  new Promise((resolve) => {
-    server.close(() => resolve());
-  });
-
-const findFreePort = async (): Promise<number> => {
-  const server = await listenOn(0, '127.0.0.1');
-  const {port} = server.address() as net.AddressInfo;
-  await closeServer(server);
-
-  return port;
-};
-
 const hasIpv6 = async (): Promise<boolean> => {
   try {
     await closeServer(await listenOn(0, '::1'));
@@ -72,65 +42,7 @@ const hasIpv6 = async (): Promise<boolean> => {
 
 const isIpv6Available = await hasIpv6();
 
-const buildResolvedResolution = (
-  devPort: number,
-  treeRoot = '/tree'
-): DevPortsResolution => ({
-  kind: 'resolved',
-  ports: {
-    devPort,
-    siteUrl: undefined,
-    slot: 0,
-    source: 'default',
-    storybookPort: 6006,
-    treeRoot,
-  },
-});
-
-type FakeServer = {
-  httpServer: {
-    emit: (event: string) => void;
-    once: (event: string, listener: () => void) => void;
-  };
-};
-
-// The plugin only calls `httpServer.once('listening', ...)`; a handler list is the whole fake.
-const makeServer = (): FakeServer => {
-  const handlers: Record<string, (() => void)[]> = {};
-
-  return {
-    httpServer: {
-      emit: (event) => {
-        for (const handler of handlers[event] ?? []) handler();
-      },
-      once: (event, listener) => {
-        handlers[event] = [...(handlers[event] ?? []), listener];
-      },
-    },
-  };
-};
-
 const heldServers: net.Server[] = [];
-let sandbox: string | undefined;
-
-const listenWith = async (treeRoot: string): Promise<void> => {
-  resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5301, treeRoot));
-  const plugin = await loadPlugin();
-  const server = makeServer();
-  await plugin.configureServer(server);
-  server.httpServer.emit('listening');
-};
-
-const makeTreeWithScript = (): string => {
-  sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-ports-plugin-'));
-  fs.mkdirSync(path.join(sandbox, '.gaia', 'scripts'), {recursive: true});
-  fs.writeFileSync(
-    path.join(sandbox, '.gaia', 'scripts', 'server-process-lib.sh'),
-    ''
-  );
-
-  return sandbox;
-};
 
 beforeEach(() => {
   vi.resetModules();
@@ -150,43 +62,41 @@ afterEach(async () => {
   await Promise.all(
     heldServers.splice(0).map(async (server) => closeServer(server))
   );
-
-  if (sandbox !== undefined) {
-    fs.rmSync(sandbox, {force: true, recursive: true});
-    sandbox = undefined;
-  }
   delete process.env.CLAUDE_CODE_SESSION_ID;
 });
 
 describe('config', () => {
-  test('serve pins the resolved dev port with strictPort', async () => {
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
-    const plugin = await loadPlugin();
+  test.each(
+    [
+      {
+        expectedPort: 5199,
+        name: 'serve pins the resolved dev port with strictPort',
+        override: undefined,
+      },
+      {
+        expectedPort: 5321,
+        name: 'a named port override replaces the tree port and keeps strictPort',
+        override: '5321',
+      },
+      {
+        expectedPort: 5199,
+        name: 'a malformed port override is ignored',
+        override: 'abc',
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'config pins the resolved or overridden dev port: %s',
+    async (_name, {expectedPort, override}) => {
+      resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
 
-    expect(plugin.config({}, {command: 'serve'})).toEqual({
-      server: {port: 5199, strictPort: true},
-    });
-  });
+      vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', override);
+      const plugin = await loadPlugin();
 
-  test('a named port override replaces the tree port and keeps strictPort', async () => {
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
-    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', '5321');
-    const plugin = await loadPlugin();
-
-    expect(plugin.config({}, {command: 'serve'})).toEqual({
-      server: {port: 5321, strictPort: true},
-    });
-  });
-
-  test('a malformed port override is ignored', async () => {
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(5199));
-    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', 'abc');
-    const plugin = await loadPlugin();
-
-    expect(plugin.config({}, {command: 'serve'})).toEqual({
-      server: {port: 5199, strictPort: true},
-    });
-  });
+      expect(plugin.config({}, {command: 'serve'})).toEqual({
+        server: {port: expectedPort, strictPort: true},
+      });
+    }
+  );
 
   test('build returns nothing port-related and never throws on a missing port file', async () => {
     resolveDevPortsMock.mockReturnValue({
@@ -243,15 +153,33 @@ describe('configureServer refusals', () => {
     }
   );
 
-  test('the override port is probed in place of the tree port', async () => {
-    const treePort = await findFreePort();
-    heldServers.push(await listenOn(treePort, '127.0.0.1'));
-    vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', String(await findFreePort()));
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(treePort));
-    const plugin = await loadPlugin();
+  test.each(
+    [
+      {
+        arrange: async (treePort: number): Promise<void> => {
+          heldServers.push(await listenOn(treePort, '127.0.0.1'));
+          vi.stubEnv('GAIA_DEV_PORT_OVERRIDE', String(await findFreePort()));
+        },
+        name: 'the override port is probed in place of the tree port',
+      },
+      {
+        arrange: async (): Promise<void> => {},
+        name: 'a free port resolves',
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'configureServer resolves on a free port and probes the override: %s',
+    async (_name, {arrange}) => {
+      const treePort = await findFreePort();
+      await arrange(treePort);
+      resolveDevPortsMock.mockReturnValue(buildResolvedResolution(treePort));
+      const plugin = await loadPlugin();
 
-    await expect(plugin.configureServer(makeServer())).resolves.toBeUndefined();
-  });
+      await expect(
+        plugin.configureServer(makeServer())
+      ).resolves.toBeUndefined();
+    }
+  );
 
   test('a taken override port rejects naming the override port', async () => {
     const overridePort = await findFreePort();
@@ -265,126 +193,5 @@ describe('configureServer refusals', () => {
     await expect(plugin.configureServer(makeServer())).rejects.toThrow(
       `port ${overridePort}`
     );
-  });
-
-  test('a free port resolves', async () => {
-    resolveDevPortsMock.mockReturnValue(
-      buildResolvedResolution(await findFreePort())
-    );
-    const plugin = await loadPlugin();
-
-    await expect(plugin.configureServer(makeServer())).resolves.toBeUndefined();
-  });
-});
-
-describe('config restart', () => {
-  test('does not refuse its own port after a module reload and records the launch once', async () => {
-    sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-ports-plugin-'));
-    fs.mkdirSync(path.join(sandbox, '.gaia', 'scripts'), {recursive: true});
-    fs.writeFileSync(
-      path.join(sandbox, '.gaia', 'scripts', 'server-process-lib.sh'),
-      ''
-    );
-    process.env.CLAUDE_CODE_SESSION_ID = 'session-one';
-    const port = await findFreePort();
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port, sandbox));
-    const plugin = await loadPlugin();
-
-    const firstServer = makeServer();
-    await plugin.configureServer(firstServer);
-    heldServers.push(await listenOn(port, '127.0.0.1'));
-    firstServer.httpServer.emit('listening');
-
-    // A real restart re-bundles the config into a fresh module, so the second
-    // configureServer runs against a module with no memory of the first.
-    vi.resetModules();
-    // The owner probe cannot identify the holder (no lsof/ss, or no git
-    // checkout): the restart must still pass, on the recorded port alone.
-    findListenerOwnerMock.mockReturnValue({kind: 'unknown'});
-    const restartedPlugin = await loadPlugin();
-
-    const restartedServer = makeServer();
-    await expect(
-      restartedPlugin.configureServer(restartedServer)
-    ).resolves.toBeUndefined();
-    restartedServer.httpServer.emit('listening');
-
-    expect(spawnMock).toHaveBeenCalledTimes(1);
-  });
-
-  test('a restart still passes through the owner probe when the slot is empty and the holder is this process', async () => {
-    const port = await findFreePort();
-    heldServers.push(await listenOn(port, '127.0.0.1'));
-    findListenerOwnerMock.mockReturnValue({kind: 'own', pid: process.pid});
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
-    const plugin = await loadPlugin();
-
-    await expect(plugin.configureServer(makeServer())).resolves.toBeUndefined();
-  });
-
-  test('a held port owned by another process still refuses', async () => {
-    const port = await findFreePort();
-    heldServers.push(await listenOn(port, '127.0.0.1'));
-    findListenerOwnerMock.mockReturnValue({kind: 'own', pid: process.pid + 1});
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
-    const plugin = await loadPlugin();
-
-    await expect(plugin.configureServer(makeServer())).rejects.toThrow(
-      `port ${port}`
-    );
-  });
-
-  test('a fresh module with the port held still refuses (control)', async () => {
-    const port = await findFreePort();
-    heldServers.push(await listenOn(port, '127.0.0.1'));
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
-    const plugin = await loadPlugin();
-
-    await expect(plugin.configureServer(makeServer())).rejects.toThrow(
-      `port ${port}`
-    );
-  });
-});
-
-describe('launch recording', () => {
-  test('with no session id nothing is spawned', async () => {
-    resolveDevPortsMock.mockReturnValue(
-      buildResolvedResolution(await findFreePort())
-    );
-    await listenWith(makeTreeWithScript());
-
-    expect(spawnMock).not.toHaveBeenCalled();
-  });
-
-  test('with a session id and the script present exactly one detached recorder is spawned', async () => {
-    process.env.CLAUDE_CODE_SESSION_ID = 'session-two';
-    const treeRoot = makeTreeWithScript();
-    await listenWith(treeRoot);
-
-    expect(spawnMock).toHaveBeenCalledTimes(1);
-    expect(spawnMock).toHaveBeenCalledWith(
-      'bash',
-      [
-        path.join(treeRoot, '.gaia', 'scripts', 'server-process-lib.sh'),
-        '--record-launch',
-        '--pid',
-        String(process.pid),
-        '--port',
-        '5301',
-        '--kind',
-        'dev',
-        '--tree',
-        treeRoot,
-      ],
-      {detached: true, stdio: 'ignore'}
-    );
-  });
-
-  test('with a session id but no script nothing is spawned', async () => {
-    process.env.CLAUDE_CODE_SESSION_ID = 'session-three';
-    sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'dev-ports-plugin-'));
-    await listenWith(sandbox);
-
-    expect(spawnMock).not.toHaveBeenCalled();
   });
 });

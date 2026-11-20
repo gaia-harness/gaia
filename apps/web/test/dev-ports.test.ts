@@ -6,7 +6,6 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   ASK_FIRST_SENTENCE,
-  buildForeignServerMessage,
   buildMissingPortFileMessage,
   buildPortInUseMessage,
   DEV_BASE_PORT,
@@ -79,39 +78,37 @@ afterEach(() => {
 });
 
 describe('resolveDevPorts defaults', () => {
-  test('uses slot 0 in an ordinary checkout with no port file', () => {
-    const {packageDirectory} = makeTree({});
-    const resolution = resolveDevPorts(packageDirectory);
-    expect(resolution).toMatchObject({kind: 'resolved'});
-    expect(extractResolvedPorts(resolution)).toMatchObject({
-      devPort: 5173,
-      siteUrl: undefined,
-      slot: 0,
-      source: 'default',
-      storybookPort: 6006,
-    });
-  });
-
-  test('uses slot 0 when no .git exists anywhere up the tree', () => {
-    const {packageDirectory} = makeTree({gitFile: 'none'});
-    const resolution = resolveDevPorts(packageDirectory);
-    expect(resolution).toMatchObject({kind: 'resolved'});
-    expect(extractResolvedPorts(resolution)).toMatchObject({
-      devPort: 5173,
-      siteUrl: undefined,
-      source: 'default',
-      storybookPort: 6006,
-    });
-  });
-
-  test('treats a submodule-shaped .git file as not a linked worktree', () => {
-    const {packageDirectory} = makeTree({
-      gitFile: 'gitdir: ../../.git/modules/web\n',
-    });
-    expect(findCheckout(packageDirectory).isLinkedWorktree).toBe(false);
-    const resolution = resolveDevPorts(packageDirectory);
-    expect(extractResolvedPorts(resolution).devPort).toBe(5173);
-  });
+  test.each(
+    [
+      {
+        name: 'uses slot 0 in an ordinary checkout with no port file',
+        treeOptions: {},
+      },
+      {
+        name: 'uses slot 0 when no .git exists anywhere up the tree',
+        treeOptions: {gitFile: 'none'},
+      },
+      {
+        name: 'treats a submodule-shaped .git file as not a linked worktree',
+        treeOptions: {gitFile: 'gitdir: ../../.git/modules/web\n'},
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'resolveDevPorts uses slot 0 outside a linked worktree: %s',
+    (_name, {treeOptions}) => {
+      const {packageDirectory} = makeTree(treeOptions);
+      const resolution = resolveDevPorts(packageDirectory);
+      expect(findCheckout(packageDirectory).isLinkedWorktree).toBe(false);
+      expect(resolution).toMatchObject({kind: 'resolved'});
+      expect(extractResolvedPorts(resolution)).toMatchObject({
+        devPort: 5173,
+        siteUrl: undefined,
+        slot: 0,
+        source: 'default',
+        storybookPort: 6006,
+      });
+    }
+  );
 });
 
 describe('resolveDevPorts port file', () => {
@@ -200,75 +197,123 @@ describe('resolveSiteUrl', () => {
     treeRoot: undefined,
   };
 
-  test('prefers an exported value', () => {
-    expect(
-      resolveSiteUrl({
-        exportedSiteUrl: 'https://exported.test:9999',
-        ports: portFilePorts,
-      })
-    ).toBe('https://exported.test:9999');
-  });
-
-  test('falls back to the port file value', () => {
-    expect(
-      resolveSiteUrl({exportedSiteUrl: undefined, ports: portFilePorts})
-    ).toBe('http://localhost:5176');
-  });
-
-  test('leaves the slot-0 default untouched', () => {
-    expect(
-      resolveSiteUrl({
-        exportedSiteUrl: undefined,
-        ports: {
-          ...portFilePorts,
-          devPort: 5173,
-          siteUrl: undefined,
-          slot: 0,
-          source: 'default',
-          storybookPort: 6006,
+  test.each(
+    (
+      [
+        {
+          expected: 'https://exported.test:9999',
+          exportedSiteUrl: 'https://exported.test:9999',
+          name: 'prefers an exported value',
+          ports: portFilePorts,
         },
-      })
-    ).toBeUndefined();
-  });
+        {
+          expected: 'http://localhost:5176',
+          exportedSiteUrl: undefined,
+          name: 'falls back to the port file value',
+          ports: portFilePorts,
+        },
+        {
+          expected: undefined,
+          exportedSiteUrl: undefined,
+          name: 'leaves the slot-0 default untouched',
+          ports: {
+            ...portFilePorts,
+            devPort: 5173,
+            siteUrl: undefined,
+            slot: 0,
+            source: 'default',
+            storybookPort: 6006,
+          },
+        },
+      ] satisfies readonly {
+        expected: string | undefined;
+        exportedSiteUrl: string | undefined;
+        name: string;
+        ports: DevelopmentPorts;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )(
+    'resolveSiteUrl prefers the export, then the port file, and leaves slot 0 alone: %s',
+    (_name, {expected, exportedSiteUrl, ports}) => {
+      expect(resolveSiteUrl({exportedSiteUrl, ports})).toBe(expected);
+    }
+  );
 });
+
+const returnsOutput = (output: string) => (): void => {
+  vi.mocked(execFileSyncMock).mockReturnValue(output);
+};
+
+const throwsError = (message: string) => (): void => {
+  vi.mocked(execFileSyncMock).mockImplementation(() => {
+    throw new Error(message);
+  });
+};
 
 describe('findListenerOwner', () => {
   const treeRoot = '/some/tree';
-
-  test.each([
-    ['free\n', {kind: 'free'}],
-    ['own 4242\n', {kind: 'own', pid: 4242}],
+  const expectedProbeCall = [
+    'bash',
     [
-      'foreign 99 /other/tree\n',
-      {kind: 'foreign', ownerPath: '/other/tree', pid: 99},
+      path.join(treeRoot, '.gaia/scripts/server-process-lib.sh'),
+      '--listener-owner',
+      '5176',
+      treeRoot,
     ],
-    ['foreign 99 unknown\n', {kind: 'foreign', ownerPath: undefined, pid: 99}],
-    ['foreign 0 unknown\n', {kind: 'foreign', ownerPath: undefined, pid: 0}],
-    ['unknown\n', {kind: 'unknown'}],
-    ['gibberish\n', {kind: 'unknown'}],
-  ])('parses %j', (output, expected) => {
-    vi.mocked(execFileSyncMock).mockReturnValue(output);
-    expect(findListenerOwner({port: 5176, treeRoot})).toEqual(expected);
-    expect(execFileSyncMock).toHaveBeenCalledWith(
-      'bash',
-      [
-        path.join(treeRoot, '.gaia/scripts/server-process-lib.sh'),
-        '--listener-owner',
-        '5176',
-        treeRoot,
-      ],
-      expect.objectContaining({encoding: 'utf8', timeout: 5000})
-    );
-  });
+    expect.objectContaining({encoding: 'utf8', timeout: 5000}),
+  ];
 
-  test('maps a thrown error to unknown', () => {
-    vi.mocked(execFileSyncMock).mockImplementation(() => {
-      throw new Error('ETIMEDOUT');
-    });
-    expect(findListenerOwner({port: 5176, treeRoot})).toEqual({
-      kind: 'unknown',
-    });
-  });
+  test.each(
+    [
+      {
+        arrange: returnsOutput('free\n'),
+        expected: {kind: 'free'},
+        name: String.raw`parses "free\n"`,
+      },
+      {
+        arrange: returnsOutput('own 4242\n'),
+        expected: {kind: 'own', pid: 4242},
+        name: String.raw`parses "own 4242\n"`,
+      },
+      {
+        arrange: returnsOutput('foreign 99 /other/tree\n'),
+        expected: {kind: 'foreign', ownerPath: '/other/tree', pid: 99},
+        name: String.raw`parses "foreign 99 /other/tree\n"`,
+      },
+      {
+        arrange: returnsOutput('foreign 99 unknown\n'),
+        expected: {kind: 'foreign', ownerPath: undefined, pid: 99},
+        name: String.raw`parses "foreign 99 unknown\n"`,
+      },
+      {
+        arrange: returnsOutput('foreign 0 unknown\n'),
+        expected: {kind: 'foreign', ownerPath: undefined, pid: 0},
+        name: String.raw`parses "foreign 0 unknown\n"`,
+      },
+      {
+        arrange: returnsOutput('unknown\n'),
+        expected: {kind: 'unknown'},
+        name: String.raw`parses "unknown\n"`,
+      },
+      {
+        arrange: returnsOutput('gibberish\n'),
+        expected: {kind: 'unknown'},
+        name: String.raw`parses "gibberish\n"`,
+      },
+      {
+        arrange: throwsError('ETIMEDOUT'),
+        expected: {kind: 'unknown'},
+        name: 'maps a thrown error to unknown',
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'findListenerOwner maps script output and failures to an owner: %s',
+    (_name, {arrange, expected}) => {
+      arrange();
+      expect(findListenerOwner({port: 5176, treeRoot})).toEqual(expected);
+      expect(execFileSyncMock).toHaveBeenCalledWith(...expectedProbeCall);
+    }
+  );
 
   test('maps an undefined tree root to unknown without probing', () => {
     expect(findListenerOwner({port: 5176, treeRoot: undefined})).toEqual({
@@ -300,17 +345,6 @@ describe('messages', () => {
       messageWithoutOwner.endsWith(`${ASK_FIRST_SENTENCE} ${PORTS_HINT}`)
     ).toBe(true);
   });
-
-  test('foreign server names the port and owner', () => {
-    expect(
-      buildForeignServerMessage({ownerPath: '/other/tree', port: 5176})
-    ).toBe(
-      `GAIA: port 5176 is held by a server that is not this tree's own (/other/tree), so Playwright will not reuse it. ${ASK_FIRST_SENTENCE} ${PORTS_HINT}`
-    );
-    expect(
-      buildForeignServerMessage({ownerPath: undefined, port: 5176})
-    ).toContain('(owner unknown)');
-  });
 });
 
 const matchDefaults = (text: string, pattern: RegExp): number[] =>
@@ -328,25 +362,30 @@ describe('slot-0 base ports match the shell defaults', () => {
   const readScript = (name: string): string =>
     fs.readFileSync(path.join(scriptsDirectory, name), 'utf8');
 
-  test('worktree-ports-lib.sh defaults equal the TypeScript base ports', () => {
-    const text = readScript('worktree-ports-lib.sh');
+  test.each(
+    [
+      {
+        devPattern: /GAIA_PORTS_DEV_BASE_PORT:-(\d+)\}/g,
+        name: 'worktree-ports-lib.sh defaults equal the TypeScript base ports',
+        script: 'worktree-ports-lib.sh',
+        storybookPattern: /GAIA_PORTS_STORYBOOK_BASE_PORT:-(\d+)\}/g,
+      },
+      {
+        devPattern: /GAIA_PORTS_DEV_BASE_PORT:-\}"\s+(\d+)\)/g,
+        name: 'server-process-stop.sh defaults equal the TypeScript base ports',
+        script: 'server-process-stop.sh',
+        storybookPattern: /GAIA_PORTS_STORYBOOK_BASE_PORT:-\}"\s+(\d+)\)/g,
+      },
+    ].map((row) => [row.name, row] as const)
+  )(
+    'shell script port defaults equal the TypeScript base ports: %s',
+    (_name, {devPattern, script, storybookPattern}) => {
+      const text = readScript(script);
 
-    expect(matchDefaults(text, /GAIA_PORTS_DEV_BASE_PORT:-(\d+)\}/g)).toEqual([
-      DEV_BASE_PORT,
-    ]);
-    expect(
-      matchDefaults(text, /GAIA_PORTS_STORYBOOK_BASE_PORT:-(\d+)\}/g)
-    ).toEqual([STORYBOOK_BASE_PORT]);
-  });
-
-  test('server-process-stop.sh defaults equal the TypeScript base ports', () => {
-    const text = readScript('server-process-stop.sh');
-
-    expect(
-      matchDefaults(text, /GAIA_PORTS_DEV_BASE_PORT:-\}"\s+(\d+)\)/g)
-    ).toEqual([DEV_BASE_PORT]);
-    expect(
-      matchDefaults(text, /GAIA_PORTS_STORYBOOK_BASE_PORT:-\}"\s+(\d+)\)/g)
-    ).toEqual([STORYBOOK_BASE_PORT]);
-  });
+      expect(matchDefaults(text, devPattern)).toEqual([DEV_BASE_PORT]);
+      expect(matchDefaults(text, storybookPattern)).toEqual([
+        STORYBOOK_BASE_PORT,
+      ]);
+    }
+  );
 });
