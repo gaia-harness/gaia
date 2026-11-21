@@ -187,6 +187,17 @@ scratch_hook() {
   true
 }
 
+@test "a high reading with the context line 0 keeps the continue-here lead and claims neither room nor a line to be below" {
+  local question descriptions
+  question="$(gaia_loop_pinned_question feat/ask "$NONCE" 5 "$UNIT_ROUNDS" false false fallback "fresh 950000 1000000" grant 0)"
+  [ "$(jq -r '.questions[0].options[0].label' <<<"$question")" = "Continue audit in this session (Recommended)" ] || return 1
+  descriptions="$(jq -r '.questions[0].options[].description' <<<"$question")"
+  grep -qF "the checkpoint is off" <<<"$descriptions" || return 1
+  grep -qF "has room" <<<"$descriptions" && return 1
+  grep -qF "below the checkpoint line" <<<"$descriptions" && return 1
+  true
+}
+
 @test "each pinned answer label records its answer shape and tells the main thread what to do next" {
   local row disputed_pin
   local rows=(

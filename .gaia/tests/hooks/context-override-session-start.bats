@@ -58,7 +58,7 @@ message() {
   echo "case: off"
   start '{"version":1,"context_checkpoint":{"ask_tokens":0}}'
   text=$(message) || return 1
-  [[ $text == *"is OFF: $OVERRIDE_FILE sets ask_tokens to 0"*"Not recommended"*"300,000 default"* ]] || return 1
+  [[ $text == *"is OFF: $OVERRIDE_FILE sets ask_tokens to 0"*"has not yet frozen its line"*"keeps it until the next branch"*"Not recommended"*"300,000 default"* ]] || return 1
 
   echo "case: invalid, whose text carries quotes the JSON must escape"
   start '{"version":1,"context_checkpoint":{"ask_tokens":"abc"}}'
