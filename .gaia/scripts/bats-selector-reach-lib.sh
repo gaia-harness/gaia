@@ -96,7 +96,7 @@ bats_selector_reaching_suites() {
       return text
     }
     # Records one assignment of `name` whose right-hand side starts `value`.
-    function record_assignment(name, value, suite_directory,   head, base, tail, dependency) {
+    function record_assignment(name, value, suite_directory,   head, base, tail, rest, dependency) {
       if (value ~ /^(""|'"''"'|[ \t;)&|]|$)/) return
       head = strip_head(value)
       kind_count[name]++
@@ -110,7 +110,8 @@ bats_selector_reaching_suites() {
       }
       # The repo directory the value fixes, when its shape allows: a bats
       # directory variable or another fixed variable, then literal path
-      # characters, then the end of the word.
+      # characters, then the end of the word. A `$(cd "<r>" && pwd)` value
+      # counts as <r> only when pwd is the whole command.
       base = ""
       if (match(head, /^\$\{?BATS_TEST_DIRNAME\}?/)) base = suite_directory
       else if (head ~ /^dirname[ \t]+"?\$\{?BATS_TEST_FILENAME\}?"?\)/) { base = suite_directory; sub(/^dirname[ \t]+"?\$\{?BATS_TEST_FILENAME\}?"?\)/, "", head); RSTART = 1; RLENGTH = 0 }
@@ -120,8 +121,15 @@ bats_selector_reaching_suites() {
       } else { root_unknown[name] = 1; return }
       tail = substr(head, RSTART + RLENGTH)
       if (!match(tail, /^[A-Za-z0-9_.@+\/-]*/)) { root_unknown[name] = 1; return }
-      if (substr(tail, RLENGTH + 1) !~ /^["\047)]*([ \t;|&]|$)/) { root_unknown[name] = 1; return }
-      tail = substr(tail, 1, RLENGTH)
+      rest = substr(tail, RLENGTH + 1); tail = substr(tail, 1, RLENGTH)
+      if (value ~ /^"?\$\(cd[ \t]/) {
+        # A cd substitution fixes the directory only when its command is a
+        # bare pwd (or pwd -P); a path tail after the closing paren joins on.
+        if (!match(rest, /^"?[ \t]*&&[ \t]*pwd([ \t]+-P)?[ \t]*\)/)) { root_unknown[name] = 1; return }
+        rest = substr(rest, RLENGTH + 1)
+        if (match(rest, /^\/[A-Za-z0-9_.@+\/-]*/)) { tail = tail substr(rest, 1, RLENGTH); rest = substr(rest, RLENGTH + 1) }
+      }
+      if (rest !~ /^["\047)]*([ \t;|&]|$)/) { root_unknown[name] = 1; return }
       root_candidate[name, kind_count[name]] = base SUBSEP tail
     }
     function resolve_roots(suite_directory,   changed, name, i, parts, base, value, settled, round) {
