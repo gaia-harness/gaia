@@ -1629,22 +1629,43 @@ veto_rounds() {
   assert_allowed
 }
 
-@test "an override present before the first unit freezes only the default, raised or malformed, and the hook denies at the default line" {
-  local pair
-  # A token count of 150 is a valid lowering, so 150 is a percent fixture only.
-  for pair in "1000000 100" "0 0" "-1 -1" "1.5 1.5" "1000000 150"; do
+@test "an override present before the first unit freezes its clamped line, the window share at the default, and the hook denies at that line" {
+  local row ask_tokens ask_window_percent frozen
+  # Each row: the override's ask_tokens and ask_window_pct, then the line it freezes.
+  for row in "1000000 100 $GAIA_CONTEXT_ASK_TOKENS_MAXIMUM" "150000 20 $GAIA_CONTEXT_ASK_TOKENS_MINIMUM" \
+    "-1 -1 $GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "1.5 1.5 $GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "250000 150 250000"; do
+    read -r ask_tokens ask_window_percent frozen <<<"$row"
+    echo "case: $row"
     rm -f "$ALF_STATE"
     rm -rf "${ALF_STATE%.json}.d"
-    # shellcheck disable=SC2086 # the pair is two words on purpose
-    settings $pair
-    below
+    settings "$ask_tokens" "$ask_window_percent"
+    write_context_reading $((frozen - 1)) 1000000
     unit_dispatch
     assert_allowed
-    [ "$(state_field '.history.context_config | "\(.ask_tokens) \(.ask_window_pct)"')" = "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT $GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT" ]
-    above
+    [ "$(state_field '.history.context_config | "\(.ask_tokens) \(.ask_window_pct)"')" = "$frozen $GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT" ]
+    write_context_reading "$frozen" 1000000
     unit_dispatch
     assert_pinned context
   done
+}
+
+@test "the checkpoint off: a frozen or live ask_tokens of 0 skips the context deny and the round-count fallback still pins" {
+  echo "case: frozen off admits a unit over any reading until the fallback checkpoint"
+  settings 0 50
+  write_context_reading 900000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.context_config.ask_tokens')" -eq 0 ]
+  [ "$(state_field '.history.units | last | .admitted_on')" = fallback ]
+
+  echo "case: live off on a branch frozen at the default, at the fallback checkpoint, pins fallback"
+  fresh_fixture
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}'
+  settings 0 50
+  write_context_reading 900000 1000000
+  unit_dispatch
+  assert_pinned fallback
 }
 
 @test "the round cap pins a checkpoint, and an answer runs its rounds instead of re-asking" {

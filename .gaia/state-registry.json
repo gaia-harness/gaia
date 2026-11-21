@@ -119,7 +119,7 @@
       "kind": "file",
       "scope": "shared",
       "keyed_by": "singleton per machine",
-      "why": "Machine-local, lower-only override of the audit checkpoint's context line. Lives in the protected folder and is hand-authored by a human; Claude tool writes to it are denied by block-audit-loop-write.sh.",
+      "why": "Machine-local override of the context checkpoint line. Lives in the protected folder and is hand-authored by a human; Claude tool writes to it are denied by block-audit-loop-write.sh.",
       "writer": "hand-authored",
       "retention": {
         "class": "keep"

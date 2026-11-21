@@ -119,7 +119,7 @@ def unit_ok:
   and (.k | is_integer) and (.through_round | is_integer) and (.after_checkpoint | is_integer)
   and (.admitted_on == "context" or .admitted_on == "grant" or .admitted_on == "accept" or .admitted_on == "fallback");
 def config_ok:
-  type == "object" and (.ask_tokens | is_integer) and .ask_tokens >= 1
+  type == "object" and (.ask_tokens | is_integer) and .ask_tokens >= 0
   and (.ask_window_pct | is_integer) and .ask_window_pct >= 1 and .ask_window_pct <= 100;
 def ok:
   type == "object" and .schema == 1

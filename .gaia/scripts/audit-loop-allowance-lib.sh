@@ -92,11 +92,11 @@ gaia_loop_decide() {
 }
 
 # gaia_loop_context_config_initial <main-root>: the line config a branch
-# freezes, as {"ask_tokens","ask_window_pct"}.
+# freezes, as {"ask_tokens","ask_window_pct"}; ask_tokens is the override's
+# clamped value, 0 when it turns the checkpoint off.
 gaia_loop_context_config_initial() {
   local tokens percent
   read -r tokens percent <<<"$(gaia_context_override "$1")"
-  tokens="$(_gaia_loop_minimum "$tokens" "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT")"
   percent="$(_gaia_loop_minimum "$percent" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT")"
   printf '{"ask_tokens":%s,"ask_window_pct":%s}\n' "$tokens" "$percent"
 }
@@ -104,12 +104,13 @@ gaia_loop_context_config_initial() {
 # gaia_loop_context_config_effective <main-root> <state-json>: prints
 # `<ask_tokens> <ask_window_pct>`; rc 5 when the state cannot be read.
 gaia_loop_context_config_effective() {
-  local init frozen live_tokens live_percent tokens percent integer_pattern='^[1-9][0-9]{0,11} [1-9][0-9]{0,11}$'
+  local init frozen live_tokens live_percent tokens percent integer_pattern='^(0|[1-9][0-9]{0,11}) [1-9][0-9]{0,11}$'
   init="$(gaia_loop_context_config_initial "$1")"
   frozen="$(printf '%s' "$2" | jq -r --argjson initial "$init" '
-    def positive_integer: type == "number" and . == floor and . >= 1;
+    def whole: type == "number" and . == floor and . >= 0;
+    def positive_integer: whole and . >= 1;
     (.history.context_config | if type == "object" then . else {} end) as $config
-    | "\(if ($config.ask_tokens | positive_integer) then $config.ask_tokens else $initial.ask_tokens end) \(if ($config.ask_window_pct | positive_integer) then $config.ask_window_pct else $initial.ask_window_pct end)"' 2>/dev/null)" || return 5
+    | "\(if ($config.ask_tokens | whole) then $config.ask_tokens else $initial.ask_tokens end) \(if ($config.ask_window_pct | positive_integer) then $config.ask_window_pct else $initial.ask_window_pct end)"' 2>/dev/null)" || return 5
   [[ $frozen =~ $integer_pattern ]] || return 5
   read -r tokens percent <<<"$frozen"
   read -r live_tokens live_percent <<<"$(gaia_context_override "$1")"

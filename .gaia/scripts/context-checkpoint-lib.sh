@@ -13,12 +13,14 @@
 # stay in audit-loop-eval.sh.
 #
 # Override rule. An optional machine-local file, <main>/.gaia/local/protected/checkpoint-override.json,
-# may LOWER the line, for example {"version":1,"context_checkpoint":{"ask_tokens":100000}}
-# (ask_tokens, ask_window_pct; version 1 is required). It can never raise it: an
-# absent, invalid, out-of-range or raised value reads as the shipped default.
-# The file is machine-local and writable by whoever runs the session, so a
-# raise would let a session widen its own bound. A human edits it by hand;
-# Claude's tool writes to it are denied by the audit loop write guard.
+# sets the red line, for example {"version":1,"context_checkpoint":{"ask_tokens":350000}}
+# (version 1 is required). ask_tokens is honoured in MINIMUM..MAXIMUM, clamped
+# to the nearer end outside it, and 0 turns the checkpoint off; an absent key
+# or file reads as the default, and an invalid one as the default with a
+# warning, whose text the session-start hook owns. Raising
+# the line is safe because only a human can: Claude's tool writes to the file
+# are denied by the audit loop write guard. The window share stays internal,
+# because a lowered share would undercut the minimum on a large window.
 #
 # Low confidence: the shipped defaults are tunable estimates, not measured
 # facts. Their evidence lives in research notes, not here.
@@ -32,10 +34,18 @@
 _GAIA_CONTEXT_LIBRARY_LOADED=1
 
 GAIA_CONTEXT_ASK_TOKENS_DEFAULT=300000
+# Below the minimum a session asks to clear before ordinary work, an audit
+# included, can finish. Above the maximum the checkpoint buys little over
+# Claude Code's own auto-compaction, so 0 (off) serves a person who wants more.
+GAIA_CONTEXT_ASK_TOKENS_MINIMUM=200000
+GAIA_CONTEXT_ASK_TOKENS_MAXIMUM=400000
 GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT=50
 # shellcheck disable=SC2034 # read by the bound hook and the evaluator that source this lib
 GAIA_CONTEXT_UNIT_ROUNDS=3
-GAIA_CONTEXT_YELLOW_TOKENS=250000
+# Yellow is a share of red so it always comes first: 5/6 of the 300,000
+# default is 250,000.
+GAIA_CONTEXT_YELLOW_NUMERATOR=5
+GAIA_CONTEXT_YELLOW_DENOMINATOR=6
 GAIA_CONTEXT_YELLOW_WINDOW_PERCENT=30
 GAIA_CONTEXT_FIRE_NUMERATOR=5
 GAIA_CONTEXT_FIRE_DENOMINATOR=4
@@ -68,27 +78,44 @@ gaia_context_file() {
   printf '%s/.gaia/local/cache/shared/context/%s.json\n' "${1:-}" "$2"
 }
 
-# gaia_context_override <main-root>: print "<ask_tokens> <ask_window_pct>". Each
-# field is honoured only as a JSON integer in 1..default; version must be 1.
-gaia_context_override() {
-  local file="${1:-}/.gaia/local/protected/checkpoint-override.json" override_values
-  local default_tokens="$GAIA_CONTEXT_ASK_TOKENS_DEFAULT" default_percent="$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT"
-  if [ -f "$file" ] && command -v jq >/dev/null 2>&1; then
-    override_values=$(jq -r --argjson default_tokens "$default_tokens" --argjson default_percent "$default_percent" '
-      def lowered($maximum): type == "number" and . == floor and . >= 1 and . <= $maximum;
-      if type == "object" and .version == 1 then
-        (.context_checkpoint | if type == "object" then . else {} end) as $context_checkpoint
-        | "\(if ($context_checkpoint.ask_tokens | lowered($default_tokens)) then $context_checkpoint.ask_tokens else $default_tokens end) \(if ($context_checkpoint.ask_window_pct | lowered($default_percent)) then $context_checkpoint.ask_window_pct else $default_percent end)"
-      else empty end' "$file" 2>/dev/null) || override_values=""
-    if [[ $override_values =~ ^[0-9]{1,12}\ [0-9]{1,12}$ ]]; then
-      printf '%s\n' "$override_values"
+# gaia_context_override_state <main-root>: print "<status> <ask_tokens used> <value read>",
+# status one of absent|ok|off|clamped-low|clamped-high|invalid, and "-" when
+# no whole number was read. A missing jq reads as invalid: the file is there
+# and cannot be honoured.
+gaia_context_override_state() {
+  local file="${1:-}/.gaia/local/protected/checkpoint-override.json" fields default_tokens="$GAIA_CONTEXT_ASK_TOKENS_DEFAULT"
+  [ -f "$file" ] || { printf 'absent %s -\n' "$default_tokens"; return 0; }
+  if command -v jq >/dev/null 2>&1; then
+    fields=$(jq -r --argjson default_tokens "$default_tokens" --argjson minimum "$GAIA_CONTEXT_ASK_TOKENS_MINIMUM" --argjson maximum "$GAIA_CONTEXT_ASK_TOKENS_MAXIMUM" '
+      if type != "object" or .version != 1 then "invalid \($default_tokens) -"
+      elif .context_checkpoint == null then "absent \($default_tokens) -"
+      elif (.context_checkpoint | type) != "object" then "invalid \($default_tokens) -"
+      elif (.context_checkpoint | has("ask_tokens") | not) then "absent \($default_tokens) -"
+      else .context_checkpoint.ask_tokens as $tokens
+        | if ($tokens | type) != "number" or $tokens != ($tokens | floor) or $tokens < 0 then "invalid \($default_tokens) -"
+          elif $tokens == 0 then "off 0 0"
+          elif $tokens < $minimum then "clamped-low \($minimum) \($tokens)"
+          elif $tokens > $maximum then "clamped-high \($maximum) \($tokens)"
+          else "ok \($tokens) \($tokens)" end
+      end' "$file" 2>/dev/null) || fields=""
+    if [[ $fields =~ ^(absent|ok|off|clamped-low|clamped-high|invalid)\ [0-9]{1,12}\ ([0-9][0-9.eE+]{0,24}|-)$ ]]; then
+      printf '%s\n' "$fields"
       return 0
     fi
   fi
-  printf '%s %s\n' "$default_tokens" "$default_percent"
+  printf 'invalid %s -\n' "$default_tokens"
 }
 
-# gaia_context_line <window_size> <ask_tokens> <ask_window_pct>
+# gaia_context_override <main-root>: print "<ask_tokens> <ask_window_pct>", the
+# pair every line consumer reads; ask_tokens 0 means the checkpoint is off.
+gaia_context_override() {
+  local tokens
+  read -r _ tokens _ <<<"$(gaia_context_override_state "${1:-}")"
+  printf '%s %s\n' "$tokens" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT"
+}
+
+# gaia_context_line <window_size> <ask_tokens> <ask_window_pct>: ask_tokens 0
+# (checkpoint off) prints 0, which gaia_context_bands refuses.
 gaia_context_line() {
   local regex='^[0-9]{1,12}$' cap
   [[ ${1:-} =~ $regex && ${2:-} =~ $regex && ${3:-} =~ $regex ]] || return 2
@@ -97,13 +124,15 @@ gaia_context_line() {
 }
 
 # gaia_context_bands <window_size> <line>: print "<yellow> <red> <fire> <skull>".
+# rc 1 on a zero line: with the checkpoint off there are no bands, and zero
+# thresholds would read every reading as skull.
 gaia_context_bands() {
   local regex='^[0-9]{1,12}$' yellow percent_anchor
   [[ ${1:-} =~ $regex && ${2:-} =~ $regex ]] || return 2
-  yellow=$GAIA_CONTEXT_YELLOW_TOKENS
+  [ "$((10#$2))" -gt 0 ] || return 1
+  yellow=$(($2 * GAIA_CONTEXT_YELLOW_NUMERATOR / GAIA_CONTEXT_YELLOW_DENOMINATOR))
   percent_anchor=$(($1 * GAIA_CONTEXT_YELLOW_WINDOW_PERCENT / 100))
   [ "$percent_anchor" -lt "$yellow" ] && yellow=$percent_anchor
-  [ "$2" -lt "$yellow" ] && yellow=$2
   printf '%s %s %s %s\n' "$yellow" "$2" \
     $(($2 * GAIA_CONTEXT_FIRE_NUMERATOR / GAIA_CONTEXT_FIRE_DENOMINATOR)) \
     $(($2 * GAIA_CONTEXT_SKULL_NUMERATOR / GAIA_CONTEXT_SKULL_DENOMINATOR))
@@ -200,7 +229,8 @@ gaia_context_effort_read() {
 }
 
 # gaia_context_effective_line <main-root> <window_size>: the checkpoint line with
-# the lower-only override applied. rc 2 on a non-integer window.
+# the override applied, 0 when it turns the checkpoint off. rc 2 on a
+# non-integer window.
 gaia_context_effective_line() {
   local override_values ask_tokens ask_window_percent
   override_values=$(gaia_context_override "${1:-}") || return 2
@@ -210,11 +240,12 @@ gaia_context_effective_line() {
 
 # gaia_context_band <used_tokens> <window_size> <line>: green|yellow|red|fire|skull.
 # A reading at or past a threshold is in that band, the same comparisons the
-# statusline makes. rc 2 on a bad argument.
+# statusline makes. rc 1 and no band on a zero line (checkpoint off), rc 2 on a
+# bad argument.
 gaia_context_band() {
   local regex='^[0-9]{1,12}$' bands yellow red fire skull
   [[ ${1:-} =~ $regex ]] || return 2
-  bands=$(gaia_context_bands "${2:-}" "${3:-}") || return 2
+  bands=$(gaia_context_bands "${2:-}" "${3:-}") || return $?
   read -r yellow red fire skull <<<"$bands"
   if [ "$((10#$1))" -ge "$skull" ]; then
     printf 'skull\n'

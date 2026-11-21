@@ -69,12 +69,14 @@
 # honoured, because `.claude/settings*.json` `env` is editable by the session
 # the bound exists to stop. Afterwards a live checkpoint value may only lower
 # the frozen one, and only while no answer is recorded. A branch frozen at the
-# old checkpoint 5 keeps 5. The context line has its own lower-only override
-# in context-checkpoint-lib.sh; its config values (never a token count) are
-# frozen into `history.context_config` as the per-field min of the lib
-# defaults and the override, and the effective config is the per-field min of
-# that frozen value and the live override, so a lowering applies live and a
-# raise never does. A branch with no frozen config reads the initial one.
+# old checkpoint 5 keeps 5. The context line has its own override in
+# context-checkpoint-lib.sh; its config values (never a token count) are
+# frozen into `history.context_config`, ask_tokens as the override sets it
+# and the window share at the lib default, and the effective config is the
+# per-field min of that frozen value and the live override, so a lowering
+# applies live and a raise waits for the next branch. ask_tokens 0 is the
+# checkpoint off, and once frozen or live it holds for the branch. A branch
+# with no frozen config reads the initial one.
 #
 # ALLOWANCE. base = the frozen checkpoint round (lowered as above). Answers
 # fold in order: a grant of n answering the checkpoint at round g sets
@@ -110,10 +112,10 @@
 #     4. the latest answer is an accept and a round is recorded after the
 #        checkpoint it answers (its closing round is spent): `deny fallback
 #        <eligible> false`, whatever the reading. An accept never re-arms the loop.
-#     5. a `fresh <tokens> <window>` reading: tokens >= the line computed
-#        against that reading's own window denies `context <eligible> false`;
-#        else `allow context s min(s+k-1, 10)`.
-#     6. any other reading: the fallback fold, `deny fallback <eligible> false`
+#     5. a `fresh <tokens> <window>` reading with ask_tokens above 0: tokens >=
+#        the line computed against that reading's own window denies `context
+#        <eligible> false`; else `allow context s min(s+k-1, 10)`.
+#     6. any other reading, or ask_tokens 0: the fallback fold, `deny fallback <eligible> false`
 #        when used >= allowed, else `allow fallback s min(s+k-1, 10, allowed)`.
 #   gaia_loop_decide_member, in a unit: used >= 10 denies `cap` first unless
 #   the latest unit runs past round 10 (an answer admitted it there); then

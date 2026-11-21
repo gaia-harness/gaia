@@ -408,6 +408,19 @@ mark_band() {
   done
 }
 
+@test "the checkpoint off: an override ask_tokens of 0 is silent and unmarked past red; removing it emits" {
+  local override_file="$MAIN_ROOT/.gaia/local/protected/checkpoint-override.json"
+  new_session
+  mkdir -p "${override_file%/*}"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":0}}\n' >"$override_file"
+  write_reading "$RED"
+  invoke "$(payload)"
+  silent_unmarked_ok || { echo "off: not silent and unmarked"; return 1; }
+  rm "$override_file"
+  invoke "$(payload)"
+  fires_ok red "$RED" || { echo "override removed: did not emit"; return 1; }
+}
+
 @test "save path: the default branch and a detached HEAD take the session form; a feature branch takes its run folder" {
   write_reading "$RED"
   invoke "$(payload)"

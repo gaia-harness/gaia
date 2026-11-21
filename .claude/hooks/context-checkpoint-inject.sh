@@ -11,7 +11,8 @@
 # context-checkpoint-lib.sh; none is spelled here.
 #
 # Silent for: a sub-agent payload (an `agent_id` key), any event other than
-# PostToolUse, a reading that is not fresh, a band already marked, a missing or
+# PostToolUse, a reading that is not fresh, the checkpoint turned off by the
+# override (no bands), a band already marked, a missing or
 # oversize doctrine file, and a session the audit loop holds right now. That
 # is read from the non-closed state file for the payload cwd's branch key, in
 # two states: the latest history.units[] entry carrying this session id has no
