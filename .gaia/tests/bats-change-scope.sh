@@ -63,7 +63,6 @@ harness_globs=(
   ".gaia/tests/bats-shards.sh"
   ".gaia/tests/bats-change-scope.sh"
   ".gaia/scripts/bats-suites-for-change.sh"
-  ".gaia/scripts/bats-selector-reach-lib.sh"
   ".gaia/tests/install-bats.sh"
   ".gaia/tests/vendor/**"
   ".gaia/tests/helpers/**"

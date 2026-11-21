@@ -12,9 +12,9 @@
 # occurrence that may be the changed file (bats-selector-reach-lib.sh decides
 # which). The match text is the basename, because a suite names the file it
 # tests through a directory variable and the bare name
-# (`"$SCRIPTS/usage-lib.sh"`), with two
-# exceptions where the bare name is mostly fixture data (a staged path, a hook
-# command) and selecting on it runs suites the change cannot affect:
+# (`"$SCRIPTS/usage-lib.sh"`), with two exceptions where the bare name is
+# mostly fixture data (a staged path, a hook command) and selecting on it runs
+# suites the change cannot affect:
 #
 #   - A root-level file matches as `/<name>`. A suite that reads one reads it
 #     through a root (`"$REPO_ROOT/CHANGELOG.md"`).

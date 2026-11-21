@@ -15,10 +15,9 @@
 #
 # A suite is dropped only when every occurrence of every match text in it,
 # comment lines included and `@test` names excepted, is proven not to be the
-# changed file. Anything
-# this cannot decide keeps the suite: that is the safe direction, because a
-# wrong drop hides a red until the push-to-main full run, while a wrong keep
-# only costs run time. An occurrence is proven not the file when:
+# changed file. Anything this cannot decide keeps the suite: that is the safe
+# direction, because a wrong drop hides a red until the push-to-main full run,
+# while a wrong keep only costs run time. An occurrence is proven not the file when:
 #
 #   - the text runs on into a longer name (`settings.json.bak`);
 #   - it is a literal absolute path, or a relative literal that is not a
@@ -34,24 +33,24 @@
 #     `mktemp`, a bats temporary directory, or another fixture root, that no
 #     line populates from outside the fixture, and that the suite writes the
 #     path under with a redirection, `touch` or `tee`;
-#   - it is the target of a truncating redirection (`> "$ROOT/CHANGELOG.md"`),
-#     which overwrites the file without reading it.
+#   - it is the target of a truncating redirection (`> "$ROOT/CHANGELOG.md"`)
+#     through no variable fixed to a repo directory, which overwrites the file
+#     without reading it.
 #
 # A line populates a fixture root, and so taints it, when it carries the root
-# and copies, links, moves, unpacks or checks out into it from anything that
-# is not a fixture root (such as cp, rsync, ln, mv, tar, unzip, or a git
-# clone, worktree, archive or checkout not run with `-C` on a fixture), when it
-# also carries a
-# variable fixed to a repo directory that holds a changed path, or when it
-# carries a bare repo path (`.claude/...`). Passing the root to a suite
+# and copies, links, moves, unpacks or checks out into it from anything that is
+# not a fixture root (such as cp, rsync, ln, mv, tar, unzip, or a git clone,
+# worktree, archive or checkout not run with `-C` on a fixture), when it also
+# carries a variable fixed to a repo directory that holds a changed path, or
+# when it carries a bare repo path (`.claude/...`). Passing the root to a suite
 # function whose body does any of those taints it the same way. A suite that
 # sources or `load`s any file has no fixture roots at all, since a helper can
 # set or populate one where this cannot read it.
 #
-# Limit: a script under test that copies a real file into a fixture
-# root the suite wrote first, overwriting it, is not seen. The push-to-main
-# full run backstops it, as it backstops a suite reaching a file through a
-# spelling the match text is not part of.
+# Limit: a script under test that copies a real file into a fixture root the
+# suite wrote first, overwriting it, is not seen. The push-to-main full run
+# backstops it, as it backstops a suite reaching a file through a spelling the
+# match text is not part of.
 
 bats_selector_reaching_suites() {
   LC_ALL=C awk -v root="$1" -v pair_file="$2" -v top_file="$3" -v suite_list="$4" '
