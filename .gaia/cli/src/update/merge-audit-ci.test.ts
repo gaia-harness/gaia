@@ -117,6 +117,11 @@ const memberWith = (extra: string[]): string =>
     '',
   ].join('\n');
 
+const memberYaml = (value: number | undefined): string =>
+  value === undefined ? 'auditors: []\n' : (
+    `auditors:\n  - name: reviewer\n    cap: ${value}\n`
+  );
+
 describe('update merge-audit-ci', () => {
   let sandbox: Sandbox;
   let stdio: ReturnType<typeof captureStdio>;
@@ -536,32 +541,58 @@ describe('update merge-audit-ci', () => {
     });
   });
 
-  test('missing file exits non-zero with a structured error', () => {
-    sandbox.write('baseline', 'auditors: []\n');
-    sandbox.write('latest', 'auditors: []\n');
-    // current is never written.
+  test.each(
+    (
+      [
+        {
+          code: 'audit_ci_file_missing',
+          extraArgs: () => [],
+          // current is never written.
+          files: {baseline: 'auditors: []\n', latest: 'auditors: []\n'},
+          name: 'missing file exits non-zero with a structured error',
+        },
+        {
+          code: 'invalid_arguments',
+          extraArgs: () => ['--nope'],
+          files: {
+            baseline: 'auditors: []\n',
+            current: 'auditors: []\n',
+            latest: 'auditors: []\n',
+          },
+          name: 'an unknown flag exits non-zero with invalid_arguments',
+        },
+        {
+          code: 'audit_ci_file_missing',
+          // The deferred baseline file is never written.
+          extraArgs: (root) => [
+            '--deferred-baseline',
+            `auditors.reviewer=${path.join(root, 'deferred.yaml')}`,
+          ],
+          files: {
+            baseline: memberYaml(2),
+            current: memberYaml(1),
+            latest: memberYaml(2),
+          },
+          name: 'a missing deferred file exits non-zero with a structured error',
+        },
+      ] satisfies {
+        code: string;
+        extraArgs: (root: string) => string[];
+        files: Partial<Record<'baseline' | 'current' | 'latest', string>>;
+        name: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {code, extraArgs, files}) => {
+    for (const [which, contents] of Object.entries(files)) {
+      sandbox.write(which as keyof typeof files, contents);
+    }
 
-    const exit = run(argv(sandbox));
+    const exit = run([...argv(sandbox), ...extraArgs(sandbox.root)]);
+
     expect(exit).not.toBe(0);
-    expect(stdio.errors.join('')).toContain('audit_ci_file_missing');
-  });
-
-  test('an unknown flag exits non-zero with invalid_arguments', () => {
-    sandbox.write('baseline', 'auditors: []\n');
-    sandbox.write('latest', 'auditors: []\n');
-    sandbox.write('current', 'auditors: []\n');
-
-    const exit = run([...argv(sandbox), '--nope']);
-
-    expect(exit).not.toBe(0);
-    expect(stdio.errors.join('')).toContain('invalid_arguments');
+    expect(stdio.errors.join('')).toContain(code);
   });
 });
-
-const memberYaml = (value: number | undefined): string =>
-  value === undefined ? 'auditors: []\n' : (
-    `auditors:\n  - name: reviewer\n    cap: ${value}\n`
-  );
 
 describe('update merge-audit-ci verdict table', () => {
   let sandbox: Sandbox;
@@ -648,16 +679,5 @@ describe('update merge-audit-ci deferred baselines', () => {
   test('without the deferred baseline the same member is a no-op', () => {
     expect(run(argv(sandbox))).toBe(0);
     expect(occupiedBucket(parseJson(stdio.outputs))).toBe('none');
-  });
-
-  test('a missing deferred file exits non-zero with a structured error', () => {
-    const exit = run([
-      ...argv(sandbox),
-      '--deferred-baseline',
-      `auditors.reviewer=${deferredPath()}`,
-    ]);
-
-    expect(exit).not.toBe(0);
-    expect(stdio.errors.join('')).toContain('audit_ci_file_missing');
   });
 });

@@ -1,99 +1,75 @@
 import {describe, expect, test} from 'vitest';
 import {parseRemoteUrl} from './parse-remote-url.js';
 
+const OWNER_REPO = {owner: 'owner', repo: 'repo'};
+
 describe('parseRemoteUrl', () => {
-  describe('accepted forms', () => {
-    test('parses scp-style SSH with .git', () => {
-      expect(parseRemoteUrl('git@github.com:owner/repo.git')).toEqual({
+  test.each(
+    [
+      {
         host: 'github.com',
-        owner: 'owner',
-        repo: 'repo',
+        name: 'parses scp-style SSH with .git',
         url: 'git@github.com:owner/repo.git',
-      });
-    });
-
-    test('parses scp-style SSH without .git', () => {
-      expect(parseRemoteUrl('git@github.com:owner/repo')).toEqual({
+      },
+      {
         host: 'github.com',
-        owner: 'owner',
-        repo: 'repo',
+        name: 'parses scp-style SSH without .git',
         url: 'git@github.com:owner/repo',
-      });
-    });
-
-    test('parses HTTPS with .git', () => {
-      expect(parseRemoteUrl('https://github.com/owner/repo.git')).toEqual({
+      },
+      {
         host: 'github.com',
-        owner: 'owner',
-        repo: 'repo',
+        name: 'parses HTTPS with .git',
         url: 'https://github.com/owner/repo.git',
-      });
-    });
-
-    test('parses HTTPS without .git', () => {
-      expect(parseRemoteUrl('https://github.com/owner/repo')).toEqual({
+      },
+      {
         host: 'github.com',
-        owner: 'owner',
-        repo: 'repo',
+        name: 'parses HTTPS without .git',
         url: 'https://github.com/owner/repo',
-      });
-    });
-
-    test('parses ssh:// protocol with .git', () => {
-      expect(parseRemoteUrl('ssh://git@github.com/owner/repo.git')).toEqual({
+      },
+      {
         host: 'github.com',
-        owner: 'owner',
-        repo: 'repo',
+        name: 'parses ssh:// protocol with .git',
         url: 'ssh://git@github.com/owner/repo.git',
-      });
-    });
-
-    test('preserves non-github host (caller branches on host)', () => {
-      const result = parseRemoteUrl('https://gitlab.com/owner/repo.git');
-      expect(result?.host).toBe('gitlab.com');
-      expect(result?.owner).toBe('owner');
-      expect(result?.repo).toBe('repo');
-    });
-
-    test('preserves non-github host on scp-style', () => {
-      const result = parseRemoteUrl('git@bitbucket.org:owner/repo.git');
-      expect(result?.host).toBe('bitbucket.org');
-    });
+      },
+      {
+        host: 'gitlab.com',
+        name: 'preserves non-github host (caller branches on host)',
+        url: 'https://gitlab.com/owner/repo.git',
+      },
+      {
+        host: 'bitbucket.org',
+        name: 'preserves non-github host on scp-style',
+        url: 'git@bitbucket.org:owner/repo.git',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {host, url}) => {
+    expect(parseRemoteUrl(url)).toEqual({...OWNER_REPO, host, url});
   });
 
-  describe('rejection cases', () => {
-    test('returns null for empty string', () => {
-      expect(parseRemoteUrl('')).toBeNull();
-    });
-
-    test('returns null for whitespace', () => {
-      expect(parseRemoteUrl(' '.repeat(3))).toBeNull();
-    });
-
-    test('returns null for malformed URL', () => {
-      expect(parseRemoteUrl('not a url')).toBeNull();
-    });
-
-    test('returns null for HTTPS with subgroups (3 path segments)', () => {
-      expect(parseRemoteUrl('https://gitlab.com/foo/bar/baz.git')).toBeNull();
-    });
-
-    test('returns null for SSH with subgroups', () => {
-      expect(
-        parseRemoteUrl('git@gitlab.com:group/subgroup/repo.git')
-      ).toBeNull();
-    });
-
-    test('returns null for missing repo', () => {
-      expect(parseRemoteUrl('https://github.com/owner')).toBeNull();
-    });
-
-    test('returns null for trailing-slash-only URL', () => {
-      expect(parseRemoteUrl('https://github.com/')).toBeNull();
-    });
-
-    test('returns null for ssh:// missing path', () => {
-      expect(parseRemoteUrl('ssh://git@github.com/')).toBeNull();
-    });
+  test.each(
+    [
+      {name: 'returns null for empty string', url: ''},
+      {name: 'returns null for whitespace', url: ' '.repeat(3)},
+      {name: 'returns null for malformed URL', url: 'not a url'},
+      {
+        name: 'returns null for HTTPS with subgroups (3 path segments)',
+        url: 'https://gitlab.com/foo/bar/baz.git',
+      },
+      {
+        name: 'returns null for SSH with subgroups',
+        url: 'git@gitlab.com:group/subgroup/repo.git',
+      },
+      {name: 'returns null for missing repo', url: 'https://github.com/owner'},
+      {
+        name: 'returns null for trailing-slash-only URL',
+        url: 'https://github.com/',
+      },
+      {
+        name: 'returns null for ssh:// missing path',
+        url: 'ssh://git@github.com/',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {url}) => {
+    expect(parseRemoteUrl(url)).toBeNull();
   });
 });

@@ -79,69 +79,77 @@ describe('computeRegionMerge', () => {
     expect(report.normalized.latest).toContain('line-end-latest');
   });
 
-  test('malformed working copy (unbalanced: start with no end) bails; verdict falls out of the raw comparison', () => {
-    const baseline = 'baseline body\n';
-    const latest = 'latest body\n';
-    const current = [START, 'a', 'b'].join('\n');
-
+  test.each(
+    (
+      [
+        {
+          baseline: 'baseline body\n',
+          current: [START, 'a', 'b'].join('\n'),
+          latest: 'latest body\n',
+          markers: {
+            current: {detail: 'unbalanced', masked: false, scan: 'malformed'},
+          },
+          name: 'malformed working copy (unbalanced: start with no end) bails; verdict falls out of the raw comparison',
+          verdict: 'conflict',
+        },
+        {
+          baseline: 'baseline body\n',
+          current: [START, 'a', START, 'b', END].join('\n'),
+          latest: 'latest body\n',
+          markers: {
+            current: {
+              detail: 'duplicate-start',
+              masked: false,
+              scan: 'malformed',
+            },
+          },
+          name: 'malformed working copy (duplicate-start) bails the same way',
+          verdict: 'conflict',
+        },
+        {
+          baseline: 'baseline body\n',
+          current: [END, 'a', START].join('\n'),
+          latest: 'latest body\n',
+          markers: {
+            current: {detail: 'inverted', masked: false, scan: 'malformed'},
+          },
+          name: 'malformed working copy (inverted) bails the same way',
+          verdict: 'conflict',
+        },
+        {
+          baseline: [START, 'a', START, 'b', END].join('\n'),
+          current: ['outside', START, 'region', END].join('\n'),
+          latest: ['outside', START, 'region', END].join('\n'),
+          markers: {
+            baseline: {
+              detail: 'duplicate-start',
+              masked: false,
+              scan: 'malformed',
+            },
+            current: {masked: false, scan: 'region'},
+          },
+          name: 'malformed baseline only: global bail, baseline carries the detail, current reports its own well-formed region unmasked',
+          verdict: 'already-latest',
+        },
+      ] satisfies {
+        baseline: string;
+        current: string;
+        latest: string;
+        markers: Partial<Record<'baseline' | 'current', object>>;
+        name: string;
+        verdict: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {baseline, current, latest, markers, verdict}) => {
     const report = computeRegionMerge(baseline, latest, current, START, END);
 
     expect(report.markers.bailed).toBe(true);
-    expect(report.markers.current).toEqual({
-      detail: 'unbalanced',
-      masked: false,
-      scan: 'malformed',
-    });
+
+    for (const [side, expected] of Object.entries(markers)) {
+      expect(report.markers[side as keyof typeof markers]).toEqual(expected);
+    }
     expect(report.normalized).toEqual({baseline, current, latest});
-    expect(report.verdict).toBe('conflict');
-  });
-
-  test('malformed working copy (duplicate-start) bails the same way', () => {
-    const baseline = 'baseline body\n';
-    const latest = 'latest body\n';
-    const current = [START, 'a', START, 'b', END].join('\n');
-
-    const report = computeRegionMerge(baseline, latest, current, START, END);
-
-    expect(report.markers.bailed).toBe(true);
-    expect(report.markers.current).toEqual({
-      detail: 'duplicate-start',
-      masked: false,
-      scan: 'malformed',
-    });
-    expect(report.normalized).toEqual({baseline, current, latest});
-  });
-
-  test('malformed working copy (inverted) bails the same way', () => {
-    const baseline = 'baseline body\n';
-    const latest = 'latest body\n';
-    const current = [END, 'a', START].join('\n');
-
-    const report = computeRegionMerge(baseline, latest, current, START, END);
-
-    expect(report.markers.bailed).toBe(true);
-    expect(report.markers.current).toEqual({
-      detail: 'inverted',
-      masked: false,
-      scan: 'malformed',
-    });
-    expect(report.normalized).toEqual({baseline, current, latest});
-  });
-
-  test('malformed baseline only: global bail, baseline carries the detail, current reports its own well-formed region unmasked', () => {
-    const baseline = [START, 'a', START, 'b', END].join('\n'); // duplicate-start
-    const latest = ['outside', START, 'region', END].join('\n');
-    const current = ['outside', START, 'region', END].join('\n');
-
-    const report = computeRegionMerge(baseline, latest, current, START, END);
-
-    expect(report.markers.bailed).toBe(true);
-    expect(report.markers.baseline).toEqual({
-      detail: 'duplicate-start',
-      masked: false,
-      scan: 'malformed',
-    });
-    expect(report.markers.current).toEqual({masked: false, scan: 'region'});
+    expect(report.verdict).toBe(verdict);
   });
 
   test('pre-region baseline (UAT-009): baseline and current carry no markers, latest does; classifies no-adopter-drift', () => {
@@ -278,26 +286,27 @@ describe('computeRegionMerge', () => {
     expect(secondReinvocation).toEqual(firstReinvocation);
   });
 
-  test('empty region on one side, populated region on the other: both mask to the same single placeholder line', () => {
-    const baseline = ['outside', START, END].join('\n'); // empty region
-    const latest = [
-      'outside',
-      START,
-      'line one',
-      'line two',
-      'line three',
-      END,
-    ].join('\n');
-    const current = baseline;
-
-    const report = computeRegionMerge(baseline, latest, current, START, END);
-
-    expect(report.normalized.baseline).toBe(report.normalized.latest);
-  });
-
-  test('different region line counts on both sides mask to byte-identical forms', () => {
-    const baseline = ['outside', START, 'one line', END].join('\n');
-    const latest = ['outside', START, 'one', 'two', 'three', END].join('\n');
+  test.each(
+    [
+      {
+        baseline: ['outside', START, END].join('\n'),
+        latest: [
+          'outside',
+          START,
+          'line one',
+          'line two',
+          'line three',
+          END,
+        ].join('\n'),
+        name: 'empty region on one side, populated region on the other: both mask to the same single placeholder line',
+      },
+      {
+        baseline: ['outside', START, 'one line', END].join('\n'),
+        latest: ['outside', START, 'one', 'two', 'three', END].join('\n'),
+        name: 'different region line counts on both sides mask to byte-identical forms',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {baseline, latest}) => {
     const current = baseline;
 
     const report = computeRegionMerge(baseline, latest, current, START, END);
@@ -400,68 +409,77 @@ describe('update merge-region (run)', () => {
     vi.restoreAllMocks();
   });
 
-  test('missing --current file exits 1 with region_file_missing', () => {
-    sandbox.write('baseline', 'baseline\n');
-    sandbox.write('latest', 'latest\n');
-    // current is never written.
+  const allSides = {
+    baseline: 'baseline\n',
+    current: 'current\n',
+    latest: 'latest\n',
+  };
 
-    const exit = run(argv(sandbox));
-
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('region_file_missing');
-  });
-
-  test('a missing required flag exits 1 with invalid_arguments', () => {
-    sandbox.write('baseline', 'baseline\n');
-    sandbox.write('latest', 'latest\n');
-    sandbox.write('current', 'current\n');
-    const flags = argv(sandbox).filter(
-      (token) => token !== '--current' && token !== sandbox.currentPath
-    );
-
-    const exit = run(flags);
-
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('invalid_arguments');
-  });
-
-  test.each(['constructor', 'toString', 'valueOf', '__proto__'])(
-    'an unknown flag named after an Object.prototype key (%s) exits 1 with invalid_arguments',
-    (token) => {
-      // A bare VALUE_FLAGS index returns the inherited value for these tokens,
-      // which would skip the unknown-flag branch and silently consume the
-      // NEXT argv element as the flag's value.
-      sandbox.write('baseline', 'baseline\n');
-      sandbox.write('latest', 'latest\n');
-      sandbox.write('current', 'current\n');
-
-      const exit = run([...argv(sandbox), token, 'swallowed']);
-
-      expect(exit).toBe(1);
-      expect(stdio.errors.join('')).toContain('invalid_arguments');
+  test.each(
+    (
+      [
+        {
+          argv,
+          code: 'region_file_missing',
+          // current is never written.
+          files: {baseline: 'baseline\n', latest: 'latest\n'},
+          name: 'missing --current file exits 1 with region_file_missing',
+        },
+        {
+          argv: (fixture) =>
+            argv(fixture).filter(
+              (token) => token !== '--current' && token !== fixture.currentPath
+            ),
+          code: 'invalid_arguments',
+          files: allSides,
+          name: 'a missing required flag exits 1 with invalid_arguments',
+        },
+        // A bare VALUE_FLAGS index returns the inherited value for these tokens,
+        // which would skip the unknown-flag branch and silently consume the
+        // NEXT argv element as the flag's value.
+        ...['constructor', 'toString', 'valueOf', '__proto__'].map((token) => ({
+          argv: (fixture: Sandbox): string[] => [
+            ...argv(fixture),
+            token,
+            'swallowed',
+          ],
+          code: 'invalid_arguments',
+          files: allSides,
+          name: `an unknown flag named after an Object.prototype key (${token}) exits 1 with invalid_arguments`,
+        })),
+        {
+          argv: (fixture) => [
+            '--baseline',
+            fixture.baselinePath,
+            '--latest',
+            fixture.latestPath,
+            '--current',
+            fixture.currentPath,
+            '--start-marker',
+            '',
+            '--end-marker',
+            END,
+          ],
+          code: 'invalid_arguments',
+          files: allSides,
+          name: 'an empty --start-marker exits 1',
+        },
+      ] satisfies {
+        argv: (sandbox: Sandbox) => string[];
+        code: string;
+        files: Partial<Record<'baseline' | 'current' | 'latest', string>>;
+        name: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {argv: buildArgv, code, files}) => {
+    for (const [which, contents] of Object.entries(files)) {
+      sandbox.write(which as keyof typeof files, contents);
     }
-  );
 
-  test('an empty --start-marker exits 1', () => {
-    sandbox.write('baseline', 'baseline\n');
-    sandbox.write('latest', 'latest\n');
-    sandbox.write('current', 'current\n');
-    const flags = [
-      '--baseline',
-      sandbox.baselinePath,
-      '--latest',
-      sandbox.latestPath,
-      '--current',
-      sandbox.currentPath,
-      '--start-marker',
-      '',
-      '--end-marker',
-      END,
-    ];
-
-    const exit = run(flags);
+    const exit = run(buildArgv(sandbox));
 
     expect(exit).toBe(1);
+    expect(stdio.errors.join('')).toContain(code);
   });
 
   test('--help exits 0 and prints the usage banner', () => {

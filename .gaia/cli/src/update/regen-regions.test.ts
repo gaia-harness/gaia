@@ -119,12 +119,14 @@ type RegenerateOverrides = Partial<{
   operand: string;
 }>;
 
+type RegionOverrides = {
+  id?: string;
+  paths?: string[];
+  regenerate?: RegenerateOverrides;
+};
+
 const buildDeclaration = (
-  overrides: {
-    id?: string;
-    paths?: string[];
-    regenerate?: RegenerateOverrides;
-  } = {}
+  overrides: RegionOverrides = {}
 ): Record<string, unknown> => ({
   endMarker: END_MARKER,
   id: overrides.id ?? 'test-region',
@@ -224,132 +226,161 @@ afterEach(() => {
 });
 
 describe('update regen-regions: hostile-input coverage', () => {
-  test('1. absolute operand is refused; nothing spawned', () => {
+  // `1e`: every one of these names the root rather than a path under it.
+  // `./` strips to the empty string and the empty-entry guard refuses it; `.`
+  // and `././` survive the strip and are refused by the parent-is-the-root
+  // guard instead, the same guard a legitimate top-level path reaches (1f).
+  // Either way scoping the snapshot to the whole tree is the outcome refused,
+  // and a bare `/` reaches it by the absolute-path guard (1j).
+  //
+  // `1j`: normalizeRepoPath collapses `//` to `/` and strips no trailing
+  // separator, so both reach the absolute-path guard. Reduced to the empty
+  // string, `/` would get the least descriptive declaration reason, naming
+  // neither what was written nor why it cannot be declared.
+  test.each(
+    (
+      [
+        {
+          declaration: (root) => ({
+            regenerate: {operand: path.join(root, REGEN_SCRIPT_REL)},
+          }),
+          files: (root) => ({[path.join(root, REGEN_SCRIPT_REL)]: 'owned'}),
+          kind: 'operand',
+          name: '1. absolute operand is refused; nothing spawned',
+          reason: () => 'operand is an absolute path',
+        },
+        {
+          // Every consumer of a declared path resolves it against --root: the
+          // backup copies it, the snapshot walks its parent directory, and the
+          // sweep writes and deletes inside that directory. An unguarded entry
+          // reaches outside --root on all three.
+          declaration: () => ({paths: ['../../victim/file.md']}),
+          files: () => DEFAULT_FILES,
+          kind: 'declaration',
+          name: '1a. declared path escaping the root with a parent-directory segment is refused; nothing spawned',
+          reason: () =>
+            'paths carries a parent-directory segment: ../../victim/file.md',
+        },
+        {
+          declaration: (root) => ({
+            paths: [path.join(root, DECLARED_PATHS[0])],
+          }),
+          files: () => DEFAULT_FILES,
+          kind: 'declaration',
+          name: '1b. absolute declared path is refused',
+          reason: (root) =>
+            `paths carries an absolute path: ${path.join(root, DECLARED_PATHS[0])}`,
+        },
+        {
+          declaration: () => ({paths: ['']}),
+          files: () => DEFAULT_FILES,
+          kind: 'declaration',
+          name: '1c. empty declared path is refused',
+          reason: () => 'paths carries an empty entry',
+        },
+        ...(
+          [
+            [
+              '.',
+              'paths carries a path whose parent is the repository root: .',
+            ],
+            ['./', 'paths carries an empty entry'],
+            [
+              '././',
+              'paths carries a path whose parent is the repository root: ./',
+            ],
+          ] as const
+        ).map(([declaredPath, reason]) => ({
+          declaration: (): RegionOverrides => ({paths: [declaredPath]}),
+          files: (): Record<string, unknown> => DEFAULT_FILES,
+          kind: 'declaration' as const,
+          name: '1e. a declared path naming the repository root itself (%p) is refused, so the snapshot never scopes to the whole tree',
+          reason: (): string => reason,
+        })),
+        {
+          declaration: () => ({paths: ['CHANGELOG.md']}),
+          files: () => DEFAULT_FILES,
+          kind: 'declaration',
+          name: '1f. a top-level declared path is refused for the same reason',
+          reason: () =>
+            'paths carries a path whose parent is the repository root: CHANGELOG.md',
+        },
+        ...['/', '//'].map((declaredPath) => ({
+          declaration: (): RegionOverrides => ({paths: [declaredPath]}),
+          files: (): Record<string, unknown> => DEFAULT_FILES,
+          kind: 'declaration' as const,
+          name: '1j. a bare separator (%p) is refused as the absolute path it is, not as an empty entry',
+          reason: (): string => 'paths carries an absolute path: /',
+        })),
+        {
+          // Resolves on disk to the exact same real script as REGEN_SCRIPT_REL,
+          // and the files map is seeded with this literal (un-collapsed) string
+          // as a key, so a broken '..' check would let this region run to
+          // completion.
+          declaration: () => ({
+            regenerate: {operand: '.gaia/scripts/../scripts/write-regions.sh'},
+          }),
+          files: () => ({
+            '.gaia/scripts/../scripts/write-regions.sh': 'owned',
+          }),
+          kind: 'operand',
+          name: '2. operand carrying a parent-directory segment is refused, even though it resolves to a shipped file',
+          reason: () => 'operand carries a parent-directory segment',
+        },
+        {
+          declaration: () => ({
+            regenerate: {operand: 'scripts/write-regions.sh'},
+          }),
+          files: () => DEFAULT_FILES,
+          kind: 'operand',
+          name: '4. operand that is a substring of a shipped key is refused, not matched',
+          reason: () => 'operand is not a path this manifest ships',
+        },
+        {
+          declaration: () => ({regenerate: {operand: 'write-regions.sh'}}),
+          files: () => DEFAULT_FILES,
+          kind: 'operand',
+          name: '5. operand that is a suffix of a shipped key is refused',
+          reason: () => 'operand is not a path this manifest ships',
+        },
+        {
+          declaration: () => ({regenerate: {interpreter: 'bin/sh'}}),
+          files: () => DEFAULT_FILES,
+          kind: 'operand',
+          name: '10. an interpreter containing a path separator is refused',
+          reason: () => 'interpreter is not a bare program name',
+        },
+      ] satisfies {
+        declaration: (root: string) => RegionOverrides;
+        files: (root: string) => Record<string, unknown>;
+        kind: 'declaration' | 'operand';
+        name: string;
+        reason: (root: string) => string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {declaration, files, kind, reason}) => {
     const root = buildRoot();
 
     writeDeclaredFiles(root, 'original');
     writeScript(root, HAPPY_SCRIPT_BODY);
-    const absoluteOperand = path.join(root, REGEN_SCRIPT_REL);
     const manifestPath = writeManifest(
       root,
-      [buildDeclaration({regenerate: {operand: absoluteOperand}})],
-      {[absoluteOperand]: 'owned'}
+      [buildDeclaration(declaration(root))],
+      files(root)
     );
 
     const {exit, report} = runCapturing(baseArgv(manifestPath, root));
 
     expect(exit).toBe(0);
+    expect(report.ran).toHaveLength(0);
+    expect(report.confined).toHaveLength(0);
     expect(report.refused).toHaveLength(1);
-    expect(report.refused[0]?.kind).toBe('operand');
-    expect(report.refused[0]?.reason).toBe('operand is an absolute path');
-    expect(report.refused[0]?.argv).toBeDefined();
+    expect(report.refused[0]?.kind).toBe(kind);
+    expect(report.refused[0]?.reason).toBe(reason(root));
+    // An operand refusal carries the argv it would have run; a declaration
+    // refusal never parsed far enough to have one.
+    expect(report.refused[0]?.argv === undefined).toBe(kind === 'declaration');
     expect(readDeclared(root, 0)).toBe('original one\n');
-  });
-
-  test('1a. declared path escaping the root with a parent-directory segment is refused; nothing spawned', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    writeScript(root, HAPPY_SCRIPT_BODY);
-    // Every consumer of a declared path resolves it against --root: the
-    // backup copies it, the snapshot walks its parent directory, and the
-    // sweep writes and deletes inside that directory. An unguarded entry
-    // reaches outside --root on all three.
-    const manifestPath = writeManifest(root, [
-      buildDeclaration({paths: ['../../victim/file.md']}),
-    ]);
-
-    const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(0);
-    expect(report.ran).toHaveLength(0);
-    expect(report.refused).toHaveLength(1);
-    expect(report.refused[0]?.kind).toBe('declaration');
-    expect(report.refused[0]?.reason).toBe(
-      'paths carries a parent-directory segment: ../../victim/file.md'
-    );
-  });
-
-  test('1b. absolute declared path is refused', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    writeScript(root, HAPPY_SCRIPT_BODY);
-    const manifestPath = writeManifest(root, [
-      buildDeclaration({paths: [path.join(root, DECLARED_PATHS[0])]}),
-    ]);
-
-    const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(0);
-    expect(report.ran).toHaveLength(0);
-    expect(report.refused[0]?.kind).toBe('declaration');
-    expect(report.refused[0]?.reason).toMatch(
-      /^paths carries an absolute path/u
-    );
-  });
-
-  test('1c. empty declared path is refused', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    writeScript(root, HAPPY_SCRIPT_BODY);
-    const manifestPath = writeManifest(root, [buildDeclaration({paths: ['']})]);
-
-    const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(0);
-    expect(report.ran).toHaveLength(0);
-    expect(report.refused[0]?.reason).toBe('paths carries an empty entry');
-  });
-
-  // Every one of these names the root rather than a path under it. `./`
-  // strips to the empty string and the empty-entry guard refuses it; `.` and
-  // `././` survive the strip and are refused by the parent-is-the-root guard
-  // instead, the same guard a legitimate top-level path reaches (test 1f).
-  // Either way scoping the snapshot to the whole tree is the outcome refused,
-  // and a bare `/` reaches it by the absolute-path guard (test 1j).
-  test.each([
-    ['.', 'paths carries a path whose parent is the repository root: .'],
-    ['./', 'paths carries an empty entry'],
-    ['././', 'paths carries a path whose parent is the repository root: ./'],
-  ])(
-    '1e. a declared path naming the repository root itself (%p) is refused, so the snapshot never scopes to the whole tree',
-    (declPath, reason) => {
-      const root = buildRoot();
-
-      writeDeclaredFiles(root, 'original');
-      writeScript(root, HAPPY_SCRIPT_BODY);
-      const manifestPath = writeManifest(root, [
-        buildDeclaration({paths: [declPath]}),
-      ]);
-
-      const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-      expect(exit).toBe(0);
-      expect(report.ran).toHaveLength(0);
-      expect(report.confined).toHaveLength(0);
-      expect(report.refused[0]?.kind).toBe('declaration');
-      expect(report.refused[0]?.reason).toBe(reason);
-    }
-  );
-
-  test('1f. a top-level declared path is refused for the same reason', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    writeScript(root, HAPPY_SCRIPT_BODY);
-    const manifestPath = writeManifest(root, [
-      buildDeclaration({paths: ['CHANGELOG.md']}),
-    ]);
-
-    const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(0);
-    expect(report.ran).toHaveLength(0);
-    expect(report.refused[0]?.reason).toBe(
-      'paths carries a path whose parent is the repository root: CHANGELOG.md'
-    );
   });
 
   test('1d. a declared path written as ./a/b still matches its own snapshot key, so the run is not reverted', () => {
@@ -374,58 +405,6 @@ describe('update regen-regions: hostile-input coverage', () => {
     expect(report.ran).toHaveLength(1);
     expect(report.confined).toHaveLength(0);
     expect(readDeclared(root, 0)).not.toBe('original one\n');
-  });
-
-  test.each(['/', '//'])(
-    '1j. a bare separator (%p) is refused as the absolute path it is, not as an empty entry',
-    (declPath) => {
-      const root = buildRoot();
-
-      writeDeclaredFiles(root, 'original');
-      writeScript(root, HAPPY_SCRIPT_BODY);
-      // Normalization strips a trailing separator, but never the last one: a
-      // lone '/' reduced to the empty string would be refused for the least
-      // descriptive of the four reasons, naming neither what was written nor
-      // why it cannot be declared. `/.` is deliberately not here: it carries a
-      // `.` segment and nothing else, so it normalizes away exactly as `.`
-      // does and 1e's empty-entry refusal is the one it earns.
-      const manifestPath = writeManifest(root, [
-        buildDeclaration({paths: [declPath]}),
-      ]);
-
-      const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-      expect(exit).toBe(0);
-      expect(report.ran).toHaveLength(0);
-      expect(report.refused[0]?.reason).toBe(
-        'paths carries an absolute path: /'
-      );
-    }
-  );
-
-  test('2. operand carrying a parent-directory segment is refused, even though it resolves to a shipped file', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    writeScript(root, HAPPY_SCRIPT_BODY);
-    // Resolves on disk to the exact same real script as REGEN_SCRIPT_REL, and
-    // the files map is seeded with this literal (un-collapsed) string as a
-    // key, so a broken '..' check would let this region run to completion.
-    const operand = '.gaia/scripts/../scripts/write-regions.sh';
-    const manifestPath = writeManifest(
-      root,
-      [buildDeclaration({regenerate: {operand}})],
-      {[operand]: 'owned'}
-    );
-
-    const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(0);
-    expect(report.refused[0]?.reason).toBe(
-      'operand carries a parent-directory segment'
-    );
-    expect(report.ran).toHaveLength(0);
-    expect(readDeclared(root, 0)).toBe('original one\n');
   });
 
   test('3. operand resolving through a symlink outside the repository is refused', () => {
@@ -460,38 +439,6 @@ describe('update regen-regions: hostile-input coverage', () => {
       'operand resolves through a symlink out of the repository'
     );
     expect(readDeclared(root, 0)).toBe('original one\n');
-  });
-
-  test('4. operand that is a substring of a shipped key is refused, not matched', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    writeScript(root, HAPPY_SCRIPT_BODY);
-    const manifestPath = writeManifest(root, [
-      buildDeclaration({regenerate: {operand: 'scripts/write-regions.sh'}}),
-    ]);
-
-    const {report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(report.refused[0]?.reason).toBe(
-      'operand is not a path this manifest ships'
-    );
-  });
-
-  test('5. operand that is a suffix of a shipped key is refused', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    writeScript(root, HAPPY_SCRIPT_BODY);
-    const manifestPath = writeManifest(root, [
-      buildDeclaration({regenerate: {operand: 'write-regions.sh'}}),
-    ]);
-
-    const {report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(report.refused[0]?.reason).toBe(
-      'operand is not a path this manifest ships'
-    );
   });
 
   test('6. a shipped key with a "./" prefix is accepted after normalization', () => {
@@ -533,88 +480,70 @@ describe('update regen-regions: hostile-input coverage', () => {
     expect(typeof report.failed[0]?.status).toBe('number');
   });
 
-  test('8. interpreter pointed at a nonexistent program is a spawn failure', () => {
+  test.each(
+    (
+      [
+        {
+          failure: {kind: 'spawn', status: undefined},
+          name: '8. interpreter pointed at a nonexistent program is a spawn failure',
+          regenerate: {interpreter: 'this-interpreter-does-not-exist-xyz'},
+          scriptBody: HAPPY_SCRIPT_BODY,
+        },
+        {
+          failure: {kind: 'exit', status: 3},
+          name: '9. the regeneration program exiting non-zero is reported distinctly from a spawn failure',
+          regenerate: {},
+          scriptBody: [
+            String.raw`printf "partial\n" > .claude/agents/one.md`,
+            'exit 3',
+          ].join('\n'),
+        },
+        {
+          // The shell signals itself: `status` is null on the thrown error,
+          // exactly as it is when the interpreter could not be launched at
+          // all. Only the signal tells the two apart. `cause` is external:
+          // neither of this command's own bounds ended it, and saying so is
+          // what keeps an operator's own kill from reading as GAIA imposing a
+          // ceiling.
+          failure: {cause: 'external', kind: 'killed', signal: 'SIGTERM'},
+          name: '9a. a regeneration program killed by a signal is reported distinctly from an interpreter that never launched',
+          regenerate: {},
+          scriptBody: 'kill -TERM $$',
+        },
+        {
+          // 33 MiB down stderr, past the command's own 32 MiB ceiling. stdout
+          // is discarded outright, so stderr is the only stream that can
+          // reach it.
+          failure: {cause: 'maxBuffer', kind: 'killed', signal: 'SIGTERM'},
+          name: '9c. a regeneration program stopped by the output bound names that bound, not a bare signal',
+          regenerate: {},
+          scriptBody:
+            'awk \'BEGIN { while (i++ < 33792) printf "%1024s", "" }\' >&2',
+        },
+      ] satisfies {
+        failure: Partial<RegenRegionsReport['failed'][number]>;
+        name: string;
+        regenerate: RegenerateOverrides;
+        scriptBody: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {failure, regenerate, scriptBody}) => {
     const root = buildRoot();
 
     writeDeclaredFiles(root, 'original');
-    writeScript(root, HAPPY_SCRIPT_BODY);
-    const manifestPath = writeManifest(root, [
-      buildDeclaration({
-        regenerate: {interpreter: 'this-interpreter-does-not-exist-xyz'},
-      }),
-    ]);
+    writeScript(root, scriptBody);
+    const manifestPath = writeManifest(root, [buildDeclaration({regenerate})]);
 
     const {exit, report} = runCapturing(baseArgv(manifestPath, root));
 
     expect(exit).toBe(0);
     expect(report.refused).toEqual([]);
-    expect(report.failed).toHaveLength(1);
-    expect(report.failed[0]?.kind).toBe('spawn');
-    expect(report.failed[0]?.status).toBeUndefined();
-  });
-
-  test('9. the regeneration program exiting non-zero is reported distinctly from a spawn failure', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    writeScript(
-      root,
-      [String.raw`printf "partial\n" > .claude/agents/one.md`, 'exit 3'].join(
-        '\n'
-      )
-    );
-    const manifestPath = writeManifest(root, [buildDeclaration()]);
-
-    const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(0);
-    expect(report.failed).toHaveLength(1);
-    expect(report.failed[0]?.kind).toBe('exit');
-    expect(report.failed[0]?.status).toBe(3);
     expect(report.ran).toEqual([]);
-  });
-
-  test('9a. a regeneration program killed by a signal is reported distinctly from an interpreter that never launched', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    // The shell signals itself: `status` is null on the thrown error, exactly
-    // as it is when the interpreter could not be launched at all. Only the
-    // signal tells the two apart.
-    writeScript(root, 'kill -TERM $$');
-    const manifestPath = writeManifest(root, [buildDeclaration()]);
-
-    const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(0);
     expect(report.failed).toHaveLength(1);
-    expect(report.failed[0]?.kind).toBe('killed');
-    expect(report.failed[0]?.signal).toBe('SIGTERM');
-    // Neither of this command's own bounds ended it, and saying so is what
-    // keeps an operator's own kill from reading as GAIA imposing a ceiling.
-    expect(report.failed[0]?.cause).toBe('external');
-    expect(report.ran).toEqual([]);
-  });
 
-  test('9c. a regeneration program stopped by the output bound names that bound, not a bare signal', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    // 33 MiB down stderr, past the command's own 32 MiB ceiling. stdout is
-    // discarded outright, so stderr is the only stream that can reach it.
-    writeScript(
-      root,
-      'awk \'BEGIN { while (i++ < 33792) printf "%1024s", "" }\' >&2'
-    );
-    const manifestPath = writeManifest(root, [buildDeclaration()]);
-
-    const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(0);
-    expect(report.failed).toHaveLength(1);
-    expect(report.failed[0]?.kind).toBe('killed');
-    expect(report.failed[0]?.signal).toBe('SIGTERM');
-    expect(report.failed[0]?.cause).toBe('maxBuffer');
+    for (const [field, value] of Object.entries(failure)) {
+      expect(report.failed[0]?.[field as keyof typeof failure]).toBe(value);
+    }
   });
 
   test('9d. every kill cause maps from the code Node reports, and an unknown one is external', () => {
@@ -644,22 +573,6 @@ describe('update regen-regions: hostile-input coverage', () => {
     expect(report.failed).toEqual([]);
     expect(report.ran).toHaveLength(1);
     expect(readDeclared(root, 0)).toBe('regenerated one\n');
-  });
-
-  test('10. an interpreter containing a path separator is refused', () => {
-    const root = buildRoot();
-
-    writeDeclaredFiles(root, 'original');
-    writeScript(root, HAPPY_SCRIPT_BODY);
-    const manifestPath = writeManifest(root, [
-      buildDeclaration({regenerate: {interpreter: 'bin/sh'}}),
-    ]);
-
-    const {report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(report.refused[0]?.reason).toBe(
-      'interpreter is not a bare program name'
-    );
   });
 });
 
@@ -1373,18 +1286,30 @@ describe('update regen-regions: behavior coverage', () => {
     expect(report.skipped[0]?.argv).toEqual(['sh', REGEN_SCRIPT_REL]);
   });
 
-  test('18. manifest with no regions key produces an empty report', () => {
+  test.each(
+    (
+      [
+        {
+          files: {},
+          name: '18. manifest with no regions key produces an empty report',
+          // JSON.stringify drops an undefined value, so the manifest is
+          // written with no regions key at all.
+          regions: undefined,
+        },
+        {
+          files: DEFAULT_FILES,
+          name: '19. manifest with regions: [] produces the same empty report',
+          regions: [],
+        },
+      ] satisfies {
+        files: Record<string, unknown>;
+        name: string;
+        regions: [] | undefined;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {files, regions}) => {
     const root = buildRoot();
-    const manifestPath = path.join(root, 'manifest.json');
-
-    writeFileSync(
-      manifestPath,
-      JSON.stringify({
-        files: {},
-        generated: '2024-01-01T00:00:00.000Z',
-        version: '1.0.0',
-      })
-    );
+    const manifestPath = writeManifest(root, regions, files);
 
     const {exit, report} = runCapturing(baseArgv(manifestPath, root));
 
@@ -1397,17 +1322,6 @@ describe('update regen-regions: behavior coverage', () => {
       refused: [],
       skipped: [],
     });
-  });
-
-  test('19. manifest with regions: [] produces the same empty report', () => {
-    const root = buildRoot();
-    const manifestPath = writeManifest(root, []);
-
-    const {exit, report} = runCapturing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(0);
-    expect(report.ran).toEqual([]);
-    expect(report.refused).toEqual([]);
   });
 
   test.each([
@@ -1506,41 +1420,47 @@ describe('update regen-regions: behavior coverage', () => {
 });
 
 describe('update regen-regions: exit codes', () => {
-  test('21a. a missing required flag exits 1 with invalid_arguments', () => {
-    const root = buildRoot();
-    const manifestPath = writeManifest(root, []);
+  test.each(
+    (
+      [
+        {
+          argv: (manifestPath) => ['--manifest', manifestPath, '--json'],
+          code: 'invalid_arguments',
+          manifest: (root) => writeManifest(root, []),
+          name: '21a. a missing required flag exits 1 with invalid_arguments',
+        },
+        {
+          argv: (manifestPath, root) => baseArgv(manifestPath, root),
+          code: 'manifest_not_found',
+          manifest: (root) => path.join(root, 'missing-manifest.json'),
+          name: '21b. a manifest that does not exist exits 1 with manifest_not_found',
+        },
+        {
+          argv: (manifestPath, root) => baseArgv(manifestPath, root),
+          code: 'manifest_parse_failed',
+          manifest: (root) => {
+            const manifestPath = path.join(root, 'manifest.json');
 
-    const {exit, stderrText} = runFailing([
-      '--manifest',
-      manifestPath,
-      '--json',
-    ]);
+            writeFileSync(manifestPath, '{not json');
+
+            return manifestPath;
+          },
+          name: '21c. a manifest that is not valid JSON exits 1 with manifest_parse_failed',
+        },
+      ] satisfies {
+        argv: (manifestPath: string, root: string) => string[];
+        code: string;
+        manifest: (root: string) => string;
+        name: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {argv, code, manifest}) => {
+    const root = buildRoot();
+
+    const {exit, stderrText} = runFailing(argv(manifest(root), root));
 
     expect(exit).toBe(1);
-    expect(stderrText).toContain('invalid_arguments');
-  });
-
-  test('21b. a manifest that does not exist exits 1 with manifest_not_found', () => {
-    const root = buildRoot();
-
-    const {exit, stderrText} = runFailing(
-      baseArgv(path.join(root, 'missing-manifest.json'), root)
-    );
-
-    expect(exit).toBe(1);
-    expect(stderrText).toContain('manifest_not_found');
-  });
-
-  test('21c. a manifest that is not valid JSON exits 1 with manifest_parse_failed', () => {
-    const root = buildRoot();
-    const manifestPath = path.join(root, 'manifest.json');
-
-    writeFileSync(manifestPath, '{not json');
-
-    const {exit, stderrText} = runFailing(baseArgv(manifestPath, root));
-
-    expect(exit).toBe(1);
-    expect(stderrText).toContain('manifest_parse_failed');
+    expect(stderrText).toContain(code);
   });
 
   test('21d. a run mixing refused, skipped, and failed regions still exits 0', () => {

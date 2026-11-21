@@ -21,77 +21,101 @@ describe('scanRegion', () => {
     expect(scanRegion(source, START, END)).toEqual({kind: 'absent'});
   });
 
-  test('two starts, one end → duplicate-start', () => {
-    const source = [START, 'a', START, 'b', END].join('\n');
-    expect(scanRegion(source, START, END)).toEqual({
+  test.each(
+    [
+      {
+        end: END,
+        lines: [START, 'a', START, 'b', END],
+        name: 'two starts, one end → duplicate-start',
+        reason: 'duplicate-start',
+        start: START,
+      },
+      {
+        end: END,
+        lines: [START, 'a', END, 'b', END],
+        name: 'one start, two ends → duplicate-end',
+        reason: 'duplicate-end',
+        start: START,
+      },
+      {
+        end: END,
+        lines: [START, 'a', 'b'],
+        name: 'one start, no end → unbalanced',
+        reason: 'unbalanced',
+        start: START,
+      },
+      {
+        end: END,
+        lines: ['a', 'b', END],
+        name: 'no start, one end → unbalanced',
+        reason: 'unbalanced',
+        start: START,
+      },
+      {
+        end: END,
+        lines: [END, 'a', START],
+        name: 'end line before start line → inverted',
+        reason: 'inverted',
+        start: START,
+      },
+      {
+        // One line matches both markers, so `startLine === endLine`. Without the
+        // `>=` guard this scans as a zero-length region and maskRegion duplicates
+        // the marker line while masking nothing.
+        end: START,
+        lines: ['a', START, 'b', 'c'],
+        name: 'identical start and end markers → inverted, and maskRegion leaves the source alone',
+        reason: 'inverted',
+        start: START,
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {end, lines, reason, start}) => {
+    const source = lines.join('\n');
+    expect(scanRegion(source, start, end)).toEqual({
       kind: 'malformed',
-      reason: 'duplicate-start',
+      reason,
     });
+    expect(maskRegion(source, start, end).masked).toBe(source);
   });
 
-  test('one start, two ends → duplicate-end', () => {
-    const source = [START, 'a', END, 'b', END].join('\n');
-    expect(scanRegion(source, START, END)).toEqual({
-      kind: 'malformed',
-      reason: 'duplicate-end',
-    });
-  });
+  test.each(
+    (
+      [
+        {
+          lines: [
+            'Use the `<!-- gaia:test:start -->` marker to delimit it.',
+            'prose',
+          ],
+          markerPairs: [[START, END]],
+          name: 'substring-only line → absent (whole-line equality, not marker-strip.ts substring matching)',
+        },
+        {
+          lines: [`  ${START}`, 'a', `${END}  `],
+          markerPairs: [[START, END]],
+          name: 'leading/trailing whitespace around an otherwise-matching line → not a match',
+        },
+        {
+          lines: [START, 'a', END],
+          markerPairs: [
+            ['', END],
+            [START, ''],
+            [' '.repeat(3), END],
+            [START, '\t'],
+          ],
+          name: 'empty and whitespace-only marker arguments → absent',
+        },
+      ] satisfies {
+        lines: string[];
+        markerPairs: [string, string][];
+        name: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {lines, markerPairs}) => {
+    const source = lines.join('\n');
 
-  test('one start, no end → unbalanced', () => {
-    const source = [START, 'a', 'b'].join('\n');
-    expect(scanRegion(source, START, END)).toEqual({
-      kind: 'malformed',
-      reason: 'unbalanced',
-    });
-  });
-
-  test('no start, one end → unbalanced', () => {
-    const source = ['a', 'b', END].join('\n');
-    expect(scanRegion(source, START, END)).toEqual({
-      kind: 'malformed',
-      reason: 'unbalanced',
-    });
-  });
-
-  test('end line before start line → inverted', () => {
-    const source = [END, 'a', START].join('\n');
-    expect(scanRegion(source, START, END)).toEqual({
-      kind: 'malformed',
-      reason: 'inverted',
-    });
-  });
-
-  test('identical start and end markers → inverted, and maskRegion leaves the source alone', () => {
-    // One line matches both markers, so `startLine === endLine`. Without the
-    // `>=` guard this scans as a zero-length region and maskRegion duplicates
-    // the marker line while masking nothing.
-    const source = ['a', START, 'b', 'c'].join('\n');
-    expect(scanRegion(source, START, START)).toEqual({
-      kind: 'malformed',
-      reason: 'inverted',
-    });
-    expect(maskRegion(source, START, START).masked).toBe(source);
-  });
-
-  test('substring-only line → absent (whole-line equality, not marker-strip.ts substring matching)', () => {
-    const source = [
-      'Use the `<!-- gaia:test:start -->` marker to delimit it.',
-      'prose',
-    ].join('\n');
-    expect(scanRegion(source, START, END)).toEqual({kind: 'absent'});
-  });
-
-  test('leading/trailing whitespace around an otherwise-matching line → not a match', () => {
-    const source = [`  ${START}`, 'a', `${END}  `].join('\n');
-    expect(scanRegion(source, START, END)).toEqual({kind: 'absent'});
-  });
-
-  test('empty and whitespace-only marker arguments → absent', () => {
-    const source = [START, 'a', END].join('\n');
-    expect(scanRegion(source, '', END)).toEqual({kind: 'absent'});
-    expect(scanRegion(source, START, '')).toEqual({kind: 'absent'});
-    expect(scanRegion(source, ' '.repeat(3), END)).toEqual({kind: 'absent'});
-    expect(scanRegion(source, START, '\t')).toEqual({kind: 'absent'});
+    for (const [start, end] of markerPairs) {
+      expect(scanRegion(source, start, end)).toEqual({kind: 'absent'});
+    }
   });
 });
 

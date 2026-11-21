@@ -1,6 +1,6 @@
 /**
  * Strategy: all three primitives are pure, so every case calls them directly.
- * The divergence block is the point of the suite: `takeValue` and
+ * The divergence rows are the point of the suite: `takeValue` and
  * `takeNonFlagValue` disagree on exactly one input shape, and both answers are
  * shipped, so a change that collapses them into one semantic fails here rather
  * than silently at whichever call sites were relaxed or tightened.
@@ -14,70 +14,81 @@ const TABLE: Readonly<Partial<Record<string, string>>> = {
 };
 
 describe('lookupOwn', () => {
-  test('returns the value for an own key', () => {
-    expect(lookupOwn(TABLE, 'build')).toBe('build');
-  });
-
-  test('returns undefined for an absent key', () => {
-    expect(lookupOwn(TABLE, 'bogus')).toBeUndefined();
-  });
-});
-
-describe('takeValue', () => {
-  test('reads the element at index', () => {
-    expect(takeValue(['--out', 'file.txt'], 1, '--out')).toEqual({
-      ok: true,
-      value: 'file.txt',
-    });
-  });
-
-  test('reports a missing value past the end of argv', () => {
-    expect(takeValue(['--out'], 1, '--out')).toEqual({
-      message: '--out requires a value',
-      ok: false,
-    });
-  });
-
-  test('reads an empty string as a value', () => {
-    expect(takeValue(['--out', ''], 1, '--out')).toEqual({ok: true, value: ''});
+  test.each(
+    [
+      {
+        expected: 'build',
+        key: 'build',
+        name: 'returns the value for an own key',
+      },
+      {
+        expected: undefined,
+        key: 'bogus',
+        name: 'returns undefined for an absent key',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, key}) => {
+    expect(lookupOwn(TABLE, key)).toBe(expected);
   });
 });
 
-describe('takeNonFlagValue', () => {
-  test('reads the element at index', () => {
-    expect(takeNonFlagValue(['--out', 'file.txt'], 1, '--out')).toEqual({
-      ok: true,
-      value: 'file.txt',
-    });
-  });
+const MISSING = {message: '--out requires a value', ok: false};
 
-  test('reports a missing value past the end of argv', () => {
-    expect(takeNonFlagValue(['--out'], 1, '--out')).toEqual({
-      message: '--out requires a value',
-      ok: false,
-    });
-  });
-
-  test('reads a single-dash element as a value', () => {
-    expect(takeNonFlagValue(['--out', '-x'], 1, '--out')).toEqual({
-      ok: true,
-      value: '-x',
-    });
-  });
-});
-
-describe('the two readers diverge on a --flag-shaped value', () => {
-  test('takeValue consumes the following flag as the value', () => {
-    expect(takeValue(['--out', '--json'], 1, '--out')).toEqual({
-      ok: true,
-      value: '--json',
-    });
-  });
-
-  test('takeNonFlagValue reports a missing value instead', () => {
-    expect(takeNonFlagValue(['--out', '--json'], 1, '--out')).toEqual({
-      message: '--out requires a value',
-      ok: false,
-    });
+// The last two rows are the divergence: the readers disagree on a
+// --flag-shaped value, and both answers are shipped.
+describe('takeValue and takeNonFlagValue', () => {
+  test.each(
+    [
+      {
+        argv: ['--out', 'file.txt'],
+        expected: {ok: true, value: 'file.txt'},
+        name: 'takeValue reads the element at index',
+        reader: takeValue,
+      },
+      {
+        argv: ['--out'],
+        expected: MISSING,
+        name: 'takeValue reports a missing value past the end of argv',
+        reader: takeValue,
+      },
+      {
+        argv: ['--out', ''],
+        expected: {ok: true, value: ''},
+        name: 'takeValue reads an empty string as a value',
+        reader: takeValue,
+      },
+      {
+        argv: ['--out', 'file.txt'],
+        expected: {ok: true, value: 'file.txt'},
+        name: 'takeNonFlagValue reads the element at index',
+        reader: takeNonFlagValue,
+      },
+      {
+        argv: ['--out'],
+        expected: MISSING,
+        name: 'takeNonFlagValue reports a missing value past the end of argv',
+        reader: takeNonFlagValue,
+      },
+      {
+        argv: ['--out', '-x'],
+        expected: {ok: true, value: '-x'},
+        name: 'takeNonFlagValue reads a single-dash element as a value',
+        reader: takeNonFlagValue,
+      },
+      {
+        argv: ['--out', '--json'],
+        expected: {ok: true, value: '--json'},
+        name: 'takeValue consumes the following flag as the value',
+        reader: takeValue,
+      },
+      {
+        argv: ['--out', '--json'],
+        expected: MISSING,
+        name: 'takeNonFlagValue reports a missing value instead',
+        reader: takeNonFlagValue,
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {argv, expected, reader}) => {
+    expect(reader(argv, 1, '--out')).toEqual(expected);
   });
 });

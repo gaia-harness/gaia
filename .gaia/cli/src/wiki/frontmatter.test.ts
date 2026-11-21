@@ -76,56 +76,50 @@ describe('wiki frontmatter', () => {
     vi.restoreAllMocks();
   });
 
-  test('flags a page missing status', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Foo.md',
-      '---\ntype: concept\n---\n\n# Foo\n\nBody.\n'
-    );
+  const requiredFrontmatterFieldsCases: readonly {
+    contents: string;
+    gaps: readonly {missing: string[]; path: string}[];
+    name: string;
+    pagePath: string;
+  }[] = [
+    {
+      contents: '---\ntype: concept\n---\n\n# Foo\n\nBody.\n',
+      gaps: [{missing: ['status'], path: 'wiki/concepts/Foo.md'}],
+      name: 'flags a page missing status',
+      pagePath: 'wiki/concepts/Foo.md',
+    },
+    {
+      contents: '---\ntitle: Bare\n---\n\n# Bare\n\nBody.\n',
+      gaps: [{missing: ['type', 'status'], path: 'wiki/concepts/Bare.md'}],
+      name: 'flags a page missing both type and status',
+      pagePath: 'wiki/concepts/Bare.md',
+    },
+    {
+      contents: '# None\n\nNo frontmatter.\n',
+      gaps: [{missing: ['type', 'status'], path: 'wiki/concepts/None.md'}],
+      name: 'flags a page with no frontmatter block at all',
+      pagePath: 'wiki/concepts/None.md',
+    },
+    {
+      contents: '---\ntype: concept\nstatus: ~\n---\n\n# Null\n',
+      gaps: [{missing: ['status'], path: 'wiki/concepts/Null.md'}],
+      name: 'treats a null required field as missing',
+      pagePath: 'wiki/concepts/Null.md',
+    },
+    {
+      contents: '---\ntype: concept\nstatus: stable\n---\n\n# Good\n',
+      gaps: [],
+      name: 'does not flag a page carrying both required fields',
+      pagePath: 'wiki/concepts/Good.md',
+    },
+  ];
 
-    const gaps = findFrontmatterGaps(sandbox.root);
-    expect(gaps).toEqual([{missing: ['status'], path: 'wiki/concepts/Foo.md'}]);
-  });
+  test.each(
+    requiredFrontmatterFieldsCases.map((row) => [row.name, row] as const)
+  )('%s', (_name, {contents, gaps, pagePath}) => {
+    sandbox.writeFile(pagePath, contents);
 
-  test('flags a page missing both type and status', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Bare.md',
-      '---\ntitle: Bare\n---\n\n# Bare\n\nBody.\n'
-    );
-
-    const gaps = findFrontmatterGaps(sandbox.root);
-    expect(gaps).toEqual([
-      {missing: ['type', 'status'], path: 'wiki/concepts/Bare.md'},
-    ]);
-  });
-
-  test('flags a page with no frontmatter block at all', () => {
-    sandbox.writeFile('wiki/concepts/None.md', '# None\n\nNo frontmatter.\n');
-
-    const gaps = findFrontmatterGaps(sandbox.root);
-    expect(gaps).toEqual([
-      {missing: ['type', 'status'], path: 'wiki/concepts/None.md'},
-    ]);
-  });
-
-  test('treats a null required field as missing', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Null.md',
-      '---\ntype: concept\nstatus: ~\n---\n\n# Null\n'
-    );
-
-    const gaps = findFrontmatterGaps(sandbox.root);
-    expect(gaps).toEqual([
-      {missing: ['status'], path: 'wiki/concepts/Null.md'},
-    ]);
-  });
-
-  test('does not flag a page carrying both required fields', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Good.md',
-      '---\ntype: concept\nstatus: stable\n---\n\n# Good\n'
-    );
-
-    expect(findFrontmatterGaps(sandbox.root)).toEqual([]);
+    expect(findFrontmatterGaps(sandbox.root)).toEqual(gaps);
   });
 
   test('skips wiki/meta/** audit artifacts', () => {

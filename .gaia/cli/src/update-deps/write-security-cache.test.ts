@@ -130,50 +130,81 @@ describe('write-security-cache writes', () => {
 });
 
 describe('write-security-cache refusals leave the cache byte-identical', () => {
-  test.each([
-    ['--source unavailable', ['--count', '1', '--source', 'unavailable']],
-    ['--count -1', ['--count', '-1', '--source', 'dependabot']],
-    ['--count 1.5', ['--count', '1.5', '--source', 'dependabot']],
-    [
-      '--count null with dependabot',
-      ['--count', 'null', '--source', 'dependabot'],
-    ],
-    [
-      '--count null with a reason',
-      ['--count', 'null', '--source', 'pnpm-audit', '--reason', 'forbidden'],
-    ],
-    [
-      '--reason not-a-token',
-      ['--count', '1', '--source', 'dependabot', '--reason', 'not-a-token'],
-    ],
-    ['an unknown flag', ['--count', '1', '--source', 'dependabot', '--x', 'y']],
-    ['a missing --count', ['--source', 'dependabot']],
-  ])('%s exits 2', (_label, argv) => {
-    const before = writeCache(fullCache());
-
-    expect(call(argv)).toBe(EXIT_CODES.INVALID_ARGUMENTS);
-    expect(readFileSync(cacheFile, 'utf8')).toBe(before);
+  const fullCacheText = `${JSON.stringify(fullCache())}\n`;
+  const validArguments = ['--count', '1', '--source', 'dependabot'];
+  const usageError = (
+    label: string,
+    argv: string[]
+  ): {
+    argv: string[];
+    cacheText: string;
+    exit: number;
+    name: string;
+    reason: string;
+  } => ({
+    argv,
+    cacheText: fullCacheText,
+    exit: EXIT_CODES.INVALID_ARGUMENTS,
+    name: `${label} exits 2`,
+    reason: 'invalid-arguments',
   });
 
-  test('an unparsable cache is refused and left byte-identical', () => {
-    const garbage = '{"checkedAt": 1, oops';
+  test.each(
+    [
+      usageError('--source unavailable', [
+        '--count',
+        '1',
+        '--source',
+        'unavailable',
+      ]),
+      usageError('--count -1', ['--count', '-1', '--source', 'dependabot']),
+      usageError('--count 1.5', ['--count', '1.5', '--source', 'dependabot']),
+      usageError('--count null with dependabot', [
+        '--count',
+        'null',
+        '--source',
+        'dependabot',
+      ]),
+      usageError('--count null with a reason', [
+        '--count',
+        'null',
+        '--source',
+        'pnpm-audit',
+        '--reason',
+        'forbidden',
+      ]),
+      usageError('--reason not-a-token', [
+        '--count',
+        '1',
+        '--source',
+        'dependabot',
+        '--reason',
+        'not-a-token',
+      ]),
+      usageError('an unknown flag', [...validArguments, '--x', 'y']),
+      usageError('a missing --count', ['--source', 'dependabot']),
+      {
+        argv: validArguments,
+        cacheText: '{"checkedAt": 1, oops',
+        exit: 1,
+        name: 'an unparsable cache is refused and left byte-identical',
+        reason: 'unreadable-cache',
+      },
+      {
+        argv: validArguments,
+        cacheText: '[1,2]',
+        exit: 1,
+        name: 'a cache holding an array is unreadable, not overwritten',
+        reason: 'unreadable-cache',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {argv, cacheText, exit, reason}) => {
+    writeFileSync(cacheFile, cacheText);
 
-    writeFileSync(cacheFile, garbage);
-
-    expect(call(['--count', '1', '--source', 'dependabot'])).toBe(1);
-    expect(result()).toStrictEqual({
-      reason: 'unreadable-cache',
-      written: false,
-    });
-    expect(readFileSync(cacheFile, 'utf8')).toBe(garbage);
+    expect(call(argv)).toBe(exit);
+    expect(result()).toStrictEqual({reason, written: false});
+    expect(readFileSync(cacheFile, 'utf8')).toBe(cacheText);
     expect(existsSync(lockDirectory)).toBe(false);
-  });
-
-  test('a cache holding an array is unreadable, not overwritten', () => {
-    writeFileSync(cacheFile, '[1,2]');
-
-    expect(call(['--count', '1', '--source', 'dependabot'])).toBe(1);
-    expect(readFileSync(cacheFile, 'utf8')).toBe('[1,2]');
   });
 });
 

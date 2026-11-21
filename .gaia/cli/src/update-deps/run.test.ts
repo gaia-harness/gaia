@@ -233,90 +233,150 @@ const makePnpmRunner =
       stdout: '',
     };
 
+type ClassificationRow = {
+  cases: [current: string, latest: string, expected: string][];
+  name: string;
+};
+
 describe('update-deps run: version classification', () => {
-  test('classifyKind returns major when leading integer differs', () => {
-    expect(classifyKind('1.2.3', '2.0.0')).toBe('major');
-    expect(classifyKind('6.30.0', '7.0.0')).toBe('major');
-  });
-
-  test('classifyKind returns minor when major matches but minor differs', () => {
-    expect(classifyKind('1.2.3', '1.3.0')).toBe('minor');
-  });
-
-  test('classifyKind returns patch when only patch differs', () => {
-    expect(classifyKind('1.2.3', '1.2.5')).toBe('patch');
-  });
-
-  test('classifyKind handles caret/tilde prefixes on current', () => {
-    expect(classifyKind('^1.2.3', '1.3.0')).toBe('minor');
-    expect(classifyKind('~1.2.3', '2.0.0')).toBe('major');
-  });
-
-  test('classifyKind treats 0.x bumps by leading-segment rule', () => {
-    // Per spec: compare leading integers. 0→0 same major.
-    expect(classifyKind('0.1.0', '0.2.0')).toBe('minor');
-    expect(classifyKind('0.1.0', '1.0.0')).toBe('major');
+  test.each(
+    (
+      [
+        {
+          cases: [
+            ['1.2.3', '2.0.0', 'major'],
+            ['6.30.0', '7.0.0', 'major'],
+          ],
+          name: 'classifyKind returns major when leading integer differs',
+        },
+        {
+          cases: [['1.2.3', '1.3.0', 'minor']],
+          name: 'classifyKind returns minor when major matches but minor differs',
+        },
+        {
+          cases: [['1.2.3', '1.2.5', 'patch']],
+          name: 'classifyKind returns patch when only patch differs',
+        },
+        {
+          cases: [
+            ['^1.2.3', '1.3.0', 'minor'],
+            ['~1.2.3', '2.0.0', 'major'],
+          ],
+          name: 'classifyKind handles caret/tilde prefixes on current',
+        },
+        {
+          // Leading integers are compared, so 0 to 0 is the same major.
+          cases: [
+            ['0.1.0', '0.2.0', 'minor'],
+            ['0.1.0', '1.0.0', 'major'],
+          ],
+          name: 'classifyKind treats 0.x bumps by leading-segment rule',
+        },
+      ] satisfies ClassificationRow[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {cases}) => {
+    for (const [current, latest, expected] of cases) {
+      expect(classifyKind(current, latest)).toBe(expected);
+    }
   });
 });
 
 describe('update-deps run: group resolution', () => {
-  test('react-router family maps to react-router group', () => {
-    expect(resolveGroup('react-router')).toBe('react-router');
-    expect(resolveGroup('@react-router/dev')).toBe('react-router');
-    expect(resolveGroup('@react-router/serve')).toBe('react-router');
-  });
-
-  test('@types/react family maps to react group', () => {
-    expect(resolveGroup('react')).toBe('react');
-    expect(resolveGroup('@types/react')).toBe('react');
-  });
-
-  test('@storybook/* prefix maps to storybook group', () => {
-    expect(resolveGroup('@storybook/react')).toBe('storybook');
-    expect(resolveGroup('@storybook/addon-essentials')).toBe('storybook');
-    expect(resolveGroup('eslint-plugin-storybook')).toBe('storybook');
-  });
-
-  test('eslint-config-* and eslint-plugin-* map to eslint group', () => {
-    expect(resolveGroup('eslint')).toBe('eslint');
-    expect(resolveGroup('eslint-config-airbnb')).toBe('eslint');
-    expect(resolveGroup('eslint-plugin-react')).toBe('eslint');
-  });
-
-  test('@fortawesome/* prefix maps to fontawesome group', () => {
-    expect(resolveGroup('@fortawesome/fontawesome-svg-core')).toBe(
-      'fontawesome'
-    );
-    expect(resolveGroup('@fortawesome/free-solid-svg-icons')).toBe(
-      'fontawesome'
-    );
-  });
-
-  test('unknown package falls back to singleton:<name>', () => {
-    expect(resolveGroup('lodash')).toBe('singleton:lodash');
-  });
-
-  test('eslint-config-prettier wins for prettier group (more specific)', () => {
-    // prettier group lists eslint-config-prettier and eslint-plugin-prettier.
-    // These must beat the eslint-config-* / eslint-plugin-* eslint-group rule.
-    expect(resolveGroup('eslint-config-prettier')).toBe('prettier');
-    expect(resolveGroup('eslint-plugin-prettier')).toBe('prettier');
-  });
-
-  test('msw-storybook-addon prefers storybook group over msw', () => {
-    // The SKILL lists msw-storybook-addon under both storybook and msw.
-    // We pick storybook (the more specific addon scope).
-    expect(resolveGroup('msw-storybook-addon')).toBe('storybook');
-  });
-
-  test('typescript and @types/node are independent singletons', () => {
-    // A compiler bump and an ambient Node type-definition bump have separate
-    // migration guides and separate blast radius, so a hold on one must never
-    // stall the other.
-    expect(resolveGroup('typescript')).toBe('singleton:typescript');
-    expect(resolveGroup('@types/node')).toBe('singleton:@types/node');
+  test.each(
+    (
+      [
+        {
+          expectedGroups: {
+            '@react-router/dev': 'react-router',
+            '@react-router/serve': 'react-router',
+            'react-router': 'react-router',
+          },
+          name: 'react-router family maps to react-router group',
+        },
+        {
+          expectedGroups: {'@types/react': 'react', react: 'react'},
+          name: '@types/react family maps to react group',
+        },
+        {
+          expectedGroups: {
+            '@storybook/addon-essentials': 'storybook',
+            '@storybook/react': 'storybook',
+            'eslint-plugin-storybook': 'storybook',
+          },
+          name: '@storybook/* prefix maps to storybook group',
+        },
+        {
+          expectedGroups: {
+            eslint: 'eslint',
+            'eslint-config-airbnb': 'eslint',
+            'eslint-plugin-react': 'eslint',
+          },
+          name: 'eslint-config-* and eslint-plugin-* map to eslint group',
+        },
+        {
+          expectedGroups: {
+            '@fortawesome/fontawesome-svg-core': 'fontawesome',
+            '@fortawesome/free-solid-svg-icons': 'fontawesome',
+          },
+          name: '@fortawesome/* prefix maps to fontawesome group',
+        },
+        {
+          expectedGroups: {lodash: 'singleton:lodash'},
+          name: 'unknown package falls back to singleton:<name>',
+        },
+        {
+          // The prettier group's exact names must beat the eslint group's
+          // eslint-config-* and eslint-plugin-* prefixes.
+          expectedGroups: {
+            'eslint-config-prettier': 'prettier',
+            'eslint-plugin-prettier': 'prettier',
+          },
+          name: 'eslint-config-prettier wins for prettier group (more specific)',
+        },
+        {
+          // msw-storybook-addon couples to both storybook and msw; storybook is
+          // the more specific addon scope.
+          expectedGroups: {'msw-storybook-addon': 'storybook'},
+          name: 'msw-storybook-addon prefers storybook group over msw',
+        },
+        {
+          // A compiler bump and an ambient Node type-definition bump have separate
+          // migration guides and separate blast radius, so a hold on one must never
+          // stall the other.
+          expectedGroups: {
+            '@types/node': 'singleton:@types/node',
+            typescript: 'singleton:typescript',
+          },
+          name: 'typescript and @types/node are independent singletons',
+        },
+      ] satisfies {expectedGroups: Record<string, string>; name: string}[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {expectedGroups}) => {
+    for (const [packageName, group] of Object.entries(expectedGroups)) {
+      expect(resolveGroup(packageName)).toBe(group);
+    }
   });
 });
+
+const heldVite = (
+  latest: string
+): {current: string; latest: string; name: string; reason: string} => ({
+  current: '8.0.16',
+  latest,
+  name: 'vite',
+  reason: 'held',
+});
+
+type ConfigHoldCase = {
+  ceiling: string;
+  dependencies: Record<string, string>;
+  expectedSkipped: ReturnType<typeof heldVite>[];
+  expectedTotalCount: number;
+  expectedWaveA: {kind: string; latest: string; name: string}[];
+  name: string;
+  outdated: FakeOutdated;
+  versionLists: Record<string, readonly string[]> | undefined;
+};
 
 describe('update-deps run: computeUpdates', () => {
   let sandbox: Sandbox;
@@ -448,197 +508,169 @@ describe('update-deps run: computeUpdates', () => {
     expect(result.wave_b[0]?.packages).toHaveLength(2);
   });
 
-  test('eslint cap: latest 10.x rewritten to highest 9.x available', () => {
-    sandbox.writePackageJson({
-      dependencies: {
-        eslint: '^9.20.0',
+  test.each(
+    [
+      {
+        // 9.22.0 is the highest 9.x available, so latest is rewritten and the
+        // entry lands in wave_a.
+        eslintVersions: ['9.18.0', '9.19.0', '9.21.0', '9.22.0', '10.0.0'],
+        expectedWaveA: [{kind: 'minor', latest: '9.22.0'}],
+        installed: '9.20.0',
+        name: 'eslint cap: latest 10.x rewritten to highest 9.x available',
       },
-    });
-
-    const result = computeUpdates({
-      cwd: sandbox.root,
-      pnpmRunner: makePnpmRunner(
-        {eslint: {current: '9.20.0', latest: '10.0.0', wanted: '9.20.0'}},
-        ['9.18.0', '9.19.0', '9.21.0', '9.22.0', '10.0.0']
-      ),
-    });
-
-    // 9.22.0 is highest 9.x available, so latest is rewritten and it lands in wave_a.
-    expect(result.wave_b).toEqual([]);
-    expect(result.wave_a).toHaveLength(1);
-    expect(result.wave_a[0]?.latest).toBe('9.22.0');
-    expect(result.wave_a[0]?.kind).toBe('minor');
-  });
-
-  test('eslint cap: already on highest 9.x → entry dropped entirely', () => {
-    sandbox.writePackageJson({
-      dependencies: {
-        eslint: '^9.22.0',
+      {
+        eslintVersions: ['9.18.0', '9.22.0', '10.0.0'],
+        expectedWaveA: [],
+        installed: '9.22.0',
+        name: 'eslint cap: already on highest 9.x → entry dropped entirely',
       },
-    });
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {eslintVersions, expectedWaveA, installed}) => {
+    sandbox.writePackageJson({dependencies: {eslint: `^${installed}`}});
 
     const result = computeUpdates({
       cwd: sandbox.root,
       pnpmRunner: makePnpmRunner(
-        {eslint: {current: '9.22.0', latest: '10.0.0', wanted: '9.22.0'}},
-        ['9.18.0', '9.22.0', '10.0.0']
+        {eslint: {current: installed, latest: '10.0.0', wanted: installed}},
+        eslintVersions
       ),
     });
 
-    expect(result.wave_a).toEqual([]);
+    expect(result.wave_a.map(({kind, latest}) => ({kind, latest}))).toEqual(
+      expectedWaveA
+    );
     expect(result.wave_b).toEqual([]);
     expect(result.skipped).toEqual([]);
   });
 
-  test('config hold: held package with no in-ceiling upgrade is dropped as held', () => {
-    // vite is held at the 8.0 line; latest 8.1.0 is above it and the highest
-    // 8.0.x (8.0.16) equals the installed version → dropped, held at current.
-    sandbox.writePackageJson({
-      dependencies: {vite: '8.0.16'},
-      gaia: {updateDepsHold: {vite: '8.0'}},
-    });
-
-    const result = computeUpdates({
-      cwd: sandbox.root,
-      pnpmRunner: makePnpmRunner(
-        {vite: {current: '8.0.16', latest: '8.1.0', wanted: '8.1.0'}},
-        undefined,
-        undefined,
-        undefined,
-        {vite: ['8.0.15', '8.0.16', '8.1.0', '8.1.2']}
-      ),
-    });
-
-    expect(result.wave_a).toEqual([]);
-    expect(result.wave_b).toEqual([]);
-    expect(result.total_count).toBe(0);
-    expect(result.skipped).toEqual([
-      {current: '8.0.16', latest: '8.1.0', name: 'vite', reason: 'held'},
-    ]);
-  });
-
-  test('config hold: an in-ceiling patch above current is offered, capped', () => {
-    // Held at 8.0; an 8.0.17 patch exists above the installed 8.0.16 → offered
-    // at 8.0.17, never the 8.1.x line.
-    sandbox.writePackageJson({
-      dependencies: {vite: '8.0.16'},
-      gaia: {updateDepsHold: {vite: '8.0'}},
-    });
-
-    const result = computeUpdates({
-      cwd: sandbox.root,
-      pnpmRunner: makePnpmRunner(
-        {vite: {current: '8.0.16', latest: '8.1.0', wanted: '8.1.0'}},
-        undefined,
-        undefined,
-        undefined,
-        {vite: ['8.0.16', '8.0.17', '8.1.0']}
-      ),
-    });
-
-    expect(result.skipped).toEqual([]);
-    expect(result.wave_a).toHaveLength(1);
-    expect(result.wave_a[0]?.name).toBe('vite');
-    expect(result.wave_a[0]?.latest).toBe('8.0.17');
-    expect(result.wave_a[0]?.kind).toBe('patch');
-  });
-
-  test('config hold: latest already on the ceiling line passes through', () => {
-    // Held at 8.0 but latest is 8.0.17 (already on-line) → offered normally,
-    // no version-list lookup needed.
-    sandbox.writePackageJson({
-      dependencies: {vite: '8.0.16'},
-      gaia: {updateDepsHold: {vite: '8.0'}},
-    });
-
-    const result = computeUpdates({
-      cwd: sandbox.root,
-      pnpmRunner: makePnpmRunner({
-        vite: {current: '8.0.16', latest: '8.0.17', wanted: '8.0.17'},
-      }),
-    });
-
-    expect(result.skipped).toEqual([]);
-    expect(result.wave_a).toHaveLength(1);
-    expect(result.wave_a[0]?.latest).toBe('8.0.17');
-  });
-
-  test('config hold: an exact-version ceiling freezes the package', () => {
-    // Ceiling "8.0.16" pins all three segments → nothing above 8.0.16 matches,
-    // so the package is frozen (dropped as held) even against an 8.0.17 patch.
-    sandbox.writePackageJson({
-      dependencies: {vite: '8.0.16'},
-      gaia: {updateDepsHold: {vite: '8.0.16'}},
-    });
-
-    const result = computeUpdates({
-      cwd: sandbox.root,
-      pnpmRunner: makePnpmRunner(
-        {vite: {current: '8.0.16', latest: '8.0.17', wanted: '8.0.17'}},
-        undefined,
-        undefined,
-        undefined,
-        {vite: ['8.0.16', '8.0.17']}
-      ),
-    });
-
-    expect(result.wave_a).toEqual([]);
-    expect(result.skipped).toEqual([
-      {current: '8.0.16', latest: '8.0.17', name: 'vite', reason: 'held'},
-    ]);
-  });
-
-  test('config hold: an unsatisfiable ceiling fails closed (held, not bumped)', () => {
-    // Ceiling "7" matches no published version → drop rather than let vite jump
-    // above the ceiling to 8.1.0.
-    sandbox.writePackageJson({
-      dependencies: {vite: '8.0.16'},
-      gaia: {updateDepsHold: {vite: '7'}},
-    });
-
-    const result = computeUpdates({
-      cwd: sandbox.root,
-      pnpmRunner: makePnpmRunner(
-        {vite: {current: '8.0.16', latest: '8.1.0', wanted: '8.1.0'}},
-        undefined,
-        undefined,
-        undefined,
-        {vite: ['8.0.16', '8.1.0']}
-      ),
-    });
-
-    expect(result.wave_a).toEqual([]);
-    expect(result.skipped).toEqual([
-      {current: '8.0.16', latest: '8.1.0', name: 'vite', reason: 'held'},
-    ]);
-  });
-
-  test('config hold: an unheld package is untouched', () => {
-    sandbox.writePackageJson({
-      dependencies: {foo: '^1.2.3', vite: '8.0.16'},
-      gaia: {updateDepsHold: {vite: '8.0'}},
-    });
-
-    const result = computeUpdates({
-      cwd: sandbox.root,
-      pnpmRunner: makePnpmRunner(
+  test.each(
+    (
+      [
         {
-          foo: {current: '1.2.3', latest: '1.3.0', wanted: '1.3.0'},
-          vite: {current: '8.0.16', latest: '8.1.0', wanted: '8.1.0'},
+          // vite is held at the 8.0 line; latest 8.1.0 is above it and the highest
+          // 8.0.x (8.0.16) equals the installed version, so it is dropped and held
+          // at current.
+          ceiling: '8.0',
+          dependencies: {vite: '8.0.16'},
+          expectedSkipped: [heldVite('8.1.0')],
+          expectedTotalCount: 0,
+          expectedWaveA: [],
+          name: 'config hold: held package with no in-ceiling upgrade is dropped as held',
+          outdated: {
+            vite: {current: '8.0.16', latest: '8.1.0', wanted: '8.1.0'},
+          },
+          versionLists: {vite: ['8.0.15', '8.0.16', '8.1.0', '8.1.2']},
         },
-        undefined,
-        undefined,
-        undefined,
-        {vite: ['8.0.16', '8.1.0']}
-      ),
-    });
+        {
+          // Held at 8.0; an 8.0.17 patch exists above the installed 8.0.16, so it
+          // is offered at 8.0.17, never the 8.1.x line.
+          ceiling: '8.0',
+          dependencies: {vite: '8.0.16'},
+          expectedSkipped: [],
+          expectedTotalCount: 1,
+          expectedWaveA: [{kind: 'patch', latest: '8.0.17', name: 'vite'}],
+          name: 'config hold: an in-ceiling patch above current is offered, capped',
+          outdated: {
+            vite: {current: '8.0.16', latest: '8.1.0', wanted: '8.1.0'},
+          },
+          versionLists: {vite: ['8.0.16', '8.0.17', '8.1.0']},
+        },
+        {
+          // Held at 8.0 but latest 8.0.17 is already on the line, so it is offered
+          // normally with no version-list lookup.
+          ceiling: '8.0',
+          dependencies: {vite: '8.0.16'},
+          expectedSkipped: [],
+          expectedTotalCount: 1,
+          expectedWaveA: [{kind: 'patch', latest: '8.0.17', name: 'vite'}],
+          name: 'config hold: latest already on the ceiling line passes through',
+          outdated: {
+            vite: {current: '8.0.16', latest: '8.0.17', wanted: '8.0.17'},
+          },
+          versionLists: undefined,
+        },
+        {
+          // Ceiling "8.0.16" pins all three segments, so nothing above 8.0.16
+          // matches and the package is frozen (dropped as held) even against an
+          // 8.0.17 patch.
+          ceiling: '8.0.16',
+          dependencies: {vite: '8.0.16'},
+          expectedSkipped: [heldVite('8.0.17')],
+          expectedTotalCount: 0,
+          expectedWaveA: [],
+          name: 'config hold: an exact-version ceiling freezes the package',
+          outdated: {
+            vite: {current: '8.0.16', latest: '8.0.17', wanted: '8.0.17'},
+          },
+          versionLists: {vite: ['8.0.16', '8.0.17']},
+        },
+        {
+          // Ceiling "7" matches no published version, so vite is dropped rather
+          // than jumping above the ceiling to 8.1.0.
+          ceiling: '7',
+          dependencies: {vite: '8.0.16'},
+          expectedSkipped: [heldVite('8.1.0')],
+          expectedTotalCount: 0,
+          expectedWaveA: [],
+          name: 'config hold: an unsatisfiable ceiling fails closed (held, not bumped)',
+          outdated: {
+            vite: {current: '8.0.16', latest: '8.1.0', wanted: '8.1.0'},
+          },
+          versionLists: {vite: ['8.0.16', '8.1.0']},
+        },
+        {
+          ceiling: '8.0',
+          dependencies: {foo: '^1.2.3', vite: '8.0.16'},
+          expectedSkipped: [heldVite('8.1.0')],
+          expectedTotalCount: 1,
+          expectedWaveA: [{kind: 'minor', latest: '1.3.0', name: 'foo'}],
+          name: 'config hold: an unheld package is untouched',
+          outdated: {
+            foo: {current: '1.2.3', latest: '1.3.0', wanted: '1.3.0'},
+            vite: {current: '8.0.16', latest: '8.1.0', wanted: '8.1.0'},
+          },
+          versionLists: {vite: ['8.0.16', '8.1.0']},
+        },
+      ] as ConfigHoldCase[]
+    ).map((row) => [row.name, row] as const)
+  )(
+    '%s',
+    (
+      _name,
+      {
+        ceiling,
+        dependencies,
+        expectedSkipped,
+        expectedTotalCount,
+        expectedWaveA,
+        outdated,
+        versionLists,
+      }
+    ) => {
+      sandbox.writePackageJson({
+        dependencies,
+        gaia: {updateDepsHold: {vite: ceiling}},
+      });
 
-    // foo flows through; vite is held out.
-    expect(result.wave_a.map((entry) => entry.name)).toEqual(['foo']);
-    expect(result.skipped).toEqual([
-      {current: '8.0.16', latest: '8.1.0', name: 'vite', reason: 'held'},
-    ]);
-  });
+      const result = computeUpdates({
+        cwd: sandbox.root,
+        pnpmRunner: makePnpmRunner(
+          outdated,
+          undefined,
+          undefined,
+          undefined,
+          versionLists
+        ),
+      });
+
+      expect(
+        result.wave_a.map(({kind, latest, name}) => ({kind, latest, name}))
+      ).toEqual(expectedWaveA);
+      expect(result.wave_b).toEqual([]);
+      expect(result.total_count).toBe(expectedTotalCount);
+      expect(result.skipped).toEqual(expectedSkipped);
+    }
+  );
 
   test('emits an empty payload when nothing is outdated', () => {
     sandbox.writePackageJson({dependencies: {foo: '^1.2.3'}});
@@ -915,32 +947,42 @@ describe('update-deps run: computeUpdates', () => {
 });
 
 describe('update-deps run: group membership', () => {
-  test('resolveGroupMembers returns all package.json members for an exact-name group', () => {
-    const allNames = ['react', 'react-dom', '@types/react', 'lodash'];
-    expect(resolveGroupMembers('react', allNames)).toEqual(
-      expect.arrayContaining(['react', 'react-dom', '@types/react'])
-    );
-    expect(resolveGroupMembers('react', allNames)).not.toContain('lodash');
-  });
-
-  test('resolveGroupMembers handles prefix-based groups', () => {
-    const allNames = [
-      'storybook',
-      '@storybook/react',
-      '@storybook/addon-essentials',
-      'react',
-    ];
-    const members = resolveGroupMembers('storybook', allNames);
-    expect(members).toContain('storybook');
-    expect(members).toContain('@storybook/react');
-    expect(members).toContain('@storybook/addon-essentials');
-    expect(members).not.toContain('react');
-  });
-
-  test('resolveGroupMembers returns empty array for singleton groups', () => {
+  test.each(
+    [
+      {
+        allNames: ['react', 'react-dom', '@types/react', 'lodash'],
+        expected: ['@types/react', 'react', 'react-dom'],
+        group: 'react',
+        name: 'resolveGroupMembers returns all package.json members for an exact-name group',
+      },
+      {
+        allNames: [
+          'storybook',
+          '@storybook/react',
+          '@storybook/addon-essentials',
+          'react',
+        ],
+        expected: [
+          '@storybook/addon-essentials',
+          '@storybook/react',
+          'storybook',
+        ],
+        group: 'storybook',
+        name: 'resolveGroupMembers handles prefix-based groups',
+      },
+      {
+        allNames: ['lodash', 'react'],
+        expected: [],
+        group: 'singleton:lodash',
+        name: 'resolveGroupMembers returns empty array for singleton groups',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {allNames, expected, group}) => {
     expect(
-      resolveGroupMembers('singleton:lodash', ['lodash', 'react'])
-    ).toEqual([]);
+      resolveGroupMembers(group, allNames).toSorted((left, right) =>
+        left.localeCompare(right)
+      )
+    ).toEqual(expected);
   });
 });
 
@@ -1007,25 +1049,32 @@ describe('update-deps run: CLI', () => {
     expect(() => readFileSync(outPath, 'utf8')).not.toThrow();
   });
 
-  test('rejects when --emit-updates is missing a value', () => {
-    const exit = run(['--emit-updates'], {cwd: sandbox.root});
+  test.each(
+    [
+      {
+        argv: (): string[] => ['--emit-updates'],
+        expectedError: '--emit-updates',
+        name: 'rejects when --emit-updates is missing a value',
+      },
+      {
+        argv: (): string[] => [],
+        expectedError: '--emit-updates',
+        name: 'rejects when --emit-updates is omitted entirely',
+      },
+      {
+        argv: (root: string): string[] => [
+          '--emit-updates',
+          path.join(root, 'x.json'),
+          '--bogus',
+        ],
+        expectedError: 'unknown flag',
+        name: 'rejects unknown flags',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {argv, expectedError}) => {
+    const exit = run(argv(sandbox.root), {cwd: sandbox.root});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--emit-updates');
-  });
-
-  test('rejects when --emit-updates is omitted entirely', () => {
-    const exit = run([], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--emit-updates');
-  });
-
-  test('rejects unknown flags', () => {
-    const exit = run(
-      ['--emit-updates', path.join(sandbox.root, 'x.json'), '--bogus'],
-      {cwd: sandbox.root}
-    );
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
+    expect(stdio.errors.join('')).toContain(expectedError);
   });
 
   test('--help prints usage and exits 0', () => {
@@ -1396,15 +1445,30 @@ describe('update-deps run: preview payload fields', () => {
     sandbox.cleanup();
   });
 
-  test('classifyBucket buckets a pre-1.0 current as nonsemver', () => {
-    expect(classifyBucket('0.4.0', '0.5.0')).toBe('nonsemver');
-    expect(classifyBucket('0.4.0', '1.0.0')).toBe('nonsemver');
-  });
-
-  test('classifyBucket falls back to patch/minor/major at or above 1.0', () => {
-    expect(classifyBucket('1.2.3', '1.2.4')).toBe('patch');
-    expect(classifyBucket('1.2.3', '1.3.0')).toBe('minor');
-    expect(classifyBucket('1.2.3', '2.0.0')).toBe('major');
+  test.each(
+    (
+      [
+        {
+          cases: [
+            ['0.4.0', '0.5.0', 'nonsemver'],
+            ['0.4.0', '1.0.0', 'nonsemver'],
+          ],
+          name: 'classifyBucket buckets a pre-1.0 current as nonsemver',
+        },
+        {
+          cases: [
+            ['1.2.3', '1.2.4', 'patch'],
+            ['1.2.3', '1.3.0', 'minor'],
+            ['1.2.3', '2.0.0', 'major'],
+          ],
+          name: 'classifyBucket falls back to patch/minor/major at or above 1.0',
+        },
+      ] satisfies ClassificationRow[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {cases}) => {
+    for (const [current, latest, expected] of cases) {
+      expect(classifyBucket(current, latest)).toBe(expected);
+    }
   });
 
   test('each wave entry carries a display bucket; 0.x is nonsemver', () => {

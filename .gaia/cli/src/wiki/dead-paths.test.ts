@@ -129,157 +129,147 @@ describe('wiki dead-paths', () => {
     ]);
   });
 
-  test('ignores paths that exist on disk', () => {
-    sandbox.writeFile('.claude/hooks/wiki-session-stop.sh', '#!/bin/bash\n');
-    sandbox.writeFile(
-      'wiki/concepts/Hooks.md',
-      '# Hooks\n\nSee `.claude/hooks/wiki-session-stop.sh`.\n'
-    );
+  const exemptReferencesAreIgnoredCases: readonly {
+    dead: readonly string[];
+    files: Readonly<Record<string, string>>;
+    name: string;
+  }[] = [
+    {
+      dead: [],
+      files: {
+        '.claude/hooks/wiki-session-stop.sh': '#!/bin/bash\n',
+        'wiki/concepts/Hooks.md':
+          '# Hooks\n\nSee `.claude/hooks/wiki-session-stop.sh`.\n',
+      },
+      name: 'ignores paths that exist on disk',
+    },
+    {
+      dead: [],
+      files: {
+        'wiki/concepts/Page.md':
+          '# Page\n\nLinks [[Other]] and code `let x = 1;` and constants `FOO_BAR`.\n',
+      },
+      name: 'ignores wikilinks and non-path backticks',
+    },
+    {
+      dead: [],
+      files: {
+        'wiki/concepts/Page.md':
+          '# Page\n\nUse `.claude/hooks/<name>.sh` and `.gaia/cli/src/**/*.ts`.\n',
+      },
+      name: 'ignores placeholders like `<path>` and globs',
+    },
+    {
+      dead: [],
+      files: {
+        'wiki/concepts/Specs.md':
+          '# Specs\n\nLives at `.gaia/local/specs/SPEC-NNN.md`. Or `.claude/foo/XXX-bar.ts`.\n',
+      },
+      name: 'ignores convention placeholders like SPEC-NNN.md and XXX-XXX.ts',
+    },
+    {
+      dead: [],
+      files: {
+        'wiki/concepts/Runtime.md':
+          '# Runtime\n\nCache at `.gaia/local/cache/shared/update-check.json` and `.gaia/local/i18n.json`.\n',
+      },
+      name: 'ignores gitignored runtime paths under .gaia/local',
+    },
+    {
+      dead: [],
+      files: {
+        'wiki/concepts/Project Policy.md':
+          '# Project Policy\n\nThe policy lives in `.gaia/project.json`.\n',
+      },
+      name: 'ignores adopter-owned sentinels absent from the GAIA source repo',
+    },
+    {
+      dead: ['.gaia/init-state.json.bak', '.gaia/init_state.json'],
+      files: {
+        'wiki/concepts/Onboarding.md':
+          '# Onboarding\n\nInit resumes from `.gaia/init-state.json`, not `.gaia/init-state.json.bak` or `.gaia/init_state.json`.\n',
+      },
+      name: 'ignores the init resume cursor, by exact token, and still flags a near miss',
+    },
+    {
+      dead: ['.claude/settings.local.json.bak'],
+      files: {
+        'wiki/concepts/Local Settings.md':
+          '# Local Settings\n\nPer-machine overrides live in `.claude/settings.local.json`, not `.claude/settings.local.json.bak`.\n',
+      },
+      name: 'ignores the machine-local Claude Code settings file, by exact token',
+    },
+    {
+      dead: [
+        'apps/web/.env.example',
+        'apps/web/.env.bak',
+        'apps/web/app/missing.ts',
+      ],
+      files: {
+        'wiki/concepts/Environment.md':
+          '# Environment\n\nCopy `apps/web/.env.example` to `apps/web/.env`, never `apps/web/.env.bak`. See `apps/web/app/missing.ts`.\n',
+      },
+      name: 'ignores the gitignored per-machine env file, by exact token, and still flags a missing tracked path',
+    },
+    {
+      // The sandbox is a post-init adopter tree: init finalize has deleted the
+      // init command, and the optional fitness config was never shipped.
+      dead: ['.claude/gaia-fitness.json.bak'],
+      files: {
+        'wiki/concepts/GAIA Init Workflow.md':
+          '# Init\n\nFinalize deletes `.claude/commands/gaia-init.md`.\n',
+        'wiki/decisions/Claude Integration Fitness.md':
+          '# Fitness\n\nOptional `.claude/gaia-fitness.json` suppresses a finding; `.claude/gaia-fitness.json.bak` does not.\n',
+      },
+      name: 'ignores shipped citations of files a post-init adopter tree lacks by design, by exact token',
+    },
+    {
+      // A path that merely extends the sentinel is a distinct, longer token and
+      // must still flag. Loosening the `.has()` membership check to a prefix
+      // match would suppress it, so this pins the exemption's exactness.
+      dead: ['.gaia/project.json.bak'],
+      files: {
+        'wiki/concepts/Project Policy.md':
+          '# Project Policy\n\nSee `.gaia/project.json` and `.gaia/project.json.bak`.\n',
+      },
+      name: 'exempts the sentinel by exact token, not by prefix',
+    },
+    {
+      dead: [],
+      files: {
+        'wiki/decisions/Some Refactor.md': [
+          '# Some Refactor',
+          '',
+          '## What changed',
+          '',
+          '- **Removed** `app/state/theme.tsx`, `app/sessions.server/theme.ts`.',
+          '- **Renamed** `app/old/path.ts` → `app/new/path.ts`.',
+          '- **Migrated** `app/legacy/foo.ts` to the new location.',
+          '',
+        ].join('\n'),
+      },
+      name: 'ignores explicit historical-record bullets in decision pages',
+    },
+    {
+      dead: [],
+      files: {
+        'wiki/log.md':
+          '# Log\n\nDeleted `.claude/hooks/old.sh` (historical record).\n',
+        'wiki/meta/lint-report.md':
+          '# Lint Report\n\nReferences historical `.claude/hooks/gone.sh`.\n',
+      },
+      name: 'skips wiki/log.md and wiki/meta/** by design',
+    },
+  ];
 
-    expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
-  });
+  test.each(
+    exemptReferencesAreIgnoredCases.map((row) => [row.name, row] as const)
+  )('%s', (_name, {dead, files}) => {
+    for (const [relativePath, contents] of Object.entries(files)) {
+      sandbox.writeFile(relativePath, contents);
+    }
 
-  test('ignores wikilinks and non-path backticks', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Page.md',
-      '# Page\n\nLinks [[Other]] and code `let x = 1;` and constants `FOO_BAR`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
-  });
-
-  test('ignores placeholders like `<path>` and globs', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Page.md',
-      '# Page\n\nUse `.claude/hooks/<name>.sh` and `.gaia/cli/src/**/*.ts`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
-  });
-
-  test('ignores convention placeholders like SPEC-NNN.md and XXX-XXX.ts', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Specs.md',
-      '# Specs\n\nLives at `.gaia/local/specs/SPEC-NNN.md`. Or `.claude/foo/XXX-bar.ts`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
-  });
-
-  test('ignores gitignored runtime paths under .gaia/local', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Runtime.md',
-      '# Runtime\n\nCache at `.gaia/local/cache/shared/update-check.json` and `.gaia/local/i18n.json`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
-  });
-
-  test('ignores adopter-owned sentinels absent from the GAIA source repo', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Project Policy.md',
-      '# Project Policy\n\nThe policy lives in `.gaia/project.json`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
-  });
-
-  test('ignores the init resume cursor, by exact token, and still flags a near miss', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Onboarding.md',
-      '# Onboarding\n\nInit resumes from `.gaia/init-state.json`, not `.gaia/init-state.json.bak` or `.gaia/init_state.json`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
-      '.gaia/init-state.json.bak',
-      '.gaia/init_state.json',
-    ]);
-  });
-
-  test('ignores the machine-local Claude Code settings file, by exact token', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Local Settings.md',
-      '# Local Settings\n\nPer-machine overrides live in `.claude/settings.local.json`, not `.claude/settings.local.json.bak`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
-      '.claude/settings.local.json.bak',
-    ]);
-  });
-
-  test('ignores the gitignored per-machine env file, by exact token, and still flags a missing tracked path', () => {
-    sandbox.writeFile(
-      'wiki/concepts/Environment.md',
-      '# Environment\n\nCopy `apps/web/.env.example` to `apps/web/.env`, never `apps/web/.env.bak`. See `apps/web/app/missing.ts`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
-      'apps/web/.env.example',
-      'apps/web/.env.bak',
-      'apps/web/app/missing.ts',
-    ]);
-  });
-
-  test('ignores shipped citations of files a post-init adopter tree lacks by design, by exact token', () => {
-    // The sandbox is a post-init adopter tree: init finalize has deleted the
-    // init command, and the optional fitness config was never shipped.
-    sandbox.writeFile(
-      'wiki/concepts/GAIA Init Workflow.md',
-      '# Init\n\nFinalize deletes `.claude/commands/gaia-init.md`.\n'
-    );
-    sandbox.writeFile(
-      'wiki/decisions/Claude Integration Fitness.md',
-      '# Fitness\n\nOptional `.claude/gaia-fitness.json` suppresses a finding; `.claude/gaia-fitness.json.bak` does not.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
-      '.claude/gaia-fitness.json.bak',
-    ]);
-  });
-
-  test('exempts the sentinel by exact token, not by prefix', () => {
-    // A path that merely extends the sentinel is a distinct, longer token and
-    // must still flag. Loosening the `.has()` membership check to a prefix
-    // match would suppress it, so this pins the exemption's exactness.
-    sandbox.writeFile(
-      'wiki/concepts/Project Policy.md',
-      '# Project Policy\n\nSee `.gaia/project.json` and `.gaia/project.json.bak`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
-      '.gaia/project.json.bak',
-    ]);
-  });
-
-  test('ignores explicit historical-record bullets in decision pages', () => {
-    sandbox.writeFile(
-      'wiki/decisions/Some Refactor.md',
-      [
-        '# Some Refactor',
-        '',
-        '## What changed',
-        '',
-        '- **Removed** `app/state/theme.tsx`, `app/sessions.server/theme.ts`.',
-        '- **Renamed** `app/old/path.ts` → `app/new/path.ts`.',
-        '- **Migrated** `app/legacy/foo.ts` to the new location.',
-        '',
-      ].join('\n')
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
-  });
-
-  test('skips wiki/log.md and wiki/meta/** by design', () => {
-    sandbox.writeFile(
-      'wiki/log.md',
-      '# Log\n\nDeleted `.claude/hooks/old.sh` (historical record).\n'
-    );
-    sandbox.writeFile(
-      'wiki/meta/lint-report.md',
-      '# Lint Report\n\nReferences historical `.claude/hooks/gone.sh`.\n'
-    );
-
-    expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
+    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual(dead);
   });
 
   test('the help text and the skip list agree, in both directions', () => {

@@ -24,78 +24,69 @@ const emptyOutdated: PnpmRunner = () => ({
 const INSTALL_COMMAND = 'npm install -g @playwright/cli@latest';
 
 describe('computePlaywrightCliRow', () => {
-  test('an older installed binary is outdated and offers the install', () => {
-    const row = computePlaywrightCliRow({
-      installedVersion: '0.1.21',
-      latestVersion: '0.1.22',
-    });
-
-    expect(row.status).toBe('outdated');
-    expect(row.installed).toBe('0.1.21');
-    expect(row.latest).toBe('0.1.22');
-    expect(row.offerInstall).toBe(true);
-    expect(row.installCommand).toBe(INSTALL_COMMAND);
-  });
-
-  test('an absent binary is not-installed and never offers the install', () => {
-    const row = computePlaywrightCliRow({
-      installedVersion: null,
-      latestVersion: '0.1.22',
-    });
-
-    expect(row.status).toBe('not-installed');
-    expect(row.message).toBe('not installed, skipped');
-    expect(row.installCommand).toBe(INSTALL_COMMAND);
-    expect(row.offerInstall).toBe(false);
-  });
-
-  test('a failed npm lookup is unknown', () => {
-    const row = computePlaywrightCliRow({
-      installedVersion: '0.1.21',
-      latestVersion: null,
-    });
-
-    expect(row.status).toBe('unknown');
-    expect(row.offerInstall).toBe(false);
-    expect(row.message).toContain('npm lookup failed');
-  });
-
-  test('a non-semver installed string is unknown without throwing', () => {
-    expect(() =>
-      computePlaywrightCliRow({
-        installedVersion: 'not-a-version',
+  test.each(
+    [
+      {
+        expected: {
+          installCommand: INSTALL_COMMAND,
+          installed: '0.1.21',
+          latest: '0.1.22',
+          offerInstall: true,
+          status: 'outdated',
+        },
+        installedVersions: ['0.1.21'],
         latestVersion: '0.1.22',
-      })
-    ).not.toThrow();
-
-    const row = computePlaywrightCliRow({
-      installedVersion: 'not-a-version',
-      latestVersion: '0.1.22',
-    });
-
-    expect(row.status).toBe('unknown');
-    expect(row.offerInstall).toBe(false);
-  });
-
-  test('an equal or newer installed binary is current', () => {
-    for (const installedVersion of ['0.1.22', '0.2.0', '1.0.0']) {
-      const row = computePlaywrightCliRow({
-        installedVersion,
+        name: 'an older installed binary is outdated and offers the install',
+      },
+      {
+        expected: {
+          installCommand: INSTALL_COMMAND,
+          message: 'not installed, skipped',
+          offerInstall: false,
+          status: 'not-installed',
+        },
+        installedVersions: [null],
         latestVersion: '0.1.22',
-      });
-
-      expect(row.status).toBe('current');
-      expect(row.offerInstall).toBe(false);
+        name: 'an absent binary is not-installed and never offers the install',
+      },
+      {
+        expected: {
+          message: expect.stringContaining('npm lookup failed') as string,
+          offerInstall: false,
+          status: 'unknown',
+        },
+        installedVersions: ['0.1.21'],
+        latestVersion: null,
+        name: 'a failed npm lookup is unknown',
+      },
+      {
+        expected: {offerInstall: false, status: 'unknown'},
+        installedVersions: ['not-a-version'],
+        latestVersion: '0.1.22',
+        name: 'a non-semver installed string is unknown without throwing',
+      },
+      {
+        expected: {offerInstall: false, status: 'current'},
+        installedVersions: ['0.1.22', '0.2.0', '1.0.0'],
+        latestVersion: '0.1.22',
+        name: 'an equal or newer installed binary is current',
+      },
+      {
+        expected: {status: 'outdated'},
+        installedVersions: ['0.1.9'],
+        latestVersion: '0.1.10',
+        name: 'versions compare numerically, not lexically',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, installedVersions, latestVersion}) => {
+    for (const installedVersion of installedVersions) {
+      expect(() =>
+        computePlaywrightCliRow({installedVersion, latestVersion})
+      ).not.toThrow();
+      expect(
+        computePlaywrightCliRow({installedVersion, latestVersion})
+      ).toMatchObject(expected);
     }
-  });
-
-  test('versions compare numerically, not lexically', () => {
-    const row = computePlaywrightCliRow({
-      installedVersion: '0.1.9',
-      latestVersion: '0.1.10',
-    });
-
-    expect(row.status).toBe('outdated');
   });
 });
 
@@ -118,25 +109,30 @@ describe('update-deps global-tools handler', () => {
   const parseRows = (): {status: string}[] =>
     (JSON.parse(written.join('')) as {rows: {status: string}[]}).rows;
 
-  test('prints rows and exits 0 when the binary probe reports it absent', () => {
+  test.each(
+    [
+      {
+        expectedStatus: 'not-installed',
+        installedVersion: null,
+        latestVersion: '0.1.22',
+        name: 'prints rows and exits 0 when the binary probe reports it absent',
+      },
+      {
+        expectedStatus: 'unknown',
+        installedVersion: '0.1.21',
+        latestVersion: null,
+        name: 'prints rows and exits 0 when the npm probe fails',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expectedStatus, installedVersion, latestVersion}) => {
     const probes: GlobalToolProbes = {
-      probeInstalledVersion: () => null,
-      probeLatestVersion: () => '0.1.22',
+      probeInstalledVersion: () => installedVersion,
+      probeLatestVersion: () => latestVersion,
     };
 
     expect(run([], {probes})).toBe(0);
     expect(parseRows()).toHaveLength(1);
-    expect(parseRows()[0]?.status).toBe('not-installed');
-  });
-
-  test('prints rows and exits 0 when the npm probe fails', () => {
-    const probes: GlobalToolProbes = {
-      probeInstalledVersion: () => '0.1.21',
-      probeLatestVersion: () => null,
-    };
-
-    expect(run([], {probes})).toBe(0);
-    expect(parseRows()[0]?.status).toBe('unknown');
+    expect(parseRows()[0]?.status).toBe(expectedStatus);
   });
 });
 

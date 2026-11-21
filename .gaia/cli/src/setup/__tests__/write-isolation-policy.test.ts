@@ -125,39 +125,55 @@ describe('setup write-isolation-policy', () => {
     expect(parsed.isolation_policy).toBe('prefer-worktree');
   });
 
-  test('exits CONFIG_INVALID, names the file, and leaves a malformed file unchanged', () => {
-    const malformed = '{not json';
-    writeFileSync(projectConfigPath(sandbox.root), malformed, 'utf8');
+  test.each(
+    [
+      {
+        args: ['prefer-worktree'],
+        existing: '{not json',
+        exit: EXIT_CODES.CONFIG_INVALID,
+        messages: ['config_malformed', 'project.json'],
+        name: 'exits CONFIG_INVALID, names the file, and leaves a malformed file unchanged',
+      },
+      {
+        args: ['sometimes'],
+        existing: `${JSON.stringify({some_future_key: 'x', version: 1}, undefined, 2)}\n`,
+        exit: EXIT_CODES.UNKNOWN_SUBCOMMAND,
+        messages: ['unrecognized isolation policy'],
+        name: 'exits non-zero on an unrecognized value and leaves the file byte-identical',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {args, existing, exit: expectedExit, messages}) => {
+    writeFileSync(projectConfigPath(sandbox.root), existing, 'utf8');
 
-    const exit = run(['prefer-worktree'], {cwd: sandbox.root});
-    expect(exit).toBe(EXIT_CODES.CONFIG_INVALID);
-    expect(stdio.err.join('')).toContain('config_malformed');
-    expect(stdio.err.join('')).toContain('project.json');
+    const exit = run(args, {cwd: sandbox.root});
+    expect(exit).toBe(expectedExit);
+
+    for (const message of messages) {
+      expect(stdio.err.join('')).toContain(message);
+    }
     expect(readFileSync(projectConfigPath(sandbox.root), 'utf8')).toBe(
-      malformed
+      existing
     );
   });
 
-  test('exits non-zero on an unrecognized value and leaves the file byte-identical', () => {
-    sandbox.writeProjectConfig({some_future_key: 'x', version: 1});
-    const before = readFileSync(projectConfigPath(sandbox.root), 'utf8');
-
-    const exit = run(['sometimes'], {cwd: sandbox.root});
-    expect(exit).not.toBe(EXIT_CODES.OK);
-    expect(stdio.err.join('')).toContain('unrecognized isolation policy');
-    expect(readFileSync(projectConfigPath(sandbox.root), 'utf8')).toBe(before);
-  });
-
-  test('an unrecognized value creates no file when none existed', () => {
-    const exit = run(['sometimes'], {cwd: sandbox.root});
-    expect(exit).not.toBe(EXIT_CODES.OK);
+  test.each(
+    [
+      {
+        args: ['sometimes'],
+        message: 'unrecognized isolation policy',
+        name: 'an unrecognized value creates no file when none existed',
+      },
+      {
+        args: ['prefer-worktree', '--bogus'],
+        message: 'unexpected argument',
+        name: 'rejects unexpected extra arguments',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {args, message}) => {
+    const exit = run(args, {cwd: sandbox.root});
+    expect(exit).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
+    expect(stdio.err.join('')).toContain(message);
     expect(existsSync(projectConfigPath(sandbox.root))).toBe(false);
-  });
-
-  test('rejects unexpected extra arguments', () => {
-    const exit = run(['prefer-worktree', '--bogus'], {cwd: sandbox.root});
-    expect(exit).not.toBe(0);
-    expect(stdio.err.join('')).toContain('unexpected argument');
   });
 
   test('--help exits 0', () => {

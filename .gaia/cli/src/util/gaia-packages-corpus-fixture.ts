@@ -56,7 +56,7 @@ const LOAD_STATUS_BY_CODE: Record<string, number> = {
   REGISTRY_MALFORMED: 2,
 };
 
-export const CORPUS_DIRECTORY = path.join(
+const CORPUS_DIRECTORY = path.join(
   resolveRepoRootFromImportMeta(import.meta.url),
   '.gaia/tests/fixtures/gaia-packages'
 );

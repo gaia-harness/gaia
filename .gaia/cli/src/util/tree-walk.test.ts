@@ -19,12 +19,21 @@ const seed = (root: string, relative: string): void => {
 // The separator is passed rather than read from `path.sep`, so a case can
 // assert a POSIX pass-through regardless of which platform runs the suite.
 describe('normalizeEntry', () => {
-  test('leaves an entry that carries no separator alone', () => {
-    expect(normalizeEntry('leaf.ts', '\\')).toBe('leaf.ts');
-  });
-
-  test('leaves an already-POSIX entry alone', () => {
-    expect(normalizeEntry('nested/leaf.ts', '/')).toBe('nested/leaf.ts');
+  test.each(
+    [
+      {
+        entry: 'leaf.ts',
+        name: 'leaves an entry that carries no separator alone',
+        separator: '\\',
+      },
+      {
+        entry: 'nested/leaf.ts',
+        name: 'leaves an already-POSIX entry alone',
+        separator: '/',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {entry, separator}) => {
+    expect(normalizeEntry(entry, separator)).toBe(entry);
   });
 });
 
@@ -37,14 +46,6 @@ describe('collectTreeFiles', () => {
 
   afterEach(() => {
     rmSync(dir, {force: true, recursive: true});
-  });
-
-  test('keeps only the entries whose extension is in the set', () => {
-    seed(dir, 'kept.ts');
-    seed(dir, 'skipped.md');
-    seed(dir, 'skipped');
-
-    expect(collectTreeFiles(dir, TS_SOURCE_EXTENSIONS)).toEqual(['kept.ts']);
   });
 
   test('reaches nested entries and reports them relative to the root', () => {
@@ -75,35 +76,47 @@ describe('collectTreeFiles', () => {
     ]);
   });
 
-  test('matches the extension case-insensitively', () => {
-    seed(dir, 'shouty.TS');
+  // In the last row, an extensionless file and a dotfile are the entries an
+  // extension set can never name, so they are what tells "every file" from
+  // "every extension anyone listed".
+  test.each(
+    (
+      [
+        {
+          directories: [],
+          expected: ['kept.ts'],
+          extensions: TS_SOURCE_EXTENSIONS,
+          files: ['kept.ts', 'skipped.md', 'skipped'],
+          name: 'keeps only the entries whose extension is in the set',
+        },
+        {
+          directories: [],
+          expected: ['shouty.TS'],
+          extensions: TS_SOURCE_EXTENSIONS,
+          files: ['shouty.TS'],
+          name: 'matches the extension case-insensitively',
+        },
+        {
+          directories: [],
+          expected: ['prose.md'],
+          extensions: new Set(['.md']),
+          files: ['prose.md', 'code.ts'],
+          name: 'honors a caller-supplied extension set',
+        },
+        {
+          directories: ['empty'],
+          expected: ['.gitignore', 'code.ts', 'Makefile', 'nested/prose.md'],
+          extensions: EVERY_EXTENSION,
+          files: ['code.ts', 'Makefile', '.gitignore', 'nested/prose.md'],
+          name: 'keeps every regular file when handed every extension',
+        },
+      ] as const
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {directories, expected, extensions, files}) => {
+    for (const file of files) seed(dir, file);
+    for (const directory of directories) mkdirSync(path.join(dir, directory));
 
-    expect(collectTreeFiles(dir, TS_SOURCE_EXTENSIONS)).toEqual(['shouty.TS']);
-  });
-
-  test('honors a caller-supplied extension set', () => {
-    seed(dir, 'prose.md');
-    seed(dir, 'code.ts');
-
-    expect(collectTreeFiles(dir, new Set(['.md']))).toEqual(['prose.md']);
-  });
-
-  // An extensionless file and a dotfile are the entries an extension set can
-  // never name, so they are what tells "every file" from "every extension
-  // anyone listed".
-  test('keeps every regular file when handed every extension', () => {
-    seed(dir, 'code.ts');
-    seed(dir, 'Makefile');
-    seed(dir, '.gitignore');
-    seed(dir, 'nested/prose.md');
-    mkdirSync(path.join(dir, 'empty'));
-
-    expect(collectTreeFiles(dir, EVERY_EXTENSION)).toEqual([
-      '.gitignore',
-      'code.ts',
-      'Makefile',
-      'nested/prose.md',
-    ]);
+    expect(collectTreeFiles(dir, extensions)).toEqual(expected);
   });
 
   test('throws when the root does not exist', () => {

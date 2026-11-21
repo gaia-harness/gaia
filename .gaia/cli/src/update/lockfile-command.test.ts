@@ -78,67 +78,108 @@ afterEach(() => {
   rmSync(root, {force: true, recursive: true});
 });
 
+const OVERRIDES_CHANGED =
+  'minimumReleaseAge: 1440\noverrides:\n  qs: ">=6.5.0"\n';
+
+const DEDUPE_TRIGGER_ADDITIONS = [
+  ['allowBuilds', 'allowBuilds:\n  msw: true\n'],
+  ['resolutionMode', 'resolutionMode: highest\n'],
+  ['dedupePeerDependents', 'dedupePeerDependents: false\n'],
+  ['autoInstallPeers', 'autoInstallPeers: false\n'],
+  ['kebab-case dedupe-peer-dependents', 'dedupe-peer-dependents: false\n'],
+] as const;
+
+const CHANGED_KEY_ROWS: {
+  command: 'dedupe' | 'install' | 'none';
+  name: string;
+  writes: [string, string][];
+}[] = [
+  {command: 'none', name: 'no change prints none', writes: []},
+  {
+    command: 'dedupe',
+    name: 'an overrides change alone prints dedupe',
+    writes: [['pnpm-workspace.yaml', OVERRIDES_CHANGED]],
+  },
+  ...DEDUPE_TRIGGER_ADDITIONS.map(([key, addition]) => ({
+    command: 'dedupe' as const,
+    name: `a ${key} change prints dedupe`,
+    writes: [['pnpm-workspace.yaml', `${BASELINE_WORKSPACE}${addition}`]] as [
+      string,
+      string,
+    ][],
+  })),
+  {
+    command: 'dedupe',
+    name: 'an overrides change plus a dependency change prints dedupe',
+    writes: [
+      ['pnpm-workspace.yaml', OVERRIDES_CHANGED],
+      ['package.json', packageJson({dependencies: {react: '^19.1.0'}})],
+    ],
+  },
+  {
+    command: 'install',
+    name: 'a dependency version change alone prints install',
+    writes: [
+      [
+        'apps/web/package.json',
+        packageJson({dependencies: {react: '^19.1.0'}}),
+      ],
+    ],
+  },
+  {
+    command: 'install',
+    name: 'a packageManager change alone prints install',
+    writes: [['package.json', packageJson({packageManager: 'pnpm@11.3.0'})]],
+  },
+  {
+    command: 'none',
+    name: 'a change confined to a non-trigger key prints none',
+    writes: [
+      ['pnpm-workspace.yaml', BASELINE_WORKSPACE.replace('1440', '4320')],
+      ['package.json', packageJson({scripts: {build: 'vite build'}})],
+    ],
+  },
+];
+
+const REFUSAL_ROWS: {
+  arguments: () => string[];
+  code: string;
+  name: string;
+  writes: [string, string][];
+}[] = [
+  {
+    arguments: () => ['--root', root, '--ref', 'no-such-ref'],
+    code: 'ref_unreadable',
+    name: 'an unreadable ref exits non-zero with a structured error',
+    writes: [],
+  },
+  {
+    arguments: () => ['--root', root],
+    code: 'parse_failed',
+    name: 'a malformed working-tree manifest exits non-zero with a structured error',
+    writes: [['package.json', '{ not json']],
+  },
+  {
+    arguments: () => [],
+    code: 'invalid_arguments',
+    name: 'a missing --root exits non-zero',
+    writes: [],
+  },
+];
+
 describe('update lockfile-command', () => {
-  test('no change prints none', () => {
-    expect(run(['--root', root])).toBe(0);
-    expect(outputs.join('')).toBe('none\n');
-  });
+  test.each(CHANGED_KEY_ROWS.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {command, writes}) => {
+      for (const [file, contents] of writes) {
+        writeTree(file, contents);
+      }
 
-  test('an overrides change alone prints dedupe', () => {
-    writeTree(
-      'pnpm-workspace.yaml',
-      'minimumReleaseAge: 1440\noverrides:\n  qs: ">=6.5.0"\n'
-    );
-
-    expect(lockfileCommand(root, 'HEAD')).toBe('dedupe');
-  });
-
-  test.each([
-    ['allowBuilds', 'allowBuilds:\n  msw: true\n'],
-    ['resolutionMode', 'resolutionMode: highest\n'],
-    ['dedupePeerDependents', 'dedupePeerDependents: false\n'],
-    ['autoInstallPeers', 'autoInstallPeers: false\n'],
-    ['kebab-case dedupe-peer-dependents', 'dedupe-peer-dependents: false\n'],
-  ])('a %s change prints dedupe', (_name, addition) => {
-    writeTree('pnpm-workspace.yaml', `${BASELINE_WORKSPACE}${addition}`);
-
-    expect(lockfileCommand(root, 'HEAD')).toBe('dedupe');
-  });
-
-  test('an overrides change plus a dependency change prints dedupe', () => {
-    writeTree(
-      'pnpm-workspace.yaml',
-      'minimumReleaseAge: 1440\noverrides:\n  qs: ">=6.5.0"\n'
-    );
-    writeTree('package.json', packageJson({dependencies: {react: '^19.1.0'}}));
-
-    expect(lockfileCommand(root, 'HEAD')).toBe('dedupe');
-  });
-
-  test('a dependency version change alone prints install', () => {
-    writeTree(
-      'apps/web/package.json',
-      packageJson({dependencies: {react: '^19.1.0'}})
-    );
-
-    expect(lockfileCommand(root, 'HEAD')).toBe('install');
-  });
-
-  test('a packageManager change alone prints install', () => {
-    writeTree('package.json', packageJson({packageManager: 'pnpm@11.3.0'}));
-
-    expect(lockfileCommand(root, 'HEAD')).toBe('install');
-  });
-
-  test('a change confined to a non-trigger key prints none', () => {
-    writeTree(
-      'pnpm-workspace.yaml',
-      BASELINE_WORKSPACE.replace('1440', '4320')
-    );
-    writeTree('package.json', packageJson({scripts: {build: 'vite build'}}));
-
-    expect(lockfileCommand(root, 'HEAD')).toBe('none');
-  });
+      expect(lockfileCommand(root, 'HEAD')).toBe(command);
+      expect(run(['--root', root])).toBe(0);
+      expect(outputs.join('')).toBe(`${command}\n`);
+    }
+  );
 
   test('a registered package is compared too', () => {
     writeTree(
@@ -189,20 +230,15 @@ describe('update lockfile-command', () => {
     expect(JSON.parse(outputs.join(''))).toEqual({command: 'none'});
   });
 
-  test('an unreadable ref exits non-zero with a structured error', () => {
-    expect(run(['--root', root, '--ref', 'no-such-ref'])).not.toBe(0);
-    expect(errors.join('')).toContain('ref_unreadable');
-  });
+  test.each(REFUSAL_ROWS.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {arguments: argv, code, writes}) => {
+      for (const [file, contents] of writes) {
+        writeTree(file, contents);
+      }
 
-  test('a malformed working-tree manifest exits non-zero with a structured error', () => {
-    writeTree('package.json', '{ not json');
-
-    expect(run(['--root', root])).not.toBe(0);
-    expect(errors.join('')).toContain('parse_failed');
-  });
-
-  test('a missing --root exits non-zero', () => {
-    expect(run([])).not.toBe(0);
-    expect(errors.join('')).toContain('invalid_arguments');
-  });
+      expect(run(argv())).not.toBe(0);
+      expect(errors.join('')).toContain(code);
+    }
+  );
 });
