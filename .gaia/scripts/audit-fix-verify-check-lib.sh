@@ -4,8 +4,8 @@
 # of the fixer's delta, the audit-artifact scan, and the error log every
 # finding is written to. Sourced only by audit-fix-verify.sh from its own
 # directory, so a pinned copy sources the pinned library. That script's header
-# owns the input and output shapes and the error kinds; ENFORCEMENT_PATHS and
-# FORBIDDEN_PATHS stay in that script too.
+# owns the input and output shapes and the error kinds; FORBIDDEN_PATHS stays
+# in that script too, and ENFORCEMENT_PATHS is in audit-fix-verify-state-lib.sh.
 #
 # Reads the caller's option globals, TEMPORARY_DIRECTORY and _here, and calls
 # the helpers of audit-fix-verify-state-lib.sh.
