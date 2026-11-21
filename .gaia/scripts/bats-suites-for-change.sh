@@ -37,12 +37,8 @@
 #
 # A suite is also selected when a test helper it loads, directly or through
 # another helper, names a changed file's match text at an occurrence that may be
-# the changed file (bats-selector-helper-lib.sh decides which). A helper under a
-# `tests/` or `helpers/` directory that copies a script into a fixture
-# repository names it, and the suite loading it never does. Production code a
-# suite sources is not a helper. A helper that copies by glob or by a derived
-# name never names the file, so a change to such a file is still missed here;
-# the open tech-debt issue #3749 tracks it.
+# the changed file. bats-selector-helper-lib.sh owns what counts as a helper and
+# the limit: a copy by glob or a derived name is missed (#3749 tracks it).
 #
 # Changed paths are read NUL-delimited. The hand-rolled spelling,
 # `for f in $(git diff --name-only ...)`, word-splits a path holding a space

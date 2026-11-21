@@ -8,10 +8,10 @@
 #   bats_selector_reaching_suites <repository root> <pair file> <top-level file> <suite list> [helper-mode]
 #
 # <pair file> holds `<changed path><TAB><match text>` lines, <top-level file>
-# the tracked top-level names, <suite list> the name-matched suites
-# (repo-relative). Prints the suites that stay selected, in input order.
-# Returns non-zero only when awk itself fails; the caller treats that as
-# "the change could not be read".
+# the tracked top-level names, <suite list> the name-matched suites (repo-relative).
+# A non-empty helper-mode reads <suite list> as helper files: comment lines are not
+# mentions and BATS_TEST_* variables are unknown. Prints the files that stay selected, in input order.
+# Returns non-zero only when awk itself fails; the caller reads that as "the change could not be read".
 #
 # A suite is dropped only when every occurrence of every match text in it,
 # comment lines included and `@test` names excepted, is proven not to be the

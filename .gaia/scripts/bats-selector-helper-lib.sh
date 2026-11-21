@@ -8,7 +8,7 @@
 #   bats_selector_helper_suites <repository root> <tracked list> <pair file> <top-level file> <pattern file>
 #
 # The pair, top-level and pattern files are the ones bats-suites-for-change.sh
-# builds. Prints the suites to select, one per line, possibly with repeats.
+# builds. Prints the suites to select, one per line.
 # Returns non-zero when git or awk fails; the caller treats that as "the change
 # could not be read".
 #
@@ -17,8 +17,8 @@
 # so a helper that names the file only as fixture data stays ruled out and a
 # mention that cannot be ruled out counts. Two rules differ for a helper: a
 # comment line is not a mention, since a comment copies nothing, and
-# `BATS_TEST_DIRNAME` is unknown, since bats sets it to the loading suite's
-# directory and not the helper's. A suite is selected when a file it loads, or a
+# `BATS_TEST_DIRNAME` and `BATS_TEST_FILENAME` are unknown, since bats sets them
+# to the loading suite's path and not the helper's. A suite is selected when a file it loads, or a
 # file such a file sources in turn, is one that counts. Production code a suite
 # sources is the code under test and is not searched.
 #
@@ -29,7 +29,7 @@
 # files links both, which only over-selects. A target that is only a variable
 # (`. "$1"`) has no tail and is not followed.
 #
-# Limit: a helper that copies a file by pattern or by a derived name
+# Limit: a helper that copies a file by glob or by a derived name
 # (`cp "$root"/dir/*.sh`, a loop over a computed list) never names the file, so
 # a change to such a file is not seen here.
 
@@ -59,7 +59,7 @@ bats_selector_helper_suites() {
       segment_count = split(path, segments, "/")
       return segments[segment_count]
     }
-    # The literal path a load or source line ends in, or "" when it has none.
+    # The literal path a load or source line names, or "" when it has none.
     function load_tail(text,   rest, run, before) {
       if (!match(text, /(^[ \t]*|[;&|][ \t]*)(load|source|bats_load_library|\.)[ \t]+/)) return ""
       rest = substr(text, RSTART + RLENGTH)
