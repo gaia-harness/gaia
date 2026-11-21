@@ -1,6 +1,7 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
-import {execFileSync} from 'node:child_process';
+import {execFileSync, spawnSync} from 'node:child_process';
 import {
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -10,7 +11,11 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {writeFrontendRegistry} from '../util/package-fixture.js';
-import {computePlaywrightCliRow, run} from './global-tools.js';
+import {
+  computePlaywrightCliRow,
+  computeReactDoctorRow,
+  run,
+} from './global-tools.js';
 import type {GlobalToolProbes} from './global-tools.js';
 import {run as runEmit} from './run.js';
 import type {PnpmRunner} from './run.js';
@@ -22,6 +27,42 @@ const emptyOutdated: PnpmRunner = () => ({
 });
 
 const INSTALL_COMMAND = 'npm install -g @playwright/cli@latest';
+
+const NOW = new Date('2026-11-21T00:00:00Z');
+const DAY_MS = 86_400_000;
+const daysAgo = (days: number): string =>
+  new Date(NOW.getTime() - days * DAY_MS).toISOString();
+
+type RegistryAnswer = {
+  latest: null | string;
+  times: null | Record<string, string>;
+};
+
+const registryReply = (stdout: null | string) =>
+  stdout === null ?
+    {status: 1, stderr: 'lookup failed', stdout: ''}
+  : {status: 0, stderr: '', stdout};
+
+// Answers the two registry reads the react-doctor row makes, so no test
+// reaches npm; `null` is a failed lookup. `calls` records every request.
+const stubRegistry = (
+  answer: RegistryAnswer
+): {calls: string[][]; runner: PnpmRunner} => {
+  const calls: string[][] = [];
+
+  return {
+    calls,
+    runner: (args) => {
+      calls.push([...args]);
+
+      return args.includes('time') ?
+          registryReply(
+            answer.times === null ? null : JSON.stringify(answer.times)
+          )
+        : registryReply(answer.latest);
+    },
+  };
+};
 
 describe('computePlaywrightCliRow', () => {
   test.each(
@@ -90,6 +131,147 @@ describe('computePlaywrightCliRow', () => {
   });
 });
 
+describe('computeReactDoctorRow', () => {
+  let repoRoot: string;
+
+  beforeEach(() => {
+    repoRoot = mkdtempSync(path.join(tmpdir(), 'gaia-react-doctor-row-'));
+    mkdirSync(path.join(repoRoot, '.gaia'));
+    // Three days, the cooldown the repository's own workspace sets.
+    writeFileSync(
+      path.join(repoRoot, 'pnpm-workspace.yaml'),
+      'minimumReleaseAge: 4320\n',
+      'utf8'
+    );
+  });
+
+  afterEach(() => {
+    rmSync(repoRoot, {force: true, recursive: true});
+  });
+
+  const writePin = (text: string): void => {
+    writeFileSync(path.join(repoRoot, '.gaia/react-doctor-version'), text);
+  };
+
+  test.each(
+    (
+      [
+        {
+          answer: {latest: '0.9.24', times: {'0.9.24': daysAgo(10)}},
+          expected: {
+            latest: '0.9.24',
+            offerBump: true,
+            pinned: '0.9.22',
+            status: 'outdated',
+          },
+          name: 'an aged newer release is outdated and offers the bump',
+        },
+        {
+          answer: {
+            latest: '0.9.24',
+            times: {'0.9.23': daysAgo(10), '0.9.24': daysAgo(1)},
+          },
+          expected: {latest: '0.9.23', offerBump: true, status: 'outdated'},
+          name: 'the cooldown caps the offer at the newest aged release',
+        },
+        {
+          answer: {latest: '0.9.23', times: {'0.9.23': daysAgo(1)}},
+          expected: {
+            message: expect.stringContaining('cooldown') as string,
+            offerBump: false,
+            status: 'current',
+          },
+          name: 'a newer release still inside the cooldown is not offered',
+        },
+        {
+          answer: {latest: '0.9.22', times: null},
+          expected: {offerBump: false, status: 'current'},
+          name: 'a pin at the registry latest is current',
+        },
+        {
+          answer: {latest: null, times: null},
+          expected: {offerBump: false, status: 'unknown'},
+          name: 'a failed registry lookup is unknown',
+        },
+        {
+          answer: {latest: '0.9.24', times: null},
+          expected: {offerBump: false, status: 'unknown'},
+          name: 'a failed release-times lookup is unknown, never a bump',
+        },
+      ] as {
+        answer: RegistryAnswer;
+        expected: Record<string, unknown>;
+        name: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {answer, expected}) => {
+    writePin('0.9.22\n');
+
+    expect(
+      computeReactDoctorRow({
+        now: NOW,
+        pnpmRunner: stubRegistry(answer).runner,
+        repoRoot,
+      })
+    ).toMatchObject(expected);
+  });
+
+  test.each([
+    ['a missing pin file', () => undefined],
+    ['a malformed pin', () => writePin('0.9\n')],
+  ])('%s is unknown and asks the registry nothing', (_name, preparePin) => {
+    preparePin();
+    const registry = stubRegistry({latest: '0.9.24', times: null});
+
+    expect(
+      computeReactDoctorRow({now: NOW, pnpmRunner: registry.runner, repoRoot})
+    ).toMatchObject({offerBump: false, pinned: null, status: 'unknown'});
+    expect(registry.calls).toEqual([]);
+  });
+
+  // The pin's accepted format is owned by react_doctor_pinned_version in
+  // .gaia/scripts/react-doctor-version-lib.sh; this keeps the TS reader from
+  // drifting away from it.
+  test.each([
+    '0.9.22',
+    ' 0.9.22 \n',
+    '10.0.1',
+    '0.9',
+    'v0.9.22',
+    '0.9.22-beta.1',
+    '0.9.22.1',
+    '',
+  ])(
+    'pin %j is accepted by the TS reader only when the shell lib accepts it',
+    (pinText) => {
+      writePin(pinText);
+      const pinFile = path.join(repoRoot, '.gaia/react-doctor-version');
+      const library = path.resolve(
+        import.meta.dirname,
+        '../../../scripts/react-doctor-version-lib.sh'
+      );
+      const shell = spawnSync(
+        'bash',
+        [
+          '-c',
+          '. "$1" && react_doctor_pinned_version "$2"',
+          '_',
+          library,
+          pinFile,
+        ],
+        {encoding: 'utf8'}
+      );
+      const row = computeReactDoctorRow({
+        now: NOW,
+        pnpmRunner: stubRegistry({latest: null, times: null}).runner,
+        repoRoot,
+      });
+
+      expect(row.pinned).toBe(shell.status === 0 ? shell.stdout.trim() : null);
+    }
+  );
+});
+
 describe('update-deps global-tools handler', () => {
   let written: string[];
 
@@ -130,9 +312,13 @@ describe('update-deps global-tools handler', () => {
       probeLatestVersion: () => latestVersion,
     };
 
-    expect(run([], {probes})).toBe(0);
-    expect(parseRows()).toHaveLength(1);
-    expect(parseRows()[0]?.status).toBe(expectedStatus);
+    const {runner} = stubRegistry({latest: null, times: null});
+
+    expect(run([], {pnpmRunner: runner, probes})).toBe(0);
+    expect(parseRows().map((row) => row.status)).toEqual([
+      expectedStatus,
+      'unknown',
+    ]);
   });
 });
 

@@ -125,13 +125,13 @@ an otherwise up-to-date run:
 .gaia/cli/gaia update-deps global-tools
 ```
 
-It prints `{"rows":[...]}` and exits 0 even when a probe fails. Keep the
-playwright-cli row for the Phase 7 `### Global tools` section. This step never
+It prints `{"rows":[...]}` and exits 0 even when a probe fails. Keep every
+row for the Phase 7 `### Global tools` section. This step never
 changes `outdatedCount`, never writes the update-check cache, and never creates
-a branch by itself: a global tool cannot be cleared through pnpm, so it stays
+a branch by itself: neither tool can be cleared through pnpm, so both stay
 out of the discovery payload and the statusline count.
 
-- **Under `--scope`**: report the row only.
+- **Under `--scope`**: report the rows only.
 - **`status` is `not-installed`**: report `not installed, skipped` with the
   row's `installCommand` as text. No prompt, no error.
 - **`status` is `current` or `unknown`**: report the row only.
@@ -140,6 +140,15 @@ out of the discovery payload and the statusline count.
   globally** (first, marked ` (Recommended)`) or **Skip**. Only after the Upgrade answer, run
   `npm install -g @playwright/cli@latest`. Record `upgraded` or `declined` as
   the action taken.
+- **Interactively with `offerBump: true`** (the react-doctor row, whose
+  `pinned` is `.gaia/react-doctor-version`): show the row, then ask with
+  `AskUserQuestion` (single-select): **Bump the react-doctor pin to
+  `<latest>`** (first, marked ` (Recommended)`) or **Skip**. Only after the
+  Bump answer, when `SHOULD_CREATE_WORKTREE=true` and no worktree exists yet,
+  run `references/worktree.md`, then follow `## Moving the pin` in
+  `wiki/dependencies/react-doctor.md` for `<latest>`. Record `bumped` or
+  `declined` as the action taken. Phase 8 publishes the bump per
+  `references/publish.md`.
 
 <!-- gaia:maintainer-only:start -->
 
