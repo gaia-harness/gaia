@@ -5,10 +5,10 @@
 # stated once, in audit-loop-eval.sh's header (SIGNALS, DECISION); this file
 # is their implementation and restates none of them.
 #
-# Needs audit-loop-state-lib.sh, context-checkpoint-lib.sh and
-# audit-loop-allowance-lib.sh's gaia_loop_allowed already defined. Defines
-# functions and one jq fragment; runs nothing at source time. Bash 3.2
-# compatible.
+# Needs audit-loop-state-lib.sh and context-checkpoint-lib.sh already sourced,
+# and audit-loop-allowance-lib.sh's gaia_loop_allowed defined before this
+# file's functions run. Defines functions and one jq fragment; runs nothing at source
+# time. Bash 3.2 compatible.
 #
 # The decision functions read no file: the bound hook reads the context
 # reading and computes the effective line config, then passes both in, so the
