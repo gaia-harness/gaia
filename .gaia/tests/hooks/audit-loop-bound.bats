@@ -1498,6 +1498,27 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   assert_allowed
 }
 
+@test "a repeat fix decision after a unit advanced leaves no vetoes.json entry for the key carrying the first direction" {
+  local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH" decision_script="$REPO_ROOT/.gaia/scripts/audit-dispositions-check.sh"
+  alf_fill f.txt 12 feature
+  alf_commit "round 1"
+  dispatch
+  assert_allowed || return 1
+  alf_stamp 1 10
+  alf_sidecar "$FRONTEND_MEMBER" '[{"path":"f.txt","line":1,"severity":"minor","security":false}]' 11
+  mkdir -p "$run_folder"
+  printf '{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"reason":"first direction"}\n' >"$BATS_TEST_TMPDIR/first.json"
+  bash "$decision_script" record-residual --root "$ALF_ROOT" --run-folder "$run_folder" --finding "$BATS_TEST_TMPDIR/first.json" --decision fix || return 1
+  new_tree
+  dispatch
+  assert_allowed || return 1
+  alf_stamp 2 20
+  printf '{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"reason":"second direction"}\n' >"$BATS_TEST_TMPDIR/second.json"
+  bash "$decision_script" record-residual --root "$ALF_ROOT" --run-folder "$run_folder" --finding "$BATS_TEST_TMPDIR/second.json" --decision fix || return 1
+  [ "$(jq '[.keys[].effective_from_round] | unique | length' "$run_folder/vetoes.json")" -eq 2 ] || return 1
+  jq -e '.keys | length > 0 and all(.[]; .direction == "second direction")' "$run_folder/vetoes.json" >/dev/null
+}
+
 @test "a key an earlier round disposed file is not undecided when the open round re-reports it after a needs-human stop" {
   local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
   alf_fill f.txt 12 feature

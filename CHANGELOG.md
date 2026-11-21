@@ -95,6 +95,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **A vetoed audit finding reaches the fixer with the human's direction:** a `fix` decision's reason, or a `direction` written on a hand-recorded veto, now briefs the next round's fixer over the finding's original suggested fix, so a redirect no longer gets the rejected fix applied again or stalls the audit at another needs-human stop (#3675)
 - **`toSnakeCase` and `toCamelCase` convert objects inside nested arrays:** an object in an array nested inside a property's array, such as `{matrix: [[{cellValue: 1}]]}`, kept its keys unconverted, so the API service's snake_case layer sent and returned those keys in the wrong case (#3688)
 - **The Node upgrade guidance fits every setup:** a shell that switches Node per folder through asdf or mise is now told to select the new Node there, not to run an fnm or nvm command, and a machine with neither nvm nor fnm is told to install one first, or to get the new Node another way (#3705)
 - **Fork checks work again on gh 2.105:** a hint gh 2.105 prints on stderr left GAIA unable to tell a fork from a same-repository pull request, so the audit dispatch, the merge gate and the fork-checkout guard refused every pull request, and the audit's `/code-review` step was skipped on every one (#3699)
