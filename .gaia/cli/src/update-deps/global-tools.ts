@@ -125,8 +125,6 @@ const defaultProbes: GlobalToolProbes = {
 
 const REACT_DOCTOR_PIN_FILE = '.gaia/react-doctor-version';
 
-export type GlobalToolRow = PlaywrightCliRow | ReactDoctorRow;
-
 export type ReactDoctorRow = {
   latest: null | string;
   message: string;
@@ -143,6 +141,8 @@ export type ReactDoctorRowInput = {
   pnpmRunner: PnpmRunner;
   repoRoot: string;
 };
+
+type GlobalToolRow = PlaywrightCliRow | ReactDoctorRow;
 
 // The accepted pin format is owned by react_doctor_pinned_version in
 // .gaia/scripts/react-doctor-version-lib.sh; a parity test in
