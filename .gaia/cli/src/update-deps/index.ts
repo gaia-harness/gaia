@@ -23,7 +23,8 @@ const HELP_TEXT = `Usage: gaia update-deps <subcommand> [args]
                                               statusline stops counting them
                                               (local only). --clear resets.
   global-tools                                Report globally installed tools
-                                              (playwright-cli) as JSON rows.
+                                              (playwright-cli) and the
+                                              react-doctor pin as JSON rows.
   advisories --emit <path> [--count-only] [--updates <path>]
                                               Fetch, validate, and rank open
                                               security advisories (Dependabot

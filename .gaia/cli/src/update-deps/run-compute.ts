@@ -8,13 +8,13 @@ import {
 } from './declines.js';
 import {
   adjustOutdatedEntry,
+  buildCooldownContext,
   createVersionFetcher,
 } from './run-compute-adjust.js';
 import type {
   Adjusted,
   AdjustEntryContext,
   ComputeOptions,
-  CooldownContext,
 } from './run-compute-adjust.js';
 import {expandGroupSiblings, routeGroupIntoWaves} from './run-compute-waves.js';
 import type {ExpandSiblingContext} from './run-compute-waves.js';
@@ -26,10 +26,6 @@ import {
   readUpdateDepsHolds,
 } from './run-outdated.js';
 import type {OutdatedEntry, PackageJsonShape} from './run-outdated.js';
-import {
-  readMinimumReleaseAge,
-  readMinimumReleaseAgeExclude,
-} from './run-release-age.js';
 import type {
   PnpmRunner,
   SkippedEntry,
@@ -199,14 +195,12 @@ export const computeUpdates = (options: ComputeOptions): UpdatesPayload => {
   // setting is unset, preserving the prior behaviour for adopters who do
   // not use it.
   const now = (options.now ?? (() => new Date()))();
-  const minimumReleaseAgeMinutes = readMinimumReleaseAge(repoRoot);
-  const cooldown: CooldownContext = {
-    cooldownCutoffMs: now.getTime() - minimumReleaseAgeMinutes * 60_000,
+  const cooldown = buildCooldownContext({
     cwd: packageDir,
-    minimumReleaseAgeExcludes: readMinimumReleaseAgeExclude(repoRoot),
-    minimumReleaseAgeMinutes,
+    now,
     pnpmRunner,
-  };
+    repoRoot,
+  });
 
   const holds = readUpdateDepsHolds(rootPackage);
   const appWaves = buildWorkspaceWaves({

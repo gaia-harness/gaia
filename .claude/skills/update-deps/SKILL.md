@@ -125,13 +125,13 @@ an otherwise up-to-date run:
 .gaia/cli/gaia update-deps global-tools
 ```
 
-It prints `{"rows":[...]}` and exits 0 even when a probe fails. Keep the
-playwright-cli row for the Phase 7 `### Global tools` section. This step never
+It prints `{"rows":[...]}` and exits 0 even when a probe fails. Keep every
+row for the Phase 7 `### Global tools` section. This step never
 changes `outdatedCount`, never writes the update-check cache, and never creates
-a branch by itself: a global tool cannot be cleared through pnpm, so it stays
+a branch by itself: neither tool can be cleared through pnpm, so both stay
 out of the discovery payload and the statusline count.
 
-- **Under `--scope`**: report the row only.
+- **Under `--scope`**: report the rows only.
 - **`status` is `not-installed`**: report `not installed, skipped` with the
   row's `installCommand` as text. No prompt, no error.
 - **`status` is `current` or `unknown`**: report the row only.
@@ -140,6 +140,23 @@ out of the discovery payload and the statusline count.
   globally** (first, marked ` (Recommended)`) or **Skip**. Only after the Upgrade answer, run
   `npm install -g @playwright/cli@latest`. Record `upgraded` or `declined` as
   the action taken.
+- **Interactively with `offerBump: true`** (the react-doctor row, which
+  reports the `.gaia/react-doctor-version` pin): show the row, then ask with
+  `AskUserQuestion` (single-select): **Bump the react-doctor pin to
+  `<latest>`** (first, marked ` (Recommended)`) or **Skip**. Put this warning
+  in the Bump option's description: the pin and `.gaia/templates/react-doctor/`
+  are GAIA-owned, so a later GAIA release that moves them raises a merge
+  question. Only after the Bump answer, when `SHOULD_CREATE_WORKTREE=true` and
+  no worktree exists yet, run `references/worktree.md`. Then read the
+  worktree's own `.gaia/react-doctor-version`, because the row read the main
+  checkout's copy. Move the pin only when `<latest>` is newer than that value
+  (follow `## Moving the pin` in `wiki/dependencies/react-doctor.md`); when it
+  is not, record `current` and leave the pin alone. Record `bumped` or
+  `declined` as the action taken. A recorded `bumped` is landed work: every
+  later exit that says "no branch" (the refresh-only Skip, the preview Cancel,
+  an empty apply set with `transitive-refresh` named) goes to Phase 7 and
+  Phase 8 instead, and
+  Phase 8 publishes the bump per `references/publish.md`.
 
 <!-- gaia:maintainer-only:start -->
 
@@ -148,7 +165,7 @@ out of the discovery payload and the statusline count.
 `apps/web/.claude/skills/playwright-cli/` is a verbatim copy of the upstream
 package's skill folder, pinned by `.gaia/vendor/playwright-cli.json`. This phase
 also runs on an otherwise up-to-date run. Compare that marker's `version` with
-the global-tools row's `latest`. When `latest` is unknown or equal, report
+the playwright-cli row's `latest`. When `latest` is unknown or equal, report
 `Vendored skills: current` (or `unknown`) and move on. Otherwise:
 
 1. When `SHOULD_CREATE_WORKTREE=true` and no worktree exists yet, run
@@ -175,7 +192,7 @@ If `total_count` is `0` and `advisories[]` is empty, print `All packages are up 
 and the run is **refresh-only** (see Decision): print the sub-dependency line (defined under the
 preview below) without its last sentence, and ask with `AskUserQuestion`
 (single-select): **Update sub-dependencies** (Recommended, first option) or
-**Skip** (exit now, no branch, no changes, no ledger write). Each `wave_a[]` and `wave_b[].packages[]` entry
+**Skip** (exit now, no branch, no changes, no ledger write; after a recorded pin bump, see the Global tools step). Each `wave_a[]` and `wave_b[].packages[]` entry
 carries `bucket` (`patch` | `minor` | `major` | `nonsemver`), `current`, `latest`,
 `is_pinned`, and `kind` (a `wave_a[]` entry also carries `group`; a `wave_b[]` element carries `group` once). `total_count` is the genuine-upgrade count;
 `actionable_count` is for the statusline only (it already subtracts local
@@ -252,7 +269,7 @@ non-empty**, offer these options in this order:
   skip; the snoozed groups stay skipped too. Description: `Name the packages to
   skip, or say "sub-dependencies" to skip that part.`
 - **Update everything incl. snoozed**: apply every group AND clear the snoozes.
-- **Cancel**: exit now, no branch, no changes, no ledger write.
+- **Cancel**: exit now, no branch, no changes, no ledger write (after a recorded pin bump, see the Global tools step).
 
 **When `snoozedGroups` is empty**, offer the original three:
 
@@ -261,7 +278,7 @@ non-empty**, offer these options in this order:
 - **Choose what to skip**: the human names the package or group names to skip;
   everything else applies. Description: `Name the packages to skip, or say
   "sub-dependencies" to skip that part.`
-- **Cancel**: exit now, no branch, no changes, no ledger write.
+- **Cancel**: exit now, no branch, no changes, no ledger write (after a recorded pin bump, see the Global tools step).
 
 ### Decision
 
