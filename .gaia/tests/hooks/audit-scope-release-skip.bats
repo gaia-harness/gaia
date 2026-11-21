@@ -357,8 +357,8 @@ digest_matches_resolver() {
 # Digest-only callers: their classification happens inside audit-digest.sh,
 # which arms itself. resolve-audit-base-context.sh's only classifier reference
 # is a presence probe.
-DIGEST_ONLY_CALLERS='.claude/hooks/post-audit-status.sh
-.gaia/scripts/audit-fix-verify.sh
+DIGEST_ONLY_CALLERS='.claude/hooks/lib/post-audit-status-gates.sh
+.gaia/scripts/audit-fix-verify-check-lib.sh
 .gaia/scripts/audit-member-digest.sh
 .gaia/scripts/audit-scope-digest.sh
 .gaia/scripts/audit-write-clearance-gates.sh

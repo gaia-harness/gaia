@@ -72,6 +72,14 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "the post-audit-status gates library is a global rule like the hook it was split from" {
+  run audit_path_is_global_rule ".claude/hooks/post-audit-status.sh"
+  [ "$status" -eq 0 ]
+
+  run audit_path_is_global_rule ".claude/hooks/lib/post-audit-status-gates.sh"
+  [ "$status" -eq 0 ]
+}
+
 @test "audit_path_is_member_rule matches only the member's own file" {
   local row path member expected
   local rows=(
