@@ -151,6 +151,8 @@
 .gaia/scripts/debt-source-report.sh
 # The reach classifier bats-suites-for-change.sh sources to decide which suites read a changed file only as a fixture. Its one consumer is withheld above, so an adopter clone would carry a library nothing sources.
 .gaia/scripts/bats-selector-reach-lib.sh
+# The helper-following library bats-suites-for-change.sh sources beside the reach classifier. Its one consumer is withheld above, so an adopter clone would carry a library nothing sources.
+.gaia/scripts/bats-selector-helper-lib.sh
 
 # --- 2. Maintainer-only wiki content ---
 # Internal vault administration files and team-specific knowledge that

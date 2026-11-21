@@ -376,7 +376,16 @@ select_on_changelog_edit() {
 
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
   [ "$status" -eq 0 ]
-  [ "$(wc -l < "$BATS_TEST_TMPDIR/grep-calls" | tr -d ' ')" -eq 1 ]
+  several_paths="$(wc -l < "$BATS_TEST_TMPDIR/grep-calls" | tr -d ' ')"
+
+  # The count is a property of the search, not of the change: one path costs the same.
+  build_fixture
+  rm -f "$BATS_TEST_TMPDIR/grep-calls"
+  printf 'edited\n' >> "$FIXTURE/wiki/PR Merge Workflow.md"
+  git -C "$FIXTURE" commit -q -am one
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/grep-calls" | tr -d ' ')" -eq "$several_paths" ]
 }
 
 @test "no remote default branch exits 3 naming the fix, an unknown option exits 2" {
@@ -389,4 +398,85 @@ select_on_changelog_edit() {
 
   run --separate-stderr bash "$SCRIPT" --bogus
   [ "$status" -eq 2 ]
+}
+
+# add_helper_suites: commit a helper chain on top of the base, then edit
+# scripts/copied.sh, so that edit is the change under test.
+add_helper_suites() {
+  mkdir -p "$FIXTURE/tests/helpers"
+  printf 'echo copied\n' > "$FIXTURE/scripts/copied.sh"
+  # Copies the script into a fixture repository by name; its suite never names it.
+  printf 'copy_in() { cp "$ROOT/scripts/copied.sh" "$REPO/"; }\n' > "$FIXTURE/tests/helpers/copier.sh"
+  printf '# loads the copier\nload helpers/copier\n' > "$FIXTURE/tests/uses-copier.bats"
+  # Reaches the copier through a second helper that sources it.
+  printf '. "$BATS_TEST_DIRNAME/helpers/copier.sh"\n' > "$FIXTURE/tests/helpers/outer.sh"
+  printf 'source "$BATS_TEST_DIRNAME/helpers/outer.sh"\n' > "$FIXTURE/tests/uses-outer.bats"
+  # Names the script only as data it writes into a directory it made itself.
+  printf 'work="$(mktemp -d)"\nprintf x > "$work/scripts/copied.sh"\n' > "$FIXTURE/tests/helpers/scratch.sh"
+  printf 'load helpers/scratch\n' > "$FIXTURE/tests/uses-scratch.bats"
+  # Loads a helper that names no changed file.
+  printf 'noop() { :; }\n' > "$FIXTURE/tests/helpers/plain.sh"
+  printf 'load helpers/plain\n' > "$FIXTURE/tests/uses-plain.bats"
+  # Production code that mentions the script is not a helper.
+  printf '. "$ROOT/scripts/copied.sh"\n' > "$FIXTURE/scripts/library.sh"
+  printf '. "$BATS_TEST_DIRNAME/../scripts/library.sh"\n' > "$FIXTURE/tests/sources-library.bats"
+  git -C "$FIXTURE" add -A
+  git -C "$FIXTURE" commit -q -m helpers
+  BASE="$(git -C "$FIXTURE" rev-parse HEAD)"
+  git -C "$FIXTURE" update-ref refs/remotes/origin/main "$BASE"
+  printf 'edited\n' >> "$FIXTURE/scripts/copied.sh"
+  git -C "$FIXTURE" commit -q -am edit
+}
+
+@test "a suite that loads a helper copying the changed script is selected, one loading no such helper is not" {
+  add_helper_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  [ "$output" = $'tests/uses-copier.bats\ntests/uses-outer.bats' ] || {
+    printf 'got:\n%s\n' "$output" >&2
+    return 1
+  }
+}
+
+@test "a helper that names the changed script only as fixture data selects no suite" {
+  add_helper_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/uses-scratch.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-copier.bats' || return 1
+  true
+}
+
+@test "a helper mentioning the changed script only in a comment selects nothing; a helper rooted at the suite directory is not ruled out" {
+  mkdir -p "$FIXTURE/tests/helpers"
+  printf '# copies scripts/copied.sh somewhere, one day\nnoop() { :; }\n' > "$FIXTURE/tests/helpers/commented.sh"
+  printf 'load helpers/commented\n' > "$FIXTURE/tests/uses-commented.bats"
+  # The root climbs from BATS_TEST_DIRNAME, which is the loading suite's
+  # directory, so it names a different tree than the helper's own location.
+  printf 'ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\ncopy_in() { cp "$ROOT/scripts/copied.sh" "$REPO/"; }\n' > "$FIXTURE/tests/helpers/rooted.sh"
+  printf 'load helpers/rooted\n' > "$FIXTURE/tests/uses-rooted.bats"
+  add_helper_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/uses-commented.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-rooted.bats' || return 1
+  true
+}
+
+@test "a failing search of the shell files a suite loads fails loudly" {
+  add_helper_suites
+  real_git="$(command -v git)"
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  # Fails every grep after the first, the ones that read the helper files, and
+  # runs every other call for real.
+  printf '#!/bin/sh\nfor argument in "$@"; do\n  if [ "$argument" = grep ]; then\n    count=$(cat "%s" 2>/dev/null || echo 0); count=$((count + 1)); echo "$count" > "%s"\n    [ "$count" -ge 2 ] && exit 128\n  fi\ndone\nexec "%s" "$@"\n' \
+    "$BATS_TEST_TMPDIR/count" "$BATS_TEST_TMPDIR/count" "$real_git" > "$BATS_TEST_TMPDIR/bin/git"
+  chmod +x "$BATS_TEST_TMPDIR/bin/git"
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 3 ] || { echo "status $status"; return 1; }
+  [ -z "$output" ]
 }
