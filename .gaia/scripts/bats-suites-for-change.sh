@@ -38,7 +38,7 @@
 # A suite is also selected when a test helper it loads, directly or through
 # another helper, names a changed file's match text at an occurrence that may be
 # the changed file. bats-selector-helper-lib.sh owns what counts as a helper and
-# the limit: a copy by glob or a derived name is missed (#3749 tracks it).
+# its limit.
 #
 # Changed paths are read NUL-delimited. The hand-rolled spelling,
 # `for f in $(git diff --name-only ...)`, word-splits a path holding a space
