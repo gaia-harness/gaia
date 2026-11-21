@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Owns the accepted format of .gaia/react-doctor-version. install-react-doctor.sh and
-# audit-frontend-oracles.sh source it; the CLI's global-tools pin reader reimplements it, and a
-# parity test in .gaia/cli/src/update-deps/global-tools.test.ts fails when the two disagree.
+# audit-frontend-oracles.sh source it; the CLI's `update-deps global-tools` pin reader
+# reimplements it, and a parity test beside that reader fails when the two disagree.
 
 # react_doctor_pinned_version <version file>: prints the pinned react-doctor version, or names the
 # file on stderr and returns 1 when it is missing or holds anything but MAJOR.MINOR.PATCH, so no

@@ -140,8 +140,8 @@ out of the discovery payload and the statusline count.
   globally** (first, marked ` (Recommended)`) or **Skip**. Only after the Upgrade answer, run
   `npm install -g @playwright/cli@latest`. Record `upgraded` or `declined` as
   the action taken.
-- **Interactively with `offerBump: true`** (the react-doctor row, whose
-  `pinned` is `.gaia/react-doctor-version`): show the row, then ask with
+- **Interactively with `offerBump: true`** (the react-doctor row, which
+  reports the `.gaia/react-doctor-version` pin): show the row, then ask with
   `AskUserQuestion` (single-select): **Bump the react-doctor pin to
   `<latest>`** (first, marked ` (Recommended)`) or **Skip**. Only after the
   Bump answer, when `SHOULD_CREATE_WORKTREE=true` and no worktree exists yet,
