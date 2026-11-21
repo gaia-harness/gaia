@@ -633,16 +633,19 @@ mark_band() {
 }
 
 # The band values for a 1M and a 200k window at the shipped line, plus the
-# lib's token constants, as a grep -wE alternation.
+# shipped line itself, as a grep -wE alternation.
 band_value_pattern() {
-  local window line values=() pattern
+  local window line values=() pattern value
   for window in 1000000 200000; do
     line="$(gaia_context_line "$window" "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT")"
     # shellcheck disable=SC2207 # four space-separated integers
     values+=($(gaia_context_bands "$window" "$line"))
   done
-  values+=("$GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "$GAIA_CONTEXT_YELLOW_TOKENS")
-  [ "${#values[@]}" -eq 10 ] || return 1
+  values+=("$GAIA_CONTEXT_ASK_TOKENS_DEFAULT")
+  [ "${#values[@]}" -eq 9 ] || return 1
+  for value in "${values[@]}"; do
+    [[ $value =~ ^[0-9]+$ ]] || return 1
+  done
   pattern="$(IFS='|'; printf '%s' "${values[*]}")"
   printf '%s\n' "$pattern"
 }
