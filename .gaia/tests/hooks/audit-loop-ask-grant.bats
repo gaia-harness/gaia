@@ -187,7 +187,7 @@ scratch_hook() {
   true
 }
 
-@test "a high reading with the context line 0 keeps the continue-here lead and claims neither room nor a line to be below" {
+@test "a high reading with the checkpoint off keeps the continue-here lead and claims neither room nor a line" {
   local question descriptions
   question="$(gaia_loop_pinned_question feat/ask "$NONCE" 5 "$UNIT_ROUNDS" false false fallback "fresh 950000 1000000" grant 0)"
   [ "$(jq -r '.questions[0].options[0].label' <<<"$question")" = "Continue audit in this session (Recommended)" ] || return 1

@@ -45,7 +45,7 @@ override_warning() {
   maximum=$(thousands "$GAIA_CONTEXT_ASK_TOKENS_MAXIMUM")
   default_tokens=$(thousands "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT")
   case "$status" in
-    off) printf 'GAIA context checkpoint is OFF: %s sets ask_tokens to 0, so the statusline, the context hooks and any branch whose audit loop has not yet frozen its line have no checkpoint and only Claude Code auto-compaction limits context; a branch whose audit loop already froze a line keeps it until the next branch. Not recommended: remove the key to restore the %s default.\n' "$file" "$default_tokens" ;;
+    off) printf 'GAIA context checkpoint is OFF: %s sets ask_tokens to 0, so only Claude Code auto-compaction limits context. An audit loop that has not yet frozen its line gets none; one that already froze a line keeps it until the next branch. Not recommended: remove the key to restore the %s default.\n' "$file" "$default_tokens" ;;
     clamped-low) printf 'WARNING: GAIA context checkpoint override raised to its minimum: %s sets ask_tokens to %s, below the %s minimum, so %s is used. Set ask_tokens from %s to %s.\n' "$file" "$read_value" "$minimum" "$minimum" "$GAIA_CONTEXT_ASK_TOKENS_MINIMUM" "$GAIA_CONTEXT_ASK_TOKENS_MAXIMUM" ;;
     clamped-high) printf 'WARNING: GAIA context checkpoint override capped: %s sets ask_tokens to %s, above the %s limit, so %s is used. To go higher, set ask_tokens to 0 to turn the checkpoint off and let Claude Code auto-compact.\n' "$file" "$read_value" "$maximum" "$maximum" ;;
     invalid) printf 'WARNING: GAIA context checkpoint override is invalid: %s is not {"version":1,"context_checkpoint":{"ask_tokens":<whole number>}}, or jq is not installed, so the %s default is used. Fix or delete the file.\n' "$file" "$default_tokens" ;;

@@ -414,7 +414,7 @@ gaia_loop_pinned_question() {
         option_context=$(gaia_context_summary "$context_tokens" "$context_window")
         question_context=", context ${option_context#Context }"
         if [ "$line" = 0 ]; then
-          # Checkpoint off: no line to be over or under, so lead here but claim no room.
+          # Checkpoint off: no line to be over or under, so lead here without claiming room.
           band=off
         elif [ -n "$line" ]; then
           case "$(gaia_context_band "$context_tokens" "$context_window" "$line")" in
