@@ -56,7 +56,7 @@ ENFORCEMENT_PATHS=(
   '.gaia/statusline/gaia-statusline-left.sh'  # statusline left side, same writer chain
   '.gaia/statusline/gaia-statusline-right.sh' # statusline right side, same writer chain
   '.gaia/statusline/setup-owed.sh'            # sourced by the right side, same writer chain
-  '.gaia/scripts/audit-fix-verify-state-lib.sh' # this verifier's snapshot, delta and pin helpers
+  '.gaia/scripts/audit-fix-verify-state-lib.sh' # this list, and this verifier's snapshot, delta and pin helpers
   '.gaia/scripts/audit-fix-verify-check-lib.sh' # this verifier's check subcommand
   '.claude/hooks/lib/audit-digest.sh'         # branch digests the check subcommand sources from the tree
   '.claude/hooks/lib/audit-scope.sh'          # the digest's ownership classifier, loaded from the tree
