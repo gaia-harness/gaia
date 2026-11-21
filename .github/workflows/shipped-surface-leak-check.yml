@@ -22,14 +22,10 @@ jobs:
   # .gaia/release-exclude does not withhold, resets the wiki sentinels, and runs
   # the scrub and runtime-dependency leak checks over the result, so its honest
   # input is the entire tree minus that exclude list, not the handful of paths
-  # the harness filter names. Every scenario builds that same tree, which
-  # is what made the mismatch live rather than theoretical: a comment added to a
-  # SHIPPED workflow naming a maintainer-only path failed the leak check in all
-  # of them, and was caught only because that pull request happened to also touch
-  # cli-tests.yml. An edit confined to that shipped workflow would have resolved the
-  # harness filter false, skipped the job, greened it having validated nothing,
-  # and surfaced the leak at tag push in release.yml, where the fix is far more
-  # expensive.
+  # the harness filter names. Behind that filter, an edit confined to a shipped
+  # file the filter does not name would skip the job, green it having validated
+  # nothing, and surface the leak at tag push in release.yml, where the fix is
+  # far more expensive.
   #
   # No paths-filter here, and the absence is the decision rather than an
   # oversight. An allowlist that honestly described this job's inputs is `'**'`,
@@ -108,14 +104,12 @@ jobs:
           staging="$(mktemp -d "$RUNNER_TEMP/release-staging.XXXXXX")"
           bash .gaia/tests/distribution/lib/build-staging.sh "$staging"
       # The marker-strip scenario runs here as well as inside the distribution harness
-      # job, and this is the copy that gates. Its four assertions read
-      # `.claude/hooks/lib/*.sh`, `.gaia/scripts/*.sh`,
-      # `.gaia/statusline/gaia-statusline-right.sh`, `.gaia/audit-ci.yml`, and
-      # `.prettierignore`; every one of those sits OUTSIDE the harness job's
-      # `code:` filter, so a pull request adding a `# gaia:maintainer-only:`
-      # block to one of them resolved that filter false, skipped the harness,
-      # and first met the doubled-separator assertion at release.yml's
-      # pre-publish gate, several pull requests later. Its honest input is the
+      # job, and this is the copy that gates. Its assertions walk every
+      # marker-bearing file in the staged tree, most of which sit OUTSIDE the
+      # harness job's `code:` filter, so a pull request adding a
+      # `# gaia:maintainer-only:` block to one of them would resolve that filter
+      # false, skip the harness, and first fail at release.yml's pre-publish
+      # gate. Its honest input is the
       # whole shipped surface, which is this job's input and not the harness
       # job's, so this is where it belongs.
       #
@@ -126,5 +120,5 @@ jobs:
       # ~170s for the alternative of widening the harness filter to reach the
       # same files -- longer than the whole pull-request critical path, on
       # every shell-touching pull request.
-      - name: Prove the marker strip left no fragment or doubled separator
+      - name: Prove the marker strip left no fragment or emptied file
         run: bash .gaia/tests/distribution/02-marker-strip.sh
