@@ -144,7 +144,7 @@ select_on_changelog_edit() {
   [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
 }
 
-@test "a cd substitution fixes its directory only when pwd or pwd -P is the whole command (bare pwd and pwd -P fix it, a pwd path tail joins on, another command leaves it unknown, with or without spaces inside the substitution)" {
+@test "a cd substitution fixes its directory only when pwd or pwd -P is the whole command (bare pwd and pwd -P fix it, a pwd path tail joins on, another command leaves it unknown, a helper command substitution leaves it unknown, the dirname form fixes it, with or without spaces inside the substitution)" {
   base="$(commit_base_files \
     'scripts/tool.sh=a' \
     $'tests/bare-pwd.bats=ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\nbash "$ROOT/tool.sh"' \
@@ -155,13 +155,16 @@ select_on_changelog_edit() {
     $'tests/spaced-bare-pwd.bats=ROOT="$( cd "$BATS_TEST_DIRNAME/.." && pwd )"\nbash "$ROOT/tool.sh"' \
     $'tests/spaced-physical-pwd.bats=ROOT="$( cd "$BATS_TEST_DIRNAME/.." && pwd -P )"\nbash "$ROOT/tool.sh"' \
     $'tests/spaced-pwd-tail-read.bats=ROOT="$( cd "$BATS_TEST_DIRNAME/.." && pwd )/scripts"\nbash "$ROOT/tool.sh"' \
-    $'tests/spaced-other-command.bats=ROOT="$( cd "$BATS_TEST_DIRNAME/.." && ls )"\nbash "$ROOT/tool.sh"')"
+    $'tests/spaced-other-command.bats=ROOT="$( cd "$BATS_TEST_DIRNAME/.." && ls )"\nbash "$ROOT/tool.sh"' \
+    $'tests/helper-substitution.bats=HELPERS="$BATS_TEST_DIRNAME/lib"\nROOT="$("$HELPERS/make.sh")"\nbash "$ROOT/tool.sh"' \
+    $'tests/spaced-helper-substitution.bats=HELPERS="$BATS_TEST_DIRNAME/lib"\nROOT="$( "$HELPERS/make.sh" )"\nbash "$ROOT/tool.sh"' \
+    $'tests/dirname-substitution.bats=ROOT="$(dirname "$BATS_TEST_FILENAME")"\nbash "$ROOT/tool.sh"')"
   printf 'edited\n' >> "$FIXTURE/scripts/tool.sh"
   git -C "$FIXTURE" commit -q -am tool
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
   [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$stderr" >&2; return 1; }
-  expected="$(printf '%s\n' tests/other-command.bats tests/pwd-tail-read.bats tests/spaced-other-command.bats tests/spaced-pwd-tail-read.bats)"
+  expected="$(printf '%s\n' tests/helper-substitution.bats tests/other-command.bats tests/pwd-tail-read.bats tests/spaced-helper-substitution.bats tests/spaced-other-command.bats tests/spaced-pwd-tail-read.bats)"
   [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
 }
 

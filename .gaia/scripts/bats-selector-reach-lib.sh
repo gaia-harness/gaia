@@ -112,6 +112,9 @@ bats_selector_reaching_suites() {
       # directory variable or another fixed variable, then literal path
       # characters, then the end of the word. A `$(cd "<r>" && pwd)` value
       # counts as <r> only when pwd is the whole command.
+      # Any command substitution other than the cd and dirname forms decided
+      # below runs code this cannot read, so the directory it yields is unknown.
+      if (value ~ /^"?\$\(/ && value !~ /^"?\$\([ \t]*(cd|dirname)[ \t]/) { root_unknown[name] = 1; return }
       base = ""
       if (match(head, /^\$\{?BATS_TEST_DIRNAME\}?/)) base = suite_directory
       else if (head ~ /^dirname[ \t]+"?\$\{?BATS_TEST_FILENAME\}?"?\)/) { base = suite_directory; sub(/^dirname[ \t]+"?\$\{?BATS_TEST_FILENAME\}?"?\)/, "", head); RSTART = 1; RLENGTH = 0 }
