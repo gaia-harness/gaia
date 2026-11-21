@@ -30,16 +30,17 @@
 # (`. "$1"`) has no tail and is not followed.
 #
 # A suite also reaches a helper it runs by a path word (`"$HELPERS/make.sh"`)
-# when that word names a tracked shell file under a `tests/` or `helpers/`
+# when that word names a tracked `.sh` file under a `tests/` or `helpers/`
 # directory, a `fixtures/` directory excepted since a fixture is data a suite
-# stages, not a helper it runs; a word naming no such file adds nothing.
+# stages, not a helper it runs.
 #
-# A helper that copies by glob (`cp`, or a `for ... in` in a helper that also
-# runs `cp`, over `"$root"/dir/*.sh`) reaches every changed file the glob's tail
-# ends. A glob with an expansion in its directory part (`$directory/*.sh`) is
-# matched on its file-name part alone, and a bare `*` matches nothing, since a
-# loop over every file is not a copy. A helper that copies a script
-# and also greps it reaches whatever that script sources.
+# A helper that copies by glob (a line starting with `cp`, or a `for ... in` in
+# a helper that also runs `cp`, over `"$root"/dir/*.sh`) reaches every changed
+# file the glob's tail ends. A glob with a second expansion after its root
+# (`"$root"/$directory/*.sh`) is matched on its file-name part alone, and one
+# whose file-name part is a bare `*` matches nothing, since a loop over every
+# file is not a copy. A helper that copies a script and also greps it reaches
+# whatever that script sources.
 #
 # Limit: a copy list built any other way (a computed array, a `find`, a name
 # read from a file) names no file, so a change to a file it picks is not seen
@@ -163,7 +164,7 @@ bats_selector_helper_suites() {
       return word
     }
     # The file-name part of an unreadable glob word, after its last "/" or
-    # expansion; "" when nothing but a bare "*" is left to match on.
+    # expansion; "" when only a bare "*" or another expansion is left to match on.
     function glob_name_part(word) {
       gsub(/["\047]/, "", word)
       sub(/;+$/, "", word)
@@ -203,8 +204,6 @@ bats_selector_helper_suites() {
       }
       return 0
     }
-    # A helper that copies by glob, or by a list derived from a script it
-    # copies, reaches every file those name.
     function mark_copying_helpers(   row_index, row, first_colon, remainder, second_colon, helper, text, kind, word_count, words, word_index, word, tail, base, pair_index, path_index) {
       for (row_index = 1; row_index <= copy_row_count; row_index++) {
         row = copy_rows[row_index]
