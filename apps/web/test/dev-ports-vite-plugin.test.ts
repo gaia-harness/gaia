@@ -1,7 +1,6 @@
 /* eslint-disable unicorn/prevent-abbreviations -- the module under test is named dev-ports-vite-plugin */
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import type net from 'node:net';
-import {ASK_FIRST_SENTENCE, PORTS_HINT} from '../dev-ports';
 import {
   buildResolvedResolution,
   closeServer,
@@ -29,18 +28,6 @@ vi.mock('../dev-ports', async (importOriginal) => ({
   findListenerOwner: findListenerOwnerMock,
   resolveDevPorts: resolveDevPortsMock,
 }));
-
-const hasIpv6 = async (): Promise<boolean> => {
-  try {
-    await closeServer(await listenOn(0, '::1'));
-
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const isIpv6Available = await hasIpv6();
 
 const heldServers: net.Server[] = [];
 
@@ -113,45 +100,55 @@ describe('config', () => {
 });
 
 describe('configureServer refusals', () => {
-  test('a missing port file rejects with the ask-first sentence and ports hint', async () => {
+  test("a missing port file rejects with the resolution's message", async () => {
+    const resolutionMessage = 'opaque-resolution-message-sentinel';
     resolveDevPortsMock.mockReturnValue({
       kind: 'missing-port-file',
-      message: `GAIA: no port file. ${ASK_FIRST_SENTENCE} ${PORTS_HINT}`,
+      message: resolutionMessage,
       portFilePath: '/package/.gaia-ports',
       treeRoot: '/tree',
     });
     const plugin = await loadPlugin();
 
-    const failure = plugin.configureServer(makeServer());
-    await expect(failure).rejects.toThrow(ASK_FIRST_SENTENCE);
-    await expect(failure).rejects.toThrow(PORTS_HINT);
+    await expect(plugin.configureServer(makeServer())).rejects.toThrow(
+      resolutionMessage
+    );
   });
 
-  test('a port taken on 127.0.0.1 rejects naming the port, the ask-first sentence, and the hint', async () => {
+  test('a port taken on 127.0.0.1 rejects naming the port', async () => {
     const port = await findFreePort();
     heldServers.push(await listenOn(port, '127.0.0.1'));
     resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
     const plugin = await loadPlugin();
 
-    const failure = plugin.configureServer(makeServer());
-    await expect(failure).rejects.toThrow(`port ${port}`);
-    await expect(failure).rejects.toThrow(ASK_FIRST_SENTENCE);
-    await expect(failure).rejects.toThrow(PORTS_HINT);
+    const refusal = plugin.configureServer(makeServer());
+
+    await expect(refusal).rejects.toThrow(`port ${port}`);
+    await expect(refusal).rejects.toThrow(
+      'Never stop a process on a port another live tree owns without asking the user first.'
+    );
+    await expect(refusal).rejects.toThrow(
+      "Run bash .gaia/scripts/ports.sh to see this tree's ports."
+    );
   });
 
-  test.skipIf(!isIpv6Available)(
-    'a port taken on ::1 only rejects the same way',
-    async () => {
-      const port = await findFreePort();
-      heldServers.push(await listenOn(port, '::1'));
-      resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
-      const plugin = await loadPlugin();
-
-      await expect(plugin.configureServer(makeServer())).rejects.toThrow(
-        `port ${port}`
+  // Runs unconditionally: a host without an IPv6 loopback fails loudly rather
+  // than skipping the IPv6-only refusal.
+  test('a port taken on ::1 only rejects the same way', async () => {
+    const heldServer = await listenOn(0, '::1').catch((error: unknown) => {
+      throw new Error(
+        `this test needs an IPv6 loopback (::1) on the host: ${String(error)}`
       );
-    }
-  );
+    });
+    heldServers.push(heldServer);
+    const {port} = heldServer.address() as net.AddressInfo;
+    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
+    const plugin = await loadPlugin();
+
+    await expect(plugin.configureServer(makeServer())).rejects.toThrow(
+      `port ${port}`
+    );
+  });
 
   test.each(
     [

@@ -136,17 +136,6 @@ describe('config restart', () => {
       `port ${port}`
     );
   });
-
-  test('a fresh module with the port held still refuses (control)', async () => {
-    const port = await findFreePort();
-    heldServers.push(await listenOn(port, '127.0.0.1'));
-    resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
-    const plugin = await loadPlugin();
-
-    await expect(plugin.configureServer(makeServer())).rejects.toThrow(
-      `port ${port}`
-    );
-  });
 });
 
 const expectNoRecorder = (): void => {
