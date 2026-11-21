@@ -39,27 +39,23 @@ class_of() {
   ' _ "$REPO_ROOT" "$FIXTURE" "$1"
 }
 
-@test "a language file under a web member classifies as a language file" {
-  run class_of apps/storefront/app/languages/en/common.ts
-  [ "$status" -eq 0 ]
-  [ "$output" = "language" ]
-}
-
-@test "the same shape under a non-web member is class none" {
-  run class_of libs/kit/app/languages/en/common.ts
-  [ "$status" -eq 0 ]
-  [ "$output" = "none" ]
-}
-
-@test "a component and a page under a web member keep their classes, under a non-web member they are none" {
-  run class_of apps/storefront/app/components/button/index.tsx
-  [ "$output" = "component" ]
-  run class_of apps/storefront/app/pages/home/page.tsx
-  [ "$output" = "page" ]
-  run class_of libs/kit/app/components/button/index.tsx
-  [ "$output" = "none" ]
-  run class_of libs/kit/app/pages/home/page.tsx
-  [ "$output" = "none" ]
+@test "a path shape classifies only under a web member, and is class none under a non-web member" {
+  local row path expected
+  local rows=(
+    'apps/storefront/app/languages/en/common.ts|language'
+    'libs/kit/app/languages/en/common.ts|none'
+    'apps/storefront/app/components/button/index.tsx|component'
+    'apps/storefront/app/pages/home/page.tsx|page'
+    'libs/kit/app/components/button/index.tsx|none'
+    'libs/kit/app/pages/home/page.tsx|none'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r path expected <<<"$row"
+    run class_of "$path"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$expected" ]
+  done
 }
 
 @test "the old literal root no longer classifies when no member sits there" {

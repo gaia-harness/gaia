@@ -171,29 +171,31 @@ describe('update-deps decline', () => {
     });
   });
 
-  test('a name that is not outstanding is rejected and writes nothing', () => {
+  // Every row writes the valid source; a row whose argv names no source or
+  // an absent one never reads it.
+  test.each(
+    [
+      {
+        argv: ['--source', 'updates.json', '--skip', 'nope'],
+        error: 'unknown_package',
+        name: 'a name that is not outstanding is rejected and writes nothing',
+      },
+      {
+        argv: ['--skip', 'foo'],
+        error: 'invalid_arguments',
+        name: '--skip without --source errors',
+      },
+      {
+        argv: ['--source', 'absent.json', '--skip', 'foo'],
+        error: 'source_unreadable',
+        name: 'a missing source file errors',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {argv, error}) => {
     sandbox.writeSource('updates.json');
-    const exit = run(['--source', 'updates.json', '--skip', 'nope'], {
-      cwd: sandbox.root,
-      now: NOW,
-    });
+    const exit = run(argv, {cwd: sandbox.root, now: NOW});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown_package');
+    expect(stdio.errors.join('')).toContain(error);
     expect(existsSync(declinedLedgerPath(sandbox.root))).toBe(false);
-  });
-
-  test('--skip without --source errors', () => {
-    const exit = run(['--skip', 'foo'], {cwd: sandbox.root, now: NOW});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('invalid_arguments');
-  });
-
-  test('a missing source file errors', () => {
-    const exit = run(['--source', 'absent.json', '--skip', 'foo'], {
-      cwd: sandbox.root,
-      now: NOW,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('source_unreadable');
   });
 });

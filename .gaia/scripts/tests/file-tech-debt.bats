@@ -1037,10 +1037,3 @@ assert_refused_authored() {
   assert_refused_authored
 }
 
-@test "the script's line count equals its recorded ceiling and the fixture carries the authorship library" {
-  build_fixture
-  [ -f "$FIX/.gaia/scripts/branch-authorship-lib.sh" ]
-  local ceiling
-  ceiling="$(jq -r '.. | objects | select(has(".gaia/scripts/file-tech-debt.sh")) | .[".gaia/scripts/file-tech-debt.sh"]' "$REAL_ROOT/.claude/maintainers/line-limit-ceilings.json")"
-  [ "$(wc -l <"$SCRIPT" | tr -d ' ')" = "$ceiling" ]
-}

@@ -156,22 +156,31 @@ describe('codify-ledger', () => {
       });
     });
 
-    test('leaves the legacy ledger byte-identical', () => {
-      writeLegacyLedger(sandbox.ledgerPath, {
-        declines: [legacyEntry('other/class', FIXED_NOW.toISOString())],
-        version: 2,
-      });
-      const before = readFileSync(sandbox.ledgerPath);
+    test.each([
+      [
+        'leaves the legacy ledger byte-identical',
+        (ledgerPath: string) => {
+          writeLegacyLedger(ledgerPath, {
+            declines: [legacyEntry('other/class', FIXED_NOW.toISOString())],
+            version: 2,
+          });
+        },
+        true,
+      ],
+      ['creates no legacy ledger when none existed', () => {}, false],
+    ])('%s', (_label, seedLegacy, ledgerExists) => {
+      seedLegacy(sandbox.ledgerPath);
+
+      const readLegacy = (): Buffer | undefined =>
+        existsSync(sandbox.ledgerPath) ?
+          readFileSync(sandbox.ledgerPath)
+        : undefined;
+      const before = readLegacy();
 
       run(recordArgs('rule/x'), {cwd: sandbox.root, now: () => FIXED_NOW});
 
-      expect(readFileSync(sandbox.ledgerPath).equals(before)).toBe(true);
-    });
-
-    test('creates no legacy ledger when none existed', () => {
-      run(recordArgs('rule/x'), {cwd: sandbox.root, now: () => FIXED_NOW});
-
-      expect(existsSync(sandbox.ledgerPath)).toBe(false);
+      expect(readLegacy()).toEqual(before);
+      expect(existsSync(sandbox.ledgerPath)).toBe(ledgerExists);
     });
 
     test('two records of one class at one instant make two files, one governing', () => {
@@ -277,61 +286,54 @@ describe('codify-ledger', () => {
       expect(json.legacy).toEqual([]);
       expect(json.committed).toHaveLength(1);
     });
-
-    test('rejects an argument', () => {
-      expect(run(['list', 'extra'], {cwd: sandbox.root})).toBe(
-        EXIT_CODES.UNKNOWN_SUBCOMMAND
-      );
-    });
   });
 
   describe('lapsed', () => {
-    test('prints only the path of a file older than the window', () => {
-      recordAt(91);
-      recordAt(10);
+    test.each([
+      [
+        'prints only the path of a file older than the window',
+        [91, 10],
+        ['rule-age-91-'],
+      ],
+      ['prints nothing when none is lapsed', [10], []],
+    ])('%s', (_label, ages, expectedFragments) => {
+      for (const age of ages) {
+        recordAt(age);
+      }
 
       const code = run(['lapsed'], {cwd: sandbox.root, now: () => FIXED_NOW});
 
       expect(code).toBe(EXIT_CODES.OK);
 
       const lines = io.out.join('').split('\n').filter(Boolean);
-      expect(lines).toHaveLength(1);
-      expect(lines[0]).toContain('rule-age-91-');
-    });
+      expect(lines).toHaveLength(expectedFragments.length);
 
-    test('prints nothing when none is lapsed', () => {
-      recordAt(10);
-
-      const code = run(['lapsed'], {cwd: sandbox.root, now: () => FIXED_NOW});
-
-      expect(code).toBe(EXIT_CODES.OK);
-      expect(io.out.join('')).toBe('');
-    });
-
-    test('rejects an argument', () => {
-      expect(run(['lapsed', 'extra'], {cwd: sandbox.root})).toBe(
-        EXIT_CODES.UNKNOWN_SUBCOMMAND
-      );
+      for (const [index, fragment] of expectedFragments.entries()) {
+        expect(lines[index]).toContain(fragment);
+      }
     });
   });
 
-  describe('removed verbs', () => {
-    test('prune is an unknown subcommand and writes nothing', () => {
-      const code = run(['prune', '--window-classes', ''], {cwd: sandbox.root});
+  describe('argument and verb refusals', () => {
+    test.each([
+      ['list', ['list', 'extra']],
+      ['lapsed', ['lapsed', 'extra']],
+    ])('%s rejects an argument', (_verb, argv) => {
+      expect(run(argv, {cwd: sandbox.root})).toBe(
+        EXIT_CODES.UNKNOWN_SUBCOMMAND
+      );
+    });
+
+    test.each([
+      ['prune', ['prune', '--window-classes', '']],
+      ['is-suppressed', ['is-suppressed', '--finding-class', 'x']],
+    ])('%s is an unknown subcommand and writes nothing', (_verb, argv) => {
+      const code = run(argv, {cwd: sandbox.root});
 
       expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
       expect(io.err.join('')).toContain('unknown_subcommand');
       expect(existsSync(sandbox.ledgerPath)).toBe(false);
       expect(storeFiles()).toEqual([]);
-    });
-
-    test('is-suppressed is an unknown subcommand', () => {
-      const code = run(['is-suppressed', '--finding-class', 'x'], {
-        cwd: sandbox.root,
-      });
-
-      expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-      expect(io.err.join('')).toContain('unknown_subcommand');
     });
   });
 

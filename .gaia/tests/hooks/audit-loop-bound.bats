@@ -1,9 +1,11 @@
 #!/usr/bin/env bats
 #
 # Tests for .claude/hooks/audit-loop-bound.sh by direct invocation with
-# fixture payloads. Every case builds its repository, findings sidecars and
-# state file under $BATS_TEST_TMPDIR with .gaia/tests/helpers/audit-loop-fixture.sh;
-# no case calls the evaluator CLI to decide its outcome.
+# fixture payloads. setup_file builds the fixture repository once with
+# .gaia/tests/helpers/audit-loop-fixture.sh, and every case, and every row of a
+# case table, starts from its own copy (fresh_fixture), then builds its
+# findings sidecars and state file under $BATS_TEST_TMPDIR; no case calls the
+# evaluator CLI to decide its outcome.
 #
 # GAIA_LOOP_BOUND_HOOK points the suite at a scratch copy of the hook, which
 # is how a mutant is run against it without touching the working file.
@@ -14,22 +16,46 @@
 
 bats_require_minimum_version 1.5.0
 
+# Building the fixture (two git inits, a commit, a push and a fetch) costs
+# several times what copying it does, and every case and table row needs one.
+setup_file() {
+  local BATS_TEST_TMPDIR="$BATS_FILE_TMPDIR/template"
+  mkdir -p "$BATS_TEST_TMPDIR"
+  # shellcheck source=/dev/null
+  . "$BATS_TEST_DIRNAME/../helpers/audit-loop-fixture.sh"
+  alf_init
+}
+
+# fresh_fixture: discard the current fixture and start again from a copy of
+# the setup_file repository and origin, on feat/loop, with an empty gh stub
+# state, the suite's hook ($BOUND_HOOK) and no knob or deadline override.
+fresh_fixture() {
+  local fixture_directory="$BATS_TEST_TMPDIR/fixture"
+  rm -rf "$fixture_directory"
+  mkdir -p "$fixture_directory/gh"
+  cp -R "$BATS_FILE_TMPDIR/template/repo" "$BATS_FILE_TMPDIR/template/origin.git" "$fixture_directory/"
+  ALF_ORIGIN="$fixture_directory/origin.git"
+  ALF_ROOT="$(cd "$fixture_directory/repo" && pwd -P)"
+  alf_git remote set-url origin "$ALF_ORIGIN"
+  alf_branch feat/loop
+  GH_STUB_STATE_DIRECTORY="$fixture_directory/gh"
+  HOOK="$BOUND_HOOK"
+  unset GAIA_AUDIT_CHECKPOINT_ROUND GAIA_AUDIT_GRANT_ROUNDS GAIA_AUDIT_LOOP_DEADLINE_SECONDS
+  CTR=0
+}
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  HOOK="${GAIA_LOOP_BOUND_HOOK:-$REPO_ROOT/.claude/hooks/audit-loop-bound.sh}"
-  BOUND_HOOK="$HOOK"
-  unset GAIA_AUDIT_CHECKPOINT_ROUND GAIA_AUDIT_GRANT_ROUNDS GAIA_AUDIT_LOOP_DEADLINE_SECONDS
+  BOUND_HOOK="${GAIA_LOOP_BOUND_HOOK:-$REPO_ROOT/.claude/hooks/audit-loop-bound.sh}"
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/scripts/audit-loop-eval.sh"
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/tests/helpers/audit-loop-fixture.sh"
-  alf_init
-  alf_branch feat/loop
+  fresh_fixture
   FRONTEND_MEMBER=code-audit-frontend
   SID=sess-a
   STUB_BIN="$BATS_TEST_TMPDIR/stubbin"
-  GH_STUB_STATE_DIRECTORY="$BATS_TEST_TMPDIR/gh"
-  mkdir -p "$STUB_BIN" "$GH_STUB_STATE_DIRECTORY"
+  mkdir -p "$STUB_BIN"
   # The fork query (`--json isCrossRepository`) answers from cross-repository
   # when a case writes one (`true`, `false`, or `fail` for a gh that cannot
   # answer), and otherwise `false` whenever the branch has a pull request,
@@ -60,7 +86,6 @@ else
 fi
 EOF
   chmod +x "$STUB_BIN/gh"
-  CTR=0
 }
 
 # --- payloads and invocation --------------------------------------------------
@@ -198,6 +223,7 @@ commit_in_worktree() {
 
 # --- the allowance checkpoint -------------------------------------------------
 
+# bats test_tags=protected
 @test "a sixth tree is denied with the checkpoint, the rounds run and both typed lines" {
   alf_sequence 6 5 4 3 2
   new_tree
@@ -262,276 +288,339 @@ next_allowed() {
   [ "$(state_field '.history.checkpoints | length')" -eq 0 ]
 }
 
-@test "stalled evidence denies at the next tree: [5,5,5]" {
-  alf_sequence 5 5 5
-  stalled_denied
-}
-
-@test "falling evidence allows the next tree: [5,4,4]" {
-  alf_sequence 5 4 4
-  next_allowed
-}
-
-@test "an accept answering a stalled checkpoint allows one closing round, then the fallback denies" {
-  alf_sequence 5 5 5
-  new_tree
-  dispatch
-  assert_denied
-  alf_add_answer 1 accept
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 4 ]
-  [ "$(state_field '.history.rounds[3].closing')" = true ]
-  new_tree
-  dispatch
-  assert_denied
-  reason | grep -qF -- "(fallback)"
-  [ "$(nrounds)" -eq 4 ]
-}
-
-@test "a grant of 2 answering a round-5 checkpoint buys exactly two more trees" {
-  alf_sequence 6 5 4 3 2
-  alf_add_checkpoint 5 allowance
-  alf_add_answer 1 grant 2
-  new_tree
-  dispatch
-  assert_allowed
-  new_tree
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 7 ]
-  new_tree
-  dispatch
-  assert_denied
-  [ "$(nrounds)" -eq 7 ]
-  [ "$(state_field '.history.checkpoints | length')" -eq 2 ]
-  [ "$(state_field '.history.checkpoints[1].at_round')" -eq 7 ]
-}
-
-@test "a partial-repair run (A = 6,5,4,3,2 with one persisting key) is never stopped" {
-  alf_fill f.txt 12 feature
-  local round_number=0 unresolved_count
-  for unresolved_count in 6 5 4 3 2; do
-    round_number=$((round_number + 1))
-    alf_set_line other.txt "$round_number" "round $round_number"
-    alf_commit "round $round_number"
-    dispatch
-    assert_allowed
-    alf_stamp "$round_number" $((10 * round_number))
-    alf_sidecar "$FRONTEND_MEMBER" "$(alf_entries f.txt 1 "$unresolved_count")" $((10 * round_number + 1))
+@test "evidence decides the next tree" {
+  local row round_number unresolved_count
+  for row in stalled-5-5-5 falling-5-4-4 partial-repair-6-5-4-3-2; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      stalled-5-5-5)
+        alf_sequence 5 5 5
+        stalled_denied
+        ;;
+      falling-5-4-4)
+        alf_sequence 5 4 4
+        next_allowed
+        ;;
+      partial-repair-6-5-4-3-2)
+        # One key persists every round, and the run is never stopped.
+        alf_fill f.txt 12 feature
+        round_number=0
+        for unresolved_count in 6 5 4 3 2; do
+          round_number=$((round_number + 1))
+          alf_set_line other.txt "$round_number" "round $round_number"
+          alf_commit "round $round_number"
+          dispatch
+          assert_allowed
+          alf_stamp "$round_number" $((10 * round_number))
+          alf_sidecar "$FRONTEND_MEMBER" "$(alf_entries f.txt 1 "$unresolved_count")" $((10 * round_number + 1))
+        done
+        [ "$(nrounds)" -eq 5 ]
+        [ "$(state_field '.history.checkpoints | length')" -eq 0 ]
+        [ "$(state_field '[.history.rounds[0:4][].snapshot.verdict] | unique | join(",")')" = continue ]
+        [ "$(state_field '.history.rounds[3].snapshot.A')" -eq 3 ]
+        ;;
+    esac
   done
-  [ "$(nrounds)" -eq 5 ]
-  [ "$(state_field '.history.checkpoints | length')" -eq 0 ]
-  [ "$(state_field '[.history.rounds[0:4][].snapshot.verdict] | unique | join(",")')" = continue ]
-  [ "$(state_field '.history.rounds[3].snapshot.A')" -eq 3 ]
+}
+
+@test "an answer to a checkpoint buys rounds" {
+  local row
+  for row in accept-after-stalled grant-2-at-round-5; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      accept-after-stalled)
+        # One closing round, then the fallback denies.
+        alf_sequence 5 5 5
+        new_tree
+        dispatch
+        assert_denied
+        alf_add_answer 1 accept
+        dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 4 ]
+        [ "$(state_field '.history.rounds[3].closing')" = true ]
+        new_tree
+        dispatch
+        assert_denied
+        reason | grep -qF -- "(fallback)"
+        [ "$(nrounds)" -eq 4 ]
+        ;;
+      grant-2-at-round-5)
+        # Exactly two more trees.
+        alf_sequence 6 5 4 3 2
+        alf_add_checkpoint 5 allowance
+        alf_add_answer 1 grant 2
+        new_tree
+        dispatch
+        assert_allowed
+        new_tree
+        dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 7 ]
+        new_tree
+        dispatch
+        assert_denied
+        [ "$(nrounds)" -eq 7 ]
+        [ "$(state_field '.history.checkpoints | length')" -eq 2 ]
+        [ "$(state_field '.history.checkpoints[1].at_round')" -eq 7 ]
+        ;;
+    esac
+  done
 }
 
 # --- the knobs ------------------------------------------------------------------
 
-@test "knobs set at round 1 freeze the checkpoint at 2 and print audit-grant 1; a grant buys one more" {
-  export GAIA_AUDIT_CHECKPOINT_ROUND=2 GAIA_AUDIT_GRANT_ROUNDS=1
-  dispatch
-  assert_allowed
-  new_tree
-  dispatch
-  assert_allowed
-  new_tree
-  dispatch
-  assert_denied
-  reason | grep -qxF -- "Grant (type exactly as the whole prompt): audit-grant 1"
-  [ "$(nrounds)" -eq 2 ]
-  alf_add_answer 1 grant 1
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 3 ]
-  new_tree
-  dispatch
-  assert_denied
-  [ "$(nrounds)" -eq 3 ]
-}
-
-@test "with both knobs unset the checkpoint is at 6 and the grant line is audit-grant 3" {
+# dispatch_trees <count>: that many new trees, each dispatched and allowed.
+dispatch_trees() {
   local i
-  for i in 1 2 3 4 5 6; do
+  for i in $(seq 1 "$1"); do
     new_tree
     dispatch
     assert_allowed
   done
-  new_tree
-  dispatch
-  assert_denied
-  reason | grep -qxF -- "Grant (type exactly as the whole prompt): audit-grant 3"
-  [ "$(state_field '.history.knobs.checkpoint_round')" -eq 6 ]
 }
 
-@test "a raised knob never allows past the frozen checkpoint" {
-  local i
-  for i in 1 2 3 4 5 6; do
-    new_tree
-    dispatch
-    assert_allowed
+@test "the knobs freeze the checkpoint line" {
+  local row knob_value
+  local rows=(set-at-round-1-to-2-and-1 both-unset raised-to-9-after-6 live-lowered-to-4-at-round-3 malformed)
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      set-at-round-1-to-2-and-1)
+        # The checkpoint freezes at 2 and prints audit-grant 1; a grant buys one more.
+        export GAIA_AUDIT_CHECKPOINT_ROUND=2 GAIA_AUDIT_GRANT_ROUNDS=1
+        dispatch
+        assert_allowed
+        dispatch_trees 1
+        new_tree
+        dispatch
+        assert_denied
+        reason | grep -qxF -- "Grant (type exactly as the whole prompt): audit-grant 1"
+        [ "$(nrounds)" -eq 2 ]
+        alf_add_answer 1 grant 1
+        dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 3 ]
+        new_tree
+        dispatch
+        assert_denied
+        [ "$(nrounds)" -eq 3 ]
+        ;;
+      both-unset)
+        # The checkpoint is at 6 and the grant line is audit-grant 3.
+        dispatch_trees 6
+        new_tree
+        dispatch
+        assert_denied
+        reason | grep -qxF -- "Grant (type exactly as the whole prompt): audit-grant 3"
+        [ "$(state_field '.history.knobs.checkpoint_round')" -eq 6 ]
+        ;;
+      raised-to-9-after-6)
+        # A raised knob never allows past the frozen checkpoint.
+        dispatch_trees 6
+        new_tree
+        export GAIA_AUDIT_CHECKPOINT_ROUND=9
+        dispatch
+        assert_denied
+        [ "$(nrounds)" -eq 6 ]
+        ;;
+      live-lowered-to-4-at-round-3)
+        # One more tree, then denied.
+        dispatch_trees 3
+        export GAIA_AUDIT_CHECKPOINT_ROUND=4
+        dispatch_trees 1
+        new_tree
+        dispatch
+        assert_denied
+        [ "$(nrounds)" -eq 4 ]
+        ;;
+      malformed)
+        # A malformed value never allows past the default.
+        dispatch_trees 6
+        new_tree
+        for knob_value in 0 -1 abc ""; do
+          export GAIA_AUDIT_CHECKPOINT_ROUND="$knob_value"
+          dispatch
+          assert_denied
+        done
+        [ "$(nrounds)" -eq 6 ]
+        ;;
+    esac
   done
-  new_tree
-  export GAIA_AUDIT_CHECKPOINT_ROUND=9
-  dispatch
-  assert_denied
-  [ "$(nrounds)" -eq 6 ]
-}
-
-@test "a live knob lowers a branch at round 3 to 4: one more tree, then denied" {
-  local i
-  for i in 1 2 3; do
-    new_tree
-    dispatch
-    assert_allowed
-  done
-  export GAIA_AUDIT_CHECKPOINT_ROUND=4
-  new_tree
-  dispatch
-  assert_allowed
-  new_tree
-  dispatch
-  assert_denied
-  [ "$(nrounds)" -eq 4 ]
-}
-
-@test "malformed knob values never allow past the default" {
-  local i knob_value
-  for i in 1 2 3 4 5 6; do
-    new_tree
-    dispatch
-    assert_allowed
-  done
-  new_tree
-  for knob_value in 0 -1 abc ""; do
-    export GAIA_AUDIT_CHECKPOINT_ROUND="$knob_value"
-    dispatch
-    assert_denied
-  done
-  [ "$(nrounds)" -eq 6 ]
 }
 
 # --- the pull request link ------------------------------------------------------
 
-@test "a merged pull request's state moves to .closed and a reused branch name starts at round 1" {
-  alf_sequence 6 5 4 3 2
-  jq '.pr = 100' "$ALF_STATE" >"$ALF_STATE.t" && mv "$ALF_STATE.t" "$ALF_STATE"
-  printf '{"number":200,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  printf '{"state":"MERGED"}\n' >"$GH_STUB_STATE_DIRECTORY/pr-100.json"
-  new_tree
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 1 ]
-  [ "$(state_field '.pr')" -eq 200 ]
-  [ "$(find "$ALF_ROOT/.gaia/local/protected/audit-loop/.closed" -name 'feat+loop.100.*.json' | wc -l | tr -d ' ')" -eq 1 ]
-}
-
-@test "a branch lookup that returns the linked pull request as MERGED closes the state" {
-  alf_sequence 6 5 4 3 2
-  jq '.pr = 100' "$ALF_STATE" >"$ALF_STATE.t" && mv "$ALF_STATE.t" "$ALF_STATE"
-  printf '{"number":100,"state":"MERGED"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  new_tree
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 1 ]
-  [ "$(state_field '.pr')" = null ]
-  [ "$(find "$ALF_ROOT/.gaia/local/protected/audit-loop/.closed" -name '*.json' | wc -l | tr -d ' ')" -eq 1 ]
-}
-
-@test "a gh failure keeps the history and the allowance" {
-  alf_sequence 6 5 4 3 2
-  jq '.pr = 100' "$ALF_STATE" >"$ALF_STATE.t" && mv "$ALF_STATE.t" "$ALF_STATE"
-  new_tree
-  dispatch
-  assert_denied
-  [ "$(nrounds)" -eq 5 ]
-  [ ! -d "$ALF_ROOT/.gaia/local/protected/audit-loop/.closed" ]
-}
-
-@test "an open pull request is linked onto a state that has none" {
-  new_tree
-  printf '{"number":321,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  dispatch
-  assert_allowed
-  [ "$(state_field '.pr')" -eq 321 ]
-}
-
-@test "a renamed branch with the same open pull request carries history and allowance over" {
-  alf_branch old/name
-  alf_sequence 6 5 4
-  jq '.pr = 77' "$ALF_STATE" >"$ALF_STATE.t" && mv "$ALF_STATE.t" "$ALF_STATE"
-  old_state="$ALF_STATE"
-  alf_git branch -m new/name
-  ALF_NORMALIZED_BRANCH=new/name
-  ALF_STATE="$ALF_ROOT/.gaia/local/protected/audit-loop/new/name.json"
-  printf '{"number":77,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  new_tree
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 4 ]
-  [ "$(state_field '.branch')" = new/name ]
-  [ "$(state_field '.key')" = branch:new/name ]
-  [ "$(state_field '.history.rounds[0].raw_branch_slug')" != "$(gaia_key_slug new/name)" ]
-  [ ! -e "$old_state" ]
-  [ -f "$ALF_ROOT/.gaia/local/protected/audit-loop/new/name.d/round-1.stamp" ]
-}
-
-@test "a detached HEAD is denied: it has no branch key" {
-  alf_git checkout -q --detach
-  dispatch
-  assert_denied
-  reason | grep -qF -- "no branch key"
-  [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/feat/loop.json" ]
+@test "a branch state's lifecycle follows its pull request" {
+  local row old_state
+  local rows=(merged-then-reused-name lookup-returns-linked-merged gh-failure open-linked-onto-none renamed-same-open)
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      merged-then-reused-name)
+        # A merged pull request's state moves to .closed and a reused branch name starts at round 1.
+        alf_sequence 6 5 4 3 2
+        jq '.pr = 100' "$ALF_STATE" >"$ALF_STATE.t" && mv "$ALF_STATE.t" "$ALF_STATE"
+        printf '{"number":200,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+        printf '{"state":"MERGED"}\n' >"$GH_STUB_STATE_DIRECTORY/pr-100.json"
+        new_tree
+        dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 1 ]
+        [ "$(state_field '.pr')" -eq 200 ]
+        [ "$(find "$ALF_ROOT/.gaia/local/protected/audit-loop/.closed" -name 'feat+loop.100.*.json' | wc -l | tr -d ' ')" -eq 1 ]
+        ;;
+      lookup-returns-linked-merged)
+        # A branch lookup that returns the linked pull request as MERGED closes the state.
+        alf_sequence 6 5 4 3 2
+        jq '.pr = 100' "$ALF_STATE" >"$ALF_STATE.t" && mv "$ALF_STATE.t" "$ALF_STATE"
+        printf '{"number":100,"state":"MERGED"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+        new_tree
+        dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 1 ]
+        [ "$(state_field '.pr')" = null ]
+        [ "$(find "$ALF_ROOT/.gaia/local/protected/audit-loop/.closed" -name '*.json' | wc -l | tr -d ' ')" -eq 1 ]
+        ;;
+      gh-failure)
+        # A gh failure keeps the history and the allowance.
+        alf_sequence 6 5 4 3 2
+        jq '.pr = 100' "$ALF_STATE" >"$ALF_STATE.t" && mv "$ALF_STATE.t" "$ALF_STATE"
+        new_tree
+        dispatch
+        assert_denied
+        [ "$(nrounds)" -eq 5 ]
+        [ ! -d "$ALF_ROOT/.gaia/local/protected/audit-loop/.closed" ]
+        ;;
+      open-linked-onto-none)
+        # An open pull request is linked onto a state that has none.
+        new_tree
+        printf '{"number":321,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+        dispatch
+        assert_allowed
+        [ "$(state_field '.pr')" -eq 321 ]
+        ;;
+      renamed-same-open)
+        # A renamed branch with the same open pull request carries history and allowance over.
+        alf_branch old/name
+        alf_sequence 6 5 4
+        jq '.pr = 77' "$ALF_STATE" >"$ALF_STATE.t" && mv "$ALF_STATE.t" "$ALF_STATE"
+        old_state="$ALF_STATE"
+        alf_git branch -m new/name
+        ALF_NORMALIZED_BRANCH=new/name
+        ALF_STATE="$ALF_ROOT/.gaia/local/protected/audit-loop/new/name.json"
+        printf '{"number":77,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+        new_tree
+        dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 4 ]
+        [ "$(state_field '.branch')" = new/name ]
+        [ "$(state_field '.key')" = branch:new/name ]
+        [ "$(state_field '.history.rounds[0].raw_branch_slug')" != "$(gaia_key_slug new/name)" ]
+        [ ! -e "$old_state" ]
+        [ -f "$ALF_ROOT/.gaia/local/protected/audit-loop/new/name.d/round-1.stamp" ]
+        ;;
+    esac
+  done
 }
 
 # --- corrupt state and missing tools --------------------------------------------
 
-@test "invalid JSON and schema 2 each deny naming the cause and the repair, and the file is never touched" {
-  alf_sequence 6 5
-  new_tree
-  cp "$ALF_STATE" "$BATS_TEST_TMPDIR/orig"
-  printf '{not json' >"$ALF_STATE"
-  cp "$ALF_STATE" "$BATS_TEST_TMPDIR/bad1"
-  dispatch
-  assert_denied
-  reason | grep -qF -- "invalid JSON"
-  reason | grep -qF -- "mv '$ALF_STATE' '$ALF_STATE.corrupt-"
-  cmp "$ALF_STATE" "$BATS_TEST_TMPDIR/bad1"
-  jq '.schema = 2' "$BATS_TEST_TMPDIR/orig" >"$ALF_STATE"
-  cp "$ALF_STATE" "$BATS_TEST_TMPDIR/bad2"
-  dispatch
-  assert_denied
-  reason | grep -qF -- "schema 2"
-  reason | grep -qF -- "outside Claude Code"
-  cmp "$ALF_STATE" "$BATS_TEST_TMPDIR/bad2"
+@test "an unusable state or environment denies naming the cause" {
+  local row
+  for row in detached-head invalid-json-and-schema-2 corrupt-state-same-tree jq-absent git-absent; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      detached-head)
+        # It has no branch key.
+        alf_git checkout -q --detach
+        dispatch
+        assert_denied
+        reason | grep -qF -- "no branch key"
+        [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/feat/loop.json" ]
+        ;;
+      invalid-json-and-schema-2)
+        # Each names the cause and the repair, and the file is never touched.
+        alf_sequence 6 5
+        new_tree
+        cp "$ALF_STATE" "$BATS_TEST_TMPDIR/orig"
+        printf '{not json' >"$ALF_STATE"
+        cp "$ALF_STATE" "$BATS_TEST_TMPDIR/bad1"
+        dispatch
+        assert_denied
+        reason | grep -qF -- "invalid JSON"
+        reason | grep -qF -- "mv '$ALF_STATE' '$ALF_STATE.corrupt-"
+        cmp "$ALF_STATE" "$BATS_TEST_TMPDIR/bad1"
+        jq '.schema = 2' "$BATS_TEST_TMPDIR/orig" >"$ALF_STATE"
+        cp "$ALF_STATE" "$BATS_TEST_TMPDIR/bad2"
+        dispatch
+        assert_denied
+        reason | grep -qF -- "schema 2"
+        reason | grep -qF -- "outside Claude Code"
+        cmp "$ALF_STATE" "$BATS_TEST_TMPDIR/bad2"
+        ;;
+      corrupt-state-same-tree)
+        # Corrupt state denies even a same-tree dispatch.
+        alf_sequence 6 5
+        printf '{"schema":1}' >"$ALF_STATE"
+        dispatch
+        assert_denied
+        ;;
+      jq-absent)
+        # A member dispatch is denied with exit 2 and a general-purpose dispatch is allowed.
+        build_path "$BATS_TEST_TMPDIR/nojq" jq
+        run env PATH="$BATS_TEST_TMPDIR/nojq" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(payload "$FRONTEND_MEMBER" "$SID" "$ALF_ROOT" "$ALF_ROOT")" "$HOOK"
+        [ "$status" -eq 2 ]
+        grep -qF -- BLOCKED <<<"$output"
+        grep -qF -- jq <<<"$output"
+        run env PATH="$BATS_TEST_TMPDIR/nojq" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(payload general-purpose "$SID" "$ALF_ROOT" "$ALF_ROOT")" "$HOOK"
+        assert_allowed
+        [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop" ]
+        ;;
+      git-absent)
+        # A member dispatch is denied with a message naming git.
+        build_path "$BATS_TEST_TMPDIR/nogit" git
+        run env PATH="$BATS_TEST_TMPDIR/nogit" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(payload "$FRONTEND_MEMBER" "$SID" "$ALF_ROOT" "$ALF_ROOT")" "$HOOK"
+        assert_denied
+        reason | grep -qF -- "git is not on PATH"
+        [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/feat/loop.json" ]
+        ;;
+    esac
+  done
 }
 
-@test "corrupt state denies even a same-tree dispatch" {
-  alf_sequence 6 5
-  printf '{"schema":1}' >"$ALF_STATE"
-  dispatch
-  assert_denied
-}
-
-@test "a missing previous-round sidecar records unknown and is allowed below the allowance" {
-  alf_sequence 6 5 4
-  rm -f "$ALF_ROOT"/.gaia/local/audit/*.findings.json
-  new_tree
-  dispatch
-  assert_allowed
-  [ "$(state_field '.history.rounds[2].snapshot.verdict')" = unknown ]
-  [ "$(state_field '.history.rounds[2].snapshot.A')" = null ]
-  [ "$(nrounds)" -eq 4 ]
-}
-
-@test "a missing previous-round sidecar records unknown and is denied at the allowance" {
-  alf_sequence 6 5 4 3 2
-  rm -f "$ALF_ROOT"/.gaia/local/audit/*.findings.json
-  new_tree
-  dispatch
-  assert_denied
-  [ "$(state_field '.history.rounds[4].snapshot.verdict')" = unknown ]
-  [ "$(state_field '.history.rounds[4].snapshot.A')" = null ]
+@test "a missing previous-round sidecar records unknown" {
+  local row
+  for row in allowed-below-the-allowance denied-at-the-allowance; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      allowed-below-the-allowance)
+        alf_sequence 6 5 4
+        rm -f "$ALF_ROOT"/.gaia/local/audit/*.findings.json
+        new_tree
+        dispatch
+        assert_allowed
+        [ "$(state_field '.history.rounds[2].snapshot.verdict')" = unknown ]
+        [ "$(state_field '.history.rounds[2].snapshot.A')" = null ]
+        [ "$(nrounds)" -eq 4 ]
+        ;;
+      denied-at-the-allowance)
+        alf_sequence 6 5 4 3 2
+        rm -f "$ALF_ROOT"/.gaia/local/audit/*.findings.json
+        new_tree
+        dispatch
+        assert_denied
+        [ "$(state_field '.history.rounds[4].snapshot.verdict')" = unknown ]
+        [ "$(state_field '.history.rounds[4].snapshot.A')" = null ]
+        ;;
+    esac
+  done
 }
 
 # failing_evaluator_hook <reason>: a copy of the hook whose sourced evaluator
@@ -560,25 +649,6 @@ failing_evaluator_hook() {
   [ "$(nrounds)" -eq 2 ]
 }
 
-@test "jq absent denies a member dispatch with exit 2 and allows a general-purpose dispatch" {
-  build_path "$BATS_TEST_TMPDIR/nojq" jq
-  run env PATH="$BATS_TEST_TMPDIR/nojq" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(payload "$FRONTEND_MEMBER" "$SID" "$ALF_ROOT" "$ALF_ROOT")" "$HOOK"
-  [ "$status" -eq 2 ]
-  grep -qF -- BLOCKED <<<"$output"
-  grep -qF -- jq <<<"$output"
-  run env PATH="$BATS_TEST_TMPDIR/nojq" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(payload general-purpose "$SID" "$ALF_ROOT" "$ALF_ROOT")" "$HOOK"
-  assert_allowed
-  [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop" ]
-}
-
-@test "git absent denies a member dispatch with a message naming git" {
-  build_path "$BATS_TEST_TMPDIR/nogit" git
-  run env PATH="$BATS_TEST_TMPDIR/nogit" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(payload "$FRONTEND_MEMBER" "$SID" "$ALF_ROOT" "$ALF_ROOT")" "$HOOK"
-  assert_denied
-  reason | grep -qF -- "git is not on PATH"
-  [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/feat/loop.json" ]
-}
-
 # --- resolving the audited root --------------------------------------------------
 
 @test "a worktree branch and a main checkout on one key accumulate rounds in one file" {
@@ -595,42 +665,48 @@ failing_evaluator_hook() {
   [ "$(state_field '.history.rounds[0].raw_branch_slug')" != "$(state_field '.history.rounds[1].raw_branch_slug')" ]
 }
 
-@test "a cwd on main with a prompt naming a feature worktree records under the feature branch" {
-  alf_git checkout -q main
-  linked_worktree wt2 feat/from-wt
-  ALF_NORMALIZED_BRANCH=feat/from-wt
-  ALF_STATE="$ALF_ROOT/.gaia/local/protected/audit-loop/feat/from-wt.json"
-  commit_in_worktree 1
-  run_payload "$(payload "$FRONTEND_MEMBER" "$SID" "$WORKTREE_PATH" "$ALF_ROOT")"
-  assert_allowed
-  [ -f "$ALF_STATE" ]
-  [ "$(nrounds)" -eq 1 ]
-  [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/main.json" ]
-}
-
-@test "a prose Working root ending in a period records under the named worktree, not the cwd" {
-  local payload_json
-  alf_git checkout -q main
-  linked_worktree wt3 feat/prose
-  ALF_STATE="$ALF_ROOT/.gaia/local/protected/audit-loop/feat/prose.json"
-  commit_in_worktree 1
-  payload_json="$(jq -n -c --arg member "$FRONTEND_MEMBER" --arg session_id "$SID" --arg root "$WORKTREE_PATH" --arg cwd "$ALF_ROOT" \
-    '{session_id: $session_id, hook_event_name: "PreToolUse", tool_name: "Agent", cwd: $cwd,
-      tool_input: {subagent_type: $member, prompt: ("Working root: " + $root + ". Audit the PR.")}}')"
-  run_payload "$payload_json"
-  assert_allowed
-  [ -f "$ALF_STATE" ]
-  [ "$(nrounds)" -eq 1 ]
-  [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/main.json" ]
-}
-
-@test "a named Working root that does not resolve is denied naming it and charges no round to the cwd" {
-  local missing="$BATS_TEST_TMPDIR/no-such-checkout"
-  alf_git checkout -q main
-  run_payload "$(payload "$FRONTEND_MEMBER" "$SID" "$missing" "$ALF_ROOT")"
-  assert_denied
-  reason | grep -qF -- "Working root: $missing"
-  [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/main.json" ]
+@test "the working root, not the cwd, decides the branch key" {
+  local row payload_json missing="$BATS_TEST_TMPDIR/no-such-checkout"
+  for row in prompt-names-feature-worktree prose-root-ending-in-period named-root-does-not-resolve; do
+    echo "case: $row"
+    fresh_fixture
+    alf_git checkout -q main
+    case "$row" in
+      prompt-names-feature-worktree)
+        # A cwd on main with a prompt naming a feature worktree records under the feature branch.
+        linked_worktree wt2 feat/from-wt
+        ALF_NORMALIZED_BRANCH=feat/from-wt
+        ALF_STATE="$ALF_ROOT/.gaia/local/protected/audit-loop/feat/from-wt.json"
+        commit_in_worktree 1
+        run_payload "$(payload "$FRONTEND_MEMBER" "$SID" "$WORKTREE_PATH" "$ALF_ROOT")"
+        assert_allowed
+        [ -f "$ALF_STATE" ]
+        [ "$(nrounds)" -eq 1 ]
+        [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/main.json" ]
+        ;;
+      prose-root-ending-in-period)
+        # A prose Working root ending in a period records under the named worktree, not the cwd.
+        linked_worktree wt3 feat/prose
+        ALF_STATE="$ALF_ROOT/.gaia/local/protected/audit-loop/feat/prose.json"
+        commit_in_worktree 1
+        payload_json="$(jq -n -c --arg member "$FRONTEND_MEMBER" --arg session_id "$SID" --arg root "$WORKTREE_PATH" --arg cwd "$ALF_ROOT" \
+          '{session_id: $session_id, hook_event_name: "PreToolUse", tool_name: "Agent", cwd: $cwd,
+            tool_input: {subagent_type: $member, prompt: ("Working root: " + $root + ". Audit the PR.")}}')"
+        run_payload "$payload_json"
+        assert_allowed
+        [ -f "$ALF_STATE" ]
+        [ "$(nrounds)" -eq 1 ]
+        [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/main.json" ]
+        ;;
+      named-root-does-not-resolve)
+        # It is denied naming the root and charges no round to the cwd.
+        run_payload "$(payload "$FRONTEND_MEMBER" "$SID" "$missing" "$ALF_ROOT")"
+        assert_denied
+        reason | grep -qF -- "Working root: $missing"
+        [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop/main.json" ]
+        ;;
+    esac
+  done
 }
 
 @test "colliding branch names a/b-c and a-b/c keep separate files" {
@@ -668,34 +744,40 @@ failing_evaluator_hook() {
 
 # --- uncommitted work -----------------------------------------------------------
 
-@test "a new tree on a dirty checkout is denied: commit the round first" {
-  alf_sequence 6 5
-  new_tree
-  printf 'edit\n' >>"$ALF_ROOT/base.txt"
-  dispatch
-  assert_denied
-  reason | grep -qF -- "Commit the round first"
-  [ "$(nrounds)" -eq 2 ]
-  git -C "$ALF_ROOT" checkout -q -- base.txt
-  printf 'staged\n' >"$ALF_ROOT/staged.txt"
-  git -C "$ALF_ROOT" add staged.txt
-  dispatch
-  assert_denied
-  git -C "$ALF_ROOT" reset -q staged.txt
-  rm -f "$ALF_ROOT/staged.txt"
-}
-
-@test "untracked files do not block a new tree, and a dirty tree does not block the same tree" {
-  alf_sequence 6 5
-  new_tree
-  printf 'x\n' >"$ALF_ROOT/untracked.txt"
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 3 ]
-  printf 'edit\n' >>"$ALF_ROOT/base.txt"
-  dispatch code-audit-maintainer-shell
-  assert_allowed
-  [ "$(nrounds)" -eq 3 ]
+@test "a dirty checkout blocks only a new tree" {
+  local row
+  for row in new-tree-dirty-or-staged untracked-new-tree-then-dirty-same-tree; do
+    echo "case: $row"
+    fresh_fixture
+    alf_sequence 6 5
+    new_tree
+    case "$row" in
+      new-tree-dirty-or-staged)
+        # A new tree on a dirty checkout is denied: commit the round first.
+        printf 'edit\n' >>"$ALF_ROOT/base.txt"
+        dispatch
+        assert_denied
+        reason | grep -qF -- "Commit the round first"
+        [ "$(nrounds)" -eq 2 ]
+        git -C "$ALF_ROOT" checkout -q -- base.txt
+        printf 'staged\n' >"$ALF_ROOT/staged.txt"
+        git -C "$ALF_ROOT" add staged.txt
+        dispatch
+        assert_denied
+        ;;
+      untracked-new-tree-then-dirty-same-tree)
+        # Untracked files do not block a new tree, and a dirty tree does not block the same tree.
+        printf 'x\n' >"$ALF_ROOT/untracked.txt"
+        dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 3 ]
+        printf 'edit\n' >>"$ALF_ROOT/base.txt"
+        dispatch code-audit-maintainer-shell
+        assert_allowed
+        [ "$(nrounds)" -eq 3 ]
+        ;;
+    esac
+  done
 }
 
 # --- the deadline ---------------------------------------------------------------
@@ -760,38 +842,47 @@ EOF
 
 # --- concurrency ----------------------------------------------------------------
 
-@test "five members dispatched at once on one new tree produce one round holding all five" {
-  new_tree
-  local member i=0 payload_json
-  payload_json="$(payload x "$SID" "$ALF_ROOT" "$ALF_ROOT")"
-  for member in code-audit-frontend code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell code-audit-extra; do
-    i=$((i + 1))
-    (printf '%s' "$payload_json" | jq -c --arg member "$member" '.tool_input.subagent_type = $member' |
-      env PATH="$STUB_BIN:$PATH" GH_STUB_DIRECTORY="$GH_STUB_STATE_DIRECTORY" bash "$HOOK" >"$BATS_TEST_TMPDIR/out.$i" 2>&1) &
+@test "parallel dispatches keep one round per tree and lose no tree" {
+  local row member i payload_json main_payload worktree_payload
+  for row in five-members-one-new-tree two-checkouts-one-key-different-trees; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      five-members-one-new-tree)
+        # Five members dispatched at once on one new tree produce one round holding all five.
+        new_tree
+        i=0
+        payload_json="$(payload x "$SID" "$ALF_ROOT" "$ALF_ROOT")"
+        for member in code-audit-frontend code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell code-audit-extra; do
+          i=$((i + 1))
+          (printf '%s' "$payload_json" | jq -c --arg member "$member" '.tool_input.subagent_type = $member' |
+            env PATH="$STUB_BIN:$PATH" GH_STUB_DIRECTORY="$GH_STUB_STATE_DIRECTORY" bash "$HOOK" >"$BATS_TEST_TMPDIR/out.$i" 2>&1) &
+        done
+        wait
+        for i in 1 2 3 4 5; do
+          [ ! -s "$BATS_TEST_TMPDIR/out.$i" ] || { printf 'out.%s: %s\n' "$i" "$(cat "$BATS_TEST_TMPDIR/out.$i")" >&2; return 1; }
+        done
+        [ "$(nrounds)" -eq 1 ]
+        [ "$(state_field '.history.rounds[0].members | length')" -eq 5 ]
+        ;;
+      two-checkouts-one-key-different-trees)
+        # Two checkouts of one key dispatching at once on different trees never lose a tree.
+        alf_branch feat/x
+        linked_worktree wtc worktree-feat+x
+        new_tree
+        commit_in_worktree 1
+        main_payload="$(payload "$FRONTEND_MEMBER" s1 "$ALF_ROOT" "$ALF_ROOT")"
+        worktree_payload="$(payload "$FRONTEND_MEMBER" s2 "$WORKTREE_PATH" "$WORKTREE_PATH")"
+        (printf '%s' "$main_payload" | env PATH="$STUB_BIN:$PATH" GH_STUB_DIRECTORY="$GH_STUB_STATE_DIRECTORY" bash "$HOOK" >"$BATS_TEST_TMPDIR/o1" 2>&1) &
+        (printf '%s' "$worktree_payload" | env PATH="$STUB_BIN:$PATH" GH_STUB_DIRECTORY="$GH_STUB_STATE_DIRECTORY" bash "$HOOK" >"$BATS_TEST_TMPDIR/o2" 2>&1) &
+        wait
+        [ ! -s "$BATS_TEST_TMPDIR/o1" ]
+        [ ! -s "$BATS_TEST_TMPDIR/o2" ]
+        [ "$(nrounds)" -eq 2 ]
+        [ "$(state_field '.history.rounds | map(.tree) | unique | length')" -eq 2 ]
+        ;;
+    esac
   done
-  wait
-  for i in 1 2 3 4 5; do
-    [ ! -s "$BATS_TEST_TMPDIR/out.$i" ] || { printf 'out.%s: %s\n' "$i" "$(cat "$BATS_TEST_TMPDIR/out.$i")" >&2; return 1; }
-  done
-  [ "$(nrounds)" -eq 1 ]
-  [ "$(state_field '.history.rounds[0].members | length')" -eq 5 ]
-}
-
-@test "two checkouts of one key dispatching at once on different trees never lose a tree" {
-  alf_branch feat/x
-  linked_worktree wtc worktree-feat+x
-  new_tree
-  commit_in_worktree 1
-  local main_payload worktree_payload
-  main_payload="$(payload "$FRONTEND_MEMBER" s1 "$ALF_ROOT" "$ALF_ROOT")"
-  worktree_payload="$(payload "$FRONTEND_MEMBER" s2 "$WORKTREE_PATH" "$WORKTREE_PATH")"
-  (printf '%s' "$main_payload" | env PATH="$STUB_BIN:$PATH" GH_STUB_DIRECTORY="$GH_STUB_STATE_DIRECTORY" bash "$HOOK" >"$BATS_TEST_TMPDIR/o1" 2>&1) &
-  (printf '%s' "$worktree_payload" | env PATH="$STUB_BIN:$PATH" GH_STUB_DIRECTORY="$GH_STUB_STATE_DIRECTORY" bash "$HOOK" >"$BATS_TEST_TMPDIR/o2" 2>&1) &
-  wait
-  [ ! -s "$BATS_TEST_TMPDIR/o1" ]
-  [ ! -s "$BATS_TEST_TMPDIR/o2" ]
-  [ "$(nrounds)" -eq 2 ]
-  [ "$(state_field '.history.rounds | map(.tree) | unique | length')" -eq 2 ]
 }
 
 # --- scope ----------------------------------------------------------------------
@@ -819,20 +910,9 @@ EOF
 #
 # A dispatch that would record a round asks gh whether the audited checkout's
 # pull request is a fork. The stub's answer comes from $GH_STUB_STATE_DIRECTORY/cross-repository
-# (see setup). Each refusal is driven both ways: against the hook, and against
-# a scratch mutant that lacks the arm, which must let the same case through.
+# (see setup).
 
-# fork_mutant <perl-substitution>: point HOOK at a copy with one mutation.
-fork_mutant() {
-  local mutant_directory="$BATS_TEST_TMPDIR/fork-mutant"
-  mkdir -p "$mutant_directory/.claude/hooks"
-  ln -sfn "$REPO_ROOT/.gaia" "$mutant_directory/.gaia"
-  ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$mutant_directory/.claude/hooks/lib"
-  perl -0pe "$1" "$HOOK" >"$mutant_directory/.claude/hooks/audit-loop-bound.sh"
-  cmp -s "$HOOK" "$mutant_directory/.claude/hooks/audit-loop-bound.sh" && { printf 'mutation changed nothing: %s\n' "$1" >&2; return 1; }
-  HOOK="$mutant_directory/.claude/hooks/audit-loop-bound.sh"
-}
-
+# bats test_tags=protected
 @test "UAT-010: a dispatch for a fork pull request is denied with the refusal and records no round" {
   local message
   printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
@@ -845,22 +925,30 @@ fork_mutant() {
   [ ! -f "$ALF_STATE" ]
 }
 
-@test "UAT-010: the same dispatch for a same-repo pull request is allowed and records its round" {
-  printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  printf 'false\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 1 ]
-}
-
-@test "UAT-010: a dispatch is denied, naming the gh failure, when gh cannot say whether the pull request is a fork" {
-  printf 'fail\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  dispatch
-  assert_denied
-  reason | grep -qF -- 'cannot tell whether the pull request'
-  reason | grep -qF -- 'HTTP 502: Bad Gateway'
-  reason | grep -qF -- 'push the branch to origin'
-  [ ! -f "$ALF_STATE" ]
+@test "UAT-010: a same-repo pull request is allowed and records its round, and a gh that cannot say whether it is a fork denies naming the failure" {
+  local row
+  for row in same-repo gh-cannot-answer; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      same-repo)
+        printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+        printf 'false\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
+        dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 1 ]
+        ;;
+      gh-cannot-answer)
+        printf 'fail\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
+        dispatch
+        assert_denied
+        reason | grep -qF -- 'cannot tell whether the pull request'
+        reason | grep -qF -- 'HTTP 502: Bad Gateway'
+        reason | grep -qF -- 'push the branch to origin'
+        [ ! -f "$ALF_STATE" ]
+        ;;
+    esac
+  done
 }
 
 # --- the light reviewer -----------------------------------------------------------
@@ -909,21 +997,42 @@ light_dispatch_in_unit() {
   [ "$(nrounds)" -eq 5 ]
 }
 
-@test "light: a dispatch on a dirty audited checkout is denied, staged edits included" {
-  alf_sequence 6 5
-  new_tree
-  printf 'edit\n' >>"$ALF_ROOT/base.txt"
-  light_dispatch_in_unit
-  assert_denied
-  reason | grep -qF -- "uncommitted tracked changes"
-  reason | grep -qF -- "Commit the round first"
-  git -C "$ALF_ROOT" add base.txt
-  light_dispatch_in_unit
-  assert_denied
-  git -C "$ALF_ROOT" reset -q base.txt
-  git -C "$ALF_ROOT" checkout -q -- base.txt
-  light_dispatch_in_unit
-  assert_allowed
+@test "light: a dispatch is refused on a dirty checkout or an unresolvable root" {
+  local row missing="$BATS_TEST_TMPDIR/no-such-checkout"
+  for row in dirty-then-staged named-root-does-not-resolve no-root-and-relative-cwd; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      dirty-then-staged)
+        # A dirty audited checkout is denied, staged edits included.
+        alf_sequence 6 5
+        new_tree
+        printf 'edit\n' >>"$ALF_ROOT/base.txt"
+        light_dispatch_in_unit
+        assert_denied
+        reason | grep -qF -- "uncommitted tracked changes"
+        reason | grep -qF -- "Commit the round first"
+        git -C "$ALF_ROOT" add base.txt
+        light_dispatch_in_unit
+        assert_denied
+        git -C "$ALF_ROOT" reset -q base.txt
+        git -C "$ALF_ROOT" checkout -q -- base.txt
+        light_dispatch_in_unit
+        assert_allowed
+        ;;
+      named-root-does-not-resolve)
+        light_dispatch_in_unit "$missing"
+        assert_denied
+        reason | grep -qF -- "Working root: $missing"
+        ;;
+      no-root-and-relative-cwd)
+        run_payload "$(jq -n -c --arg member "$LIGHT_MEMBER" '{session_id: "s", hook_event_name: "PreToolUse", tool_name: "Agent", cwd: "relative",
+          tool_input: {subagent_type: $member, prompt: "Review the change."}}')"
+        assert_denied
+        reason | grep -qF -- "cannot resolve the audited checkout"
+        ;;
+    esac
+  done
 }
 
 @test "light: untracked files do not block a dispatch" {
@@ -932,44 +1041,36 @@ light_dispatch_in_unit() {
   assert_allowed
 }
 
-@test "light: a named Working root that does not resolve is denied naming it" {
-  local missing="$BATS_TEST_TMPDIR/no-such-checkout"
-  light_dispatch_in_unit "$missing"
-  assert_denied
-  reason | grep -qF -- "Working root: $missing"
-}
-
-@test "light: a dispatch with no Working root and no absolute cwd is denied" {
-  run_payload "$(jq -n -c --arg member "$LIGHT_MEMBER" '{session_id: "s", hook_event_name: "PreToolUse", tool_name: "Agent", cwd: "relative",
-    tool_input: {subagent_type: $member, prompt: "Review the change."}}')"
-  assert_denied
-  reason | grep -qF -- "cannot resolve the audited checkout"
-}
-
-@test "light: a dispatch for a fork pull request is denied with the refusal" {
-  local message
-  printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  printf 'true\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  light_dispatch_in_unit
-  assert_denied
+@test "light: a fork pull request is denied with the refusal, a gh that cannot say is denied naming the failure, and a same-repo one is allowed" {
+  local row message
   message="$(bash -c '. "$1"; printf "%s" "$GAIA_CROSS_REPO_REFUSAL_MESSAGE"' _ "$REPO_ROOT/.claude/hooks/lib/cross-repo-refusal.sh")"
-  reason | grep -qF -- "$message"
-  [ ! -f "$ALF_STATE" ]
-}
-
-@test "light: a dispatch is denied, naming the gh failure, when gh cannot say whether the pull request is a fork" {
-  printf 'fail\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  light_dispatch_in_unit
-  assert_denied
-  reason | grep -qF -- 'cannot tell whether the pull request'
-  reason | grep -qF -- 'HTTP 502: Bad Gateway'
-}
-
-@test "light: a same-repo pull request is allowed" {
-  printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  printf 'false\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  light_dispatch_in_unit
-  assert_allowed
+  for row in fork gh-cannot-answer same-repo; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      fork)
+        printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+        printf 'true\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
+        light_dispatch_in_unit
+        assert_denied
+        reason | grep -qF -- "$message"
+        [ ! -f "$ALF_STATE" ]
+        ;;
+      gh-cannot-answer)
+        printf 'fail\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
+        light_dispatch_in_unit
+        assert_denied
+        reason | grep -qF -- 'cannot tell whether the pull request'
+        reason | grep -qF -- 'HTTP 502: Bad Gateway'
+        ;;
+      same-repo)
+        printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+        printf 'false\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
+        light_dispatch_in_unit
+        assert_allowed
+        ;;
+    esac
+  done
 }
 
 # --- the unit gate ----------------------------------------------------------------
@@ -1074,7 +1175,7 @@ scratch_copy() {
   rm -rf "$scratch_directory"
   mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
   for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
-    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-dispositions-check.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh audit-member-digest.sh; do
+    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-dispositions-check.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh audit-member-digest.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$scratch_directory/.gaia/scripts/$script_name"
   done
   ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
@@ -1101,15 +1202,13 @@ settings() {
   [ ! -e "$ALF_ROOT/.gaia/local/protected/audit-loop" ]
 }
 
-@test "jq absent refuses a unit dispatch with exit 2 and allows a general-purpose one; without the unit literal the unit gets through" {
+# bats test_tags=protected
+@test "jq absent refuses a unit dispatch with exit 2 and allows a general-purpose one" {
   build_path "$BATS_TEST_TMPDIR/nojq" jq
   run env PATH="$BATS_TEST_TMPDIR/nojq" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(unit_payload "$SIDU")" "$HOOK"
   [ "$status" -eq 2 ]
   grep -qF -- BLOCKED <<<"$output"
   run env PATH="$BATS_TEST_TMPDIR/nojq" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(payload general-purpose "$SIDU" "$ALF_ROOT" "$ALF_ROOT")" "$HOOK"
-  assert_allowed
-  fork_mutant "s/ 'code-audit-' 'audit-loop-unit'/ 'code-audit-'/"
-  run env PATH="$BATS_TEST_TMPDIR/nojq" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(unit_payload "$SIDU")" "$HOOK"
   assert_allowed
 }
 
@@ -1170,63 +1269,72 @@ settings() {
   [ "$(nrounds)" -eq "$through" ]
 }
 
-@test "a reading at the line denies the unit with a pinned context checkpoint and the unattended rule" {
-  local nonce elig want
-  alf_sequence 6 5
-  above
-  unit_dispatch
-  assert_pinned context
-  nonce="$(state_field '.history.checkpoints[-1].nonce')"
-  elig="$(state_field '.history.rounds[1].snapshot.accept_eligible // false')"
-  want="$(gaia_loop_pinned_question feat/loop "$nonce" 2 "$GAIA_CONTEXT_UNIT_ROUNDS" "$elig" false context "fresh $GAIA_CONTEXT_ASK_TOKENS_DEFAULT 1000000" grant "$(gaia_context_line 1000000 "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT")")"
-  [ "$(state_field '.history.checkpoints[-1].question | tojson')" = "$want" ]
-  [[ "$(state_field '.history.checkpoints[-1].question.questions[0].question')" == *"(context), context "[0-9]*"% ("[0-9]*"k of 1000k). How should"* ]]
-  [ "$(state_field '.history.checkpoints[-1].at_round')" -eq 2 ]
-  reason | grep -qF -- "never ask; stop, leave the PR open, print the typed grant line above inside a fenced code block, and print no continuation prompt"
-  [ "$(state_field '.history.units // [] | length')" -eq 0 ]
-}
-
-@test "missing, stale, future-dated and garbage readings fall back to the round count: allowed at 5 used, denied at 6" {
-  local mode reading_file
-  reading_file="$(gaia_context_file "$ALF_ROOT" "$SIDU")"
-  for mode in missing stale future garbage; do
-    rm -f "$reading_file" "$ALF_STATE"
-    rm -rf "${ALF_STATE%.json}.d"
-    seed_rounds 5 '{"verdict":"continue","A":1}'
-    case "$mode" in
-      missing) ;;
-      stale) write_context_reading 1000 1000000 $((GAIA_CONTEXT_FRESH_SECONDS + 60)) ;;
-      future) write_context_reading 1000 1000000 -3600 ;;
-      garbage) mkdir -p "${reading_file%/*}" && printf '{garbage' >"$reading_file" ;;
+@test "context readings and signals decide the unit window" {
+  local row nonce elig want mode reading_file signal
+  for row in reading-at-the-line unusable-reading-falls-back signals-below-the-line; do
+    echo "case: $row"
+    fresh_fixture
+    case "$row" in
+      reading-at-the-line)
+        # A reading at the line denies the unit with a pinned context checkpoint and the unattended rule.
+        alf_sequence 6 5
+        above
+        unit_dispatch
+        assert_pinned context
+        nonce="$(state_field '.history.checkpoints[-1].nonce')"
+        elig="$(state_field '.history.rounds[1].snapshot.accept_eligible // false')"
+        want="$(gaia_loop_pinned_question feat/loop "$nonce" 2 "$GAIA_CONTEXT_UNIT_ROUNDS" "$elig" false context "fresh $GAIA_CONTEXT_ASK_TOKENS_DEFAULT 1000000" grant "$(gaia_context_line 1000000 "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT")")"
+        [ "$(state_field '.history.checkpoints[-1].question | tojson')" = "$want" ]
+        [[ "$(state_field '.history.checkpoints[-1].question.questions[0].question')" == *"(context), context "[0-9]*"% ("[0-9]*"k of 1000k). How should"* ]]
+        [ "$(state_field '.history.checkpoints[-1].at_round')" -eq 2 ]
+        reason | grep -qF -- "never ask; stop, leave the PR open, print the typed grant line above inside a fenced code block, and print no continuation prompt"
+        [ "$(state_field '.history.units // [] | length')" -eq 0 ]
+        ;;
+      unusable-reading-falls-back)
+        # Missing, stale, future-dated and garbage readings fall back to the
+        # round count: allowed at 5 used, denied at 6.
+        reading_file="$(gaia_context_file "$ALF_ROOT" "$SIDU")"
+        for mode in missing stale future garbage; do
+          rm -f "$reading_file" "$ALF_STATE"
+          rm -rf "${ALF_STATE%.json}.d"
+          seed_rounds 5 '{"verdict":"continue","A":1}'
+          case "$mode" in
+            missing) ;;
+            stale) write_context_reading 1000 1000000 $((GAIA_CONTEXT_FRESH_SECONDS + 60)) ;;
+            future) write_context_reading 1000 1000000 -3600 ;;
+            garbage) mkdir -p "${reading_file%/*}" && printf '{garbage' >"$reading_file" ;;
+          esac
+          unit_dispatch
+          assert_allowed
+          [ "$(state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round] | map(tostring) | join(" ")')" = "fallback 6 6" ]
+          seed_rounds 6 '{"verdict":"continue","A":1}'
+          unit_dispatch
+          assert_pinned fallback
+        done
+        ;;
+      signals-below-the-line)
+        # Below the line each denying signal denies the unit and quiet alone
+        # does not; the cap pins both grants, accept or type-accept, and stop.
+        below
+        for signal in enriching stalled nitpicky reintroduced small-tail waiver-drift; do
+          seed_rounds 6 "$(sig_snap "$signal" true)"
+          unit_dispatch
+          assert_pinned "rubric:$signal"
+        done
+        seed_rounds 6 "$(sig_snap quiet true)"
+        unit_dispatch
+        assert_allowed
+        seed_rounds "$_GAIA_LOOP_HARD_CAP" "$(sig_snap cap true)"
+        unit_dispatch
+        assert_pinned cap
+        [ "$(state_field '[.history.checkpoints[-1].question.questions[0].options[].label] | join("|")')" = "Continue audit in this session (Recommended)|Continue audit in a new session|Accept the remainder|Stop and file the remainder" ]
+        seed_rounds "$_GAIA_LOOP_HARD_CAP" "$(sig_snap cap false)"
+        unit_dispatch
+        assert_pinned cap
+        [ "$(state_field '[.history.checkpoints[-1].question.questions[0].options[].label] | join("|")')" = "Continue audit in this session (Recommended)|Continue audit in a new session|Type audit-accept instead|Stop and file the remainder" ]
+        ;;
     esac
-    unit_dispatch
-    assert_allowed
-    [ "$(state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round] | map(tostring) | join(" ")')" = "fallback 6 6" ]
-    seed_rounds 6 '{"verdict":"continue","A":1}'
-    unit_dispatch
-    assert_pinned fallback
   done
-}
-
-@test "below the line each denying signal denies the unit and quiet alone does not; the cap pins both grants, accept or type-accept, and stop" {
-  local signal
-  below
-  for signal in enriching stalled nitpicky reintroduced small-tail waiver-drift; do
-    seed_rounds 6 "$(sig_snap "$signal" true)"
-    unit_dispatch
-    assert_pinned "rubric:$signal"
-  done
-  seed_rounds 6 "$(sig_snap quiet true)"
-  unit_dispatch
-  assert_allowed
-  seed_rounds "$_GAIA_LOOP_HARD_CAP" "$(sig_snap cap true)"
-  unit_dispatch
-  assert_pinned cap
-  [ "$(state_field '[.history.checkpoints[-1].question.questions[0].options[].label] | join("|")')" = "Continue audit in this session (Recommended)|Continue audit in a new session|Accept the remainder|Stop and file the remainder" ]
-  seed_rounds "$_GAIA_LOOP_HARD_CAP" "$(sig_snap cap false)"
-  unit_dispatch
-  assert_pinned cap
-  [ "$(state_field '[.history.checkpoints[-1].question.questions[0].options[].label] | join("|")')" = "Continue audit in this session (Recommended)|Continue audit in a new session|Type audit-accept instead|Stop and file the remainder" ]
 }
 
 # first_pinned_label: the leading option of the latest checkpoint's pinned question.
@@ -1314,27 +1422,35 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   [ "$(state_field '.history.units[-1].session_id')" = "$SIDV" ]
 }
 
-@test "a pending checkpoint with no answer denies the next unit again with a new nonce" {
-  local first
-  alf_sequence 6 5
-  above
-  unit_dispatch
-  assert_pinned context
-  first="$(state_field '.history.checkpoints[-1].nonce')"
-  unit_dispatch
-  assert_pinned context
-  [ "$(state_field '.history.checkpoints | length')" -eq 2 ]
-  [ "$(state_field '.history.checkpoints[-1].nonce')" != "$first" ]
-}
-
-@test "a legacy pending checkpoint without a nonce is superseded by a pinned one" {
-  alf_sequence 6 5
-  alf_add_checkpoint 2 allowance
-  above
-  unit_dispatch
-  assert_pinned context
-  [ "$(state_field '.history.checkpoints | length')" -eq 2 ]
-  [ "$(state_field '.history.checkpoints[0].nonce // "none"')" = none ]
+@test "a pending checkpoint is superseded by a newly pinned one" {
+  local row first
+  for row in pinned-with-no-answer legacy-without-a-nonce; do
+    echo "case: $row"
+    fresh_fixture
+    alf_sequence 6 5
+    case "$row" in
+      pinned-with-no-answer)
+        # The next unit is denied again with a new nonce.
+        above
+        unit_dispatch
+        assert_pinned context
+        first="$(state_field '.history.checkpoints[-1].nonce')"
+        unit_dispatch
+        assert_pinned context
+        [ "$(state_field '.history.checkpoints | length')" -eq 2 ]
+        [ "$(state_field '.history.checkpoints[-1].nonce')" != "$first" ]
+        ;;
+      legacy-without-a-nonce)
+        # A legacy pending checkpoint without a nonce is superseded by a pinned one.
+        alf_add_checkpoint 2 allowance
+        above
+        unit_dispatch
+        assert_pinned context
+        [ "$(state_field '.history.checkpoints | length')" -eq 2 ]
+        [ "$(state_field '.history.checkpoints[0].nonce // "none"')" = none ]
+        ;;
+    esac
+  done
 }
 
 @test "a failing zero-fix dispositions file denies the same-tree re-dispatch and the next unit, recording nothing" {
@@ -1513,83 +1629,111 @@ veto_rounds() {
   assert_allowed
 }
 
-@test "an override present before the first unit freezes only the default, raised or malformed, and the hook denies at the default line" {
-  local pair
-  # A token count of 150 is a valid lowering, so 150 is a percent fixture only.
-  for pair in "1000000 100" "0 0" "-1 -1" "1.5 1.5" "1000000 150"; do
+@test "an override present before the first unit freezes its clamped line, the window share at the default, and the hook denies at that line" {
+  local row ask_tokens ask_window_percent frozen
+  # Each row: the override's ask_tokens and ask_window_pct, then the line it freezes.
+  for row in "1000000 100 $GAIA_CONTEXT_ASK_TOKENS_MAXIMUM" "150000 20 $GAIA_CONTEXT_ASK_TOKENS_MINIMUM" \
+    "-1 -1 $GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "1.5 1.5 $GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "250000 150 250000"; do
+    read -r ask_tokens ask_window_percent frozen <<<"$row"
+    echo "case: $row"
     rm -f "$ALF_STATE"
     rm -rf "${ALF_STATE%.json}.d"
-    # shellcheck disable=SC2086 # the pair is two words on purpose
-    settings $pair
-    below
+    settings "$ask_tokens" "$ask_window_percent"
+    write_context_reading $((frozen - 1)) 1000000
     unit_dispatch
     assert_allowed
-    [ "$(state_field '.history.context_config | "\(.ask_tokens) \(.ask_window_pct)"')" = "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT $GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT" ]
-    above
+    [ "$(state_field '.history.context_config | "\(.ask_tokens) \(.ask_window_pct)"')" = "$frozen $GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT" ]
+    write_context_reading "$frozen" 1000000
     unit_dispatch
     assert_pinned context
   done
 }
 
-@test "at the round cap a unit is denied with trigger cap and a nested member for the next round is denied" {
-  seed_rounds "$_GAIA_LOOP_HARD_CAP" '{"verdict":"continue","A":1}'
-  alf_state_edit '.history.units = [{unit: 1, start_round: 8, k: 3, through_round: 10, admitted_on: "context",
-    after_checkpoint: 0, recorded_at: "2026-01-01T00:00:00Z", session_id: $session_id}]' --arg session_id "$SIDU"
-  below
-  unit_dispatch
-  assert_pinned cap
-  new_tree
-  nested
-  assert_pinned cap
-  [ "$(nrounds)" -eq "$_GAIA_LOOP_HARD_CAP" ]
-}
-
-@test "at the round cap a grant runs a whole unit instead of re-asking, then the cap asks again" {
-  local unit_rounds="$GAIA_CONTEXT_UNIT_ROUNDS" round
-  seed_rounds "$_GAIA_LOOP_HARD_CAP" '{"verdict":"continue","A":1}'
-  alf_state_edit '.history.units = [{unit: 1, start_round: 8, k: 3, through_round: 10, admitted_on: "context",
-    after_checkpoint: 0, recorded_at: "2026-01-01T00:00:00Z", session_id: $session_id}]' --arg session_id "$SIDU"
-  below
-  unit_dispatch
-  assert_pinned cap
-  alf_add_answer 1 grant "$unit_rounds"
+@test "the checkpoint off: a frozen or live ask_tokens of 0 skips the context deny and the round-count fallback still pins" {
+  echo "case: frozen off admits a unit over any reading until the fallback checkpoint"
+  settings 0 50
+  write_context_reading 900000 1000000
   unit_dispatch
   assert_allowed
-  [ "$(state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round] | map(tostring) | join(" ")')" = "grant $((_GAIA_LOOP_HARD_CAP + 1)) $((_GAIA_LOOP_HARD_CAP + unit_rounds))" ]
-  round=1
-  while [ "$round" -le "$unit_rounds" ]; do
-    new_tree
-    nested
-    assert_allowed
-    round=$((round + 1))
+  [ "$(state_field '.history.context_config.ask_tokens')" -eq 0 ]
+  [ "$(state_field '.history.units | last | .admitted_on')" = fallback ]
+
+  echo "case: live off never lifts a branch frozen at the default, so a reading over it pins context"
+  fresh_fixture
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}'
+  settings 0 50
+  write_context_reading 900000 1000000
+  unit_dispatch
+  assert_pinned context
+
+  echo "case: a branch frozen off takes a live number, so the bound context-denies again"
+  fresh_fixture
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 0, ask_window_pct: 50}'
+  settings 300000 50
+  write_context_reading 900000 1000000
+  unit_dispatch
+  assert_pinned context
+}
+
+@test "the round cap pins a checkpoint, and an answer runs its rounds instead of re-asking" {
+  local row unit_rounds="$GAIA_CONTEXT_UNIT_ROUNDS" round
+  for row in no-answer grant accept; do
+    echo "case: $row"
+    fresh_fixture
+    # Every row starts at the cap with a unit that ran, and a pinned cap checkpoint.
+    seed_rounds "$_GAIA_LOOP_HARD_CAP" '{"verdict":"continue","A":1}'
+    alf_state_edit '.history.units = [{unit: 1, start_round: 8, k: 3, through_round: 10, admitted_on: "context",
+      after_checkpoint: 0, recorded_at: "2026-01-01T00:00:00Z", session_id: $session_id}]' --arg session_id "$SIDU"
+    below
+    unit_dispatch
+    assert_pinned cap
+    case "$row" in
+      no-answer)
+        # A nested member for the next round is denied with trigger cap.
+        new_tree
+        nested
+        assert_pinned cap
+        [ "$(nrounds)" -eq "$_GAIA_LOOP_HARD_CAP" ]
+        ;;
+      grant)
+        # A grant runs a whole unit, then the cap asks again.
+        alf_add_answer 1 grant "$unit_rounds"
+        unit_dispatch
+        assert_allowed
+        [ "$(state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round] | map(tostring) | join(" ")')" = "grant $((_GAIA_LOOP_HARD_CAP + 1)) $((_GAIA_LOOP_HARD_CAP + unit_rounds))" ]
+        round=1
+        while [ "$round" -le "$unit_rounds" ]; do
+          new_tree
+          nested
+          assert_allowed
+          round=$((round + 1))
+        done
+        [ "$(nrounds)" -eq $((_GAIA_LOOP_HARD_CAP + unit_rounds)) ]
+        new_tree
+        unit_dispatch
+        assert_pinned cap
+        [ "$(nrounds)" -eq $((_GAIA_LOOP_HARD_CAP + unit_rounds)) ]
+        ;;
+      accept)
+        # An accept runs its one closing round, then the cap denies.
+        alf_add_answer 1 accept
+        unit_dispatch
+        assert_allowed
+        [ "$(state_field '.history.checkpoints | length')" -eq 1 ]
+        new_tree
+        nested
+        assert_allowed
+        [ "$(nrounds)" -eq $((_GAIA_LOOP_HARD_CAP + 1)) ]
+        [ "$(state_field ".history.rounds[$_GAIA_LOOP_HARD_CAP].closing")" = true ]
+        new_tree
+        unit_dispatch
+        assert_pinned cap
+        [ "$(nrounds)" -eq $((_GAIA_LOOP_HARD_CAP + 1)) ]
+        ;;
+    esac
   done
-  [ "$(nrounds)" -eq $((_GAIA_LOOP_HARD_CAP + unit_rounds)) ]
-  new_tree
-  unit_dispatch
-  assert_pinned cap
-  [ "$(nrounds)" -eq $((_GAIA_LOOP_HARD_CAP + unit_rounds)) ]
-}
-
-@test "at the round cap an accept runs its one closing round instead of re-asking, then the cap denies" {
-  seed_rounds "$_GAIA_LOOP_HARD_CAP" '{"verdict":"continue","A":1}'
-  alf_state_edit '.history.units = [{unit: 1, start_round: 8, k: 3, through_round: 10, admitted_on: "context",
-    after_checkpoint: 0, recorded_at: "2026-01-01T00:00:00Z", session_id: $session_id}]' --arg session_id "$SIDU"
-  below
-  unit_dispatch
-  assert_pinned cap
-  alf_add_answer 1 accept
-  unit_dispatch
-  assert_allowed
-  [ "$(state_field '.history.checkpoints | length')" -eq 1 ]
-  new_tree
-  nested
-  assert_allowed
-  [ "$(nrounds)" -eq $((_GAIA_LOOP_HARD_CAP + 1)) ]
-  [ "$(state_field ".history.rounds[$_GAIA_LOOP_HARD_CAP].closing")" = true ]
-  new_tree
-  unit_dispatch
-  assert_pinned cap
-  [ "$(nrounds)" -eq $((_GAIA_LOOP_HARD_CAP + 1)) ]
 }
 
 @test "deny classes: each gate deny carries its prefix and no fail-loud deny borrows one" {
@@ -1717,29 +1861,19 @@ stop_threshold_case() {
      [entry("rule/x"; "f.txt"; 1; $stop), entry("rule/x"; "f.txt"; 2; $rest), entry("rule/y"; "f.txt"; 8; $rest), entry("rule/q"; "base.txt"; 3; $other)]')"
 }
 
+# bats test_tags=protected
 @test "default stop: a fix on a stop key keeps the checkpoint and leaves the stored default_stop true; a fix only off S keeps the override" {
   below
   stop_threshold_case true
   unit_dispatch
   assert_pinned rubric:enriching || return 1
   [ "$(state_field '.history.rounds[2].snapshot | [.default_stop, has("stop_override")] | tojson')" = '[true,false]' ] || return 1
-  rm -rf "$BATS_TEST_TMPDIR/repo" "$BATS_TEST_TMPDIR/origin.git"
-  alf_init && alf_branch feat/loop
+  fresh_fixture
   below
   stop_threshold_case false
   unit_dispatch
   assert_allowed || return 1
   [ "$(state_field '.history.rounds[2].snapshot | [.default_stop, has("stop_override")] | tojson')" = '[true,false]' ]
-}
-
-@test "default stop: a mutant keying the decision on default_stop instead of the override goes red" {
-  scratch_copy
-  sed -i.bak 's/\.stop_override == true/.default_stop == true/g' "$SCRATCH_SCRIPTS/audit-loop-signals-lib.sh"
-  cmp -s "$SCRATCH_SCRIPTS/audit-loop-signals-lib.sh" "$SCRATCH_SCRIPTS/audit-loop-signals-lib.sh.bak" && return 1
-  below
-  stop_threshold_case true
-  unit_dispatch
-  assert_allowed
 }
 
 # --- the reopened round -----------------------------------------------------------
@@ -1805,100 +1939,112 @@ earn_markers() {
   done
 }
 
-@test "reopen: a veto effective at the next round on the unmoved tree records a reopened round, and the check-all passes the pending veto" {
-  reopen_base
-  veto_at 3
-  below
-  unit_dispatch
-  assert_allowed
-  assert_reopened 3
-}
-
-@test "reopen: a gate failure after the latest round on HEAD's tree records a reopened round" {
-  reopen_base
-  gate_failure 2
-  below
-  unit_dispatch
-  assert_allowed
-  assert_reopened 3
-}
-
-@test "reopen: a gate failure on a tree no round recorded reopens on HEAD's tree after a quick clear, a light clear and a late-pass commit, each past the last reopen" {
-  local ending used
-  reopen_base
-  below
-  for ending in quick-clear light-clear late-pass; do
-    used="$(nrounds)"
-    alf_set_line other.txt 30 "$ending"
-    alf_commit "$ending"
-    gate_failure "$used"
-    unit_dispatch
-    assert_allowed || return 1
-    assert_reopened $((used + 1)) || return 1
+# bats test_tags=protected
+@test "reopen: each cause records a reopened round or declines to" {
+  local row ending used run_folder
+  local rows=(veto-next-round-unmoved-tree gate-failure-after-latest-round gate-failure-on-unrecorded-tree
+    no-cause-later-veto-stale-failure-checkpoint-deny accept-admission dead-unit-successor)
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    fresh_fixture
+    reopen_base
+    run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+    case "$row" in
+      veto-next-round-unmoved-tree)
+        # A veto effective at the next round on the unmoved tree records a
+        # reopened round, and the check-all passes the pending veto.
+        veto_at 3
+        below
+        unit_dispatch
+        assert_allowed
+        assert_reopened 3
+        ;;
+      gate-failure-after-latest-round)
+        # A gate failure after the latest round on HEAD's tree records a reopened round.
+        gate_failure 2
+        below
+        unit_dispatch
+        assert_allowed
+        assert_reopened 3
+        ;;
+      gate-failure-on-unrecorded-tree)
+        # A gate failure on a tree no round recorded reopens on HEAD's tree
+        # after a quick clear, a light clear and a late-pass commit, each past
+        # the last reopen.
+        below
+        for ending in quick-clear light-clear late-pass; do
+          used="$(nrounds)"
+          alf_set_line other.txt 30 "$ending"
+          alf_commit "$ending"
+          gate_failure "$used"
+          unit_dispatch
+          assert_allowed || return 1
+          assert_reopened $((used + 1)) || return 1
+        done
+        [ "$(state_field '[.history.rounds[2,3] | .snapshot | [.verdict, .A]] | tojson')" = '[["quiet",0],["quiet",0]]' ]
+        ;;
+      no-cause-later-veto-stale-failure-checkpoint-deny)
+        # No cause, a later veto, a stale failure tree or round and a
+        # checkpoint deny each record no round, and a veto on a moved tree reopens.
+        below
+        unit_dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 2 ] || return 1
+        veto_at 4
+        unit_dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 2 ] || return 1
+        rm -f "$run_folder/vetoes.json"
+        gate_failure 2 "$(printf 'b%.0s' $(seq 1 40))"
+        unit_dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 2 ] || return 1
+        gate_failure 1
+        unit_dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 2 ] || return 1
+        rm -f "$run_folder/gate-failure.json"
+        veto_at 3
+        above
+        unit_dispatch
+        assert_pinned context || return 1
+        [ "$(nrounds)" -eq 2 ] || return 1
+        below
+        new_tree
+        unit_dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 3 ]
+        ;;
+      accept-admission)
+        # An accept admission runs no fixer, so a pending veto on the unmoved tree records no round.
+        veto_at 3
+        alf_add_checkpoint 2 stalled
+        alf_add_answer 1 accept
+        below
+        unit_dispatch
+        assert_allowed
+        [ "$(state_field '.history.units | last | .admitted_on')" = accept ] || return 1
+        [ "$(nrounds)" -eq 2 ]
+        ;;
+      dead-unit-successor)
+        # A dead unit's successor does not reopen twice on the same tree, for a
+        # re-failed gate or a newer veto.
+        gate_failure 2
+        below
+        unit_dispatch
+        assert_reopened 3 || return 1
+        gate_failure 3
+        unit_dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 3 ] || return 1
+        [ "$(state_field '.history.units | length')" -eq 2 ] || return 1
+        veto_at 4
+        unit_dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 3 ]
+        ;;
+    esac
   done
-  [ "$(state_field '[.history.rounds[2,3] | .snapshot | [.verdict, .A]] | tojson')" = '[["quiet",0],["quiet",0]]' ]
-}
-
-@test "reopen: no cause, a later veto, a stale failure tree or round and a checkpoint deny each record no round, and a veto on a moved tree reopens" {
-  local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
-  reopen_base
-  below
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 2 ] || return 1
-  veto_at 4
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 2 ] || return 1
-  rm -f "$run_folder/vetoes.json"
-  gate_failure 2 "$(printf 'b%.0s' $(seq 1 40))"
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 2 ] || return 1
-  gate_failure 1
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 2 ] || return 1
-  rm -f "$run_folder/gate-failure.json"
-  veto_at 3
-  above
-  unit_dispatch
-  assert_pinned context || return 1
-  [ "$(nrounds)" -eq 2 ] || return 1
-  below
-  new_tree
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 3 ]
-}
-
-@test "reopen: an accept admission runs no fixer, so a pending veto on the unmoved tree records no round" {
-  reopen_base
-  veto_at 3
-  alf_add_checkpoint 2 stalled
-  alf_add_answer 1 accept
-  below
-  unit_dispatch
-  assert_allowed
-  [ "$(state_field '.history.units | last | .admitted_on')" = accept ] || return 1
-  [ "$(nrounds)" -eq 2 ]
-}
-
-@test "reopen: a dead unit's successor does not reopen twice on the same tree, for a re-failed gate or a newer veto" {
-  reopen_base
-  gate_failure 2
-  below
-  unit_dispatch
-  assert_reopened 3 || return 1
-  gate_failure 3
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 3 ] || return 1
-  [ "$(state_field '.history.units | length')" -eq 2 ] || return 1
-  veto_at 4
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 3 ]
 }
 
 @test "reopen: after a default stop the reopened round is quiet with A = 0, and the next wave's round holds the stop over a twin of an accepted triple" {
@@ -1971,65 +2117,4 @@ earn_markers() {
   assert_reopened 4 || return 1
   [ "$(state_field '.history.rounds[2].snapshot.default_stop')" = true ] || return 1
   [ $((end_milliseconds - start_milliseconds)) -lt 10000 ]
-}
-
-# reopen_mutant <sed-expression> <scripts-file|hook>: point HOOK at a scratch
-# copy with that file edited, and prove the edit applied.
-reopen_mutant() {
-  local target
-  scratch_copy
-  target="$SCRATCH_SCRIPTS/$2"
-  [ "$2" != hook ] || target="$HOOK"
-  sed -i.bak "$1" "$target"
-  cmp -s "$target" "$target.bak" && return 1
-  true
-}
-
-# fresh_branch: discard the fixture repository and start again on feat/loop.
-fresh_branch() {
-  rm -rf "$BATS_TEST_TMPDIR/repo" "$BATS_TEST_TMPDIR/origin.git"
-  alf_init && alf_branch feat/loop
-}
-
-@test "reopen: mutants adding a tree test to the veto or the gate failure, dropping the reopened test or the accept test each go red" {
-  reopen_base
-  below
-  reopen_mutant 's/(\$vetoes\[\]; .effective_from_round == \$used + 1)$/($vetoes[]; .effective_from_round == $used + 1) and $unmoved/' audit-veto-lib.sh || return 1
-  veto_at 3
-  new_tree
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 2 ] || return 1
-
-  fresh_branch
-  reopen_base
-  below
-  reopen_mutant 's/\$failure.tree == \$tree)/$failure.tree == $tree and $unmoved)/' audit-veto-lib.sh || return 1
-  new_tree
-  gate_failure 2
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 2 ] || return 1
-
-  fresh_branch
-  reopen_base
-  below
-  reopen_mutant 's/(\$latest.reopened == true and \$unmoved) | not/true/' audit-veto-lib.sh || return 1
-  gate_failure 2
-  unit_dispatch
-  gate_failure 3
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 4 ] || return 1
-
-  fresh_branch
-  reopen_base
-  reopen_mutant 's/\[ "\$admitted_on" != accept \] && //' hook || return 1
-  veto_at 3
-  alf_add_checkpoint 2 stalled
-  alf_add_answer 1 accept
-  below
-  unit_dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 3 ]
 }

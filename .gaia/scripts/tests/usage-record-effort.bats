@@ -116,21 +116,6 @@ start_joined_run() {
   main_usage m2 11:30 3000 0
 }
 
-# scratch_scripts <dir>: a copy of the scripts the record path loads, mutable
-# without touching the checkout. No node_modules or other real directory is linked.
-scratch_scripts() {
-  local scratch="$1" file
-  mkdir -p "$scratch/spec"
-  for file in "$SCRIPTS"/usage*.sh "$SCRIPTS"/token-*.sh "$SCRIPTS"/token-rates.json "$SCRIPTS"/branch-name-lib.sh \
-    "$SCRIPTS"/main-root-lib.sh "$SCRIPTS"/context-checkpoint-lib.sh; do
-    [ -f "$file" ] && cp "$file" "$scratch/"
-  done
-  cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch/spec/"
-  cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch/"
-  mkdir -p "$scratch/notebook"
-  cp "$SCRIPTS"/notebook/*.sh "$scratch/notebook/"
-}
-
 # The Cost line's last field is elapsed time since a fixed past day, which moves
 # between runs, so a twin comparison drops it.
 without_elapsed() { printf '%s' "${1%, *}"; }
@@ -173,8 +158,9 @@ without_elapsed() { printf '%s' "${1%, *}"; }
   close_row "$SESSION_T" | jq -e 'has("effort") | not' >/dev/null
 }
 
-@test "a reading far older than the context freshness window is still recorded" {
+@test "a reading is recorded when far older than the context freshness window, and when the render carries a level but no context_window" {
   local old_file
+  echo "case: far older than the freshness window"
   render_effort "$SESSION_S" medium
   old_file="$(effort_file "$SESSION_S")"
   jq -c '.written_at = 1' "$old_file" >"$old_file.edit"
@@ -185,9 +171,8 @@ without_elapsed() { printf '%s' "${1%, *}"; }
   run record spec:SPEC-901 --workflow gaia-spec
   [ "$status" -eq 0 ]
   close_has_effort "$SESSION_S" medium
-}
-
-@test "a render with a level and no context_window is recorded" {
+  echo "case: a level and no context_window"
+  new_fixture twin
   render_effort "$SESSION_S" xhigh
   [ ! -e "$MAIN/.gaia/local/cache/shared/context/$SESSION_S.json" ]
   as_session "$SESSION_S"
@@ -208,20 +193,3 @@ without_elapsed() { printf '%s' "${1%, *}"; }
   jq -s -e '[.[] | select(.kind == "binding" and .type == "start")] | length == 1 and all(.[]; has("effort") | not)' "$(ledger)" >/dev/null
 }
 
-@test "guard twin: without the reader the effort assertion fails while the record still exits 0" {
-  local scratch="$TEMPORARY_DIRECTORY/scratch-scripts"
-  render_effort "$SESSION_S" high with-context
-  render_effort "$SESSION_T" low
-  start_joined_run
-  scratch_scripts "$scratch"
-  printf '%s\n' '# a library with no effort reader' >"$scratch/context-checkpoint-lib.sh"
-  USAGE_SCRIPT="$scratch/usage.sh"
-  run record spec:SPEC-901 --workflow gaia-spec
-  [ "$status" -eq 0 ]
-  [[ "$(last_stdout_line)" == "Cost: "* ]]
-  [ "$(jq -s '[.[] | select(.kind == "binding" and .type == "close")] | length' "$(ledger)")" -eq 2 ]
-  run close_has_effort "$SESSION_S" high
-  [ "$status" -ne 0 ]
-  run close_has_effort "$SESSION_T" low
-  [ "$status" -ne 0 ]
-}

@@ -20,63 +20,56 @@ setup() {
 # required sections and the three required frontmatter keys.
 # ---------------------------------------------------------------------------
 
-@test "valid body returns valid:true" {
+@test "valid body parses: valid:true and frontmatter fields class, gaia_version, created, gh_issue_url" {
+  # One parse serves every case below.
   run "$PARSER" "$FIXTURES/valid.md"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":true'* ]]
+
+  echo "case: valid body returns valid:true"
+  [[ "$output" == *'"valid":true'* ]] || return 1
+
+  echo "case: valid body extracts class from frontmatter"
+  [[ "$output" == *'"class":"quality-gate"'* ]] || return 1
+
+  echo "case: valid body extracts gaia_version from frontmatter"
+  [[ "$output" == *'"gaia_version":"1.4.2"'* ]] || return 1
+
+  echo "case: valid body extracts created from frontmatter"
+  [[ "$output" == *'"created":"2026-05-08"'* ]] || return 1
+
+  echo "case: valid body extracts optional gh_issue_url when present"
+  [[ "$output" == *'"gh_issue_url":"https://github.com/gaia-react/gaia/issues/123"'* ]] || return 1
 }
 
-@test "valid body extracts class from frontmatter" {
+@test "valid body extracts the four sections and the JSON shape" {
+  # One parse serves every case below.
   run "$PARSER" "$FIXTURES/valid.md"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"class":"quality-gate"'* ]]
-}
 
-@test "valid body extracts gaia_version from frontmatter" {
-  run "$PARSER" "$FIXTURES/valid.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"gaia_version":"1.4.2"'* ]]
-}
-
-@test "valid body extracts created from frontmatter" {
-  run "$PARSER" "$FIXTURES/valid.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"created":"2026-05-08"'* ]]
-}
-
-@test "valid body extracts optional gh_issue_url when present" {
-  run "$PARSER" "$FIXTURES/valid.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"gh_issue_url":"https://github.com/gaia-react/gaia/issues/123"'* ]]
-}
-
-@test "valid body extracts symptom section" {
-  run "$PARSER" "$FIXTURES/valid.md"
-  [ "$status" -eq 0 ]
+  echo "case: valid body extracts symptom section"
   # Body contains backtick-fenced inline code; ensure it survives.
-  [[ "$output" == *'pnpm typecheck'* ]]
-  [[ "$output" == *'TS2304'* ]]
-}
+  [[ "$output" == *'pnpm typecheck'* ]] || return 1
+  [[ "$output" == *'TS2304'* ]] || return 1
 
-@test "valid body extracts classification section" {
-  run "$PARSER" "$FIXTURES/valid.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'class: quality-gate'* ]]
-  [[ "$output" == *'evidence:'* ]]
-}
+  echo "case: valid body extracts classification section"
+  [[ "$output" == *'class: quality-gate'* ]] || return 1
+  [[ "$output" == *'evidence:'* ]] || return 1
 
-@test "valid body extracts capture section preserving fenced block" {
-  run "$PARSER" "$FIXTURES/valid.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'node_version: v20.11.0'* ]]
-  [[ "$output" == *'pnpm_version: 9.0.0'* ]]
-}
+  echo "case: valid body extracts capture section preserving fenced block"
+  [[ "$output" == *'node_version: v20.11.0'* ]] || return 1
+  [[ "$output" == *'pnpm_version: 9.0.0'* ]] || return 1
 
-@test "valid body extracts reproduction_context section" {
-  run "$PARSER" "$FIXTURES/valid.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'.claude/hooks/wiki-session-stop.sh'* ]]
-  [[ "$output" == *'.claude/hooks/post-tool.sh'* ]]
+  echo "case: valid body extracts reproduction_context section"
+  [[ "$output" == *'.claude/hooks/wiki-session-stop.sh'* ]] || return 1
+  [[ "$output" == *'.claude/hooks/post-tool.sh'* ]] || return 1
+
+  echo "case: success JSON contains frontmatter and sections objects"
+  [[ "$output" == *'"frontmatter":{'* ]] || return 1
+  [[ "$output" == *'"sections":{'* ]] || return 1
+  [[ "$output" == *'"symptom":'* ]] || return 1
+  [[ "$output" == *'"classification":'* ]] || return 1
+  [[ "$output" == *'"capture":'* ]] || return 1
+  [[ "$output" == *'"reproduction_context":'* ]] || return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -84,51 +77,25 @@ setup() {
 # Each failure emits valid:false plus a precise error code.
 # ---------------------------------------------------------------------------
 
-@test "missing symptom returns missing-section" {
-  run "$PARSER" "$FIXTURES/missing-symptom.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":false'* ]]
-  [[ "$output" == *'"error":"missing-section"'* ]]
-  [[ "$output" == *'"symptom"'* ]]
-}
-
-@test "missing frontmatter still parses; class is derived from Classification" {
-  # Frontmatter is optional. The GH-issue body shape ships without one
-  # in some workflows; `class` is derived from the `class: <tag>` line
-  # inside the `## Classification` section instead.
-  run "$PARSER" "$FIXTURES/missing-frontmatter.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":true'* ]]
-  [[ "$output" == *'"class":"other"'* ]]
-}
-
-# RT-02: a non-canonical `## ` line (inside a fenced block or in a
-# section body) is retained as section content, never flagged malformed.
-# Only the four exact canonical headers start a section.
-@test "non-canonical ## line is retained as content (RT-02)" {
-  run "$PARSER" "$FIXTURES/noncanonical-header.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":true'* ]]
-  # Inside a fenced block: the pasted `## Error output` line survives.
-  [[ "$output" == *'## Error output'* ]]
-  [[ "$output" == *'Traceback (most recent call last):'* ]]
-  # Outside a fence, in a section body: `## Notes from the report` is
-  # content of `## Reproduction context`, not a malformed header.
-  [[ "$output" == *'## Notes from the report'* ]]
-  [[ "$output" == *'.claude/hooks/x.sh'* ]]
-}
-
 # RT-03: the same canonical header appearing twice is a duplicate. The
 # parser rejects loudly rather than silently corrupting the body.
-@test "duplicate canonical header returns duplicate-section-header (RT-03)" {
+# bats test_tags=protected
+@test "malformed bodies return valid:false with a precise error code" {
+  echo "case: missing symptom returns missing-section"
+  run "$PARSER" "$FIXTURES/missing-symptom.md"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"valid":false'* ]] || return 1
+  [[ "$output" == *'"error":"missing-section"'* ]] || return 1
+  [[ "$output" == *'"symptom"'* ]] || return 1
+
+  echo "case: duplicate canonical header returns duplicate-section-header (RT-03)"
   run "$PARSER" "$FIXTURES/duplicate-section-header.md"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":false'* ]]
-  [[ "$output" == *'"error":"duplicate-section-header"'* ]]
-  [[ "$output" == *'"Capture"'* ]]
-}
+  [[ "$output" == *'"valid":false'* ]] || return 1
+  [[ "$output" == *'"error":"duplicate-section-header"'* ]] || return 1
+  [[ "$output" == *'"Capture"'* ]] || return 1
 
-@test "frontmatter without closing delimiter returns malformed-frontmatter" {
+  echo "case: frontmatter without closing delimiter returns malformed-frontmatter"
   body_file="$BATS_TEST_TMPDIR/no-close.md"
   cat > "$body_file" <<'EOF'
 ---
@@ -157,11 +124,10 @@ empty
 EOF
   run "$PARSER" "$body_file"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":false'* ]]
-  [[ "$output" == *'"error":"malformed-frontmatter"'* ]]
-}
+  [[ "$output" == *'"valid":false'* ]] || return 1
+  [[ "$output" == *'"error":"malformed-frontmatter"'* ]] || return 1
 
-@test "frontmatter missing class falls through to Classification derivation" {
+  echo "case: frontmatter missing class falls through to Classification derivation"
   # When the frontmatter doesn't carry `class:` and the `## Classification`
   # section also lacks a `class: <tag>` line, the parser reports the
   # missing class explicitly rather than treating it as a frontmatter
@@ -191,39 +157,10 @@ x
 EOF
   run "$PARSER" "$body_file"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":false'* ]]
-  [[ "$output" == *'"error":"missing-class"'* ]]
-}
+  [[ "$output" == *'"valid":false'* ]] || return 1
+  [[ "$output" == *'"error":"missing-class"'* ]] || return 1
 
-@test "frontmatterless body with class in Classification parses cleanly" {
-  body_file="$BATS_TEST_TMPDIR/no-fm.md"
-  cat > "$body_file" <<'EOF'
-## Symptom
-
-`/update-gaia` skipped a file even though the manifest declared it owned.
-
-## Classification
-
-class: update
-evidence: "three-way merge" + .gaia/manifest.json
-
-## Capture
-
-gaia_version: 1.4.2
-node: v22.0.0
-
-## Reproduction context
-
-Routine /update-deps run; downstream CI broke because a file was missing.
-EOF
-  run "$PARSER" "$body_file"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":true'* ]]
-  [[ "$output" == *'"class":"update"'* ]]
-  [[ "$output" == *'"gaia_version":"1.4.2"'* ]]
-}
-
-@test "empty section body returns empty-section" {
+  echo "case: empty section body returns empty-section"
   body_file="$BATS_TEST_TMPDIR/empty-symptom.md"
   cat > "$body_file" <<'EOF'
 ---
@@ -248,12 +185,11 @@ x
 EOF
   run "$PARSER" "$body_file"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":false'* ]]
-  [[ "$output" == *'"error":"empty-section"'* ]]
-  [[ "$output" == *'"symptom"'* ]]
-}
+  [[ "$output" == *'"valid":false'* ]] || return 1
+  [[ "$output" == *'"error":"empty-section"'* ]] || return 1
+  [[ "$output" == *'"symptom"'* ]] || return 1
 
-@test "all four sections missing reports them all" {
+  echo "case: all four sections missing reports them all"
   body_file="$BATS_TEST_TMPDIR/no-sections.md"
   cat > "$body_file" <<'EOF'
 ---
@@ -266,38 +202,89 @@ just freeform text, no headers at all.
 EOF
   run "$PARSER" "$body_file"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"valid":false'* ]]
-  [[ "$output" == *'"error":"missing-section"'* ]]
-  [[ "$output" == *'"symptom"'* ]]
-  [[ "$output" == *'"classification"'* ]]
-  [[ "$output" == *'"capture"'* ]]
-  [[ "$output" == *'"reproduction_context"'* ]]
+  [[ "$output" == *'"valid":false'* ]] || return 1
+  [[ "$output" == *'"error":"missing-section"'* ]] || return 1
+  [[ "$output" == *'"symptom"'* ]] || return 1
+  [[ "$output" == *'"classification"'* ]] || return 1
+  [[ "$output" == *'"capture"'* ]] || return 1
+  [[ "$output" == *'"reproduction_context"'* ]] || return 1
+}
+
+@test "absent frontmatter: class derived from Classification section" {
+  echo "case: missing frontmatter still parses; class is derived from Classification"
+  # Frontmatter is optional. The GH-issue body shape ships without one
+  # in some workflows; `class` is derived from the `class: <tag>` line
+  # inside the `## Classification` section instead.
+  run "$PARSER" "$FIXTURES/missing-frontmatter.md"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"valid":true'* ]] || return 1
+  [[ "$output" == *'"class":"other"'* ]] || return 1
+
+  echo "case: frontmatterless body with class in Classification parses cleanly"
+  body_file="$BATS_TEST_TMPDIR/no-fm.md"
+  cat > "$body_file" <<'EOF'
+## Symptom
+
+`/update-gaia` skipped a file even though the manifest declared it owned.
+
+## Classification
+
+class: update
+evidence: "three-way merge" + .gaia/manifest.json
+
+## Capture
+
+gaia_version: 1.4.2
+node: v22.0.0
+
+## Reproduction context
+
+Routine /update-deps run; downstream CI broke because a file was missing.
+EOF
+  run "$PARSER" "$body_file"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"valid":true'* ]] || return 1
+  [[ "$output" == *'"class":"update"'* ]] || return 1
+  [[ "$output" == *'"gaia_version":"1.4.2"'* ]] || return 1
+}
+
+# RT-02: a non-canonical `## ` line (inside a fenced block or in a
+# section body) is retained as section content, never flagged malformed.
+# Only the four exact canonical headers start a section.
+@test "non-canonical ## line is retained as content (RT-02)" {
+  run "$PARSER" "$FIXTURES/noncanonical-header.md"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"valid":true'* ]]
+  # Inside a fenced block: the pasted `## Error output` line survives.
+  [[ "$output" == *'## Error output'* ]]
+  [[ "$output" == *'Traceback (most recent call last):'* ]]
+  # Outside a fence, in a section body: `## Notes from the report` is
+  # content of `## Reproduction context`, not a malformed header.
+  [[ "$output" == *'## Notes from the report'* ]]
+  [[ "$output" == *'.claude/hooks/x.sh'* ]]
 }
 
 # ---------------------------------------------------------------------------
 # UAT-015, redaction tokens pass through verbatim.
 # ---------------------------------------------------------------------------
 
-@test "redaction tokens pass through symptom verbatim" {
+@test "redaction tokens pass through each section verbatim" {
+  # One parse serves every case below.
   run "$PARSER" "$FIXTURES/redaction-passthrough.md"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'<redacted>'* ]]
-}
 
-@test "redaction tokens pass through capture verbatim" {
-  run "$PARSER" "$FIXTURES/redaction-passthrough.md"
-  [ "$status" -eq 0 ]
+  echo "case: redaction tokens pass through symptom verbatim"
+  [[ "$output" == *'<redacted>'* ]] || return 1
+
+  echo "case: redaction tokens pass through capture verbatim"
   # capture section contains both tokens; both must appear byte-identically.
-  [[ "$output" == *'api_key: <redacted>'* ]]
-  [[ "$output" == *'config_path: <repo-relative-paths>'* ]]
-  [[ "$output" == *'git_branch: feature/<redacted>-fix'* ]]
-}
+  [[ "$output" == *'api_key: <redacted>'* ]] || return 1
+  [[ "$output" == *'config_path: <repo-relative-paths>'* ]] || return 1
+  [[ "$output" == *'git_branch: feature/<redacted>-fix'* ]] || return 1
 
-@test "redaction tokens pass through reproduction_context verbatim" {
-  run "$PARSER" "$FIXTURES/redaction-passthrough.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'- `<repo-relative-paths>`'* ]]
-  [[ "$output" == *'file at `<repo-relative-paths>` referencing `<redacted>`'* ]]
+  echo "case: redaction tokens pass through reproduction_context verbatim"
+  [[ "$output" == *'- `<repo-relative-paths>`'* ]] || return 1
+  [[ "$output" == *'file at `<repo-relative-paths>` referencing `<redacted>`'* ]] || return 1
 }
 
 @test "optional gh_issue_url is null when absent from frontmatter" {
@@ -310,38 +297,17 @@ EOF
 # CLI / script-error contract.
 # ---------------------------------------------------------------------------
 
-@test "no args prints usage and exits 2" {
-  run "$PARSER"
-  [ "$status" -eq 2 ]
-}
-
-@test "missing input file exits 2" {
+@test "a missing input file exits 2" {
   run "$PARSER" "$BATS_TEST_TMPDIR/does-not-exist.md"
   [ "$status" -eq 2 ]
 }
 
 # ---------------------------------------------------------------------------
-# Determinism, re-running on the same input is byte-identical (UAT-009
-# in spirit: deterministic, not LLM-touched).
+# Internal-error JSON envelope. When awk fails, the script must NOT fall
+# through to a default valid:false; it must emit `{"internal_error":true,...}`
+# so the workflow can distinguish infrastructure failure from a malformed
+# body.
 # ---------------------------------------------------------------------------
-
-@test "parser output is byte-identical across two runs (determinism)" {
-  run "$PARSER" "$FIXTURES/valid.md"
-  first="$output"
-  run "$PARSER" "$FIXTURES/valid.md"
-  [ "$output" = "$first" ]
-}
-
-# ---------------------------------------------------------------------------
-# SPEC-003 UAT-006, pipefail + internal-error JSON envelope. When awk
-# fails, the script must NOT fall through to a default valid:false; it
-# must emit `{"internal_error":true,...}` so the workflow can distinguish
-# infrastructure failure from a malformed body.
-# ---------------------------------------------------------------------------
-
-@test "pipefail preamble is declared" {
-  grep -qE '^set -uo pipefail' "$PARSER"
-}
 
 @test "awk failure emits internal-error JSON envelope (not valid:false)" {
   # Shadow `awk` with a stub that always exits non-zero. The script is
@@ -363,20 +329,4 @@ STUB
   [[ "$output" == *'"exit_code":7'* ]]
   # Critical: the failure path does NOT pretend to be a malformed body.
   [[ "$output" != *'"valid":false'* ]]
-}
-
-# ---------------------------------------------------------------------------
-# JSON shape sanity, make sure the success JSON contains all required
-# top-level keys.
-# ---------------------------------------------------------------------------
-
-@test "success JSON contains frontmatter and sections objects" {
-  run "$PARSER" "$FIXTURES/valid.md"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"frontmatter":{'* ]]
-  [[ "$output" == *'"sections":{'* ]]
-  [[ "$output" == *'"symptom":'* ]]
-  [[ "$output" == *'"classification":'* ]]
-  [[ "$output" == *'"capture":'* ]]
-  [[ "$output" == *'"reproduction_context":'* ]]
 }

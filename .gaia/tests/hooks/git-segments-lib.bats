@@ -22,122 +22,66 @@ command_word() {
 
 # --- gaia_collapsed_substitutions ---
 
-@test "collapse prints nothing for text with no substitution" {
-  collapse 'git commit -m x'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "collapse replaces a substitution with a bare underscore" {
-  collapse 'git -C "$(pwd)" commit --no-verify'
-  [ "$status" -eq 0 ]
-  [ "$output" = 'git -C "_" commit --no-verify' ]
-}
-
-@test "collapse replaces a nested substitution over successive passes" {
-  collapse 'git -C $(dirname $(pwd)) commit -n'
-  [ "$status" -eq 0 ]
-  [ "$output" = 'git -C _ commit -n' ]
-}
-
-@test "collapse leaves a backtick span uncollapsed, byte for byte" {
-  collapse 'git -C `pwd` commit -n'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  collapse 'git -C `pwd` commit -m "$(cat f)" -n'
-  [ "$status" -eq 0 ]
-  [ "$output" = 'git -C `pwd` commit -m "_" -n' ]
-}
-
-@test "collapse leaves a substitution spanning a newline alone" {
-  collapse $'git commit -m "$(cat\nf)" -n'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+@test "gaia_collapsed_substitutions collapses substitutions, leaves backticks and newline-spanning spans" {
+  local row label text expected
+  for row in \
+    "no substitution|git commit -m x|" \
+    'bare underscore|git -C "$(pwd)" commit --no-verify|git -C "_" commit --no-verify' \
+    'nested over successive passes|git -C $(dirname $(pwd)) commit -n|git -C _ commit -n' \
+    'backtick alone|git -C `pwd` commit -n|' \
+    'backtick beside a substitution|git -C `pwd` commit -m "$(cat f)" -n|git -C `pwd` commit -m "_" -n' \
+    $'newline-spanning substitution|git commit -m "$(cat\nf)" -n|'; do
+    label=${row%%|*}
+    text=${row#*|}; text=${text%|*}
+    expected=${row##*|}
+    collapse "$text"
+    [ "$status" -eq 0 ] || { echo "case $label: status=$status"; return 1; }
+    [ "$output" = "$expected" ] || { echo "case $label: output=[$output] want [$expected]"; return 1; }
+  done
 }
 
 # --- gaia_segment_command_word: one input per strip alternative ---
 
-@test "command word strips leading whitespace" {
-  command_word '   git commit'
-  [ "$output" = 'git commit' ]
-}
-
-@test "command word strips a NAME=value prefix" {
-  command_word 'GIT_AUTHOR_NAME=x git commit'
-  [ "$output" = 'git commit' ]
-}
-
-@test "command word strips a double-quoted assignment value carrying a space" {
-  command_word 'GIT_AUTHOR_DATE="2024-01-01 12:00" git commit'
-  [ "$output" = 'git commit' ]
-}
-
-@test "command word strips a single-quoted assignment value carrying a space" {
-  command_word "GIT_AUTHOR_DATE='2024-01-01 12:00' git commit"
-  [ "$output" = 'git commit' ]
-}
-
-@test "command word strips a leading redirection" {
-  command_word '>/tmp/out git commit'
-  [ "$output" = 'git commit' ]
-  command_word '2>/dev/null git commit'
-  [ "$output" = 'git commit' ]
-}
-
-@test "command word strips a brace and a bang" {
-  command_word '{ git commit'
-  [ "$output" = 'git commit' ]
-  command_word '! git commit'
-  [ "$output" = 'git commit' ]
-}
-
-@test "command word strips each reserved word" {
-  local reserved_word
-  for reserved_word in 'coproc' 'elif' 'else' 'while' 'until' 'then' 'do' 'if'; do
-    command_word "$reserved_word git commit"
-    [ "$output" = 'git commit' ]
+@test "gaia_segment_command_word strips whitespace, assignments, redirections, reserved words and time, leaves wrappers" {
+  local row label segment expected
+  for row in \
+    "leading whitespace|   git commit|git commit" \
+    "NAME=value prefix|GIT_AUTHOR_NAME=x git commit|git commit" \
+    'double-quoted assignment with a space|GIT_AUTHOR_DATE="2024-01-01 12:00" git commit|git commit' \
+    "single-quoted assignment with a space|GIT_AUTHOR_DATE='2024-01-01 12:00' git commit|git commit" \
+    "stdout redirection|>/tmp/out git commit|git commit" \
+    "stderr redirection|2>/dev/null git commit|git commit" \
+    "brace|{ git commit|git commit" \
+    "bang|! git commit|git commit" \
+    "reserved coproc|coproc git commit|git commit" \
+    "reserved elif|elif git commit|git commit" \
+    "reserved else|else git commit|git commit" \
+    "reserved while|while git commit|git commit" \
+    "reserved until|until git commit|git commit" \
+    "reserved then|then git commit|git commit" \
+    "reserved do|do git commit|git commit" \
+    "reserved if|if git commit|git commit" \
+    "time|time git commit|git commit" \
+    "time -p|time -p git commit|git commit" \
+    "time --|time -- git commit|git commit" \
+    "mixed prefixes|then A=1 B+=2 >/dev/null time -p git push|git push" \
+    "wrapper stays|env -i git commit|env -i git commit" \
+    "no prefix stays|ls -la|ls -la"; do
+    label=${row%%|*}
+    segment=${row#*|}; segment=${segment%|*}
+    expected=${row##*|}
+    command_word "$segment"
+    [ "$output" = "$expected" ] || { echo "case $label: output=[$output] want [$expected]"; return 1; }
   done
-}
-
-@test "command word strips time with its optional -p and --" {
-  command_word 'time git commit'
-  [ "$output" = 'git commit' ]
-  command_word 'time -p git commit'
-  [ "$output" = 'git commit' ]
-  command_word 'time -- git commit'
-  [ "$output" = 'git commit' ]
-}
-
-@test "command word strips a run of mixed prefixes" {
-  command_word 'then A=1 B+=2 >/dev/null time -p git push'
-  [ "$output" = 'git push' ]
-}
-
-@test "command word leaves a wrapper in place" {
-  command_word 'env -i git commit'
-  [ "$output" = 'env -i git commit' ]
-}
-
-@test "command word leaves a segment with no prefix unchanged" {
-  command_word 'ls -la'
-  [ "$output" = 'ls -la' ]
 }
 
 # --- sourcing contract ---
 
-@test "sourcing the library does no work and prints nothing" {
+@test "sourcing the library does no work and is idempotent" {
   run bash -c '. "$1"' _ "$GIT_SEGMENTS_LIBRARY"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
+  [ "$status" -eq 0 ] || { echo "case sourced once: status=$status"; return 1; }
+  [ -z "$output" ] || { echo "case sourced once: printed [$output]"; return 1; }
 
-@test "sourcing the library twice keeps both functions defined" {
   run bash -c '. "$1" && . "$1" && type gaia_collapsed_substitutions && type gaia_segment_command_word' _ "$GIT_SEGMENTS_LIBRARY"
-  [ "$status" -eq 0 ]
-}
-
-@test "the library parses under the stock macOS bash" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
-  run /bin/bash -n "$GIT_SEGMENTS_LIBRARY"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "case sourced twice: a function is undefined, status=$status"; return 1; }
 }

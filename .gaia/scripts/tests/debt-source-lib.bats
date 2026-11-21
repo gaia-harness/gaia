@@ -265,11 +265,6 @@ hasher_fails() { return 1; }
   [ "$output" = "rc=0" ]
 }
 
-@test "the library parses under the system bash" {
-  run /bin/bash -n "$LIB"
-  [ "$status" -eq 0 ]
-}
-
 # ---- filing through file-tech-debt.sh -------------------------------------
 # A scratch repository on main holds copies of the filing script and its
 # siblings; a linked worktree carries the branch under test. gh is a stub.

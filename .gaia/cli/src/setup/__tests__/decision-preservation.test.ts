@@ -23,17 +23,6 @@ describe('machine decisions across setup-state writes', () => {
     now: () => new Date('2026-01-02T03:04:05.000Z'),
   });
 
-  const expectDecisionKept = (): void => {
-    expect(readStateJson(sandbox.root).decisions).toEqual({
-      'mach-a': 'declined',
-    });
-    out.length = 0;
-    runDrift(['--json'], {cwd: sandbox.root});
-    expect(
-      JSON.parse(out.join('')).undecided.map((entry: {id: string}) => entry.id)
-    ).not.toContain('mach-a');
-  };
-
   beforeEach(() => {
     sandbox = setupSandbox('gaia-setup-decisions-kept-');
     out = [];
@@ -54,42 +43,63 @@ describe('machine decisions across setup-state writes', () => {
     vi.restoreAllMocks();
   });
 
-  test('mark-step keeps the decision', () => {
-    expect(runMarkStep(['install-tools'], cwd())).toBe(EXIT_CODES.OK);
-    expectDecisionKept();
-  });
+  test.each([
+    {
+      act: () => runMarkStep(['install-tools'], cwd()),
+      decision: 'declined',
+      name: 'mark-step keeps the decision',
+      state: {},
+    },
+    {
+      act: () => {
+        for (const step of [
+          'install-tools',
+          'install-plugins',
+          'chmod-statusline',
+          'bootstrap-env',
+        ]) {
+          runMarkStep([step], cwd());
+        }
 
-  test('finalize keeps the decision', () => {
-    for (const step of [
-      'install-tools',
-      'install-plugins',
-      'chmod-statusline',
-      'bootstrap-env',
-    ]) {
-      runMarkStep([step], cwd());
-    }
+        return runFinalize([], cwd());
+      },
+      decision: 'declined',
+      name: 'finalize keeps the decision',
+      state: {completed_at: expect.any(String)},
+    },
+    {
+      act: () => runFinalize(['--force'], cwd()),
+      decision: 'declined',
+      name: 'finalize --force with a pending step keeps the decision',
+      state: {completed_steps: []},
+    },
+    {
+      act: () => {
+        const statePath = resolveStateFilePath(sandbox.root);
+        writeFileSync(
+          statePath,
+          JSON.stringify({...readStateJson(sandbox.root), admin: true}),
+          'utf8'
+        );
+        runMarkStep(['install-tools'], cwd());
+        runRecord(['mach-a', 'applied'], cwd());
 
-    expect(runFinalize([], cwd())).toBe(EXIT_CODES.OK);
-    expect(readStateJson(sandbox.root).completed_at).not.toBeNull();
-    expectDecisionKept();
-  });
+        return runFinalize(['--force'], cwd());
+      },
+      decision: 'applied',
+      name: 'mark-step, record and finalize keep the cached admin answer',
+      state: {admin: true},
+    },
+  ])('$name', ({act, decision, state}) => {
+    expect(act()).toBe(EXIT_CODES.OK);
 
-  test('finalize --force with a pending step keeps the decision', () => {
-    expect(runFinalize(['--force'], cwd())).toBe(EXIT_CODES.OK);
-    expect(readStateJson(sandbox.root).completed_steps).toEqual([]);
-    expectDecisionKept();
-  });
-
-  test('mark-step, record and finalize keep the cached admin answer', () => {
-    const statePath = resolveStateFilePath(sandbox.root);
-    writeFileSync(
-      statePath,
-      JSON.stringify({...readStateJson(sandbox.root), admin: true}),
-      'utf8'
-    );
-    runMarkStep(['install-tools'], cwd());
-    runRecord(['mach-a', 'applied'], cwd());
-    runFinalize(['--force'], cwd());
-    expect(readStateJson(sandbox.root).admin).toBe(true);
+    const written = readStateJson(sandbox.root);
+    expect(written).toMatchObject(state);
+    expect(written.decisions).toEqual({'mach-a': decision});
+    out.length = 0;
+    runDrift(['--json'], {cwd: sandbox.root});
+    expect(
+      JSON.parse(out.join('')).undecided.map((entry: {id: string}) => entry.id)
+    ).not.toContain('mach-a');
   });
 });

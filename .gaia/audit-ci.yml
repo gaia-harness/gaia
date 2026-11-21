@@ -207,15 +207,12 @@ auditors:
       # can judge that is the one holding the script carrying the digest pin.
       # An `unowned:` entry would let a swapped blob dispatch nobody.
       - ".gaia/tests/vendor/**"
-      # Executable fixtures under the scripts' test tree. The `.jq` and `.sed`
-      # mutants are programs the bats suites run to prove a guard can fail, and
-      # `SHA256SUMS` pins the baseline copies that arm the byte-identity guard.
-      # Granted rather than declared unowned: a swapped mutant or baseline
-      # would quietly disarm a guard, so it should dispatch the reviewer who
-      # owns those suites. Scoped to `tests/fixtures` so no other `.jq`, `.sed`
-      # or `SHA256SUMS` file is claimed by accident.
-      - ".gaia/scripts/tests/fixtures/**/*.jq"
-      - ".gaia/scripts/tests/fixtures/**/*.sed"
+      # `SHA256SUMS` under the scripts' test fixtures pins the baseline copies
+      # that arm the byte-identity guard. Granted rather than declared unowned:
+      # a swapped baseline would quietly disarm the guard, so it should
+      # dispatch the reviewer who owns the bats suites that check it. Scoped
+      # to `tests/fixtures` so no other `SHA256SUMS` file is claimed by
+      # accident.
       - ".gaia/scripts/tests/fixtures/**/SHA256SUMS"
       # The hooks suites run awk fixtures too: a frozen copy of an earlier
       # parser that a compatibility test executes beside the current one.
@@ -283,6 +280,7 @@ auditors:
     light_hard_full:
       - ".claude/hooks/pr-merge-audit-check.sh"
       - ".claude/hooks/post-audit-status.sh"
+      - ".claude/hooks/lib/post-audit-status-gates.sh"
       - ".claude/hooks/audit-loop-bound.sh"
       - ".gaia/scripts/audit-write-clearance.sh"
       - ".gaia/scripts/audit-write-clearance-args.sh"
@@ -292,12 +290,15 @@ auditors:
       - ".gaia/scripts/audit-write-clearance-ledger.sh"
       - ".gaia/scripts/audit-dispositions-check.sh"
       - ".gaia/scripts/audit-veto-lib.sh"
+      - ".gaia/scripts/audit-loop-stop-lib.sh"
       - ".gaia/scripts/audit-triage-lib.sh"
       - ".gaia/scripts/audit-gate-owed.sh"
       - ".gaia/scripts/audit-pr-sections-lib.sh"
       - ".gaia/scripts/audit-recorded-decision-lib.sh"
       - ".gaia/scripts/filing-outcomes-lib.sh"
       - ".gaia/scripts/audit-fix-verify.sh"
+      - ".gaia/scripts/audit-fix-verify-state-lib.sh"
+      - ".gaia/scripts/audit-fix-verify-check-lib.sh"
       - ".gaia/scripts/audit-light-route.sh"
       - ".gaia/scripts/audit-light-mark.sh"
       - ".claude/hooks/lib/audit-light-route-lib.sh"

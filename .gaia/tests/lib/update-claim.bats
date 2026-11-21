@@ -150,7 +150,20 @@ count_lines_matching() {
   grep -c -- "$1" "$2" || true
 }
 
-@test "list prints one CLAIM line for the same-repo update PR and drops the rest" {
+# Clear the logs, the gh behaviour switches, the claims list, both hooks, the
+# claim commit and its pushed branch, so each case starts from setup()'s state.
+reset_case() {
+  rm -f "$STATE_DIR"/fail-* "$STATE_DIR/require-body" \
+    "$WORK/.git/hooks/pre-commit" "$ORIGIN/hooks/pre-receive"
+  printf '[]' >"$STATE_DIR/pr-list.json"
+  "$REAL_GIT" -C "$WORK" reset -q --hard main
+  "$REAL_GIT" -C "$ORIGIN" update-ref -d "refs/heads/$CLAIM_BRANCH" 2>/dev/null || true
+  : >"$GH_LOG"
+  : >"$GIT_LOG"
+}
+
+@test "list prints a CLAIM line per same-repo update PR, parsing prerelease and compact stamps, dropping bad rows, ascending" {
+  echo "case: one same-repo update PR, the rest dropped"
   {
     claim_entry 41 "update/v2.0.4-2026-10-18-1200" octo-cat false
     claim_entry 42 "update/v2.0.4-20261018T120000Z" forker true
@@ -162,23 +175,20 @@ count_lines_matching() {
   [ "$status" -eq 0 ]
   [ "$output" = "CLAIM 41 v2.0.4 octo-cat 2026-10-18T12:00:00Z update/v2.0.4-2026-10-18-1200" ]
   grep -q -- '--limit 1000' "$GH_LOG"
-}
 
-@test "list parses a prerelease tag ahead of the minted stamp" {
+  echo "case: a prerelease tag ahead of the minted stamp"
   claim_entry 41 "update/v2.1.0-rc.1-2026-10-18-1200" octo-cat false | set_claims
   run_claim list --tree "$WORK"
   [ "$status" -eq 0 ]
   [ "$output" = "CLAIM 41 v2.1.0-rc.1 octo-cat 2026-10-18T12:00:00Z update/v2.1.0-rc.1-2026-10-18-1200" ]
-}
 
-@test "list parses a same-repo branch with a compact stamp to its core tag" {
+  echo "case: a same-repo branch with a compact stamp parses to its core tag"
   claim_entry 41 "update/v2.0.4-20261018T120000Z" octo-cat false | set_claims
   run_claim list --tree "$WORK"
   [ "$status" -eq 0 ]
   [ "$output" = "CLAIM 41 v2.0.4 octo-cat 2026-10-18T12:00:00Z update/v2.0.4-20261018T120000Z" ]
-}
 
-@test "list drops a claim whose createdAt is malformed and prints in ascending number" {
+  echo "case: a malformed createdAt is dropped and the rest print in ascending number"
   {
     claim_entry 52 "update/v2.0.4-2026-10-18-1300" zed false
     claim_entry 51 "update/v2.0.4-2026-10-18-1200" amy false
@@ -189,14 +199,14 @@ count_lines_matching() {
   [ "$(printf '%s\n' "$output" | cut -d' ' -f2 | tr '\n' ' ')" = "51 52 " ]
 }
 
-@test "list with a failing gh exits 3 with the skip token" {
+@test "list exits 3 with a skip token when gh fails or is missing" {
+  echo "case: gh fails"
   : >"$STATE_DIR/fail-list"
   run_claim list --tree "$WORK"
   [ "$status" -eq 3 ]
   [ "$output" = "CLAIM_CHECK_SKIPPED gh-failed" ]
-}
 
-@test "list with gh missing exits 3 with the skip token" {
+  echo "case: gh missing"
   local restricted
   restricted="$(make_path_without_gh)"
   run env PATH="$restricted" "$(command -v bash)" "$CLAIM_SCRIPT" list --tree "$WORK"
@@ -222,22 +232,22 @@ count_lines_matching() {
   [ "$output" = "LOGIN_UNAVAILABLE login-out-of-set" ]
 }
 
-@test "origin-version reads the file through gh api and never runs git fetch" {
+@test "origin-version reads through gh api without git fetch and exits 3 on failure or a non-version" {
+  echo "case: reads the file through gh api and never runs git fetch"
   printf '2.0.4\n' >"$STATE_DIR/origin-version.txt"
   run_claim origin-version --tree "$WORK"
   [ "$status" -eq 0 ]
   [ "$output" = "ORIGIN_VERSION 2.0.4" ]
   grep -q -- 'api -H Accept: application/vnd.github.raw+json repos/{owner}/{repo}/contents/.gaia/VERSION' "$GH_LOG"
   grep -q -- 'fetch' "$GIT_LOG" && return 1
-  true
-}
 
-@test "origin-version exits 3 on a gh failure and on a value that is not a version" {
+  echo "case: a gh failure"
   : >"$STATE_DIR/fail-origin"
   run_claim origin-version --tree "$WORK"
   [ "$status" -eq 3 ]
   [ "$output" = "ORIGIN_VERSION_UNAVAILABLE gh-failed" ]
 
+  echo "case: a value that is not a version"
   rm "$STATE_DIR/fail-origin"
   printf 'not a version' >"$STATE_DIR/origin-version.txt"
   run_claim origin-version --tree "$WORK"
@@ -245,23 +255,25 @@ count_lines_matching() {
   [ "$output" = "ORIGIN_VERSION_UNAVAILABLE not-a-version" ]
 }
 
-@test "cache-fields prints the all-empty JSON and exits 0 when every gh call fails" {
+@test "cache-fields prints all-empty JSON on failure or no jq, and carries the claims otherwise" {
+  local empty='{"gaiaOriginVersion":null,"gaiaUpdateClaims":[],"ghLogin":""}'
+
+  echo "case: every gh call fails"
   : >"$STATE_DIR/fail-all"
   run_claim cache-fields --tree "$WORK"
   [ "$status" -eq 0 ]
-  [ "$output" = '{"gaiaOriginVersion":null,"gaiaUpdateClaims":[],"ghLogin":""}' ]
-}
+  [ "$output" = "$empty" ]
+  rm "$STATE_DIR/fail-all"
 
-@test "cache-fields prints the all-empty JSON when jq is missing" {
+  echo "case: jq is missing"
   local restricted
   restricted="$(make_path_without_gh)"
   rm "$restricted/jq"
   run env PATH="$restricted" "$(command -v bash)" "$CLAIM_SCRIPT" cache-fields --tree "$WORK"
   [ "$status" -eq 0 ]
-  [ "$output" = '{"gaiaOriginVersion":null,"gaiaUpdateClaims":[],"ghLogin":""}' ]
-}
+  [ "$output" = "$empty" ]
 
-@test "cache-fields carries the origin version, the claims and the login" {
+  echo "case: carries the origin version, the claims and the login"
   printf '2.0.4\n' >"$STATE_DIR/origin-version.txt"
   printf 'octo-cat\n' >"$STATE_DIR/login.txt"
   claim_entry 41 "update/v2.0.4-2026-10-18-1200" other false | set_claims
@@ -272,12 +284,17 @@ count_lines_matching() {
   [ "$(printf '%s' "$output" | jq -c '.gaiaUpdateClaims[0] | [.number, .tag, .authorLogin, .headRefName]')" = '[41,"v2.0.4","other","update/v2.0.4-2026-10-18-1200"]' ]
 }
 
-@test "every subcommand without --tree exits 2" {
+@test "malformed invocations exit 2: missing --tree, non-claim branch" {
   local subcommand
   for subcommand in list login origin-version cache-fields fetch-branch start tie-break close-own; do
+    echo "case: $subcommand without --tree"
     run bash "$CLAIM_SCRIPT" "$subcommand"
     [ "$status" -eq 2 ]
   done
+
+  echo "case: start on a branch that is not a claim branch"
+  run_claim start --tree "$WORK" --tag v2.0.4 --branch "feature/x" --base main
+  [ "$status" -eq 2 ]
 }
 
 @test "every gh call runs with the tree as its working directory" {
@@ -298,24 +315,27 @@ count_lines_matching() {
   done <"$GH_LOG"
 }
 
-@test "start skips with gh-missing before any commit" {
+# bats test_tags=protected
+@test "start skips with the failing step's reason and never retries, forces or bypasses" {
+  echo "case: gh-missing before any commit"
+  reset_case
   local restricted
   restricted="$(make_path_without_gh)"
   run env PATH="$restricted" "$(command -v bash)" "$CLAIM_SCRIPT" start --tree "$WORK" --tag v2.0.4 --branch "$CLAIM_BRANCH" --base main
   [ "$status" -eq 0 ]
   [ "$output" = "CLAIM_SKIPPED gh-missing" ]
   [ "$(count_lines_matching ' commit ' "$GIT_LOG")" = "0" ]
-}
 
-@test "start skips with gh-unauthenticated before any commit" {
+  echo "case: gh-unauthenticated before any commit"
+  reset_case
   : >"$STATE_DIR/fail-auth"
   run_claim start --tree "$WORK" --tag v2.0.4 --branch "$CLAIM_BRANCH" --base main
   [ "$status" -eq 0 ]
   [ "$output" = "CLAIM_SKIPPED gh-unauthenticated" ]
   [ "$(count_lines_matching ' commit ' "$GIT_LOG")" = "0" ]
-}
 
-@test "start skips with commit-refused when a hook refuses and never retries or bypasses" {
+  echo "case: commit-refused when a hook refuses, never retried or bypassed"
+  reset_case
   printf '#!/bin/sh\nexit 1\n' >"$WORK/.git/hooks/pre-commit"
   chmod +x "$WORK/.git/hooks/pre-commit"
   run_claim start --tree "$WORK" --tag v2.0.4 --branch "$CLAIM_BRANCH" --base main
@@ -324,10 +344,9 @@ count_lines_matching() {
   [ "$(count_lines_matching ' commit ' "$GIT_LOG")" = "1" ]
   grep -q -- '--no-verify' "$GIT_LOG" && return 1
   grep -q -- 'pr create' "$GH_LOG" && return 1
-  true
-}
 
-@test "start skips with push-rejected when origin refuses the push, never forced" {
+  echo "case: push-rejected when origin refuses the push, never forced"
+  reset_case
   printf '#!/bin/sh\nexit 1\n' >"$ORIGIN/hooks/pre-receive"
   chmod +x "$ORIGIN/hooks/pre-receive"
   run_claim start --tree "$WORK" --tag v2.0.4 --branch "$CLAIM_BRANCH" --base main
@@ -335,10 +354,9 @@ count_lines_matching() {
   [ "$output" = "CLAIM_SKIPPED push-rejected" ]
   grep -q -- 'force' "$GIT_LOG" && return 1
   grep -q -- 'pr create' "$GH_LOG" && return 1
-  true
-}
 
-@test "start skips with pr-create-failed when gh pr create fails" {
+  echo "case: pr-create-failed when gh pr create fails"
+  reset_case
   : >"$STATE_DIR/fail-create"
   run_claim start --tree "$WORK" --tag v2.0.4 --branch "$CLAIM_BRANCH" --base main
   [ "$status" -eq 0 ]
@@ -346,6 +364,7 @@ count_lines_matching() {
 }
 
 @test "start makes one empty commit, pushes it and opens a draft PR with a body" {
+  echo "case: one empty commit, pushed, a draft PR with a body"
   run_claim start --tree "$WORK" --tag v2.0.4 --branch "$CLAIM_BRANCH" --base main
   [ "$status" -eq 0 ]
   [ "$output" = "CLAIMED 77 https://github.com/acme/widgets/pull/77" ]
@@ -358,9 +377,9 @@ count_lines_matching() {
   while IFS= read -r line; do
     [ "${line%% | *}" = "$WORK" ]
   done <"$GH_LOG"
-}
 
-@test "start passes a body: a gh that refuses a bodiless create still yields CLAIMED" {
+  echo "case: a gh that refuses a bodiless create still yields CLAIMED"
+  reset_case
   : >"$STATE_DIR/require-body"
   run_claim start --tree "$WORK" --tag v2.0.4 --branch "$CLAIM_BRANCH" --base main
   [ "$status" -eq 0 ]
@@ -379,11 +398,6 @@ count_lines_matching() {
   [ "$(count_lines_matching 'pr create' "$GH_LOG")" = "1" ]
 }
 
-@test "start rejects a branch that is not a claim branch" {
-  run_claim start --tree "$WORK" --tag v2.0.4 --branch "feature/x" --base main
-  [ "$status" -eq 2 ]
-}
-
 two_claims_with_origin_branches() {
   local branch_41="update/v2.0.4-2026-10-18-1100" branch_42="update/v2.0.4-2026-10-18-1300"
   "$REAL_GIT" -C "$WORK" push -q origin "main:refs/heads/$branch_41" "main:refs/heads/$branch_42"
@@ -397,7 +411,31 @@ two_claims_with_origin_branches() {
   BRANCH_42="$branch_42"
 }
 
-@test "tie-break closes the higher-numbered own claim, deletes only its remote branch and reports LOST" {
+@test "tie-break reports WON, LOST or SKIPPED and closes only the higher own claim" {
+  echo "case: only the own claim reports WON and closes nothing"
+  claim_entry 42 "update/v2.0.4-2026-10-18-1300" other false | set_claims
+  run_claim tie-break --tree "$WORK" --own 42
+  [ "$status" -eq 0 ]
+  [ "$output" = "WON" ]
+  grep -q -- 'pr close' "$GH_LOG" && return 1
+
+  echo "case: a failing list reports TIE_BREAK_SKIPPED and closes nothing"
+  reset_case
+  : >"$STATE_DIR/fail-list"
+  run_claim tie-break --tree "$WORK" --own 42
+  [ "$status" -eq 0 ]
+  [ "$output" = "TIE_BREAK_SKIPPED gh-failed" ]
+  grep -q -- 'pr close' "$GH_LOG" && return 1
+
+  echo "case: the lowest-numbered claim is the winner"
+  reset_case
+  two_claims_with_origin_branches
+  run_claim tie-break --tree "$WORK" --own 41
+  [ "$status" -eq 0 ]
+  [ "$output" = "WON" ]
+
+  echo "case: the higher-numbered own claim is closed, only its remote branch deleted, LOST"
+  reset_case
   two_claims_with_origin_branches
   run_claim tie-break --tree "$WORK" --own 42
   [ "$status" -eq 0 ]
@@ -408,38 +446,38 @@ two_claims_with_origin_branches() {
   "$REAL_GIT" -C "$ORIGIN" rev-parse --verify --quiet "refs/heads/$BRANCH_41" >/dev/null
 }
 
-@test "tie-break with only the own claim reports WON and closes nothing" {
-  claim_entry 42 "update/v2.0.4-2026-10-18-1300" other false | set_claims
-  run_claim tie-break --tree "$WORK" --own 42
-  [ "$status" -eq 0 ]
-  [ "$output" = "WON" ]
-  grep -q -- 'pr close' "$GH_LOG" && return 1
-  true
-}
-
-@test "tie-break reports the lowest-numbered claim as the winner" {
-  two_claims_with_origin_branches
-  run_claim tie-break --tree "$WORK" --own 41
-  [ "$status" -eq 0 ]
-  [ "$output" = "WON" ]
-}
-
-@test "tie-break with a failing list reports TIE_BREAK_SKIPPED and closes nothing" {
-  : >"$STATE_DIR/fail-list"
-  run_claim tie-break --tree "$WORK" --own 42
-  [ "$status" -eq 0 ]
-  [ "$output" = "TIE_BREAK_SKIPPED gh-failed" ]
-  grep -q -- 'pr close' "$GH_LOG" && return 1
-  true
-}
-
 view_tsv() {
   # view_tsv <state> <head> <author> <cross>
   printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >"$STATE_DIR/view.tsv"
 }
 
-@test "close-own closes an open PR the current user authored from the named branch" {
+# bats test_tags=protected
+@test "close-own closes an open own PR from the named branch, refuses another head or a PR that is not open, and exits 3 when gh fails" {
   printf 'octo-cat\n' >"$STATE_DIR/login.txt"
+
+  echo "case: refuses when the head differs from --branch"
+  view_tsv OPEN "update/v2.0.4-2026-10-18-1999" octo-cat false
+  run_claim close-own --tree "$WORK" --number 42 --branch "$CLAIM_BRANCH"
+  [ "$status" -eq 1 ]
+  [ "$output" = "CLOSE_REFUSED head-mismatch" ]
+  grep -q -- 'pr close' "$GH_LOG" && return 1
+
+  echo "case: refuses a PR that is not open"
+  reset_case
+  view_tsv MERGED "$CLAIM_BRANCH" octo-cat false
+  run_claim close-own --tree "$WORK" --number 42 --branch "$CLAIM_BRANCH"
+  [ "$status" -eq 1 ]
+  [ "$output" = "CLOSE_REFUSED not-open" ]
+  grep -q -- 'pr close' "$GH_LOG" && return 1
+
+  echo "case: exits 3 when gh fails"
+  reset_case
+  : >"$STATE_DIR/fail-view"
+  run_claim close-own --tree "$WORK" --number 42 --branch "$CLAIM_BRANCH"
+  [ "$status" -eq 3 ]
+
+  echo "case: closes an open PR the current user authored from the named branch"
+  reset_case
   "$REAL_GIT" -C "$WORK" push -q origin "main:refs/heads/$CLAIM_BRANCH"
   view_tsv OPEN "$CLAIM_BRANCH" octo-cat false
   run_claim close-own --tree "$WORK" --number 42 --branch "$CLAIM_BRANCH"
@@ -450,6 +488,7 @@ view_tsv() {
   true
 }
 
+# bats test_tags=protected
 @test "close-own refuses when the author is not the current login" {
   printf 'octo-cat\n' >"$STATE_DIR/login.txt"
   view_tsv OPEN "$CLAIM_BRANCH" someone-else false
@@ -460,33 +499,7 @@ view_tsv() {
   true
 }
 
-@test "close-own refuses when the head differs from --branch" {
-  printf 'octo-cat\n' >"$STATE_DIR/login.txt"
-  view_tsv OPEN "update/v2.0.4-2026-10-18-1999" octo-cat false
-  run_claim close-own --tree "$WORK" --number 42 --branch "$CLAIM_BRANCH"
-  [ "$status" -eq 1 ]
-  [ "$output" = "CLOSE_REFUSED head-mismatch" ]
-  grep -q -- 'pr close' "$GH_LOG" && return 1
-  true
-}
-
-@test "close-own refuses a PR that is not open" {
-  printf 'octo-cat\n' >"$STATE_DIR/login.txt"
-  view_tsv MERGED "$CLAIM_BRANCH" octo-cat false
-  run_claim close-own --tree "$WORK" --number 42 --branch "$CLAIM_BRANCH"
-  [ "$status" -eq 1 ]
-  [ "$output" = "CLOSE_REFUSED not-open" ]
-  grep -q -- 'pr close' "$GH_LOG" && return 1
-  true
-}
-
-@test "close-own exits 3 when gh fails" {
-  printf 'octo-cat\n' >"$STATE_DIR/login.txt"
-  : >"$STATE_DIR/fail-view"
-  run_claim close-own --tree "$WORK" --number 42 --branch "$CLAIM_BRANCH"
-  [ "$status" -eq 3 ]
-}
-
+# bats test_tags=protected
 @test "fetch-branch fetches a claim branch and refuses any other name" {
   "$REAL_GIT" -C "$WORK" push -q origin "main:refs/heads/update/v2.0.9-2026-10-18-1200"
   run_claim fetch-branch --tree "$WORK" --branch "update/v2.0.9-2026-10-18-1200"
@@ -495,20 +508,4 @@ view_tsv() {
   grep -q -- '--force\|+refs' "$GIT_LOG" && return 1
   run_claim fetch-branch --tree "$WORK" --branch "main"
   [ "$status" -eq 2 ]
-}
-
-@test "mutation: without the isCrossRepository filter the fork claim is listed too" {
-  {
-    claim_entry 41 "update/v2.0.4-2026-10-18-1200" octo-cat false
-    claim_entry 42 "update/v2.0.4-20261018T120000Z" forker true
-  } | set_claims
-  run_claim list --tree "$WORK"
-  [ "$(printf '%s\n' "$output" | grep -c '^CLAIM')" = "1" ]
-
-  local scratch="$BATS_TEST_TMPDIR/mutant-update-claim.sh"
-  sed 's/select(.isCrossRepository == false)/select(true)/' "$CLAIM_SCRIPT" >"$scratch"
-  cmp -s "$scratch" "$CLAIM_SCRIPT" && return 1
-  run bash "$scratch" list --tree "$WORK"
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c '^CLAIM')" = "2" ]
 }

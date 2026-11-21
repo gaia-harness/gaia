@@ -93,7 +93,6 @@ const apply = (
     base?: string;
     catalog?: readonly RuleDefinition[];
     proposal?: string;
-    symlinkCheck?: () => string | undefined;
     target?: string;
   } = {}
 ): Applied =>
@@ -103,7 +102,6 @@ const apply = (
     env: scratch.env,
     proposalPath: options.proposal ?? proposalFile(),
     root: scratch.root,
-    symlinkCheck: options.symlinkCheck,
     target: options.target ?? 'CLAUDE.md',
   });
 
@@ -215,97 +213,158 @@ describe('gaia fitness apply refusals', () => {
     expect(readText(scratch.root, 'notes.md')).toBe(MARKED);
   });
 
-  test('refuses a target whose finding is already clean', () => {
-    const scratch = project(gitProject({'CLAUDE.md': '# Notes\n'}));
-    const result = apply(scratch, {base: sha256('# Notes\n')});
+  test.each<
+    [
+      string,
+      () => {
+        apply: () => Applied;
+        content: string;
+        expected: {kind: 'refused'; reason?: string};
+        file: string;
+        scratch: ScratchProject;
+      },
+    ]
+  >([
+    [
+      'refuses a target whose finding is already clean',
+      () => {
+        const scratch = project(gitProject({'CLAUDE.md': '# Notes\n'}));
 
-    expect(result).toMatchObject({
-      kind: 'refused',
-      reason: 'target is not in the fixable set',
-    });
-    expect(readText(scratch.root, 'CLAUDE.md')).toBe('# Notes\n');
-  });
+        return {
+          apply: () => apply(scratch, {base: sha256('# Notes\n')}),
+          content: '# Notes\n',
+          expected: {
+            kind: 'refused',
+            reason: 'target is not in the fixable set',
+          },
+          file: 'CLAUDE.md',
+          scratch,
+        };
+      },
+    ],
+    [
+      'refuses a GAIA-shipped target',
+      () => {
+        const scratch = project({
+          ...gitProject({'CLAUDE.md': MARKED}),
+          manifest: {files: {'CLAUDE.md': 'owned'}},
+        });
 
-  test('refuses a GAIA-shipped target', () => {
-    const scratch = project({
-      ...gitProject({'CLAUDE.md': MARKED}),
-      manifest: {files: {'CLAUDE.md': 'owned'}},
-    });
-    const result = apply(scratch);
+        return {
+          apply: () => apply(scratch),
+          content: MARKED,
+          expected: {
+            kind: 'refused',
+            reason: 'target is not in the fixable set',
+          },
+          file: 'CLAUDE.md',
+          scratch,
+        };
+      },
+    ],
+    [
+      'refuses a target under a vendor pin',
+      () => {
+        const scratch = project({
+          ...gitProject({'vendored/CLAUDE.md': MARKED}),
+          vendorPins: {example: 'vendored'},
+        });
 
-    expect(result).toMatchObject({
-      kind: 'refused',
-      reason: 'target is not in the fixable set',
-    });
-    expect(readText(scratch.root, 'CLAUDE.md')).toBe(MARKED);
-  });
+        return {
+          apply: () => apply(scratch, {target: 'vendored/CLAUDE.md'}),
+          content: MARKED,
+          expected: {kind: 'refused'},
+          file: 'vendored/CLAUDE.md',
+          scratch,
+        };
+      },
+    ],
+    [
+      'refuses when ownership has drifted away from adopter since the check',
+      () => {
+        const scratch = project({
+          ...gitProject({'CLAUDE.md': MARKED}),
+          classifier: driftingClassifier('third-party'),
+        });
 
-  test('refuses a target under a vendor pin', () => {
-    const scratch = project({
-      ...gitProject({'vendored/CLAUDE.md': MARKED}),
-      vendorPins: {example: 'vendored'},
-    });
-    const result = apply(scratch, {target: 'vendored/CLAUDE.md'});
+        return {
+          apply: () => apply(scratch),
+          content: MARKED,
+          expected: {
+            kind: 'refused',
+            reason: 'target ownership is third-party, not adopter',
+          },
+          file: 'CLAUDE.md',
+          scratch,
+        };
+      },
+    ],
+    [
+      'refuses when the classifier fails on the re-classification',
+      () => {
+        const scratch = project({
+          ...gitProject({'CLAUDE.md': MARKED}),
+          classifier: driftingClassifier('exit-failure'),
+        });
 
-    expect(result.kind).toBe('refused');
-    expect(readText(scratch.root, 'vendored/CLAUDE.md')).toBe(MARKED);
-  });
+        return {
+          apply: () => apply(scratch),
+          content: MARKED,
+          expected: {
+            kind: 'refused',
+            reason: 'target ownership is unknown, not adopter',
+          },
+          file: 'CLAUDE.md',
+          scratch,
+        };
+      },
+    ],
+    [
+      'refuses a stale base digest',
+      () => {
+        const scratch = project(gitProject({'CLAUDE.md': MARKED}));
 
-  test('refuses when ownership has drifted away from adopter since the check', () => {
-    const scratch = project({
-      ...gitProject({'CLAUDE.md': MARKED}),
-      classifier: driftingClassifier('third-party'),
-    });
-    const result = apply(scratch);
+        return {
+          apply: () => apply(scratch, {base: sha256('something else\n')}),
+          content: MARKED,
+          expected: {
+            kind: 'refused',
+            reason: 'file changed since the diff was shown',
+          },
+          file: 'CLAUDE.md',
+          scratch,
+        };
+      },
+    ],
+    [
+      'refuses an absent base digest for a file that exists',
+      () => {
+        const scratch = project(gitProject({'CLAUDE.md': MARKED}));
 
-    expect(result).toMatchObject({
-      kind: 'refused',
-      reason: 'target ownership is third-party, not adopter',
-    });
-    expect(readText(scratch.root, 'CLAUDE.md')).toBe(MARKED);
-  });
+        return {
+          apply: () => apply(scratch, {base: 'absent'}),
+          content: MARKED,
+          expected: {
+            kind: 'refused',
+            reason: 'file changed since the diff was shown',
+          },
+          file: 'CLAUDE.md',
+          scratch,
+        };
+      },
+    ],
+  ])('%s', (_name, build) => {
+    const {apply: run, content, expected, file, scratch} = build();
 
-  test('refuses when the classifier fails on the re-classification', () => {
-    const scratch = project({
-      ...gitProject({'CLAUDE.md': MARKED}),
-      classifier: driftingClassifier('exit-failure'),
-    });
-    const result = apply(scratch);
-
-    expect(result).toMatchObject({
-      kind: 'refused',
-      reason: 'target ownership is unknown, not adopter',
-    });
-    expect(readText(scratch.root, 'CLAUDE.md')).toBe(MARKED);
-  });
-
-  test('refuses a stale base digest', () => {
-    const scratch = project(gitProject({'CLAUDE.md': MARKED}));
-    const result = apply(scratch, {base: sha256('something else\n')});
-
-    expect(result).toMatchObject({
-      kind: 'refused',
-      reason: 'file changed since the diff was shown',
-    });
-    expect(readText(scratch.root, 'CLAUDE.md')).toBe(MARKED);
-  });
-
-  test('refuses an absent base digest for a file that exists', () => {
-    const scratch = project(gitProject({'CLAUDE.md': MARKED}));
-    const result = apply(scratch, {base: 'absent'});
-
-    expect(result).toMatchObject({
-      kind: 'refused',
-      reason: 'file changed since the diff was shown',
-    });
-    expect(readText(scratch.root, 'CLAUDE.md')).toBe(MARKED);
+    expect(run()).toMatchObject(expected);
+    expect(readText(scratch.root, file)).toBe(content);
   });
 });
 
 /** A tracked directory the check reads, swapped for a symlink to an outside folder before the write. */
 const directorySwappedForEscape = (): {
   outside: string;
-  result: (symlinkCheck?: () => string | undefined) => Applied;
+  result: () => Applied;
   scratch: ScratchProject;
 } => {
   const scratch = project({
@@ -323,10 +382,9 @@ const directorySwappedForEscape = (): {
 
   return {
     outside,
-    result: (symlinkCheck) =>
+    result: () =>
       apply(scratch, {
         catalog: [markerRule(swap)],
-        symlinkCheck,
         target: 'docs/CLAUDE.md',
       }),
     scratch,
@@ -335,7 +393,7 @@ const directorySwappedForEscape = (): {
 
 /** A tracked CLAUDE.md that is a symlink into a vendored tree. */
 const fileLinkedIntoVendorTree = (): {
-  result: (symlinkCheck?: () => string | undefined) => Applied;
+  result: () => Applied;
   scratch: ScratchProject;
 } => {
   const scratch = project({
@@ -350,12 +408,10 @@ const fileLinkedIntoVendorTree = (): {
   );
 
   return {
-    result: (symlinkCheck) => apply(scratch, {symlinkCheck}),
+    result: () => apply(scratch),
     scratch,
   };
 };
-
-const passingSymlinkCheck = (): undefined => undefined;
 
 describe('gaia fitness apply symlink refusals', () => {
   test('refuses a target reached through a symlinked directory that leaves the root', () => {
@@ -395,14 +451,6 @@ describe('gaia fitness apply symlink refusals', () => {
       lstatSync(path.join(scratch.root, 'CLAUDE.md')).isSymbolicLink()
     ).toBe(true);
     expect(readText(scratch.root, 'AGENTS.md')).toBe(MARKED);
-  });
-
-  test('both symlink refusals depend on the symlink check', () => {
-    const escaping = directorySwappedForEscape().result(passingSymlinkCheck);
-    const vendored = fileLinkedIntoVendorTree().result(passingSymlinkCheck);
-
-    expect(escaping.kind).not.toBe('refused');
-    expect(vendored.kind).not.toBe('refused');
   });
 });
 

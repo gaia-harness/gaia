@@ -73,13 +73,27 @@ stage_and_run_hook() {
   run env PATH="$PATH" sh -c 'cd "$1" && "$2" </dev/null' _ "$REPO" "$HOOK_ABSOLUTE_PATH"
 }
 
-@test "a member with only typecheck runs it and skips the other two steps without error" {
-  write_member packages/lib "{\"typecheck\":\"echo typecheck >> '$STEP_LOG'\"}"
-  stage_and_run_hook packages/lib/src/value.ts
-  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-  [ "$(cat "$STEP_LOG")" = "typecheck" ]
+@test "a member runs only its defined steps in order: typecheck only, all three, a lint-staged config file, a path outside every member" {
+  local row label member_path scripts extra lintstaged_rc staged_path expected
+  for row in \
+    "typecheck only|packages/lib|{\"typecheck\":\"echo typecheck >> '$STEP_LOG'\"}|||packages/lib/src/value.ts|typecheck" \
+    "all three in order|apps/web|{\"typecheck\":\"echo typecheck >> '$STEP_LOG'\",\"test:lint-staged\":\"echo test >> '$STEP_LOG'\"}|,\"lint-staged\":{\"*.ts\":\"true\"}||apps/web/src/value.ts|typecheck lint-staged test" \
+    "lint-staged config file|apps/web|{\"typecheck\":\"echo typecheck >> '$STEP_LOG'\"}||{\"*.ts\":\"true\"}|apps/web/src/value.ts|typecheck lint-staged" \
+    "path outside every member|packages/lib|{\"typecheck\":\"echo typecheck >> '$STEP_LOG'\"}|||docs/note.ts|"; do
+    IFS='|' read -r label member_path scripts extra lintstaged_rc staged_path expected <<<"$row"
+    # Rows share one scratch repo: unstage the previous row's path and clear the log.
+    git -C "$REPO" read-tree HEAD
+    rm -f "$REPO/apps/web/.lintstagedrc.json"
+    : >"$STEP_LOG"
+    write_member "$member_path" "$scripts" "$extra"
+    [ -z "$lintstaged_rc" ] || echo "$lintstaged_rc" >"$REPO/$member_path/.lintstagedrc.json"
+    stage_and_run_hook "$staged_path"
+    [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+    [ "$(tr '\n' ' ' <"$STEP_LOG" | sed 's/ $//')" = "$expected" ] || { echo "case $label: steps=[$(cat "$STEP_LOG")] want [$expected]"; return 1; }
+  done
 }
 
+# bats test_tags=protected
 @test "a type error in a typecheck-only member refuses the commit" {
   write_member packages/lib "{\"typecheck\":\"echo typecheck >> '$STEP_LOG'; exit 1\"}"
   stage_and_run_hook packages/lib/src/value.ts
@@ -87,31 +101,9 @@ stage_and_run_hook() {
   [ "$(cat "$STEP_LOG")" = "typecheck" ]
 }
 
-@test "a member with all three steps runs them in order" {
-  write_member apps/web "{\"typecheck\":\"echo typecheck >> '$STEP_LOG'\",\"test:lint-staged\":\"echo test >> '$STEP_LOG'\"}" ',"lint-staged":{"*.ts":"true"}'
-  stage_and_run_hook apps/web/src/value.ts
-  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-  [ "$(cat "$STEP_LOG")" = "$(printf 'typecheck\nlint-staged\ntest')" ]
-}
-
 @test "the first failing step stops the later ones" {
   write_member apps/web "{\"typecheck\":\"echo typecheck >> '$STEP_LOG'; exit 1\",\"test:lint-staged\":\"echo test >> '$STEP_LOG'\"}" ',"lint-staged":{"*.ts":"true"}'
   stage_and_run_hook apps/web/src/value.ts
   [ "$status" -ne 0 ]
   [ "$(cat "$STEP_LOG")" = "typecheck" ]
-}
-
-@test "a lint-staged config file counts as a defined lint-staged step" {
-  write_member apps/web "{\"typecheck\":\"echo typecheck >> '$STEP_LOG'\"}"
-  echo '{"*.ts":"true"}' >"$REPO/apps/web/.lintstagedrc.json"
-  stage_and_run_hook apps/web/src/value.ts
-  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-  [ "$(cat "$STEP_LOG")" = "$(printf 'typecheck\nlint-staged')" ]
-}
-
-@test "a path outside every member runs no step" {
-  write_member packages/lib "{\"typecheck\":\"echo typecheck >> '$STEP_LOG'\"}"
-  stage_and_run_hook docs/note.ts
-  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-  [ ! -s "$STEP_LOG" ]
 }

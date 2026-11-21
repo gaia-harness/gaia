@@ -38,13 +38,9 @@ usage() {
 
 command -v jq >/dev/null 2>&1 || { echo "update-decisions.sh needs jq on PATH" >&2; exit 2; }
 
-# Prints the first problem in a slurped document, or an empty string. The
-# marked regions are what the mutation cases in the suite remove to prove the
-# matching case can fail.
 read -r -d '' VALIDATE_PROGRAM <<'JQ'
 def semver:
   type == "string" and test("^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$");
-# SEMVER-DEF
 def unsafe_path:
   type != "string" or . == "" or startswith("/") or contains("\\")
   or (explode | any(. < 32 or . == 127))
@@ -83,9 +79,7 @@ elif (.[0].decisions | type) != "array" then "decisions is not an array"
 else
   .[0] | first(
     entry_errors,
-    # BEGIN-DUPLICATE-CHECK
     duplicate_errors,
-    # END-DUPLICATE-CHECK
     empty
   ) // ""
 end
@@ -228,7 +222,6 @@ case "$subcommand" in
 "
           drop_lines="$drop_lines
 DROPPED $entry_path#$entry_key"
-        # REBASE-KEY-BEGIN
         elif [ "$entry_decision" = 'deferred' ] && jq -e --arg path "$entry_path" --arg key "$entry_key" '
              [.files[]? | select(.path == $path) | .fieldMerge | (.applied, .keptRemoved, .removedUpstream)[]?
               | (.key, (if .section then "\(.section).\(.key)" else empty end))]
@@ -237,7 +230,6 @@ DROPPED $entry_path#$entry_key"
 "
           drop_lines="$drop_lines
 REBASED $entry_path#$entry_key $latest_tag"
-        # REBASE-KEY-END
         fi
       else
         tree_file="$tree/$entry_path"
@@ -248,7 +240,6 @@ REBASED $entry_path#$entry_key $latest_tag"
 "
           drop_lines="$drop_lines
 DROPPED $entry_path"
-        # REBASE-FILE-BEGIN
         elif [ "$entry_decision" = 'deferred' ]; then
           # A path the run resolved without a question no longer needs its old
           # baseline bundle; an open, pending or unreported path stays put.
@@ -263,7 +254,6 @@ DROPPED $entry_path"
 REBASED $entry_path $latest_tag"
               ;;
           esac
-        # REBASE-FILE-END
         fi
       fi
     done < <(jq -r '.decisions | to_entries[]

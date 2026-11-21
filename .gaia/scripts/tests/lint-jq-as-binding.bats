@@ -185,7 +185,7 @@ jq -n '.c as \$v | \$v'"
   [ "$status" -eq 0 ]
 }
 
-@test "flags a hit in a workflow run body" {
+@test "flags a hit in each non-.sh scan surface" {
   fixture_repo
   fixture_file .github/workflows/ci.yml "jobs:
   t:
@@ -193,36 +193,25 @@ jq -n '.c as \$v | \$v'"
       - run: |
           jq -n '.a // .b as \$v | \$v'"
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "ci.yml:5:" <<<"$output"
-}
-
-@test "flags a hit in an extensionless git hook" {
+  [ "$status" -eq 1 ] || { echo "workflow run body: status $status, output: $output"; return 1; }
+  grep -qF -- "ci.yml:5:" <<<"$output" || { echo "workflow run body: no file:line in: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
   fixture_repo
   fixture_file .githooks/pre-commit "#!/usr/bin/env bash
 jq -n '.a + .b as \$v | \$v'"
   run_linter
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 1 ] || { echo "extensionless hook: status $status, output: $output"; return 1; }
   grep -qF -- ".githooks/pre-commit:2:" <<<"$output"
 }
 
-@test "errors rather than greening when nothing is scanned" {
+@test "refuses to green when the scan surface is empty or discovery failed" {
   fixture_repo
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "nothing was scanned" <<<"$output"
-}
-
-@test "a discovery that never ran exits distinctly from a surface that came back empty" {
+  [ "$status" -eq 1 ] || { echo "empty surface: status $status, output: $output"; return 1; }
+  grep -qF -- "nothing was scanned" <<<"$output" || { echo "empty surface: wrong message: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
   TEMPORARY_DIRECTORY="$(mktemp -d -t jq-as-lint-XXXXXX)"
   run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER' 2>&1"
-  [ "$status" -eq 3 ]
+  [ "$status" -eq 3 ] || { echo "no discovery: status $status, output: $output"; return 1; }
   grep -qF -- "discovery failed" <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "the real repository tree is clean" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER' 2>&1"
-  [ "$status" -eq 0 ]
-  grep -qF -- "clean" <<<"$output"
 }

@@ -30,8 +30,6 @@ You also own the declarative half of that same subsystem: the roster your own di
 - `.gaia/retired-paths-allowlist.tsv`
 - `.gaia/toolchain-floors.tsv`
 - `.gaia/tests/vendor/**`
-- `.gaia/scripts/tests/fixtures/**/*.jq`
-- `.gaia/scripts/tests/fixtures/**/*.sed`
 - `.gaia/scripts/tests/fixtures/**/SHA256SUMS`
 - `.gaia/tests/hooks/fixtures/*.awk`
 - `.gaia/scripts/tests/fixtures/audit-quick-corpus.json`

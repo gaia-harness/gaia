@@ -166,23 +166,17 @@ describe('gaia ping', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  test('setup event: --sandbox on is accepted', async () => {
-    const exit = await run(['--event', 'setup', '--sandbox', 'on'], {
-      cwd: sandbox.root,
-    });
+  test.each(['on', 'off'])(
+    'setup event: --sandbox %s is accepted',
+    async (value) => {
+      const exit = await run(['--event', 'setup', '--sandbox', value], {
+        cwd: sandbox.root,
+      });
 
-    expect(exit).toBe(0);
-    expect(parsedBody()).toMatchObject({event: 'setup', sandbox: 'on'});
-  });
-
-  test('setup event: --sandbox off is accepted', async () => {
-    const exit = await run(['--event', 'setup', '--sandbox', 'off'], {
-      cwd: sandbox.root,
-    });
-
-    expect(exit).toBe(0);
-    expect(parsedBody()).toMatchObject({event: 'setup', sandbox: 'off'});
-  });
+      expect(exit).toBe(0);
+      expect(parsedBody()).toMatchObject({event: 'setup', sandbox: value});
+    }
+  );
 
   test('setup event: --sandbox composes with the existing setup fields', async () => {
     const exit = await run(

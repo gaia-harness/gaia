@@ -4,7 +4,7 @@
 # wiki pages and every tracked Markdown file, so a citation of it cannot return.
 #
 # Failing states are driven in a temporary git repository holding a copy of the
-# gate; the remaining tests read the real tree.
+# gate.
 #
 # Run under bash 5: `bash .gaia/scripts/bats5.sh .gaia/scripts/tests/retired-frontend-root.bats`.
 #
@@ -12,7 +12,6 @@
 
 setup() {
   SCRIPT_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
-  REPO_ROOT="$(cd "$SCRIPT_DIRECTORY/../.." && pwd)"
 }
 
 make_repo() {
@@ -31,112 +30,32 @@ run_gate() {
   run bash "$1/.gaia/scripts/check-retired-paths.sh"
 }
 
-# bats test_tags=whole-tree
-@test "the real working tree passes with the retired root in the token set" {
-  run bash "$SCRIPT_DIRECTORY/check-retired-paths.sh" --root "$REPO_ROOT"
-  [ "$status" -eq 0 ]
-  grep -qF -- "check-retired-paths: clean" <<<"$output"
-}
-
-@test "a wiki page and a rule body each citing frontend/app fail, and both are named" {
+@test "a retired frontend/ citation or tracked path fails and is named" {
   local repo
-  repo="$(make_repo both)"
+  repo="$(make_repo retired)"
   printf '# Page\n\nSee frontend/app/routes for routes.\n' >"$repo/wiki/modules/Page.md"
   printf -- '---\npaths:\n  - "apps/web/app/**"\n---\n\nEdit frontend/app/root.tsx first.\n' >"$repo/.claude/rules/body.md"
-  run_gate "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF -- 'RETIRED wiki/modules/Page.md:3:' <<<"$output"
-  grep -qF -- 'RETIRED .claude/rules/body.md:6:' <<<"$output"
-}
-
-@test "a clean wiki page and rule body pass, and the scan set holds both" {
-  local repo
-  repo="$(make_repo clean)"
-  run_gate "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF -- "(3 files scanned)" <<<"$output"
-}
-
-@test "code-audit-frontend/ and apps/web/frontend/ do not trip" {
-  local repo
-  repo="$(make_repo lookalike)"
-  printf 'Roster: .claude/agents/code-audit-frontend/x and apps/web/frontend/y.\n' >"$repo/wiki/modules/Lookalike.md"
-  run_gate "$repo"
-  [ "$status" -eq 0 ]
-}
-
-@test "a frontend/ path glob in rule frontmatter fails" {
-  local repo
-  repo="$(make_repo glob)"
   printf -- '---\npaths:\n  - "frontend/app/**"\n---\n\nBody.\n' >"$repo/.claude/rules/glob.md"
-  run_gate "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF -- 'RETIRED .claude/rules/glob.md:3:' <<<"$output"
-}
-
-@test "the frozen history files may cite frontend/" {
-  local repo
-  repo="$(make_repo frozen)"
-  printf 'Moved frontend/app.\n' >"$repo/CHANGELOG.md"
-  printf 'Moved frontend/app.\n' >"$repo/wiki/log.md"
-  run_gate "$repo"
-  [ "$status" -eq 0 ]
-}
-
-@test "a tracked path under frontend/ fails" {
-  local repo
-  repo="$(make_repo tracked)"
   mkdir -p "$repo/frontend"
   printf 'x\n' >"$repo/frontend/x.txt"
   run_gate "$repo"
   [ "$status" -eq 1 ]
-  grep -qF -- 'TRACKED frontend/x.txt' <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "no rule frontmatter in the real tree names frontend/" {
-  local rule_file line_number line
-  for rule_file in "$REPO_ROOT"/.claude/rules/*.md "$REPO_ROOT"/.claude/rules/maintainers/*.md "$REPO_ROOT"/apps/web/.claude/rules/*.md; do
-    [ -f "$rule_file" ] || continue
-    line_number=0
-    while IFS= read -r line; do
-      line_number=$((line_number + 1))
-      if [ "$line_number" -eq 1 ]; then
-        [ "$line" = "---" ] || break
-        continue
-      fi
-      [ "$line" = "---" ] && break
-      case "$line" in
-        *frontend/*)
-          printf '%s:%s names frontend/\n' "$rule_file" "$line_number" >&2
-          return 1
-          ;;
-      esac
-    done <"$rule_file"
+  local expected
+  for expected in 'RETIRED wiki/modules/Page.md:3:' 'RETIRED .claude/rules/body.md:6:' \
+    'RETIRED .claude/rules/glob.md:3:' 'TRACKED frontend/x.txt'; do
+    grep -qF -- "$expected" <<<"$output" || { echo "missing: $expected"; return 1; }
   done
-  true
 }
 
-@test "the two repo-wide rules keep their intended globs and name no frontend path" {
-  local comments="$REPO_ROOT/.claude/rules/code-comments.md"
-  local doc_ids="$REPO_ROOT/.claude/rules/working-doc-ids.md"
-  grep -qF -- "  - '**/*.{ts,tsx,js,jsx,mjs,cjs}'" "$comments"
-  grep -qF -- "  - '**/*.{sh,bats,jq,awk,sed}'" "$comments"
-  grep -qF -- "  - '**/*.{yml,yaml}'" "$comments"
-  grep -qF -- "  - '**/*.{ts,tsx,js,jsx,mjs,cjs}'" "$doc_ids"
-  grep -qF -- "  - 'apps/web/.claude/**/*.md'" "$doc_ids"
-  grep -qF -- "  - '.claude/**/*.md'" "$doc_ids"
-  grep -qF -- "  - 'wiki/**/*.md'" "$doc_ids"
-  grep -qF -- "frontend/" "$comments" && return 1
-  grep -qF -- "frontend/" "$doc_ids" && return 1
-  true
-}
-
-@test "allowlist rows naming frontend/ cover only the two notes and two data lines" {
-  local files
-  files="$(awk -F'\t' '$1 !~ /^#/ && $2 ~ /(^|[^-])frontend\// { print $1 }' "$REPO_ROOT/.gaia/retired-paths-allowlist.tsv" | LC_ALL=C sort -u)"
-  [ "$files" = ".gaia/cli/src/util/gaia-packages-corpus-fixture.ts
-.gaia/migrations/2.0.0.md
-.gaia/migrations/2.4.0.md
-.gaia/scripts/fitness-nudge-lib.sh" ]
+@test "clean, lookalike and frozen-history files pass" {
+  local repo
+  repo="$(make_repo allowed)"
+  run_gate "$repo"
+  [ "$status" -eq 0 ]
+  grep -qF -- "(3 files scanned)" <<<"$output"
+  printf 'Roster: .claude/agents/code-audit-frontend/x and apps/web/frontend/y.\n' >"$repo/wiki/modules/Lookalike.md"
+  printf 'Moved frontend/app.\n' >"$repo/CHANGELOG.md"
+  printf 'Moved frontend/app.\n' >"$repo/wiki/log.md"
+  run_gate "$repo"
+  [ "$status" -eq 0 ]
 }

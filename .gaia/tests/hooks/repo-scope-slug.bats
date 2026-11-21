@@ -97,61 +97,38 @@ name_half_verdict() {
     if command_targets_foreign_repo "$1"; then echo foreign; else echo home; fi )
 }
 
-@test "s1: a same-named sibling is foreign, where the name-half guard says home" {
-  # The load-bearing fixture. The sandbox's origin remote points at a
-  # repository named `gaia`, so `--repo other-org/gaia` matches the name-half
-  # comparison and reads as home there; the home slug is `acme/widgets`, so
-  # the whole-slug comparison reads it as the different repository it is.
-  [ "$(name_half_verdict 'gh pr merge --repo other-org/gaia 5')" = "home" ]
-  [ "$(verdict 'gh pr merge --repo other-org/gaia 5')" = "foreign" ]
+# Fail with the row's name when a verdict is not the expected one.
+expect_verdict() {
+  local row="$1" expected="$2" command_text="$3" actual
+  actual="$(verdict "$command_text")"
+  if [ "$actual" != "$expected" ]; then
+    echo "row '$row': expected $expected, got $actual for: $command_text" >&2
+    return 1
+  fi
 }
 
-@test "s2: the home slug is home" {
-  [ "$(verdict 'gh pr merge --repo acme/widgets 5')" = "home" ]
-}
-
-@test "s3: a home slug differing only in case is home" {
-  # GitHub resolves OWNER/REPO case-insensitively, so this lands on the home
-  # repository and a case-sensitive comparison would cost the action.
-  [ "$(verdict 'gh pr merge --repo ACME/Widgets 5')" = "home" ]
-}
-
-@test "s4: an owner differing from home is foreign even with the same name" {
-  [ "$(verdict 'gh pr merge --repo other-org/widgets 5')" = "foreign" ]
-}
-
-@test "s6: the = form is read" {
-  [ "$(verdict 'gh pr merge --repo=other-org/widgets 5')" = "foreign" ]
-}
-
-@test "s7: a trailing flag decides as much as a leading one" {
-  # gh accepts flags in any position, so a leading-flag-only read would leave
-  # every trailing spelling unguarded.
-  [ "$(verdict 'gh pr merge 5 --repo other-org/widgets')" = "foreign" ]
-}
-
-@test "s8: a host qualifier naming the home host is home" {
-  [ "$(verdict 'gh pr merge --repo github.com/acme/widgets 5')" = "home" ]
-}
-
-@test "s9: a host qualifier naming another host is foreign" {
-  # The same OWNER/REPO served from another host is another repository, which
-  # a slug-only comparison would accept.
-  [ "$(verdict 'gh pr merge --repo ghe.example.com/acme/widgets 5')" = "foreign" ]
+# One comparison rule: the whole [HOST/]OWNER/REPO decides, in any flag
+# spelling. GitHub resolves OWNER/REPO case-insensitively, so a case-only
+# difference is home; the same OWNER/REPO on another host is another
+# repository; gh accepts flags in any position and in the = form; the scan
+# resolves quoting the way the shell does, so the value gh receives is the value
+# compared.
+@test "slug comparison: the whole [HOST/]OWNER/REPO decides, in any flag spelling" {
+  expect_verdict "s2 the home slug is home" home 'gh pr merge --repo acme/widgets 5'
+  expect_verdict "s3 a home slug differing only in case is home" home 'gh pr merge --repo ACME/Widgets 5'
+  expect_verdict "s4 an owner differing from home is foreign even with the same name" foreign 'gh pr merge --repo other-org/widgets 5'
+  expect_verdict "s6 the = form is read" foreign 'gh pr merge --repo=other-org/widgets 5'
+  expect_verdict "s7 a trailing flag decides as much as a leading one" foreign 'gh pr merge 5 --repo other-org/widgets'
+  expect_verdict "s8 a host qualifier naming the home host is home" home 'gh pr merge --repo github.com/acme/widgets 5'
+  expect_verdict "s9 a host qualifier naming another host is foreign" foreign 'gh pr merge --repo ghe.example.com/acme/widgets 5'
+  expect_verdict "s13 a quoted double flag value is read, quotes removed" home 'gh pr merge --repo="acme/widgets" 5'
+  expect_verdict "s13 a quoted single flag value is read, quotes removed" foreign "gh pr merge --repo='other-org/widgets' 5"
 }
 
 @test "s10: a merge naming no explicit target reads home" {
   # The merge is the first command in the tool call, so nothing redirected cwd
   # ahead of it and gh resolves from the hook's own checkout.
   [ "$(verdict 'gh pr merge 5')" = "home" ]
-}
-
-@test "s11: a cd into a sibling checkout is foreign" {
-  # Not because the path is read and compared: the scan stops at the first
-  # command, which is the `cd`, so the merge is never reached and the verdict
-  # is the abstention's. A path this entry point cannot resolve reaches the
-  # same verdict for the same reason, which is what s17 pins.
-  [ "$(verdict "cd $SIBLING && gh pr merge 5")" = "foreign" ]
 }
 
 @test "s12: an unresolvable home is foreign, not home" {
@@ -161,75 +138,41 @@ name_half_verdict() {
   [ "$(verdict 'gh pr merge --repo acme/widgets 5')" = "foreign" ]
 }
 
-@test "s13: a quoted flag value is read, quotes removed" {
-  # The scan resolves quoting the way the shell does, so the value gh receives
-  # is the value compared. A capture over the raw text keeps the quote
-  # characters, misses the comparison, and declines on a merge aimed squarely
-  # at home.
-  [ "$(verdict 'gh pr merge --repo="acme/widgets" 5')" = "home" ]
-  [ "$(verdict "gh pr merge --repo='other-org/widgets' 5")" = "foreign" ]
+# Only the first command decides. A cwd redirection ahead of the merge, or a
+# first command that only resembles it, fails the first-command requirement and
+# reads foreign (declining costs a findings-block posting rather than a write
+# onto a pull request in a repository the merge never named). A later command's
+# -R, attached or separated, is another tool's flag and does not decide this
+# one. The lookalike rows each fail exactly one conjunct of the merge identity
+# test and name the home repository or none, so a dropped conjunct reads home;
+# the short rows pin the length check guarding the identity test's index reads
+# under the consumers' `set -u`.
+@test "only the first command decides: a cwd redirection or lookalike first command is foreign, a later command's -R is ignored" {
+  expect_verdict "s11 a cd into a sibling checkout is foreign" foreign "cd $SIBLING && gh pr merge 5"
+  expect_verdict "s15 a later attached -R (grep) does not decide" home 'gh pr merge 42 --squash && grep -Rn TODO .'
+  expect_verdict "s15 a later attached -R (cp) does not decide" home 'gh pr merge 42 --squash && cp -Rp a b'
+  expect_verdict "s15 a later attached -R (ls) does not decide" home 'gh pr merge 42 --squash && ls -RA'
+  expect_verdict "s17 pushd ahead of the merge is foreign" foreign "pushd $SIBLING && gh pr merge 5"
+  expect_verdict "s17 a subshell cd ahead of the merge is foreign" foreign "(cd $SIBLING && gh pr merge 5)"
+  expect_verdict "s17 a cd to an unresolvable path is foreign" foreign "cd $PARENT/does-not-exist && gh pr merge 5"
+  expect_verdict "s18 a separated -R on grep does not decide" home 'gh pr merge 42 --squash && grep -R app/routes .'
+  expect_verdict "s18 a separated -R on cp does not decide" home 'gh pr merge 42 && cp -R a/b c/d'
+  expect_verdict "s18 a separated -R on ls does not decide" home 'gh pr merge 42 && ls -R /tmp'
+  expect_verdict "s20 fails on the subcommand" foreign 'gh pr view --repo acme/widgets 5 && gh pr merge 5'
+  expect_verdict "s20 fails on the command group" foreign 'gh browse merge && gh pr merge 5'
+  expect_verdict "s20 fails on the program" foreign 'hub pr merge 5 && gh pr merge 5'
+  expect_verdict "s21 a two-word first command is foreign" foreign 'gh pr && gh pr merge 5'
+  expect_verdict "s21 a one-word first command is foreign" foreign 'gh && gh pr merge 5'
 }
 
-@test "s14: the blocking entry point is unchanged by the new one" {
-  # The existing comparison is left exactly as the blocking consumers
-  # depend on it, including the over-classification that is safe for them.
+# The load-bearing fixture: the sandbox's origin remote points at a repository
+# named `gaia`, so `--repo other-org/gaia` matches the name-half comparison and
+# reads as home there, while the home slug is `acme/widgets` and the whole-slug
+# comparison reads it as the different repository it is. The blocking entry
+# point is left exactly as its consumers depend on it, including the
+# over-classification that is safe for them.
+@test "the name-half guard says home where the slug guard says foreign, and the blocking entry point is unchanged" {
   [ "$(name_half_verdict 'gh pr merge --repo other-org/gaia 5')" = "home" ]
+  [ "$(verdict 'gh pr merge --repo other-org/gaia 5')" = "foreign" ]
   [ "$(name_half_verdict 'gh pr merge --repo other-org/other-repo 5')" = "foreign" ]
-}
-
-@test "s15: a later command's unrelated ATTACHED -R does not decide this one" {
-  # `-R` is a common short flag on other tools, and a tool call may run one
-  # after the merge. Reading its letters as the target classifies an ordinary
-  # command foreign, and an acting consumer then silently declines on it.
-  [ "$(verdict 'gh pr merge 42 --squash && grep -Rn TODO .')" = "home" ]
-  [ "$(verdict 'gh pr merge 42 --squash && cp -Rp a b')" = "home" ]
-  [ "$(verdict 'gh pr merge 42 --squash && ls -RA')" = "home" ]
-}
-
-# s17 covers the redirections no pattern set models. Each puts a command ahead
-# of the merge, so each fails the first-command requirement and reads foreign,
-# and the third does so without the path being resolvable at all. Declining is
-# the safe direction: it costs a findings-block posting rather than a write
-# onto a pull request in a repository the merge never named.
-@test "s17: a cwd redirection ahead of the merge is foreign" {
-  [ "$(verdict "pushd $SIBLING && gh pr merge 5")" = "foreign" ]
-  [ "$(verdict "(cd $SIBLING && gh pr merge 5)")" = "foreign" ]
-  [ "$(verdict "cd $PARENT/does-not-exist && gh pr merge 5")" = "foreign" ]
-}
-
-# s18 is the sibling of s15 for the SEPARATED spelling, which no shape test on
-# the value can tell from gh's own repository flag: a path argument carries a
-# slash exactly as a slug does. Telling `-R app/routes` (grep's recursive flag
-# plus a path) from `-R owner/repo` needs to know which command the flag
-# belongs to, and the scan knows because it reads only the first command's
-# words. The merge itself names no repository, so each of these reads home.
-@test "s18: a separated -R on another command does not decide this one" {
-  [ "$(verdict 'gh pr merge 42 --squash && grep -R app/routes .')" = "home" ]
-  [ "$(verdict 'gh pr merge 42 && cp -R a/b c/d')" = "home" ]
-  [ "$(verdict 'gh pr merge 42 && ls -R /tmp')" = "home" ]
-}
-
-# s20 discriminates the three words that identify the merge. The redirection
-# fixtures above cannot: each of those closes its first command in two words, so
-# the length check alone decides them, and a conjunct dropped from the identity
-# test would survive every one. Each of these carries a three-word first command
-# that fails exactly one conjunct, and each names the HOME repository or names
-# none, so a dropped conjunct reads it as home rather than agreeing by accident.
-@test "s20: a first command that only resembles the merge is foreign" {
-  # Fails on the subcommand.
-  [ "$(verdict 'gh pr view --repo acme/widgets 5 && gh pr merge 5')" = "foreign" ]
-  # Fails on the command group.
-  [ "$(verdict 'gh browse merge && gh pr merge 5')" = "foreign" ]
-  # Fails on the program: another tool whose first three words spell the same
-  # phrase is not this one's invocation.
-  [ "$(verdict 'hub pr merge 5 && gh pr merge 5')" = "foreign" ]
-}
-
-# s21 pins the length check that guards the identity test's own index reads.
-# A first command shorter than the merge phrase leaves those indices unset, and
-# `verdict` runs under the consumers' `set -u`, so dropping the check aborts the
-# lib mid-question rather than answering it.
-@test "s21: a first command shorter than the merge phrase is foreign" {
-  [ "$(verdict 'gh pr && gh pr merge 5')" = "foreign" ]
-  [ "$(verdict 'gh && gh pr merge 5')" = "foreign" ]
 }

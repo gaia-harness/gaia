@@ -6,7 +6,7 @@ Maintainer-only fixture suite for the `/gaia-forensics` skill. Excluded from the
 
 Each `*.bats` file's header comment names the UAT or TST ids it binds and what it asserts; this page does not restate them.
 
-Every UAT from UAT-001 through UAT-013 has at least one binding assertion. UAT-001 and UAT-002 are covered through the fixture inputs and golden files (the init/update classification and schema tests exercise these end-to-end scenarios).
+UAT coverage: `integration.md`.
 
 ## Library
 
@@ -50,8 +50,6 @@ bats .gaia/tests/forensics/01-redaction-roundtrip.bats
   - macOS: `brew install bats-core`
   - Debian/Ubuntu CI: `apt-get install -y bats`
   - Any platform: `npx -y bats@latest` (the run-all.sh entrypoint falls back to this)
-- `git` on `$PATH` (used in write-surface and redaction tests for `git init`/`git rev-parse`)
-- `python3` on `$PATH` (used for synthetic token generation in redaction tests; falls back to `printf` if absent)
 
 The npm package is `bats`, not `bats-core`. The project is bats-core and the
 Homebrew formula is bats-core, but no `bats-core` package is published to npm,

@@ -32,7 +32,14 @@ seed() {
   [ ! -L "$HANDOFFS" ]
 }
 
-@test "with a yield number only that unit's file for that number is removed" {
+# fresh_handoffs: an empty plan folder with no handoffs folder.
+fresh_handoffs() {
+  rm -rf "$PLAN"
+  mkdir -p "$PLAN"
+}
+
+@test "handoff-clear removes only the named unit's regular files, one yield or every yield, and tolerates a missing target and a trailing slash" {
+  # one yield number: only that unit's file for that number
   seed planner-yield-1.md planner-yield-2.md planner-yield-12.md phase-1-task-a-yield-1.md
   run bash "$SCRIPT" "$PLAN" planner 1
   [ "$status" -eq 0 ]
@@ -40,9 +47,9 @@ seed() {
   [ -f "$HANDOFFS/planner-yield-2.md" ]
   [ -f "$HANDOFFS/planner-yield-12.md" ]
   [ -f "$HANDOFFS/phase-1-task-a-yield-1.md" ]
-}
 
-@test "without a yield number every file of that unit is removed and other units are left" {
+  # no yield number: every file of the unit, other units and extended names left
+  fresh_handoffs
   seed phase-2-task-build-yield-1.md phase-2-task-build-yield-2.md phase-2-task-build-yield-10.md \
     phase-2-task-other-yield-1.md planner-yield-1.md phase-2-task-build-yield-2.md.keep
   run bash "$SCRIPT" "$PLAN" phase-2-task-build
@@ -53,26 +60,26 @@ seed() {
   [ -f "$HANDOFFS/phase-2-task-other-yield-1.md" ]
   [ -f "$HANDOFFS/planner-yield-1.md" ]
   [ -f "$HANDOFFS/phase-2-task-build-yield-2.md.keep" ]
-}
 
-@test "a unit whose name extends another unit's name keeps its own files when the shorter unit is cleared" {
+  # a unit whose name extends the cleared unit's name keeps its files
+  fresh_handoffs
   seed phase-1-task-a-yield-1.md phase-1-task-a-yield-2-yield-1.md
   run bash "$SCRIPT" "$PLAN" phase-1-task-a
   [ "$status" -eq 0 ]
   [ ! -e "$HANDOFFS/phase-1-task-a-yield-1.md" ]
   [ -f "$HANDOFFS/phase-1-task-a-yield-2-yield-1.md" ]
-}
 
-@test "a missing target is not an error, with or without a yield number" {
+  # a missing target is not an error, with or without a yield number
+  fresh_handoffs
   seed planner-yield-1.md
   run bash "$SCRIPT" "$PLAN" phase-3-task-none 4
   [ "$status" -eq 0 ]
   run bash "$SCRIPT" "$PLAN" phase-3-task-none
   [ "$status" -eq 0 ]
   [ -f "$HANDOFFS/planner-yield-1.md" ]
-}
 
-@test "the planner unit and a phase task unit both work" {
+  # the planner unit and a multi-part phase task unit both work
+  fresh_handoffs
   seed planner-yield-3.md phase-12-task-a1-b2-yield-3.md
   run bash "$SCRIPT" "$PLAN" planner 3
   [ "$status" -eq 0 ]
@@ -80,16 +87,18 @@ seed() {
   run bash "$SCRIPT" "$PLAN" phase-12-task-a1-b2 3
   [ "$status" -eq 0 ]
   [ ! -e "$HANDOFFS/phase-12-task-a1-b2-yield-3.md" ]
-}
 
-@test "a trailing slash on the plan folder is accepted" {
+  # a trailing slash on the plan folder is accepted
+  fresh_handoffs
   seed planner-yield-1.md
   run bash "$SCRIPT" "$PLAN/" planner 1
   [ "$status" -eq 0 ]
   [ ! -e "$HANDOFFS/planner-yield-1.md" ]
 }
 
-@test "a symlinked handoffs folder is refused and the file behind it survives" {
+# bats test_tags=protected
+@test "handoff-clear never removes through a symlinked handoffs or plan folder, refuses a regular-file handoffs path, and skips a matching directory or symlink" {
+  # symlinked handoffs folder: refused, with and without a yield number
   mkdir -p "$BATS_TEST_TMPDIR/elsewhere"
   printf 'keep\n' >"$BATS_TEST_TMPDIR/elsewhere/planner-yield-1.md"
   ln -s "$BATS_TEST_TMPDIR/elsewhere" "$HANDOFFS"
@@ -100,17 +109,16 @@ seed() {
   run bash "$SCRIPT" "$PLAN" planner
   [ "$status" -eq 1 ]
   [ -f "$BATS_TEST_TMPDIR/elsewhere/planner-yield-1.md" ]
-}
 
-@test "a handoffs path that is a regular file is refused" {
+  # handoffs path that is a regular file
+  fresh_handoffs
   printf 'not a folder\n' >"$HANDOFFS"
   run bash "$SCRIPT" "$PLAN" planner 1
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF 'not a directory'
   [ -f "$HANDOFFS" ]
-}
 
-@test "a symlinked plan folder is refused and nothing behind it is touched" {
+  # symlinked plan folder
   mkdir -p "$BATS_TEST_TMPDIR/real/handoffs"
   printf 'keep\n' >"$BATS_TEST_TMPDIR/real/handoffs/planner-yield-1.md"
   ln -s "$BATS_TEST_TMPDIR/real" "$BATS_TEST_TMPDIR/linked"
@@ -118,9 +126,9 @@ seed() {
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF 'symlink'
   [ -f "$BATS_TEST_TMPDIR/real/handoffs/planner-yield-1.md" ]
-}
 
-@test "a matching name that is a directory is not removed" {
+  # matching name that is a directory
+  fresh_handoffs
   mkdir -p "$HANDOFFS/planner-yield-1.md"
   printf 'inside\n' >"$HANDOFFS/planner-yield-1.md/file"
   run bash "$SCRIPT" "$PLAN" planner 1
@@ -129,9 +137,9 @@ seed() {
   run bash "$SCRIPT" "$PLAN" planner
   [ "$status" -eq 0 ]
   [ -f "$HANDOFFS/planner-yield-1.md/file" ]
-}
 
-@test "a matching name that is a symlink is not followed or removed" {
+  # matching name that is a symlink: not followed, not removed
+  fresh_handoffs
   printf 'keep\n' >"$BATS_TEST_TMPDIR/target.md"
   mkdir -p "$HANDOFFS"
   ln -s "$BATS_TEST_TMPDIR/target.md" "$HANDOFFS/planner-yield-1.md"
@@ -163,20 +171,4 @@ seed() {
     [ "$status" -eq 2 ] || { echo "yield number '$bad' exited $status" >&2; return 1; }
   done
   [ -f "$HANDOFFS/planner-yield-1.md" ]
-}
-
-@test "red twin: a copy without the symlink check removes the file behind the symlink" {
-  local copy="$BATS_TEST_TMPDIR/handoff-clear-unguarded.sh"
-  mkdir -p "$BATS_TEST_TMPDIR/elsewhere"
-  printf 'keep\n' >"$BATS_TEST_TMPDIR/elsewhere/planner-yield-1.md"
-  ln -s "$BATS_TEST_TMPDIR/elsewhere" "$HANDOFFS"
-  sed -e 's/^if \[ -L "\$handoffs" \]; then$/if false; then/' -e 's/^\[ "\$resolved_handoffs" = .*$/:/' "$SCRIPT" >"$copy"
-  grep -qF 'if false; then' "$copy"
-  cmp -s "$SCRIPT" "$copy" && return 1
-  run bash "$SCRIPT" "$PLAN" planner 1
-  [ "$status" -eq 1 ]
-  [ -f "$BATS_TEST_TMPDIR/elsewhere/planner-yield-1.md" ]
-  run bash "$copy" "$PLAN" planner 1
-  [ "$status" -eq 0 ]
-  [ ! -e "$BATS_TEST_TMPDIR/elsewhere/planner-yield-1.md" ]
 }

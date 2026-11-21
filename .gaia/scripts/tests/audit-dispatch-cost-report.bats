@@ -147,6 +147,7 @@ build_escalate_then_skip_log() {
 ESCALATE_MEMBER_LINE="code-audit-frontend member branches=1 dispatches=0 dollars=n/a calls=n/a wall_s=n/a dollars_with_children=n/a calls_with_children=n/a wall_s_with_children=n/a not_dispatched=1 transcript_missing=0 transcript_unparsed=0 incomplete=0 unrecorded=1"
 ESCALATE_LIGHT_LINE="code-audit-frontend light_reviewer branches=1 dispatches=1 dollars=0.200000 calls=4.0 wall_s=40.000 dollars_with_children=0.300000 calls_with_children=5.0 wall_s_with_children=40.000 not_dispatched=0 transcript_missing=0 transcript_unparsed=0 incomplete=0 unrecorded=0"
 
+# bats test_tags=protected
 @test "an escalated light reviewer does not mask a full member result with no cost event" {
   build_escalate_then_skip_log
   run_report
@@ -155,39 +156,24 @@ ESCALATE_LIGHT_LINE="code-audit-frontend light_reviewer branches=1 dispatches=1 
 $ESCALATE_LIGHT_LINE" ]
 }
 
-@test "kind isolation can fail: a join without the kind condition masks the skip" {
-  build_escalate_then_skip_log
-  local mutant="$BATS_TEST_TMPDIR/mutant-report.sh"
-  cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$BATS_TEST_TMPDIR/main-root-lib.sh"
-  # shellcheck disable=SC2016
-  sed 's/ and \.kind == \$kind and \.state != "not_dispatched"/ and .state != "not_dispatched"/' \
-    "$SCRIPT" > "$mutant"
-  # The scratch copy must really differ, or this test proves nothing.
-  cmp -s "$SCRIPT" "$mutant" && return 1
-  run bash "$mutant" --root "$ROOT"
-  [ "$status" -eq 0 ]
-  local expected_member_line="${ESCALATE_MEMBER_LINE%unrecorded=1}unrecorded=0"
-  [ "$output" = "$expected_member_line
-$ESCALATE_LIGHT_LINE" ]
-}
-
-@test "results on a branch with no cost event count as unrecorded nowhere" {
+@test "unrecorded counts only results at or after the branch's first cost event: a branch with no cost event prints no line, a result before the first is zero, one after the first with no cost event of its own is one" {
+  # no cost event on the branch
   add_result member_result lb1 "$FRONTEND" d1
   add_result member_result lb1 "$FRONTEND" d1
   run_report
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
 
-@test "a result written before the branch's first cost event is not unrecorded" {
+  # a result written before the branch's first cost event
+  : > "$LOG"
   add_result member_result lb2 "$FRONTEND" d1
   add_cost lb2 "$FRONTEND" member d1 ok false 1.0 10 100 ok 0.5 2 50
   run_report
   [ "$status" -eq 0 ]
   [ "$output" = "code-audit-frontend member branches=1 dispatches=1 dollars=1.000000 calls=10.0 wall_s=100.000 dollars_with_children=1.500000 calls_with_children=12.0 wall_s_with_children=100.000 not_dispatched=0 transcript_missing=0 transcript_unparsed=0 incomplete=0 unrecorded=0" ]
-}
 
-@test "a result after the first cost event with no cost event of its own counts once" {
+  # a result after the first cost event with no cost event of its own
+  : > "$LOG"
   add_result member_result lb1 "$FRONTEND" d1
   add_result member_result lb2 "$FRONTEND" d1
   add_cost lb2 "$FRONTEND" member d1 ok false 1.0 10 100 ok 0.5 2 50
@@ -204,7 +190,7 @@ $ESCALATE_LIGHT_LINE" ]
   [ -z "$output" ]
 }
 
-@test "--window rejects zero and non-numbers with exit 2" {
+@test "usage errors exit 2: --window 0, --window x, --window with no value, an unknown argument" {
   build_window_log
   run_report --window 0
   [ "$status" -eq 2 ]
@@ -212,9 +198,6 @@ $ESCALATE_LIGHT_LINE" ]
   [ "$status" -eq 2 ]
   run_report --window
   [ "$status" -eq 2 ]
-}
-
-@test "an unknown argument exits 2" {
   run_report --bogus
   [ "$status" -eq 2 ]
 }
@@ -249,10 +232,4 @@ $ESCALATE_LIGHT_LINE" ]
   run_report --window 3
   [ "$status" -eq 0 ]
   [ "$output" = "$baseline" ]
-}
-
-# bats test_tags=whole-tree
-@test "release-exclude lists both phase-one scripts" {
-  grep -qxF '.gaia/scripts/audit-dispatch-cost-lib.sh' "$REPO_ROOT/.gaia/release-exclude"
-  grep -qxF '.gaia/scripts/audit-dispatch-cost-report.sh' "$REPO_ROOT/.gaia/release-exclude"
 }

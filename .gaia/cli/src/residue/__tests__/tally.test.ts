@@ -174,8 +174,46 @@ describe('gaia residue-tally', () => {
       rmSync(dir, {force: true, recursive: true});
   });
 
-  test('a failed pull-request window read emits gh_ok: false, candidate_count 0, empty candidates, and exits 0', () => {
-    const root = makeRoot({issues: []});
+  test.each<{corpus: FixtureCorpus; expected: object; title: string}>([
+    {
+      corpus: {issues: []},
+      expected: {candidate_count: 0, candidates: [], gh_ok: false},
+      title:
+        'a failed pull-request window read emits gh_ok: false, candidate_count 0, empty candidates, and exits 0',
+    },
+    {
+      corpus: {
+        prs: [
+          {
+            body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1),
+            headRefOid: 'sha1',
+            mergedAt: '2026-01-01T00:00:00Z',
+            number: 1,
+          },
+        ],
+      },
+      expected: {candidate_count: 0, gh_ok: false},
+      title:
+        'a failed issue read also emits gh_ok: false with an empty candidate list',
+    },
+    {
+      corpus: {
+        blobs: {'sha1:app/a.ts': 'line one\nthe cited line\nline three\n'},
+        issues: [],
+        prs: [
+          {
+            body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 2),
+            headRefOid: 'sha1',
+            mergedAt: '2026-01-01T00:00:00Z',
+            number: 1,
+          },
+        ],
+      },
+      expected: {candidate_count: 1, gh_ok: true},
+      title: 'with a corpus that would produce candidates, gh_ok is true',
+    },
+  ])('$title', ({corpus, expected}) => {
+    const root = makeRoot(corpus);
     const out = capture();
 
     const exitCode = run([], {
@@ -184,65 +222,7 @@ describe('gaia residue-tally', () => {
     });
 
     expect(exitCode).toBe(0);
-
-    const emitted = out.json() as {
-      candidate_count: number;
-      candidates: unknown[];
-      gh_ok: boolean;
-    };
-
-    expect(emitted.gh_ok).toBe(false);
-    expect(emitted.candidate_count).toBe(0);
-    expect(emitted.candidates).toEqual([]);
-  });
-
-  test('a failed issue read also emits gh_ok: false with an empty candidate list', () => {
-    const root = makeRoot({
-      prs: [
-        {
-          body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1),
-          headRefOid: 'sha1',
-          mergedAt: '2026-01-01T00:00:00Z',
-          number: 1,
-        },
-      ],
-    });
-    const out = capture();
-
-    const exitCode = run([], {
-      cwd: root,
-      env: {GAIA_RESIDUE_FIXTURE_DIR: root},
-    });
-
-    expect(exitCode).toBe(0);
-
-    const emitted = out.json() as {candidate_count: number; gh_ok: boolean};
-
-    expect(emitted.gh_ok).toBe(false);
-    expect(emitted.candidate_count).toBe(0);
-  });
-
-  test('with a corpus that would produce candidates, gh_ok is true', () => {
-    const root = makeRoot({
-      blobs: {'sha1:app/a.ts': 'line one\nthe cited line\nline three\n'},
-      issues: [],
-      prs: [
-        {
-          body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 2),
-          headRefOid: 'sha1',
-          mergedAt: '2026-01-01T00:00:00Z',
-          number: 1,
-        },
-      ],
-    });
-    const out = capture();
-
-    run([], {cwd: root, env: {GAIA_RESIDUE_FIXTURE_DIR: root}});
-
-    const emitted = out.json() as {candidate_count: number; gh_ok: boolean};
-
-    expect(emitted.gh_ok).toBe(true);
-    expect(emitted.candidate_count).toBe(1);
+    expect(out.json()).toMatchObject(expected);
   });
 
   // A second HTML comment sitting beside the key must not change which line
@@ -304,60 +284,50 @@ describe('gaia residue-tally', () => {
     );
   });
 
-  test('a residual whose cited content exists nowhere at current HEAD resolves "gone"', () => {
-    const root = makeRoot({
+  test.each<{
+    argv: string[];
+    blobs: Record<string, string>;
+    expected: object;
+    line: number;
+    title: string;
+  }>([
+    {
+      argv: [],
       blobs: {
         'HEAD:app/a.ts': 'nothing like it here\n',
         'sha1:app/a.ts': 'the cited line\n',
       },
-      issues: [],
-      prs: [
-        {
-          body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1),
-          headRefOid: 'sha1',
-          mergedAt: '2026-01-01T00:00:00Z',
-          number: 1,
-        },
-      ],
-    });
-    const out = capture();
-
-    run([], {cwd: root, env: {GAIA_RESIDUE_FIXTURE_DIR: root}});
-
-    const emitted = out.json() as {candidates: {resolution: string}[]};
-
-    expect(emitted.candidates[0]?.resolution).toBe('gone');
-  });
-
-  test('a blank cited line at the head object classifies unresolvable, not still', () => {
-    const root = makeRoot({
+      expected: {candidates: [{resolution: 'gone'}]},
+      line: 1,
+      title:
+        'a residual whose cited content exists nowhere at current HEAD resolves "gone"',
+    },
+    {
+      argv: [],
       blobs: {'sha1:app/a.ts': 'first\n   \nthird\n'},
-      issues: [],
-      prs: [
-        {
-          body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 2),
-          headRefOid: 'sha1',
-          mergedAt: '2026-01-01T00:00:00Z',
-          number: 1,
-        },
-      ],
-    });
-    const out = capture();
-
-    run([], {cwd: root, env: {GAIA_RESIDUE_FIXTURE_DIR: root}});
-
-    const emitted = out.json() as {candidates: {resolution: string}[]};
-
-    expect(emitted.candidates[0]?.resolution).toBe('unresolvable');
-  });
-
-  test('--count-only performs no resolution: every candidate is "unresolved" with empty text, and count_approximate is true', () => {
-    const root = makeRoot({
+      expected: {candidates: [{resolution: 'unresolvable'}]},
+      line: 2,
+      title:
+        'a blank cited line at the head object classifies unresolvable, not still',
+    },
+    {
+      argv: ['--count-only'],
       blobs: {'sha1:app/a.ts': 'the cited line\n'},
+      expected: {
+        candidates: [{resolution: 'unresolved', resolved_line_text: ''}],
+        count_approximate: true,
+      },
+      line: 1,
+      title:
+        '--count-only performs no resolution: every candidate is "unresolved" with empty text, and count_approximate is true',
+    },
+  ])('$title', ({argv, blobs, expected, line}) => {
+    const root = makeRoot({
+      blobs,
       issues: [],
       prs: [
         {
-          body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1),
+          body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', line),
           headRefOid: 'sha1',
           mergedAt: '2026-01-01T00:00:00Z',
           number: 1,
@@ -366,18 +336,9 @@ describe('gaia residue-tally', () => {
     });
     const out = capture();
 
-    run(['--count-only'], {cwd: root, env: {GAIA_RESIDUE_FIXTURE_DIR: root}});
+    run(argv, {cwd: root, env: {GAIA_RESIDUE_FIXTURE_DIR: root}});
 
-    const emitted = out.json() as {
-      candidates: {resolution: string; resolved_line_text: string}[];
-      count_approximate: boolean;
-    };
-
-    expect(emitted.count_approximate).toBe(true);
-    expect(emitted.candidates[0]).toMatchObject({
-      resolution: 'unresolved',
-      resolved_line_text: '',
-    });
+    expect(out.json()).toMatchObject(expected);
   });
 
   test('the count-only degradation, on a cold cache: a dismissed record with non-empty cited_line_text still drops an aged residual from remaining_count and aged_candidate_count', () => {
@@ -724,71 +685,28 @@ describe('gaia residue-tally', () => {
       expect(tallyCounts(root).malformed).toEqual([]);
     });
 
-    test('a cache entry of an unexpected shape does not crash the window scan', () => {
-      // A hand-edited or truncated cache reaches the scan, and exiting 0 over
-      // a cache it cannot use is this command's stated contract. This case
-      // covers a pull-request entry that is wrong at its top level; the
-      // sibling below covers one that is wrong inside `entries[]`, which is
-      // where the consumers actually dereference.
-      const root = makeRoot(
-        corpusWithBody(bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1))
-      );
-
-      tallyCounts(root);
-
-      const cachePath = path.join(
-        root,
-        '.gaia',
-        'local',
-        'cache',
-        'residual-attribution.json'
-      );
-
-      writeFileSync(
-        cachePath,
-        JSON.stringify({
+    // A hand-edited or truncated cache reaches the scan, and exiting 0 over a
+    // cache it cannot use is this command's stated contract. The rows cover a
+    // pull-request entry wrong at its top level, one wrong inside `entries[]`
+    // (where the consumers actually dereference), and a cached resolution that
+    // is not a record (the wider blast radius: a crash there also loses an
+    // operator's dismissal in `residue-record`).
+    test.each<{cache: object; corpus: FixtureCorpus; title: string}>([
+      {
+        cache: {
           high_water_merged_at: '2026-02-01T00:00:00Z',
           prs: {1: {}, abc: {}},
           resolutions: {},
           schema: 'v3',
-        })
-      );
-
-      const out = capture();
-
-      expect(
-        run([], {
-          cwd: root,
-          env: {GAIA_RESIDUE_FIXTURE_DIR: root},
-          now: fixedNow,
-        })
-      ).toBe(0);
-      expect((out.json() as {gh_ok: boolean}).gh_ok).toBe(true);
-    });
-
-    test('a cache entry whose entries[] holds a non-record does not crash the window scan', () => {
-      // The entry passes every container check: `attribution.entries` is an
-      // array. `compute-candidates.ts` then reads `entry.key.class` two levels
-      // in, so validating only the array hands it a `null` to dereference and
-      // the command exits non-zero with a stack trace, against both its own
-      // always-exits-0 contract and the cache's promise to degrade to empty.
-      const root = makeRoot(
-        corpusWithBody(bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1))
-      );
-
-      tallyCounts(root);
-
-      const cachePath = path.join(
-        root,
-        '.gaia',
-        'local',
-        'cache',
-        'residual-attribution.json'
-      );
-
-      writeFileSync(
-        cachePath,
-        JSON.stringify({
+        },
+        corpus: corpusWithBody(
+          bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1)
+        ),
+        title:
+          'a cache entry of an unexpected shape does not crash the window scan',
+      },
+      {
+        cache: {
           high_water_merged_at: '2026-02-01T00:00:00Z',
           prs: {
             99: {
@@ -800,7 +718,45 @@ describe('gaia residue-tally', () => {
           },
           resolutions: {},
           schema: 'v3',
-        })
+        },
+        corpus: corpusWithBody(
+          bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1)
+        ),
+        title:
+          'a cache entry whose entries[] holds a non-record does not crash the window scan',
+      },
+      {
+        cache: {
+          high_water_merged_at: null,
+          prs: {},
+          resolutions: {'sha1:app/a.ts:2': null},
+          schema: 'v3',
+        },
+        corpus: {
+          blobs: {'sha1:app/a.ts': 'preamble\nthe cited line\n'},
+          issues: [],
+          prs: [
+            {
+              body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 2),
+              headRefOid: 'sha1',
+              mergedAt: '2026-01-01T00:00:00Z',
+              number: 1,
+            },
+          ],
+        },
+        title:
+          'a cached resolution that is not a record does not crash the run',
+      },
+    ])('$title', ({cache, corpus}) => {
+      const root = makeRoot(corpus);
+
+      // A run first, so the cache directory exists and the path written below
+      // is the one the command actually reads; the whole file is then replaced.
+      tallyCounts(root);
+
+      writeFileSync(
+        path.join(root, '.gaia', 'local', 'cache', 'residual-attribution.json'),
+        JSON.stringify(cache)
       );
 
       const out = capture();
@@ -866,72 +822,32 @@ describe('gaia residue-tally', () => {
       ).toEqual([]);
     });
 
-    test('a cached resolution that is not a record does not crash the run', () => {
-      // The sibling of the `prs` map, and the one whose blast radius is wider:
-      // `makeCachingResolve` hands a cached value straight back, so the crash
-      // reaches `residue-record` too, losing an operator's dismissal rather
-      // than only a read. Keyed the way `resolutionCacheKey` spells it, so the
-      // lookup hits rather than missing and silently passing.
-      const root = makeRoot({
-        blobs: {'sha1:app/a.ts': 'preamble\nthe cited line\n'},
-        issues: [],
-        prs: [
-          {
-            body: bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 2),
-            headRefOid: 'sha1',
-            mergedAt: '2026-01-01T00:00:00Z',
-            number: 1,
-          },
-        ],
-      });
-
-      // A run first, so the cache directory exists and the path written below
-      // is the one the command actually reads rather than one this test
-      // invented; the whole file is then replaced.
-      tallyCounts(root);
-
-      writeFileSync(
-        path.join(root, '.gaia', 'local', 'cache', 'residual-attribution.json'),
-        JSON.stringify({
-          high_water_merged_at: null,
-          prs: {},
-          resolutions: {'sha1:app/a.ts:2': null},
-          schema: 'v3',
-        })
-      );
-
-      const out = capture();
-
-      expect(
-        run([], {
-          cwd: root,
-          env: {GAIA_RESIDUE_FIXTURE_DIR: root},
-          now: fixedNow,
-        })
-      ).toBe(0);
-      expect((out.json() as {gh_ok: boolean}).gh_ok).toBe(true);
-    });
-
-    test('an unchanged body reuses its cached attribution instead of re-attributing', () => {
-      // Counting candidates across two runs cannot see this: a run that
-      // ignores the cache entirely produces the identical count. Only the
-      // attribution call itself distinguishes reuse from re-attribution.
-      const root = makeRoot(
-        corpusWithBody(bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1))
-      );
-
-      tallyCounts(root);
-      attributeBodySpy.mockClear();
-      tallyCounts(root);
-
-      expect(attributeBodySpy).not.toHaveBeenCalled();
-    });
-
-    test('a high-water mark of the wrong type discards the cache rather than being read as a date', () => {
-      // The field is typed `null | string` and compared as a date. Counting
-      // candidates cannot see a wrong value here either, for the same reason
-      // the test above gives, so reuse-versus-rediscovery is again the only
-      // observable that separates a validated cache from an unvalidated one.
+    // Counting candidates across two runs cannot see either case: a run that
+    // ignores the cache entirely produces the identical count. Only the
+    // attribution call itself distinguishes reuse from re-attribution. The
+    // corpus carries two merges, so re-attributing both is what separates the
+    // whole cache being discarded from one entry of it being refreshed. (Not a
+    // bare `toHaveBeenCalled()`: `vitest/prefer-called-with` autofixes that
+    // into an empty `toHaveBeenCalledWith()`, which asserts something else.)
+    test.each<{
+      expectedCalls: number;
+      tamper: (cached: Record<string, unknown>) => Record<string, unknown>;
+      title: string;
+    }>([
+      {
+        expectedCalls: 0,
+        tamper: (cached) => cached,
+        title:
+          'an unchanged body reuses its cached attribution instead of re-attributing',
+      },
+      {
+        expectedCalls: 2,
+        // The field is typed `null | string` and compared as a date.
+        tamper: (cached) => ({...cached, high_water_merged_at: 42}),
+        title:
+          'a high-water mark of the wrong type discards the cache rather than being read as a date',
+      },
+    ])('$title', ({expectedCalls, tamper}) => {
       const root = makeRoot(
         corpusWithBody(bodyWithKey(ACCEPT_HEADING, 'x/y', 'app/a.ts', 1))
       );
@@ -946,25 +862,22 @@ describe('gaia residue-tally', () => {
         'residual-attribution.json'
       );
 
-      const cached: unknown = JSON.parse(readFileSync(cachePath, 'utf8'));
-
       writeFileSync(
         cachePath,
-        JSON.stringify({
-          ...(cached as Record<string, unknown>),
-          high_water_merged_at: 42,
-        })
+        JSON.stringify(
+          tamper(
+            JSON.parse(readFileSync(cachePath, 'utf8')) as Record<
+              string,
+              unknown
+            >
+          )
+        )
       );
 
       attributeBodySpy.mockClear();
       tallyCounts(root);
 
-      // Not a bare `toHaveBeenCalled()`: `vitest/prefer-called-with` autofixes
-      // that into an empty `toHaveBeenCalledWith()`, which asserts something
-      // else entirely. The count is the stronger claim anyway: this corpus
-      // carries two merges, so re-attributing both is what distinguishes the
-      // whole cache being discarded from one entry of it being refreshed.
-      expect(attributeBodySpy).toHaveBeenCalledTimes(2);
+      expect(attributeBodySpy).toHaveBeenCalledTimes(expectedCalls);
     });
   });
 });

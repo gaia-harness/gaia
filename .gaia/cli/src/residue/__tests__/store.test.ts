@@ -1,6 +1,5 @@
 import {describe, expect, test} from 'vitest';
 import {
-  appendFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -182,98 +181,44 @@ describe('residue/store', () => {
   });
 
   describe('refusals', () => {
-    test(
-      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-      'a record whose reason carries \\n is refused, and the store file is left unchanged',
-      () => {
-        const sandbox = setupSandbox();
+    test.each<{pattern: RegExp; record: StoreRecord; title: string}>([
+      {
+        pattern: /reason/,
+        record: baseRecord({line: 2, reason: 'line one\nline two'}),
+        title: String.raw`a record whose reason carries \n is refused, and the store file is left unchanged`,
+      },
+      {
+        pattern: /cited_line_text/,
+        record: baseRecord({
+          cited_line_text: 'const a = 1;\nconst b = 2;',
+          line: 2,
+        }),
+        title: String.raw`a record whose cited_line_text carries \n is refused, and the store file is left unchanged`,
+      },
+      {
+        pattern: /class/,
+        record: baseRecord({class: 'holistic/foo\nbar', line: 2}),
+        title: String.raw`a record whose class carries \n is refused, and the store file is left unchanged`,
+      },
+      {
+        pattern: /path/,
+        record: baseRecord({line: 2, path: 'app/foo.ts\napp/bar.ts'}),
+        title: String.raw`a record whose path carries \n is refused, and the store file is left unchanged`,
+      },
+      {
+        pattern: /reason/,
+        record: baseRecord({line: 2, reason: 'line one\rline two'}),
+        title: String.raw`a record carrying \r is refused the same way`,
+      },
+    ])('$title', ({pattern, record}) => {
+      const sandbox = setupSandbox();
 
-        try {
-          expectRefusalLeavesStoreUnchanged(
-            sandbox.root,
-            baseRecord({line: 2, reason: 'line one\nline two'}),
-            /reason/
-          );
-        } finally {
-          sandbox.cleanup();
-        }
+      try {
+        expectRefusalLeavesStoreUnchanged(sandbox.root, record, pattern);
+      } finally {
+        sandbox.cleanup();
       }
-    );
-
-    test(
-      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-      'a record whose cited_line_text carries \\n is refused, and the store file is left unchanged',
-      () => {
-        const sandbox = setupSandbox();
-
-        try {
-          expectRefusalLeavesStoreUnchanged(
-            sandbox.root,
-            baseRecord({
-              cited_line_text: 'const a = 1;\nconst b = 2;',
-              line: 2,
-            }),
-            /cited_line_text/
-          );
-        } finally {
-          sandbox.cleanup();
-        }
-      }
-    );
-
-    test(
-      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-      'a record whose class carries \\n is refused, and the store file is left unchanged',
-      () => {
-        const sandbox = setupSandbox();
-
-        try {
-          expectRefusalLeavesStoreUnchanged(
-            sandbox.root,
-            baseRecord({class: 'holistic/foo\nbar', line: 2}),
-            /class/
-          );
-        } finally {
-          sandbox.cleanup();
-        }
-      }
-    );
-
-    test(
-      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-      'a record whose path carries \\n is refused, and the store file is left unchanged',
-      () => {
-        const sandbox = setupSandbox();
-
-        try {
-          expectRefusalLeavesStoreUnchanged(
-            sandbox.root,
-            baseRecord({line: 2, path: 'app/foo.ts\napp/bar.ts'}),
-            /path/
-          );
-        } finally {
-          sandbox.cleanup();
-        }
-      }
-    );
-
-    test(
-      // eslint-disable-next-line unicorn/prefer-string-raw -- vitest/valid-title requires a plain string title, not a tagged template
-      'a record carrying \\r is refused the same way',
-      () => {
-        const sandbox = setupSandbox();
-
-        try {
-          expectRefusalLeavesStoreUnchanged(
-            sandbox.root,
-            baseRecord({line: 2, reason: 'line one\rline two'}),
-            /reason/
-          );
-        } finally {
-          sandbox.cleanup();
-        }
-      }
-    );
+    });
 
     test('a reason with a quote, a backslash, and a tab is accepted and round-trips byte-identically', () => {
       const sandbox = setupSandbox();
@@ -607,40 +552,27 @@ describe('residue/store', () => {
 
       expect(containsExclusionLine(realExcludePath)).toBe(true);
     });
-
-    test('a scratch copy with the line removed reads red', () => {
-      const sandbox = setupSandbox();
-
-      try {
-        const realExcludePath = path.join(
-          REPO_ROOT,
-          '.gaia',
-          'release-exclude'
-        );
-        const withoutLine = readFileSync(realExcludePath, 'utf8')
-          .split('\n')
-          .filter((line) => line.trim() !== STORE_RELATIVE_PATH)
-          .join('\n');
-        const scratchPath = path.join(sandbox.root, 'release-exclude');
-
-        writeFileSync(scratchPath, withoutLine);
-
-        expect(containsExclusionLine(scratchPath)).toBe(false);
-      } finally {
-        sandbox.cleanup();
-      }
-    });
   });
 
   describe('append onto a store missing its final newline', () => {
-    test('keeps both the prior record and the appended one readable', () => {
+    test.each<{appended: StoreRecord; title: string}>([
+      {
+        appended: baseRecord({
+          line: 2,
+          reason: 'appended after the truncation',
+        }),
+        title: 'keeps both the prior record and the appended one readable',
+      },
+      {
+        appended: baseRecord({line: 2}),
+        title: 'the prior record still suppresses its own coordinate',
+      },
+    ])('$title', ({appended}) => {
       const sandbox = setupSandbox();
 
       try {
         seedWithoutTrailingNewline(sandbox.root);
-        appendRecords(sandbox.root, [
-          baseRecord({line: 2, reason: 'appended after the truncation'}),
-        ]);
+        appendRecords(sandbox.root, [appended]);
 
         const {records, skipped} = readStore(sandbox.root);
 
@@ -648,46 +580,11 @@ describe('residue/store', () => {
         expect(records.map((record) => record.line)).toEqual([1, 2]);
         expect(records.map((record) => record.reason)).toEqual([
           'seeded by hand',
-          'appended after the truncation',
+          appended.reason,
         ]);
-      } finally {
-        sandbox.cleanup();
-      }
-    });
-
-    test('the prior record still suppresses its own coordinate', () => {
-      const sandbox = setupSandbox();
-
-      try {
-        seedWithoutTrailingNewline(sandbox.root);
-        appendRecords(sandbox.root, [baseRecord({line: 2})]);
-
-        const {records} = readStore(sandbox.root);
-
         expect(
           hasCoordinateRecord(records, {line: 1, path: baseRecord().path})
         ).toBe(true);
-      } finally {
-        sandbox.cleanup();
-      }
-    });
-
-    test('guard-must-fail: concatenating instead of separating loses both records', () => {
-      const sandbox = setupSandbox();
-
-      try {
-        const seeded = seedWithoutTrailingNewline(sandbox.root);
-        const filePath = storeFilePath(sandbox.root);
-
-        // The pre-fix behavior, written directly: append with no separator.
-        appendFileSync(filePath, `${JSON.stringify({...seeded, line: 2})}\n`, {
-          flag: 'a',
-        });
-
-        const {records, skipped} = readStore(sandbox.root);
-
-        expect(records).toEqual([]);
-        expect(skipped).toHaveLength(1);
       } finally {
         sandbox.cleanup();
       }

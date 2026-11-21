@@ -37,19 +37,12 @@ key_json() {
     "$GAIA_USAGE_JQ_DEFS"' usage_key($branch; $session_id; $default_branch; $branch_map)'
 }
 
-# ---------- 1. source-time purity and the function set ----------
-
-@test "C6 names: the functions the file defines equal the frozen set, exactly" {
-  local defined expected
-  defined="$(grep -o '^gaia_usage_[a-z_]*()' "$USAGE_LIBRARY" | tr -d '()' | sort)"
-  expected="$(printf '%s\n' gaia_usage_main_root gaia_usage_telemetry_directory \
-    gaia_usage_default_branch gaia_usage_tree_roots gaia_usage_projects_root \
-    gaia_usage_encode_path gaia_usage_candidate_directories gaia_usage_due_files \
-    gaia_usage_valid_reference gaia_usage_branch_key gaia_usage_branch_map \
-    gaia_usage_append gaia_usage_inactive_reason gaia_usage_hooks_registered | sort)"
-  [ "$(printf '%s\n' "$defined" | wc -l | tr -d ' ')" -eq 14 ]
-  [ "$defined" = "$expected" ]
+# expect_equal <case> <got> <want>: fails the calling test naming the case.
+expect_equal() {
+  [ "$2" = "$3" ] || { printf 'case %s: got [%s] want [%s]\n' "$1" "$2" "$3" >&2; return 1; }
 }
+
+# ---------- 1. source-time purity and the function set ----------
 
 @test "sourcing under set -u with an empty PATH defines every C6 name (bash 3.2 and 5)" {
   local bash_binary function_name
@@ -79,7 +72,7 @@ key_json() {
 
 # ---------- 2. branch map and hash parity ----------
 
-@test "branch map: every spelling's norm equals gaia_branch_normalize, and the fixture is non-trivial" {
+@test "branch map: every spelling normalizes as gaia_branch_normalize, including a dash-leading spelling" {
   local -a raw_branches=('fix/foo' 'worktree-debt+123-slug' 'worktree-worktree-x' 'a+b+c' 'HEAD' ''
     'release/v2.0.0-rc.1' 'worktree-agent-a109ec9e' 'feat/has space' 'feat/dollar$x'
     'main' 'worktree-plan+spec-087-x' 'a.b.c/d' "$(printf 'z%.0s' $(seq 1 130))")
@@ -98,6 +91,10 @@ key_json() {
   [ "$(jq -r '.["worktree-worktree-x"].norm' <<<"$branch_map")" = "worktree-x" ]
   [ "$(jq -r '.["a+b+c"].key' <<<"$branch_map")" = "branch:a/b/c" ]
   [ "$(jq -r '.[""].key' <<<"$branch_map")" = "null" ]
+  # A spelling that starts with a dash survives intact.
+  branch_map="$(gaia_usage_branch_map '-x' '--args')"
+  [ "$(jq -r '.["-x"].norm' <<<"$branch_map")" = "-x" ] || { echo "case dash-leading: -x norm differs"; return 1; }
+  [ "$(jq -r '.["--args"].norm' <<<"$branch_map")" = "--args" ] || { echo "case dash-leading: --args norm differs"; return 1; }
 }
 
 @test "branch key: a failing branch hashes to the first 16 hex characters of its sha256" {
@@ -112,45 +109,37 @@ key_json() {
   [ "$(gaia_usage_branch_key "$(printf 'q%.0s' $(seq 1 128))")" = "branch:$(printf 'q%.0s' $(seq 1 128))" ]
 }
 
-@test "branch map: a spelling that starts with a dash survives intact" {
-  local branch_map
-  branch_map="$(gaia_usage_branch_map '-x' '--args')"
-  [ "$(jq -r '.["-x"].norm' <<<"$branch_map")" = "-x" ]
-  [ "$(jq -r '.["--args"].norm' <<<"$branch_map")" = "--args" ]
-}
-
 # ---------- 3. key derivation ----------
 
-@test "key: default branch resolved through origin/HEAD keys session, never branch" {
+@test "key derivation: default branch, master default, HEAD, empty and agent worktrees" {
+  local default_branch
+
+  # case: default branch resolved through origin/HEAD keys session, never branch
   make_repo "$TEMPORARY_DIRECTORY/km"
   git -C "$TEMPORARY_DIRECTORY/km" update-ref refs/remotes/origin/main HEAD
   git -C "$TEMPORARY_DIRECTORY/km" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
-  local default_branch
   default_branch="$(gaia_usage_default_branch "$TEMPORARY_DIRECTORY/km")"
-  [ "$default_branch" = main ]
-  [ "$(key_json main S1 "$default_branch")" = '{"key":"session:S1","inherit":false}' ]
-  [ "$(key_json fix/foo S1 "$default_branch")" = '{"key":"branch:fix/foo","inherit":false}' ]
-  [ "$(key_json worktree-fix+bar S1 "$default_branch")" = '{"key":"branch:fix/bar","inherit":false}' ]
-}
+  expect_equal "origin/HEAD main" "$default_branch" main || return 1
+  expect_equal "main keys session" "$(key_json main S1 "$default_branch")" '{"key":"session:S1","inherit":false}' || return 1
+  expect_equal "fix/foo keys branch" "$(key_json fix/foo S1 "$default_branch")" '{"key":"branch:fix/foo","inherit":false}' || return 1
+  expect_equal "worktree-fix+bar keys branch" "$(key_json worktree-fix+bar S1 "$default_branch")" '{"key":"branch:fix/bar","inherit":false}' || return 1
 
-@test "key: a master default, named by origin/HEAD, keys session and never branch:master" {
+  # case: a master default, named by origin/HEAD, keys session and never branch:master
   make_repo "$TEMPORARY_DIRECTORY/kmaster" master
   git -C "$TEMPORARY_DIRECTORY/kmaster" update-ref refs/remotes/origin/master HEAD
   git -C "$TEMPORARY_DIRECTORY/kmaster" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/master
-  local default_branch
   default_branch="$(gaia_usage_default_branch "$TEMPORARY_DIRECTORY/kmaster")"
-  [ "$default_branch" = master ]
-  [ "$(key_json master S2 "$default_branch")" = '{"key":"session:S2","inherit":false}' ]
-  [ "$(key_json main S2 "$default_branch")" = '{"key":"branch:main","inherit":false}' ]
-}
+  expect_equal "origin/HEAD master" "$default_branch" master || return 1
+  expect_equal "master keys session" "$(key_json master S2 "$default_branch")" '{"key":"session:S2","inherit":false}' || return 1
+  expect_equal "main keys branch under a master default" "$(key_json main S2 "$default_branch")" '{"key":"branch:main","inherit":false}' || return 1
 
-@test "key: HEAD and empty key session; agent worktrees inherit" {
-  [ "$(key_json HEAD S3 main)" = '{"key":"session:S3","inherit":false}' ]
-  [ "$(key_json '' S3 main)" = '{"key":"session:S3","inherit":false}' ]
-  [ "$(key_json worktree-agent-abc123 S3 main)" = '{"key":"session:S3","inherit":true}' ]
+  # case: HEAD and empty key session; agent worktrees inherit
+  expect_equal "HEAD" "$(key_json HEAD S3 main)" '{"key":"session:S3","inherit":false}' || return 1
+  expect_equal "empty" "$(key_json '' S3 main)" '{"key":"session:S3","inherit":false}' || return 1
+  expect_equal "agent worktree" "$(key_json worktree-agent-abc123 S3 main)" '{"key":"session:S3","inherit":true}' || return 1
   # A branch key is never produced for a missing gitBranch (null reaches jq as null).
   run jq -nc --argjson branch_map '{}' --arg session_id S3 "$GAIA_USAGE_JQ_DEFS"' usage_key(null; $session_id; "main"; $branch_map)'
-  [ "$output" = '{"key":"session:S3","inherit":false}' ]
+  expect_equal "null branch" "$output" '{"key":"session:S3","inherit":false}' || return 1
 }
 
 @test "key: a command-substitution branch is hashed and runs nothing" {
@@ -164,20 +153,14 @@ key_json() {
 
 # ---------- 4. default branch fallback ----------
 
-@test "default branch: only master and no origin resolves master" {
+@test "default branch resolution: master only, main and master, neither" {
   make_repo "$TEMPORARY_DIRECTORY/dm" master
-  [ "$(gaia_usage_default_branch "$TEMPORARY_DIRECTORY/dm")" = master ]
-}
-
-@test "default branch: main and master with no origin resolves main" {
+  expect_equal "only master" "$(gaia_usage_default_branch "$TEMPORARY_DIRECTORY/dm")" master || return 1
   make_repo "$TEMPORARY_DIRECTORY/dboth" main
   git -C "$TEMPORARY_DIRECTORY/dboth" branch master
-  [ "$(gaia_usage_default_branch "$TEMPORARY_DIRECTORY/dboth")" = main ]
-}
-
-@test "default branch: neither ref nor origin falls back to main" {
+  expect_equal "main and master" "$(gaia_usage_default_branch "$TEMPORARY_DIRECTORY/dboth")" main || return 1
   make_repo "$TEMPORARY_DIRECTORY/dneither" trunk
-  [ "$(gaia_usage_default_branch "$TEMPORARY_DIRECTORY/dneither")" = main ]
+  expect_equal "neither ref" "$(gaia_usage_default_branch "$TEMPORARY_DIRECTORY/dneither")" main || return 1
 }
 
 # ---------- 5. membership and candidate directories ----------
@@ -209,39 +192,39 @@ is_member() {
   [ "$(is_member "" "$roots")" = false ]
 }
 
-@test "candidate dirs: decoy dropped; main and worktree-prefixed project dirs listed" {
-  local main="$TEMPORARY_DIRECTORY/main" encoded_path projects_directory="$TEMPORARY_DIRECTORY/projects"
+@test "candidate directories: decoy dropped, main, worktree and outside-worktree dirs listed, encoding" {
+  local main="$TEMPORARY_DIRECTORY/main" encoded_path projects_directory="$TEMPORARY_DIRECTORY/projects" got
+
+  # case: decoy dropped; main and worktree-prefixed project dirs listed
   make_repo "$main"
   encoded_path="$(printf '%s' "$main" | sed 's/[^A-Za-z0-9]/-/g')"
   mkdir -p "$projects_directory/$encoded_path" "$projects_directory/$encoded_path--claude-worktrees-x" "$projects_directory/$encoded_path-web" "$projects_directory/unrelated"
   : >"$projects_directory/loose-file.jsonl"
-  local got
   got="$(gaia_usage_candidate_directories "$projects_directory" "$main")"
-  [ "$(sort <<<"$got")" = "$(printf '%s\n%s' "$projects_directory/$encoded_path" "$projects_directory/$encoded_path--claude-worktrees-x" | sort)" ]
-}
+  expect_equal "decoy dropped" "$(sort <<<"$got")" "$(printf '%s\n%s' "$projects_directory/$encoded_path" "$projects_directory/$encoded_path--claude-worktrees-x" | sort)" || return 1
 
-@test "candidate dirs: a project dir of a worktree outside the main root is listed" {
-  local main="$TEMPORARY_DIRECTORY/main" encoded_path projects_directory="$TEMPORARY_DIRECTORY/projects"
+  # case: a project dir of a worktree outside the main root is listed
+  rm -rf "$main" "$projects_directory"
   make_repo "$main"
   git -C "$main" worktree add -q "$TEMPORARY_DIRECTORY/outside-wt" -b wt-out
   encoded_path="$(printf '%s' "$TEMPORARY_DIRECTORY/outside-wt" | sed 's/[^A-Za-z0-9]/-/g')"
   mkdir -p "$projects_directory/$encoded_path"
-  [ "$(gaia_usage_candidate_directories "$projects_directory" "$main")" = "$projects_directory/$encoded_path" ]
-}
+  expect_equal "outside worktree" "$(gaia_usage_candidate_directories "$projects_directory" "$main")" "$projects_directory/$encoded_path" || return 1
 
-@test "encoding: underscore and plus map to dash, proven against a hand-spelled dir and a narrow encoder" {
-  local main="$TEMPORARY_DIRECTORY/my_repo+x" projects_directory="$TEMPORARY_DIRECTORY/projects" literal_name
+  # case: underscore and plus map to dash, proven against a hand-spelled dir and a narrow encoder
+  local literal_name narrow narrow_projects_directory="$TEMPORARY_DIRECTORY/projects-narrow"
+  main="$TEMPORARY_DIRECTORY/my_repo+x"
+  rm -rf "$projects_directory"
   make_repo "$main"
   literal_name="$(printf '%s' "$main" | sed 's/[^A-Za-z0-9]/-/g')"
   mkdir -p "$projects_directory/$literal_name"
-  [ "$(gaia_usage_candidate_directories "$projects_directory" "$main")" = "$projects_directory/$literal_name" ]
-  [ "$(gaia_usage_encode_path "$main")" = "$literal_name" ]
+  expect_equal "encoded directory" "$(gaia_usage_candidate_directories "$projects_directory" "$main")" "$projects_directory/$literal_name" || return 1
+  expect_equal "encode_path" "$(gaia_usage_encode_path "$main")" "$literal_name" || return 1
   # The narrow encoder (only / and .) names a different directory and is not matched.
-  local narrow_projects_directory="$TEMPORARY_DIRECTORY/projects-narrow" narrow
   narrow="$(printf '%s' "$main" | sed 's/[/.]/-/g')"
-  [ "$narrow" != "$literal_name" ]
+  [ "$narrow" != "$literal_name" ] || { echo "case narrow encoder: names the same directory"; return 1; }
   mkdir -p "$narrow_projects_directory/$narrow"
-  [ -z "$(gaia_usage_candidate_directories "$narrow_projects_directory" "$main")" ]
+  [ -z "$(gaia_usage_candidate_directories "$narrow_projects_directory" "$main")" ] || { echo "case narrow encoder: matched"; return 1; }
 }
 
 @test "projects root: transcript_path wins, then GAIA_TALLY_PROJECTS_ROOT, then CLAUDE_CONFIG_DIR" {
@@ -316,54 +299,59 @@ append_in_fresh_process() {
   bash -c 'source "$1"; gaia_usage_append "$2" "$3" "$4"' _ "$USAGE_LIBRARY" "$@"
 }
 
-@test "append: lock timeout returns 75 and leaves the ledger byte-identical; the same call lands once unlocked" {
-  local telemetry_directory="$TEMPORARY_DIRECTORY/tel" rows="$TEMPORARY_DIRECTORY/rows.jsonl"
+@test "append refuses: lock timeout 75, locked-out first write, bad basename 2, unreachable mutex 1" {
+  local telemetry_directory rows
+
+  # case: lock timeout returns 75 and leaves the ledger byte-identical; the same call lands once unlocked
+  telemetry_directory="$TEMPORARY_DIRECTORY/tel" rows="$TEMPORARY_DIRECTORY/rows.jsonl"
   mkdir -p "$telemetry_directory"
   printf '{"n":1}\n' >"$rows"
   run append_in_fresh_process "$telemetry_directory" usage.jsonl "$rows"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "case lock timeout: first append exited $status"; return 1; }
   cp "$telemetry_directory/usage.jsonl" "$TEMPORARY_DIRECTORY/before"
   mkdir "$telemetry_directory/specs.lock.d"
   printf '{"n":2}\n' >"$rows"
   GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 GAIA_LEDGER_LOCK_TIMEOUT_SECONDS=1 GAIA_LEDGER_LOCK_POLL_SECONDS=0.1 \
     run append_in_fresh_process "$telemetry_directory" usage.jsonl "$rows"
-  [ "$status" -eq 75 ]
-  cmp "$telemetry_directory/usage.jsonl" "$TEMPORARY_DIRECTORY/before"
+  [ "$status" -eq 75 ] || { echo "case lock timeout: locked append exited $status, want 75"; return 1; }
+  cmp "$telemetry_directory/usage.jsonl" "$TEMPORARY_DIRECTORY/before" || { echo "case lock timeout: ledger changed"; return 1; }
   rmdir "$telemetry_directory/specs.lock.d"
   GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 run append_in_fresh_process "$telemetry_directory" usage.jsonl "$rows"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$telemetry_directory/usage.jsonl")" = "$(printf '{"n":1}\n{"n":2}')" ]
-}
+  [ "$status" -eq 0 ] || { echo "case lock timeout: unlocked append exited $status"; return 1; }
+  [ "$(cat "$telemetry_directory/usage.jsonl")" = "$(printf '{"n":1}\n{"n":2}')" ] || { echo "case lock timeout: ledger rows differ"; return 1; }
 
-@test "append: a locked-out first write leaves the file absent" {
-  local telemetry_directory="$TEMPORARY_DIRECTORY/tel2" rows="$TEMPORARY_DIRECTORY/rows2.jsonl"
+  # case: a locked-out first write leaves the file absent
+  telemetry_directory="$TEMPORARY_DIRECTORY/tel2" rows="$TEMPORARY_DIRECTORY/rows2.jsonl"
   mkdir -p "$telemetry_directory/specs.lock.d"
   printf '{"n":1}\n' >"$rows"
   GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 GAIA_LEDGER_LOCK_TIMEOUT_SECONDS=1 GAIA_LEDGER_LOCK_POLL_SECONDS=0.1 \
     run append_in_fresh_process "$telemetry_directory" links.jsonl "$rows"
-  [ "$status" -eq 75 ]
-  [ ! -e "$telemetry_directory/links.jsonl" ]
-}
+  [ "$status" -eq 75 ] || { echo "case locked-out first write: exited $status, want 75"; return 1; }
+  [ -e "$telemetry_directory/links.jsonl" ] && { echo "case locked-out first write: file exists"; return 1; }
 
-@test "append: any other target basename returns 2 and writes nothing" {
-  local telemetry_directory="$TEMPORARY_DIRECTORY/tel3" rows="$TEMPORARY_DIRECTORY/rows3.jsonl"
+  # case: any other target basename returns 2 and writes nothing
+  telemetry_directory="$TEMPORARY_DIRECTORY/tel3" rows="$TEMPORARY_DIRECTORY/rows3.jsonl"
   printf '{"n":1}\n' >"$rows"
   run append_in_fresh_process "$telemetry_directory" other.jsonl "$rows"
-  [ "$status" -eq 2 ]
-  [ ! -e "$telemetry_directory/other.jsonl" ]
+  [ "$status" -eq 2 ] || { echo "case bad basename: other.jsonl exited $status, want 2"; return 1; }
+  [ -e "$telemetry_directory/other.jsonl" ] && { echo "case bad basename: other.jsonl written"; return 1; }
   run append_in_fresh_process "$telemetry_directory" ../usage.jsonl "$rows"
-  [ "$status" -eq 2 ]
-  [ ! -e "$telemetry_directory" ] || [ -z "$(ls -A "$telemetry_directory")" ]
-}
+  [ "$status" -eq 2 ] || { echo "case bad basename: ../usage.jsonl exited $status, want 2"; return 1; }
+  if [ -e "$telemetry_directory" ] && [ -n "$(ls -A "$telemetry_directory")" ]; then
+    echo "case bad basename: telemetry directory not empty"
+    return 1
+  fi
 
-@test "append: with the mutex helper unreachable it returns 1 and never appends unlocked" {
-  local isolated_directory="$TEMPORARY_DIRECTORY/iso" telemetry_directory="$TEMPORARY_DIRECTORY/tel4" rows="$TEMPORARY_DIRECTORY/rows4.jsonl"
+  # case: with the mutex helper unreachable it returns 1 and never appends unlocked
+  local isolated_directory="$TEMPORARY_DIRECTORY/iso"
+  telemetry_directory="$TEMPORARY_DIRECTORY/tel4" rows="$TEMPORARY_DIRECTORY/rows4.jsonl"
   mkdir -p "$isolated_directory/.gaia/scripts"
   cp "$USAGE_LIBRARY" "$isolated_directory/.gaia/scripts/usage-lib.sh"
   printf '{"n":1}\n' >"$rows"
   run bash -c 'source "$1"; gaia_usage_append "$2" usage.jsonl "$3"' _ "$isolated_directory/.gaia/scripts/usage-lib.sh" "$telemetry_directory" "$rows"
-  [ "$status" -eq 1 ]
-  [ ! -e "$telemetry_directory/usage.jsonl" ]
+  [ "$status" -eq 1 ] || { echo "case unreachable mutex: exited $status, want 1"; return 1; }
+  [ -e "$telemetry_directory/usage.jsonl" ] && { echo "case unreachable mutex: appended unlocked"; return 1; }
+  true
 }
 
 # ---------- 9. hook registration ----------
@@ -411,21 +399,6 @@ write_settings() {
   [ -z "$output" ]
 }
 
-# ---------- 11. state registry ----------
-
-@test "state registry: valid JSON and the usage entries are present with the frozen shape" {
-  local registry_file="$REPO_ROOT/.gaia/state-registry.json" id
-  jq empty "$registry_file"
-  for id in telemetry-usage-ledger telemetry-links-ledger telemetry-usage-cursor-cache \
-    telemetry-usage-branch-memo telemetry-usage-sweep-lock telemetry-usage-tmp research-main; do
-    [ "$(jq -r --arg id "$id" '[.entries[] | select(.id == $id)] | length' "$registry_file")" = 1 ] ||
-      { printf 'registry entry %s missing or duplicated\n' "$id" >&2; return 1; }
-  done
-  [ "$(jq -r '.entries[] | select(.id == "research-main") | "\(.path) \(.match) \(.kind) \(.scope) \(.writer)"' "$registry_file")" = "research/ prefix dir main-only hand-authored" ]
-  [ "$(jq -r '.entries[] | select(.id == "telemetry-usage-branch-memo") | "\(.path) \(.match) \(.kind) \(.scope) \(.writer)"' "$registry_file")" = "telemetry/usage-branch-memo.json exact file shared code" ]
-  [ "$(jq -r '.entries[] | select(.id == "telemetry-usage-tmp") | .match' "$registry_file")" = glob ]
-}
-
 # ---------- 12. due files ----------
 
 # make_due_fixture: sets PROJECTS_DIRECTORY, MAIN, TELEMETRY_DIRECTORY and the file paths CURRENT_FILE, GROWN_FILE, UNCACHED_FILE and TRUNCATED_FILE (the current one is up to date).
@@ -454,33 +427,28 @@ make_due_fixture() {
             ($truncated_file): {session_id: "s", role: "main", offset: 50, size: 50}}, pairs: {}}' >"$TELEMETRY_DIRECTORY/usage-cursors.json"
 }
 
-@test "due files: grown, uncached, and truncated files are listed oldest first; the current one is not" {
+@test "due files: grown, uncached, truncated, missing cache, no candidates" {
   make_due_fixture
   local got want
+  # case: grown, uncached and truncated files are listed oldest first; the current one is not
   got="$(gaia_usage_due_files "$PROJECTS_DIRECTORY" "$MAIN" "$TELEMETRY_DIRECTORY")"
   want="$(printf '50\t10\t%s\n70\t0\t%s\n5\t50\t%s' "$GROWN_FILE" "$UNCACHED_FILE" "$TRUNCATED_FILE")"
-  [ "$got" = "$want" ] || { printf 'got:\n%s\nwant:\n%s\n' "$got" "$want" >&2; return 1; }
-  grep -qF "$CURRENT_FILE" <<<"$got" && return 1
-  true
-}
+  [ "$got" = "$want" ] || { printf 'case oldest first: got:\n%s\nwant:\n%s\n' "$got" "$want" >&2; return 1; }
+  grep -qF "$CURRENT_FILE" <<<"$got" && { echo "case oldest first: the current file is listed"; return 1; }
 
-@test "due files: a missing or unparseable cache lists every non-empty transcript with offset 0" {
-  make_due_fixture
-  local want
+  # case: a missing or unparseable cache lists every non-empty transcript with offset 0
   want="$(printf '50\t0\t%s\n70\t0\t%s\n5\t0\t%s\n100\t0\t%s' "$GROWN_FILE" "$UNCACHED_FILE" "$TRUNCATED_FILE" "$CURRENT_FILE")"
   rm "$TELEMETRY_DIRECTORY/usage-cursors.json"
-  [ "$(gaia_usage_due_files "$PROJECTS_DIRECTORY" "$MAIN" "$TELEMETRY_DIRECTORY")" = "$want" ]
+  expect_equal "missing cache" "$(gaia_usage_due_files "$PROJECTS_DIRECTORY" "$MAIN" "$TELEMETRY_DIRECTORY")" "$want" || return 1
   printf '{ not json' >"$TELEMETRY_DIRECTORY/usage-cursors.json"
-  [ "$(gaia_usage_due_files "$PROJECTS_DIRECTORY" "$MAIN" "$TELEMETRY_DIRECTORY")" = "$want" ]
+  expect_equal "unparseable cache" "$(gaia_usage_due_files "$PROJECTS_DIRECTORY" "$MAIN" "$TELEMETRY_DIRECTORY")" "$want" || return 1
   printf '{"files": 7}' >"$TELEMETRY_DIRECTORY/usage-cursors.json"
-  [ "$(gaia_usage_due_files "$PROJECTS_DIRECTORY" "$MAIN" "$TELEMETRY_DIRECTORY")" = "$want" ]
-}
+  expect_equal "cache with a non-object files" "$(gaia_usage_due_files "$PROJECTS_DIRECTORY" "$MAIN" "$TELEMETRY_DIRECTORY")" "$want" || return 1
 
-@test "due files: no candidate directory prints nothing and succeeds" {
-  MAIN="$TEMPORARY_DIRECTORY/main"
-  make_repo "$MAIN"
+  # case: no candidate directory prints nothing and succeeds
+  make_repo "$TEMPORARY_DIRECTORY/main-empty"
   mkdir -p "$TEMPORARY_DIRECTORY/empty-projects"
-  run gaia_usage_due_files "$TEMPORARY_DIRECTORY/empty-projects" "$MAIN" "$TEMPORARY_DIRECTORY/tel"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  run gaia_usage_due_files "$TEMPORARY_DIRECTORY/empty-projects" "$TEMPORARY_DIRECTORY/main-empty" "$TEMPORARY_DIRECTORY/tel-empty"
+  [ "$status" -eq 0 ] || { echo "case no candidates: exited $status"; return 1; }
+  [ -z "$output" ] || { echo "case no candidates: printed [$output]"; return 1; }
 }

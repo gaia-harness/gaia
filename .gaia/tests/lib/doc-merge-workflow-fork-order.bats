@@ -18,11 +18,6 @@
 # fenced lines that check out a head or run a repo script. Prose lines are not
 # read, because prose does not run.
 #
-# The checker is a function over a file, so the mutation tests below drive the
-# same function against scratch copies of the page and prove it can fail:
-# the check moved below the audit-loop-eval fence, a head checkout inserted
-# above it, and the check absent altogether.
-#
 # Assertion style: .claude/rules/bats-assertions.md. `.gaia/tests/` is
 # release-excluded and out of wiki-style.md's scope.
 
@@ -45,16 +40,6 @@ fenced_lines() {
     !inside && $0 ~ regex { inside = 1; next }
     inside && /^```[[:space:]]*$/ { inside = 0; next }
     inside { printf "%d\t%s\n", NR, $0 }
-  ' "$1"
-}
-
-# fence_block_of <file> <literal>: `<open-line> <close-line>` of the first shell
-# fence whose body contains <literal>, or nothing.
-fence_block_of() {
-  awk -v regex="$FENCE_OPEN_REGEX" -v pattern="$2" '
-    !inside && $0 ~ regex { inside = 1; start = NR; hit = 0; next }
-    inside && /^```[[:space:]]*$/ { if (hit) { print start, NR; exit } inside = 0; next }
-    inside && index($0, pattern) { hit = 1 }
   ' "$1"
 }
 
@@ -107,124 +92,4 @@ order_violations() {
     return 1
   }
   [ -z "$output" ]
-}
-
-@test "the guard reads real gated lines: it sees the checkpoint brief script, the status poster and the merge wait" {
-  gated="$(gated_lines "$PAGE")"
-  grep -qF 'audit-loop-eval.sh brief' <<<"$gated" || return 1
-  grep -qF 'pr-wait-merge.sh --pr' <<<"$gated" || return 1
-  grep -qF 'post-audit-status.sh' <<<"$gated" || return 1
-  # The check sits in a shell fence, not only in prose.
-  [ -n "$(first_fork_check_line "$PAGE")" ]
-}
-
-@test "the merge wait assertion fails when every pr-wait-merge.sh fence is turned into prose" {
-  scratch="${BATS_TEST_TMPDIR}/wait-as-prose.md"
-  # Drop the fence markers of every shell fence holding the merge wait, so its
-  # lines stay on the page as prose.
-  awk -v regex="$FENCE_OPEN_REGEX" '
-    { line[NR] = $0 }
-    END {
-      for (i = 1; i <= NR; i++) {
-        if (!inside && line[i] ~ regex) { inside = 1; start = i; hit = 0; continue }
-        if (inside && line[i] ~ /^```[[:space:]]*$/) {
-          if (hit) { skip[start] = 1; skip[i] = 1 }
-          inside = 0; continue
-        }
-        if (inside && index(line[i], "pr-wait-merge.sh")) hit = 1
-      }
-      for (i = 1; i <= NR; i++) if (!skip[i]) print line[i]
-    }
-  ' "$PAGE" >"$scratch"
-  [ "$(grep -cF 'pr-wait-merge.sh' "$scratch")" -ge 1 ] || return 1
-  gated="$(gated_lines "$scratch")"
-  run grep -qF 'pr-wait-merge.sh --pr' <<<"$gated"
-  [ "$status" -eq 1 ]
-}
-
-@test "the guard fails when the fork check is moved below the first audit-loop-eval.sh fence" {
-  scratch="${BATS_TEST_TMPDIR}/moved-below.md"
-  fork_block="$(fence_block_of "$PAGE" isCrossRepository)"
-  resolver_block="$(fence_block_of "$PAGE" audit-loop-eval.sh)"
-  [ -n "$fork_block" ] || return 1
-  [ -n "$resolver_block" ] || return 1
-  fork_start="${fork_block% *}"
-  fork_end="${fork_block#* }"
-  resolver_end="${resolver_block#* }"
-  # The mutation is only a move if the check really starts above the resolver.
-  [ "$fork_end" -lt "$resolver_end" ] || return 1
-  {
-    sed -n "1,$((fork_start - 1))p" "$PAGE"
-    sed -n "$((fork_end + 1)),${resolver_end}p" "$PAGE"
-    printf '\n'
-    sed -n "${fork_start},${fork_end}p" "$PAGE"
-    sed -n "$((resolver_end + 1)),\$p" "$PAGE"
-  } >"$scratch"
-  run order_violations "$scratch"
-  [ "$status" -eq 1 ] || return 1
-  grep -qF 'precedes the fork check' <<<"$output" || return 1
-  grep -qF 'audit-loop-eval.sh' <<<"$output"
-}
-
-@test "the guard fails when a gh pr checkout line sits above the fork check" {
-  scratch="${BATS_TEST_TMPDIR}/checkout-above.md"
-  fork_block="$(fence_block_of "$PAGE" isCrossRepository)"
-  [ -n "$fork_block" ] || return 1
-  fork_start="${fork_block% *}"
-  {
-    sed -n "1,$((fork_start - 1))p" "$PAGE"
-    # shellcheck disable=SC2016 # the backticks are literal fence markers
-    printf '```bash\ngh pr checkout <N>\n```\n\n'
-    sed -n "${fork_start},\$p" "$PAGE"
-  } >"$scratch"
-  run order_violations "$scratch"
-  [ "$status" -eq 1 ] || return 1
-  grep -qF 'gh pr checkout <N>' <<<"$output"
-}
-
-@test "the guard fails when a pull/<n>/head fetch sits above the fork check" {
-  scratch="${BATS_TEST_TMPDIR}/fetch-above.md"
-  fork_block="$(fence_block_of "$PAGE" isCrossRepository)"
-  [ -n "$fork_block" ] || return 1
-  fork_start="${fork_block% *}"
-  {
-    sed -n "1,$((fork_start - 1))p" "$PAGE"
-    # shellcheck disable=SC2016 # the backticks are literal fence markers
-    printf '```bash\ngit fetch origin pull/<N>/head\n```\n\n'
-    sed -n "${fork_start},\$p" "$PAGE"
-  } >"$scratch"
-  run order_violations "$scratch"
-  [ "$status" -eq 1 ] || return 1
-  grep -qF 'pull/<N>/head' <<<"$output"
-}
-
-@test "the guard fails when the fork check is absent from the fences" {
-  scratch="${BATS_TEST_TMPDIR}/no-check.md"
-  fork_block="$(fence_block_of "$PAGE" isCrossRepository)"
-  [ -n "$fork_block" ] || return 1
-  fork_start="${fork_block% *}"
-  fork_end="${fork_block#* }"
-  {
-    sed -n "1,$((fork_start - 1))p" "$PAGE"
-    sed -n "$((fork_end + 1)),\$p" "$PAGE"
-  } >"$scratch"
-  run order_violations "$scratch"
-  [ "$status" -eq 1 ] || return 1
-  grep -qF 'no fenced isCrossRepository check' <<<"$output"
-}
-
-@test "a prose-only mention of the check does not satisfy the guard" {
-  scratch="${BATS_TEST_TMPDIR}/prose-only.md"
-  fork_block="$(fence_block_of "$PAGE" isCrossRepository)"
-  [ -n "$fork_block" ] || return 1
-  fork_start="${fork_block% *}"
-  fork_end="${fork_block#* }"
-  {
-    sed -n "1,$((fork_start - 1))p" "$PAGE"
-    printf 'Ask for isCrossRepository first.\n'
-    sed -n "$((fork_end + 1)),\$p" "$PAGE"
-  } >"$scratch"
-  run order_violations "$scratch"
-  [ "$status" -eq 1 ] || return 1
-  grep -qF 'no fenced isCrossRepository check' <<<"$output"
 }

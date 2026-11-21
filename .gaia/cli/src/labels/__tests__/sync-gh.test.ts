@@ -134,19 +134,47 @@ describe('labels/sync carrier counting', () => {
     ])
   );
 
-  test('a blocked label carried only by a pull request is never deleted', () => {
-    stubGh({
-      issues: ok('[]'),
-      labelList: blockedLive,
-      pulls: ok(JSON.stringify([{number: 192}])),
-    });
+  test.each(
+    [
+      {
+        absent: [`blocked removed: ${BLOCKED}`],
+        name: 'a blocked label carried only by a pull request is never deleted',
+        present: `blocked but present: ${BLOCKED} (carried by 1 or more issues and pull requests, so it was not removed)`,
+        responses: {
+          issues: ok('[]'),
+          labelList: blockedLive,
+          pulls: ok(JSON.stringify([{number: 192}])),
+        },
+      },
+      {
+        absent: [],
+        name: 'a label carried on neither surface is still removed',
+        present: `blocked removed: ${BLOCKED}`,
+        responses: {issues: ok('[]'), labelList: blockedLive, pulls: ok('[]')},
+      },
+      {
+        absent: [`blocked removed: ${BLOCKED}`],
+        name: 'an uncountable pull-request surface refuses the delete, and says so',
+        present: `blocked but present: ${BLOCKED} (carrier count unavailable, so it was not removed)`,
+        responses: {issues: ok('[]'), labelList: blockedLive, pulls: FAILED},
+      },
+      {
+        absent: [`blocked removed: ${BLOCKED}`],
+        name: 'an uncountable issue surface refuses the delete, and says so',
+        present: `blocked but present: ${BLOCKED} (carrier count unavailable, so it was not removed)`,
+        responses: {issues: FAILED, labelList: blockedLive, pulls: ok('[]')},
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {absent, present, responses}) => {
+    stubGh(responses);
 
     enforce();
 
-    expect(stdout()).toContain(
-      `blocked but present: ${BLOCKED} (carried by 1 or more issues and pull requests, so it was not removed)`
-    );
-    expect(stdout()).not.toContain(`blocked removed: ${BLOCKED}`);
+    expect(stdout()).toContain(present);
+
+    for (const text of absent) {
+      expect(stdout()).not.toContain(text);
+    }
   });
 
   test('both surfaces are queried, so the count is not issue-only', () => {
@@ -158,36 +186,6 @@ describe('labels/sync carrier counting', () => {
     expect(ghQueries('pr')).toHaveLength(1);
     expect(ghQueries('pr')[0]).toContain('--label');
     expect(ghQueries('pr')[0]).toContain(BLOCKED);
-  });
-
-  test('a label carried on neither surface is still removed', () => {
-    stubGh({issues: ok('[]'), labelList: blockedLive, pulls: ok('[]')});
-
-    enforce();
-
-    expect(stdout()).toContain(`blocked removed: ${BLOCKED}`);
-  });
-
-  test('an uncountable pull-request surface refuses the delete, and says so', () => {
-    stubGh({issues: ok('[]'), labelList: blockedLive, pulls: FAILED});
-
-    enforce();
-
-    expect(stdout()).toContain(
-      `blocked but present: ${BLOCKED} (carrier count unavailable, so it was not removed)`
-    );
-    expect(stdout()).not.toContain(`blocked removed: ${BLOCKED}`);
-  });
-
-  test('an uncountable issue surface refuses the delete, and says so', () => {
-    stubGh({issues: FAILED, labelList: blockedLive, pulls: ok('[]')});
-
-    enforce();
-
-    expect(stdout()).toContain(
-      `blocked but present: ${BLOCKED} (carrier count unavailable, so it was not removed)`
-    );
-    expect(stdout()).not.toContain(`blocked removed: ${BLOCKED}`);
   });
 
   test('a run that never enforces is distinguishable from one that could not count', () => {
@@ -227,38 +225,69 @@ const plainRun = (responses: Responses): string => {
   return stdout();
 };
 
+type DegradeRow = {
+  expected: DegradeSource | null;
+  name: string;
+  responses: Responses;
+  unreportedLines: string[];
+};
+
 describe('labels/sync degrade source', () => {
-  test('a refused read is reported as a read degrade', () => {
-    expect(jsonRun({labelList: REFUSED}).degradedAt).toBe<DegradeSource>(
-      'read'
-    );
-  });
+  const degradeRows: DegradeRow[] = [
+    {
+      expected: 'read',
+      name: 'a refused read is reported as a read degrade',
+      responses: {labelList: REFUSED},
+      unreportedLines: [],
+    },
+    {
+      expected: 'write',
+      name: 'a refused write is reported as a write degrade',
+      responses: {labelList: ok('[]'), mutation: REFUSED},
+      unreportedLines: [],
+    },
+    {
+      expected: null,
+      name: 'a run that writes everything degrades nowhere',
+      responses: {labelList: ok('[]'), mutation: ok('')},
+      unreportedLines: [DEGRADED_LINE],
+    },
+  ];
 
-  test('a refused write is reported as a write degrade', () => {
-    expect(
-      jsonRun({labelList: ok('[]'), mutation: REFUSED}).degradedAt
-    ).toBe<DegradeSource>('write');
-  });
+  test.each(degradeRows.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {expected, responses, unreportedLines}) => {
+      expect(jsonRun(responses).degradedAt).toBe(expected);
 
-  test('a run that writes everything degrades nowhere', () => {
-    const report = jsonRun({labelList: ok('[]'), mutation: ok('')});
+      for (const line of unreportedLines) {
+        expect(stdio.errors.join('')).not.toContain(line);
+      }
+    }
+  );
 
-    expect(report.degradedAt).toBeNull();
-    expect(stdio.errors.join('')).not.toContain(DEGRADED_LINE);
-  });
-
-  test('a read degrade says the list is the whole registry', () => {
-    const printed = plainRun({labelList: REFUSED});
+  test.each(
+    [
+      {
+        absent: [],
+        name: 'a read degrade says the list is the whole registry',
+        present: 'the whole registry, not the work remaining',
+        responses: {labelList: REFUSED},
+      },
+      {
+        absent: ['the whole registry'],
+        name: 'a write degrade says the list is the mutations still owed',
+        present: 'the mutations still owed',
+        responses: {labelList: ok('[]'), mutation: REFUSED},
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {absent, present, responses}) => {
+    const printed = plainRun(responses);
 
     expect(printed).toContain(DEGRADED_LINE);
-    expect(printed).toContain('the whole registry, not the work remaining');
-  });
+    expect(printed).toContain(present);
 
-  test('a write degrade says the list is the mutations still owed', () => {
-    const printed = plainRun({labelList: ok('[]'), mutation: REFUSED});
-
-    expect(printed).toContain(DEGRADED_LINE);
-    expect(printed).toContain('the mutations still owed');
-    expect(printed).not.toContain('the whole registry');
+    for (const text of absent) {
+      expect(printed).not.toContain(text);
+    }
   });
 });

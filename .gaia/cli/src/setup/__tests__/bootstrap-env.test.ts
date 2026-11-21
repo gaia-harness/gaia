@@ -41,25 +41,44 @@ afterEach(() => {
 const frontendFile = (name: string): string =>
   path.join(root, 'apps', 'web', name);
 
+const writeIfPresent = (
+  filePath: string,
+  content: string | undefined
+): void => {
+  if (content !== undefined) {
+    writeFileSync(filePath, content, 'utf8');
+  }
+};
+
+const readIfPresent = (filePath: string): null | string =>
+  existsSync(filePath) ? readFileSync(filePath, 'utf8') : null;
+
 describe('gaia setup bootstrap-env', () => {
-  test('copies apps/web/.env.example to apps/web/.env when .env is absent', () => {
-    writeFileSync(frontendFile('.env.example'), 'FOO=bar\n', 'utf8');
+  test.each([
+    {
+      exampleEnv: 'FOO=bar\n',
+      existingEnv: undefined,
+      expectedEnv: 'FOO=bar\n',
+      name: 'copies apps/web/.env.example to apps/web/.env when .env is absent',
+    },
+    {
+      exampleEnv: 'FOO=bar\n',
+      existingEnv: 'EXISTING=1\n',
+      expectedEnv: 'EXISTING=1\n',
+      name: 'leaves an existing .env untouched',
+    },
+    {
+      exampleEnv: undefined,
+      existingEnv: undefined,
+      expectedEnv: null,
+      name: 'is a no-op when .env.example is absent',
+    },
+  ])('$name', ({exampleEnv, existingEnv, expectedEnv}) => {
+    writeIfPresent(frontendFile('.env'), existingEnv);
+    writeIfPresent(frontendFile('.env.example'), exampleEnv);
 
     expect(run([], {cwd: root})).toBe(EXIT_CODES.OK);
-    expect(readFileSync(frontendFile('.env'), 'utf8')).toBe('FOO=bar\n');
-  });
-
-  test('leaves an existing .env untouched', () => {
-    writeFileSync(frontendFile('.env'), 'EXISTING=1\n', 'utf8');
-    writeFileSync(frontendFile('.env.example'), 'FOO=bar\n', 'utf8');
-
-    expect(run([], {cwd: root})).toBe(EXIT_CODES.OK);
-    expect(readFileSync(frontendFile('.env'), 'utf8')).toBe('EXISTING=1\n');
-  });
-
-  test('is a no-op when .env.example is absent', () => {
-    expect(run([], {cwd: root})).toBe(EXIT_CODES.OK);
-    expect(existsSync(frontendFile('.env'))).toBe(false);
+    expect(readIfPresent(frontendFile('.env'))).toBe(expectedEnv);
   });
 
   test('writes no init resume cursor', () => {
@@ -70,13 +89,23 @@ describe('gaia setup bootstrap-env', () => {
     expect(existsSync(path.join(root, '.gaia', 'init-state.json'))).toBe(false);
   });
 
-  test('prints its usage on --help', () => {
-    expect(run(['--help'], {cwd: root})).toBe(EXIT_CODES.OK);
-    expect(outputs.join('')).toContain('Usage: gaia setup bootstrap-env');
-  });
-
-  test('rejects unknown flags', () => {
-    expect(run(['--bogus'], {cwd: root})).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    expect(errors.join('')).toContain('unknown flag');
+  test.each([
+    {
+      args: ['--help'],
+      exit: EXIT_CODES.OK,
+      name: 'prints its usage on --help',
+      stream: 'outputs',
+      text: 'Usage: gaia setup bootstrap-env',
+    },
+    {
+      args: ['--bogus'],
+      exit: EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      name: 'rejects unknown flags',
+      stream: 'errors',
+      text: 'unknown flag',
+    },
+  ] as const)('$name', ({args, exit, stream, text}) => {
+    expect(run([...args], {cwd: root})).toBe(exit);
+    expect({errors, outputs}[stream].join('')).toContain(text);
   });
 });

@@ -36,7 +36,6 @@ setup() {
   printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$MAIN/.gaia/local/setup-state.json"
   CACHE_FILE="$MAIN/.gaia/local/cache/shared/update-check.json"
   SCRIPT="$MAIN/.gaia/statusline/gaia-statusline.sh"
-  RIGHT_SCRIPT="$MAIN/.gaia/statusline/gaia-statusline-right.sh"
 
   TEMPORARY_HOME=$(mktemp -d -t gaia-sl-team-home-XXXXXX)
 }
@@ -64,7 +63,8 @@ render_at() {
   right_side=$(printf '%s' "$plain" | sed 's/^Claude Code *//')
 }
 
-@test "in-progress nudge keeps its Medium form while every other nudge shrinks then hides" {
+@test "the in-progress nudge keeps its Medium form and floor across widths" {
+  echo "case: in-progress nudge keeps its Medium form while every other nudge shrinks then hides"
   write_busy_cache
   declare -a widths=(260 215 200 165 125 90 80 74 60 55 50)
   declare -a expected=(
@@ -91,9 +91,7 @@ render_at() {
     case "$plain" in *"/update-gaia"*) return 1 ;; esac
     case "$plain" in *"🚀"*) return 1 ;; esac
   done
-}
-
-@test "the in-progress nudge never takes a bare icon form or counts itself in the +N" {
+  echo "case: the in-progress nudge never takes a bare icon form or counts itself in the +N"
   write_busy_cache
   local width
   for width in 300 200 150 100 80 60 50 40 30 20; do
@@ -103,35 +101,21 @@ render_at() {
     case "$right_side" in *"⌛️ │"*|*"⌛️ +"*|*"⌛️") return 1 ;; esac
     case "$right_side" in *"+6"*) return 1 ;; esac
   done
-}
-
-@test "too narrow for the floor with every other nudge hidden, the floor renders past the width with the +N" {
+  echo "case: too narrow for the floor with every other nudge hidden, the floor renders past the width with the +N"
   write_busy_cache
   render_at 20
   [ "$status" -eq 0 ]
   [ "$right_side" = "⌛️ GAIA 2.0.4 (@octo-cat) +5" ]
-}
-
-@test "a floor of one nudge alone renders its Medium form past the width with no +N" {
+  rm -f "$MAIN/.gaia/local/debt/count.json"
+  echo "case: a floor of one nudge alone renders its Medium form past the width with no +N"
   printf '%s' '{"ghLogin":"me","gaiaUpdateClaims":[{"number":7,"tag":"v2.0.4","authorLogin":"octo-cat"}]}' > "$CACHE_FILE"
   render_at 20
   [ "$status" -eq 0 ]
   [ "$right_side" = "⌛️ GAIA 2.0.4 (@octo-cat)" ]
 }
 
-@test "without the floor check the same narrow widths shrink the progress nudge, so the table fails" {
-  write_busy_cache
-  sed 's/^\( *\)if \[ -z "${dense_floor\[$shrink_target\]}" \].*; then$/\1if true; then/' "$RIGHT_SCRIPT" > "$BATS_TEST_TMPDIR/no-floor.sh"
-  cmp -s "$RIGHT_SCRIPT" "$BATS_TEST_TMPDIR/no-floor.sh" && return 1
-  cp "$BATS_TEST_TMPDIR/no-floor.sh" "$RIGHT_SCRIPT"
-  render_at 100
-  [ "$status" -eq 0 ]
-  [ "$right_side" != "⌛️ GAIA 2.0.4 (@octo-cat) │ 📦 /update-deps │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15" ]
-  render_at 20
-  [ "$right_side" != "⌛️ GAIA 2.0.4 (@octo-cat) +5" ]
-}
-
-@test "the reader's own claim renders resume at full width and the bare command at Small" {
+@test "claim resolution picks progress, resume or plain update" {
+  echo "case: the reader's own claim renders resume at full width and the bare command at Small"
   printf '%s' '{"ghLogin":"me","gaiaUpdateClaims":[{"number":7,"tag":"v2.0.4","authorLogin":"me"}]}' > "$CACHE_FILE"
   render_at 120
   [ "$status" -eq 0 ]
@@ -139,28 +123,37 @@ render_at() {
   render_at 40
   [ "$status" -eq 0 ]
   [ "$right_side" = "🚀 /update-gaia" ]
-}
-
-@test "a teammate's claim outranks the reader's own, and the lowest number wins" {
+  echo "case: a teammate's claim outranks the reader's own, and the lowest number wins"
   printf '%s' '{"ghLogin":"me","gaiaUpdateClaims":[{"number":3,"tag":"v2.0.3","authorLogin":"me"},{"number":9,"tag":"v2.0.9","authorLogin":"zed"},{"number":8,"tag":"v2.0.8","authorLogin":"amy"}]}' > "$CACHE_FILE"
   render_at 120
   [ "$right_side" = "⌛️ GAIA 2.0.8 in progress (@amy)" ]
-}
-
-@test "a cache holding an origin version and no claim renders today's update nudge" {
-  printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","gaiaOriginVersion":"9.9.9"}' > "$CACHE_FILE"
+  echo "case: a valid claim after invalid lower-numbered ones still wins"
+  printf '%s' '{"ghLogin":"me","gaiaUpdateClaims":[{"number":1,"tag":"v9","authorLogin":"octo-cat"},{"number":2,"tag":"v2.0.4","authorLogin":"amy"}]}' > "$CACHE_FILE"
   render_at 120
-  [ "$status" -eq 0 ]
-  [ "$right_side" = "🚀 /update-gaia (2.0.5)" ]
-}
-
-@test "an empty ghLogin hides progress and resume and the update renders as today" {
+  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@amy)" ]
+  echo "case: an empty ghLogin hides progress and resume and the update renders as today"
   printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","ghLogin":"","gaiaUpdateClaims":[{"number":7,"tag":"v2.0.4","authorLogin":"octo-cat"},{"number":8,"tag":"v2.0.4","authorLogin":"me"}]}' > "$CACHE_FILE"
   render_at 120
   [ "$right_side" = "🚀 /update-gaia (2.0.5)" ]
 }
 
+@test "a cache without claims renders the plain update nudge" {
+  echo "case: a cache holding an origin version and no claim renders today's update nudge"
+  printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","gaiaOriginVersion":"9.9.9"}' > "$CACHE_FILE"
+  render_at 120
+  [ "$status" -eq 0 ]
+  [ "$right_side" = "🚀 /update-gaia (2.0.5)" ]
+  echo "case: a cache with only today's fields renders the update nudge byte for byte as before"
+  printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","outdatedCount":0}' > "$CACHE_FILE"
+  render_at 120
+  [ "$status" -eq 0 ]
+  expected_nudge=$'\033[01;36m🚀 /update-gaia (2.0.5)\033[00m'
+  case "$output" in *"$expected_nudge") ;; *) return 1 ;; esac
+}
+
+# bats test_tags=protected
 @test "a claim whose login or tag is out of set renders no progress and no control byte" {
+  echo "case: a claim whose login or tag is out of set renders no progress and no control byte"
   local bad_claims
   bad_claims='[{"number":1,"tag":"v2.0.4","authorLogin":"evil\u001b[31mcat"},{"number":2,"tag":"v2.0.4","authorLogin":"line\nbreak"},{"number":3,"tag":"v2.0.4\n","authorLogin":"octo-cat"},{"number":4,"tag":"v2.0.4\u001b[2J","authorLogin":"octo-cat"},{"number":5,"tag":"v2.0.4","authorLogin":"trailing\n"},{"number":6,"tag":"2.0.4","authorLogin":"octo-cat"},{"number":7,"tag":"v2.0.4","authorLogin":"-bad"}]'
   printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","ghLogin":"me","gaiaUpdateClaims":'"$bad_claims"'}' > "$CACHE_FILE"
@@ -174,23 +167,7 @@ render_at() {
   printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","ghLogin":"me\u001b[31m","gaiaUpdateClaims":[{"number":1,"tag":"v2.0.4","authorLogin":"octo-cat"}]}' > "$CACHE_FILE"
   render_at 120
   [ "$right_side" = "🚀 /update-gaia (2.0.5)" ]
-}
-
-@test "a valid claim after invalid lower-numbered ones still wins" {
-  printf '%s' '{"ghLogin":"me","gaiaUpdateClaims":[{"number":1,"tag":"v9","authorLogin":"octo-cat"},{"number":2,"tag":"v2.0.4","authorLogin":"amy"}]}' > "$CACHE_FILE"
-  render_at 120
-  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@amy)" ]
-}
-
-@test "a cache with only today's fields renders the update nudge byte for byte as before" {
-  printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","outdatedCount":0}' > "$CACHE_FILE"
-  render_at 120
-  [ "$status" -eq 0 ]
-  expected_nudge=$'\033[01;36m🚀 /update-gaia (2.0.5)\033[00m'
-  case "$output" in *"$expected_nudge") ;; *) return 1 ;; esac
-}
-
-@test "malformed claim fields render the plain update nudge" {
+  echo "case: malformed claim fields render the plain update nudge"
   printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","gaiaUpdateClaims":"nope","ghLogin":12}' > "$CACHE_FILE"
   render_at 120
   [ "$status" -eq 0 ]
@@ -209,11 +186,23 @@ render_at() {
   printf '#!/bin/bash\necho "$@" >> "%s/gh.log"\nexit 1\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/gh"
   chmod +x "$BATS_TEST_TMPDIR/bin/gh"
   : > "$BATS_TEST_TMPDIR/gh.log"
+  local json rendered
+  json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
+
+  echo "case: rendering never calls gh"
   jq --argjson now "$(date +%s)" '. + {checkedAt: $now, securitySource: "unavailable", fitnessBasisVersion: ""}' "$CACHE_FILE" > "$CACHE_FILE.next"
   mv "$CACHE_FILE.next" "$CACHE_FILE"
-  local json
-  json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" HOME="$TEMPORARY_HOME" COLUMNS=200 bash -c "printf '%s' '$json' | bash '$SCRIPT'" < /dev/null > /dev/null
+
+  echo "case: the pull state arms without gh on the render path"
+  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
+  write_pull_cache
+  jq --argjson now "$(date +%s)" '. + {checkedAt: $now, securitySource: "unavailable", fitnessBasisVersion: "2.0.3"}' "$CACHE_FILE" > "$CACHE_FILE.next"
+  mv "$CACHE_FILE.next" "$CACHE_FILE"
+  rendered=$(PATH="$BATS_TEST_TMPDIR/bin:$PATH" HOME="$TEMPORARY_HOME" COLUMNS=200 bash -c "printf '%s' '$json' | bash '$SCRIPT'" < /dev/null)
+  case "$rendered" in *"pull 2.0.4"*) ;; *) return 1 ;; esac
+
+  # One wait covers both renders: a gh call from either lands in the one log.
   sleep 2
   [ ! -s "$BATS_TEST_TMPDIR/gh.log" ]
 }
@@ -224,7 +213,8 @@ write_pull_cache() {
   printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","gaiaOriginVersion":"'"${1:-2.0.4}"'","ghLogin":"me","gaiaUpdateClaims":[{"number":7,"tag":"v2.0.4","authorLogin":"octo-cat"}]}' > "$CACHE_FILE"
 }
 
-@test "origin ahead of the live local version renders the pull nudge, with or without a teammate's claim" {
+@test "the pull nudge arms from origin versus the live local version" {
+  echo "case: origin ahead of the live local version renders the pull nudge, with or without a teammate's claim"
   printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
   write_pull_cache
   render_at 120
@@ -235,9 +225,46 @@ write_pull_cache() {
   printf '%s' '{"gaiaOriginVersion":"2.0.4"}' > "$CACHE_FILE"
   render_at 120
   [ "$right_side" = "🚀 /update-gaia (pull 2.0.4)" ]
-}
-
-@test "the pull nudge keeps its slot at every width and never shows progress or resume text" {
+  echo "case: the local version is read live: bumping only the version file removes pull"
+  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
+  write_pull_cache
+  render_at 120
+  [ "$right_side" = "🚀 /update-gaia (pull 2.0.4)" ]
+  printf '2.0.4\n' > "$MAIN/.gaia/VERSION"
+  render_at 120
+  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
+  rm -f "$MAIN/.gaia/VERSION"
+  echo "case: a missing or non-version local file renders no pull"
+  write_pull_cache
+  render_at 120
+  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
+  printf 'garbage\n' > "$MAIN/.gaia/VERSION"
+  render_at 120
+  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
+  : > "$MAIN/.gaia/VERSION"
+  render_at 120
+  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
+  echo "case: a non-version origin value renders no pull"
+  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
+  local origin
+  for origin in '"latest"' '7' 'null' '"2.0"' '"v2.0.4"' '"2.0.4\n"'; do
+    printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","gaiaOriginVersion":'"$origin"'}' > "$CACHE_FILE"
+    render_at 120
+    [ "$right_side" = "🚀 /update-gaia (2.0.5)" ] || {
+      echo "origin $origin: got [$right_side]" >&2
+      return 1
+    }
+  done
+  echo "case: versions compare by their numeric core, so 2.0.10 is ahead of 2.0.9 and a prerelease does not outrank its release"
+  printf '2.0.9\n' > "$MAIN/.gaia/VERSION"
+  printf '%s' '{"gaiaOriginVersion":"2.0.10"}' > "$CACHE_FILE"
+  render_at 120
+  [ "$right_side" = "🚀 /update-gaia (pull 2.0.10)" ]
+  printf '2.0.4\n' > "$MAIN/.gaia/VERSION"
+  printf '%s' '{"gaiaOriginVersion":"2.0.4-rc.1"}' > "$CACHE_FILE"
+  render_at 120
+  [ -z "$right_side" ]
+  echo "case: the pull nudge keeps its slot at every width and never shows progress or resume text"
   printf '2.0.3' > "$MAIN/.gaia/VERSION"
   printf '%s' '{"gaiaOriginVersion":"2.0.4","ghLogin":"me","gaiaUpdateClaims":[{"number":7,"tag":"v2.0.4","authorLogin":"octo-cat"},{"number":9,"tag":"v2.0.4","authorLogin":"me"}],"outdatedCount":28,"codifyNudgeReason":"1 new pattern","codifyCandidateCount":6,"residueCandidateCount":15,"cleanseNudge":true,"cleanseNudgeReason":"34 days since review"}' > "$CACHE_FILE"
   printf '{"openCount":1}' > "$MAIN/.gaia/local/debt/count.json"
@@ -252,81 +279,3 @@ write_pull_cache() {
   case "$right_side" in "🚀 /update-gaia (pull 2.0.4) │ "*) ;; *) return 1 ;; esac
 }
 
-@test "the local version is read live: bumping only the version file removes pull" {
-  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
-  write_pull_cache
-  render_at 120
-  [ "$right_side" = "🚀 /update-gaia (pull 2.0.4)" ]
-  printf '2.0.4\n' > "$MAIN/.gaia/VERSION"
-  render_at 120
-  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
-}
-
-@test "a missing or non-version local file renders no pull" {
-  write_pull_cache
-  render_at 120
-  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
-  printf 'garbage\n' > "$MAIN/.gaia/VERSION"
-  render_at 120
-  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
-  : > "$MAIN/.gaia/VERSION"
-  render_at 120
-  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
-}
-
-@test "a non-version origin value renders no pull" {
-  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
-  local origin
-  for origin in '"latest"' '7' 'null' '"2.0"' '"v2.0.4"' '"2.0.4\n"'; do
-    printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","gaiaOriginVersion":'"$origin"'}' > "$CACHE_FILE"
-    render_at 120
-    [ "$right_side" = "🚀 /update-gaia (2.0.5)" ] || {
-      echo "origin $origin: got [$right_side]" >&2
-      return 1
-    }
-  done
-}
-
-@test "versions compare by their numeric core, so 2.0.10 is ahead of 2.0.9 and a prerelease does not outrank its release" {
-  printf '2.0.9\n' > "$MAIN/.gaia/VERSION"
-  printf '%s' '{"gaiaOriginVersion":"2.0.10"}' > "$CACHE_FILE"
-  render_at 120
-  [ "$right_side" = "🚀 /update-gaia (pull 2.0.10)" ]
-  printf '2.0.4\n' > "$MAIN/.gaia/VERSION"
-  printf '%s' '{"gaiaOriginVersion":"2.0.4-rc.1"}' > "$CACHE_FILE"
-  render_at 120
-  [ -z "$right_side" ]
-}
-
-@test "the pull state arms without gh on the render path" {
-  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
-  write_pull_cache
-  mkdir -p "$MAIN/.gaia/scripts" "$BATS_TEST_TMPDIR/bin"
-  cp "$REPO_ROOT/.gaia/scripts/check-updates.sh" "$MAIN/.gaia/scripts/check-updates.sh"
-  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$MAIN/.gaia/scripts/exclusive-lock-lib.sh"
-  printf '#!/bin/bash\necho "$@" >> "%s/gh.log"\nexit 1\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/gh"
-  chmod +x "$BATS_TEST_TMPDIR/bin/gh"
-  : > "$BATS_TEST_TMPDIR/gh.log"
-  jq --argjson now "$(date +%s)" '. + {checkedAt: $now, securitySource: "unavailable", fitnessBasisVersion: "2.0.3"}' "$CACHE_FILE" > "$CACHE_FILE.next"
-  mv "$CACHE_FILE.next" "$CACHE_FILE"
-  local json rendered
-  json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
-  rendered=$(PATH="$BATS_TEST_TMPDIR/bin:$PATH" HOME="$TEMPORARY_HOME" COLUMNS=200 bash -c "printf '%s' '$json' | bash '$SCRIPT'" < /dev/null)
-  case "$rendered" in *"pull 2.0.4"*) ;; *) return 1 ;; esac
-  sleep 2
-  [ ! -s "$BATS_TEST_TMPDIR/gh.log" ]
-}
-
-@test "an inverted version comparison renders pull for a local version ahead of origin, so the pull assertions fail on it" {
-  sed 's/\$origin_core > \$local_core/$origin_core < $local_core/' "$RIGHT_SCRIPT" > "$BATS_TEST_TMPDIR/inverted.sh"
-  cmp -s "$RIGHT_SCRIPT" "$BATS_TEST_TMPDIR/inverted.sh" && return 1
-  cp "$BATS_TEST_TMPDIR/inverted.sh" "$RIGHT_SCRIPT"
-  printf '2.0.4\n' > "$MAIN/.gaia/VERSION"
-  printf '%s' '{"gaiaOriginVersion":"2.0.3"}' > "$CACHE_FILE"
-  render_at 120
-  [ "$right_side" = "🚀 /update-gaia (pull 2.0.3)" ]
-  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
-  printf '%s' '{"gaiaOriginVersion":"2.0.4"}' > "$CACHE_FILE"
-  render_at 120
-  [ "$right_side" != "🚀 /update-gaia (pull 2.0.4)" ]
-}

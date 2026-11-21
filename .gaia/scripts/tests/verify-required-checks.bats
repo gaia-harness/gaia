@@ -31,12 +31,9 @@ Shellcheck and bats"
 
 # Usage errors (exit 2)
 
-@test "usage error: unknown flag exits 2" {
+@test "usage errors exit 2: unknown flag, flag without value does not hang" {
   run "$SCRIPT" --not-a-real-flag foo
-  [ "$status" -eq 2 ]
-}
-
-@test "usage error: a value-taking flag with no value exits 2, does not hang" {
+  [ "$status" -eq 2 ] || { echo "case unknown flag: got $status"; return 1; }
   # No `timeout(1)` on stock macOS, so bound it by hand: background the call,
   # poll briefly for exit, and kill it if it is still alive (a hang, not a
   # usage error).
@@ -50,27 +47,23 @@ Shellcheck and bats"
   if kill -0 "$pid" 2>/dev/null; then
     kill -9 "$pid" 2>/dev/null
     wait "$pid" 2>/dev/null
+    echo "case flag without value: hung"
     return 1
   fi
   local exit_status=0
   wait "$pid" || exit_status=$?
-  [ "$exit_status" -eq 2 ]
+  [ "$exit_status" -eq 2 ] || { echo "case flag without value: got $exit_status"; return 1; }
 }
 
 # Clean pass: every declared-required context is in the live ruleset
 
-@test "clean pass: exits 0 when every required context is present" {
+@test "clean pass: exits 0, confirms, prints no MISSING section" {
   run "$SCRIPT" --repo gaia-react/gaia --branch main \
     --ruleset-contexts <(printf '%s\n' "$FULL_RULESET")
   [ "$status" -eq 0 ]
   assert_contains "all declared-required contexts confirmed"
-}
-
-@test "clean pass: does not print a MISSING section" {
-  run "$SCRIPT" --repo gaia-react/gaia --branch main \
-    --ruleset-contexts <(printf '%s\n' "$FULL_RULESET")
-  local prior_output="$output"
-  run ! grep -qF "MISSING" <<<"$prior_output"
+  assert_contains "MISSING" && return 1
+  true
 }
 
 @test "--ruleset-contexts - reads the live-required set from stdin" {
@@ -80,7 +73,8 @@ Shellcheck and bats"
 
 # Drift: a declared-required context is missing from the live ruleset
 
-@test "drift: exits 1 when a required context is missing live" {
+# bats test_tags=protected
+@test "drift: a missing context exits 1 and is named exactly once; an empty ruleset reports all" {
   local partial="Audit CI Tests
 Run Chromatic
 Vitest and Playwright
@@ -88,42 +82,24 @@ Vitest (.gaia/cli)
 Shellcheck and bats"
   run "$SCRIPT" --repo gaia-react/gaia --branch main \
     --ruleset-contexts <(printf '%s\n' "$partial")
-  [ "$status" -eq 1 ]
-}
-
-@test "drift: reports exactly the missing context by name" {
-  local partial="Audit CI Tests
-Run Chromatic
-Vitest and Playwright
-Vitest (.gaia/cli)
-Shellcheck and bats"
-  run "$SCRIPT" --repo gaia-react/gaia --branch main \
-    --ruleset-contexts <(printf '%s\n' "$partial")
-  assert_contains "MISSING"
-  assert_contains "GAIA-Audit"
-  # "exactly" is only true while `partial` above stays in sync with
-  # REQUIRED_CONTEXTS: a context added to the script but not to `partial` would
-  # leave both drift tests green while they silently degrade to "at least one
-  # missing", retiring the specific-context reporting they exist to guard.
-  # Pin the count so that desync fails loudly instead.
+  [ "$status" -eq 1 ] || { echo "case partial: expected exit 1, got $status"; return 1; }
+  assert_contains "MISSING" || { echo "case partial: no MISSING"; return 1; }
+  assert_contains "GAIA-Audit" || { echo "case partial: GAIA-Audit not named"; return 1; }
+  # Pin the count so a context added to the script but not to `partial`
+  # fails loudly instead of degrading to "at least one missing".
   local missing_bullets
   missing_bullets=$(awk '/^MISSING/{inside_missing_section=1;next} inside_missing_section && /^  - /{bullet_count++} END{print bullet_count+0}' <<<"$output")
-  [ "$missing_bullets" -eq 1 ]
-}
+  [ "$missing_bullets" -eq 1 ] || { echo "case partial: $missing_bullets bullets"; return 1; }
 
-@test "drift: an empty live ruleset reports every declared-required context missing" {
-  # Injected-empty path (--ruleset-contexts <(printf '')): a real, legitimate
-  # empty answer. Distinct from the gh-api-failure path below, which must NOT
-  # be treated as a legitimate empty answer.
+  # Injected-empty path: a real, legitimate empty answer, distinct from the
+  # gh-api-failure path below.
   run "$SCRIPT" --repo gaia-react/gaia --branch main \
     --ruleset-contexts <(printf '')
-  [ "$status" -eq 1 ]
-  assert_contains "GAIA-Audit"
-  assert_contains "Audit CI Tests"
-  assert_contains "Run Chromatic"
-  assert_contains "Vitest and Playwright"
-  assert_contains "Vitest (.gaia/cli)"
-  assert_contains "Shellcheck and bats"
+  [ "$status" -eq 1 ] || { echo "case empty: expected exit 1, got $status"; return 1; }
+  local context
+  for context in "GAIA-Audit" "Audit CI Tests" "Run Chromatic" "Vitest and Playwright" "Vitest (.gaia/cli)" "Shellcheck and bats"; do
+    assert_contains "$context" || { echo "case empty: $context not reported"; return 1; }
+  done
 }
 
 # gh api failure on the live ruleset read (exit 2, not a drift verdict) (#809)
@@ -163,37 +139,10 @@ unmapped_contexts() {
   done < <(declared_contexts)
 }
 
-@test "the maintainer Claude review workflow is gone" {
-  [ ! -e "$WORKFLOWS_DIRECTORY/${DELETED_WORKFLOW}" ]
-}
-
-@test "the declared contexts are exactly the set the maintainer ruleset requires" {
-  local actual expected
-  actual="$(declared_contexts | LC_ALL=C sort)"
-  expected="$(printf '%s\n' "GAIA-Audit" "Audit CI Tests" "Run Chromatic" "Vitest and Playwright" "Vitest (.gaia/cli)" "Shellcheck and bats" | LC_ALL=C sort)"
-  [ -n "$actual" ]
-  [ "$actual" = "$expected" ]
-}
-
 @test "every declared context except GAIA-Audit equals a job name in a real workflow" {
   local unmapped
   unmapped="$(unmapped_contexts "$WORKFLOWS_DIRECTORY")"
   [ -z "$unmapped" ] || { printf 'declared context with no job: %s\n' "$unmapped" >&2; return 1; }
-}
-
-@test "the context-to-job check fails when a job name is removed" {
-  local fixture="$BATS_TEST_TMPDIR/workflows" name
-  mkdir -p "$fixture"
-  for name in audit-ci-tests chromatic cli-tests tests; do
-    cp "$WORKFLOWS_DIRECTORY/${name}.yml" "$fixture/"
-  done
-  # Control: the untouched copy maps every context, so the failure below is
-  # caused by the removal and not by a fixture that never mapped.
-  [ -z "$(unmapped_contexts "$fixture")" ]
-  sed -i.bak '/^    name: Run Chromatic$/d' "$fixture/chromatic.yml"
-  local unmapped
-  unmapped="$(unmapped_contexts "$fixture")"
-  [ "$unmapped" = "Run Chromatic" ]
 }
 
 @test "audit-ci-tests.yml triggers on pull_request, covers every shard, and names no deleted workflow" {

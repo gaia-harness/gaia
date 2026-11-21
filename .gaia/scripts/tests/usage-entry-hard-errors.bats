@@ -148,7 +148,6 @@ drive_entry() {
 
 check_entry_hard_errors() {
   local entry="$1" libraries library holding
-  copy_trees
   # Derive from the copy: it is byte-identical to the tracked script.
   libraries="$(library_files "$TREE/$entry")"
   [ -n "$libraries" ] || { printf '%s names no library\n' "$entry" >&2; return 1; }
@@ -165,23 +164,12 @@ check_entry_hard_errors() {
 }
 
 # bats test_tags=whole-tree
-@test "usage.sh fails loud on each missing library, for every subcommand it drives" {
-  check_entry_hard_errors .gaia/scripts/usage.sh
-}
-
-# bats test_tags=whole-tree
-@test "usage-flush.sh fails loud on each missing library" {
-  check_entry_hard_errors .gaia/scripts/usage-flush.sh
-}
-
-# bats test_tags=whole-tree
-@test "usage-merge.sh fails loud on each missing library" {
-  check_entry_hard_errors .gaia/scripts/usage-merge.sh
-}
-
-# bats test_tags=whole-tree
-@test "pr-merge-cost.sh fails loud on each missing library" {
-  check_entry_hard_errors .claude/hooks/pr-merge-cost.sh
+@test "each usage entry script fails loud (non-zero, names the file, nothing on stdout) on each missing library" {
+  local entry
+  copy_trees
+  for entry in .gaia/scripts/usage.sh .gaia/scripts/usage-flush.sh .gaia/scripts/usage-merge.sh .claude/hooks/pr-merge-cost.sh; do
+    check_entry_hard_errors "$entry" || { echo "case $entry: did not fail loud on a missing library" >&2; return 1; }
+  done
 }
 
 @test "usage-record-lib.sh loads nothing itself: it is sourced by usage.sh" {

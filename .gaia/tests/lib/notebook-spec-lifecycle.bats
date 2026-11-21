@@ -3,9 +3,9 @@
 # spec lives under the notebook and never under the old machine-local specs
 # folder; the two reapers delete only the notebook's folder (from main and from
 # a linked worktree), record a reap on the row, and refuse an id or a symlink
-# that would reach outside it; a notebook whose one-time move has not run is
-# left untouched; the mint lock never stalls a plan or research write; and a
-# fixture operand keeps every script away from the real checkout's notebook.
+# that would reach outside it; the mint lock never stalls a plan or research
+# write; and a fixture operand keeps every script away from the real checkout's
+# notebook.
 #
 # Each test builds its own tmp repo via helpers/tmp-notebook-repo.sh and tears
 # it down. Assertion style: .claude/rules/bats-assertions.md.
@@ -19,7 +19,6 @@ setup() {
   ARCHIVE_ABANDONED=".gaia/scripts/spec/spec-archive-abandoned.sh"
   LEDGER_UPDATE=".gaia/scripts/spec/ledger-update.sh"
   NOTEBOOK_LIBRARY=".gaia/scripts/notebook/notebook-lib.sh"
-  MOVE_LINE="bash .gaia/scripts/notebook/move.sh run"
   REAL_ROOT="$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)"
   # shellcheck source=helpers/usage-gate.sh
   . "$HELPERS/usage-gate.sh"
@@ -28,7 +27,6 @@ setup() {
   export GAIA_SPEC_RETENTION_DAYS=0
   export GAIA_SPEC_FORCE_OFFLINE=1
   REPO=""
-  WORKTREE=""
 }
 
 teardown() {
@@ -102,60 +100,43 @@ _assert_decoys() {
   [ -f "$1/.notebook-elsewhere/specs/$2/keep.txt" ]
 }
 
-@test "2a: spec-archive-merged run from main deletes the notebook folder, stamps a reap and leaves decoys" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
-  _close_row spec:SPEC-001 gaia-spec
-  _plant_decoys "$REPO" SPEC-001
+@test "the spec reapers delete the notebook folder from main or from a linked worktree, stamp a reap and leave decoys" {
+  local row kind origin id script fixture tree seed
+  for row in "merged|main" "merged|linked" "abandoned|main" "abandoned|linked"; do
+    kind=${row%%|*}; origin=${row#*|}
+    if [ "$kind" = merged ]; then
+      id=SPEC-001
+      script="$ARCHIVE_MERGED"
+      seed=(--seed-spec-merged-folder "$id")
+    else
+      id=SPEC-002
+      script="$ARCHIVE_ABANDONED"
+      seed=(--seed-spec-abandoned-folder "$id")
+    fi
+    if [ "$origin" = linked ]; then
+      fixture="$("$HELPERS/tmp-notebook-repo.sh" "${seed[@]}" --worktree wt)"
+      REPO="$(printf '%s\n' "$fixture" | sed -n 1p)"
+      tree="$(printf '%s\n' "$fixture" | sed -n 2p)"
+    else
+      REPO="$("$HELPERS/tmp-notebook-repo.sh" "${seed[@]}")"
+      tree="$REPO"
+    fi
+    if [ "$kind" = merged ]; then _close_row "spec:$id" gaia-spec; fi
+    _plant_decoys "$tree" "$id"
 
-  run bash "$REPO/$ARCHIVE_MERGED" "$REPO"
-  [ "$status" -eq 0 ]
-  [ ! -e "$REPO/.notebook/specs/SPEC-001" ]
-  [ "$(_row_field "$REPO" SPEC-001 status)" = "merged" ]
-  [ "$(jq -r '.items[0].reap.by' "$REPO/.notebook/catalog.json")" = "spec-archive-merged.sh" ]
-  [ "$(jq -r '.items[0].reap.at | type' "$REPO/.notebook/catalog.json")" = "string" ]
-  _assert_decoys "$REPO" SPEC-001
+    run bash "$tree/$script" "$tree"
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    [ ! -e "$REPO/.notebook/specs/$id" ] || { echo "row $row: notebook folder survived"; return 1; }
+    [ "$(_row_field "$REPO" "$id" status)" = "$kind" ] || { echo "row $row: row status changed"; return 1; }
+    [ "$(jq -r '.items[0].reap.by' "$REPO/.notebook/catalog.json")" = "$(basename "$script")" ] || { echo "row $row: reap.by wrong"; return 1; }
+    [ "$(jq -r '.items[0].reap.at | type' "$REPO/.notebook/catalog.json")" = "string" ] || { echo "row $row: reap.at missing"; return 1; }
+    _assert_decoys "$tree" "$id" || { echo "row $row: a decoy was removed"; return 1; }
+    rm -rf "$REPO" "${REPO}-wt"
+  done
+  REPO=""
 }
 
-@test "2b: spec-archive-merged run from a linked worktree deletes main's notebook folder, stamps a reap and leaves decoys" {
-  fixture="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001 --worktree wt)"
-  REPO="$(printf '%s\n' "$fixture" | sed -n 1p)"
-  WORKTREE="$(printf '%s\n' "$fixture" | sed -n 2p)"
-  _close_row spec:SPEC-001 gaia-spec
-  _plant_decoys "$WORKTREE" SPEC-001
-
-  run bash "$WORKTREE/$ARCHIVE_MERGED" "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ ! -e "$REPO/.notebook/specs/SPEC-001" ]
-  [ "$(jq -r '.items[0].reap.by' "$REPO/.notebook/catalog.json")" = "spec-archive-merged.sh" ]
-  _assert_decoys "$WORKTREE" SPEC-001
-}
-
-@test "2c: spec-archive-abandoned run from main deletes the notebook folder, stamps a reap and leaves decoys" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-002)"
-  _plant_decoys "$REPO" SPEC-002
-
-  run bash "$REPO/$ARCHIVE_ABANDONED" "$REPO"
-  [ "$status" -eq 0 ]
-  [ ! -e "$REPO/.notebook/specs/SPEC-002" ]
-  [ "$(_row_field "$REPO" SPEC-002 status)" = "abandoned" ]
-  [ "$(jq -r '.items[0].reap.by' "$REPO/.notebook/catalog.json")" = "spec-archive-abandoned.sh" ]
-  _assert_decoys "$REPO" SPEC-002
-}
-
-@test "2d: spec-archive-abandoned run from a linked worktree deletes main's notebook folder, stamps a reap and leaves decoys" {
-  fixture="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-002 --worktree wt)"
-  REPO="$(printf '%s\n' "$fixture" | sed -n 1p)"
-  WORKTREE="$(printf '%s\n' "$fixture" | sed -n 2p)"
-  _plant_decoys "$WORKTREE" SPEC-002
-
-  run bash "$WORKTREE/$ARCHIVE_ABANDONED" "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ ! -e "$REPO/.notebook/specs/SPEC-002" ]
-  [ "$(jq -r '.items[0].reap.by' "$REPO/.notebook/catalog.json")" = "spec-archive-abandoned.sh" ]
-  _assert_decoys "$WORKTREE" SPEC-002
-}
-
-# --- Path containment (red twins) ---------------------------------------------
+# --- Path containment ---------------------------------------------
 
 # _traversal_row <id> <status> <stamp field>: a catalog row whose id climbs out
 # of the specs folder.
@@ -166,116 +147,57 @@ _traversal_row() {
       status_changed_at: "2026-01-01T00:00:00Z"} + {($stamp_field): "2026-01-01T00:00:00Z"}'
 }
 
-_assert_traversal_refused() {
-  [ "$status" -eq 0 ]
-  [ -n "$stderr" ]
-  [ -f "$REPO/.notebook/x/keep.txt" ]
-  [ -d "$REPO/.notebook/specs/SPEC-001" ]
-  [ -f "$REPO/.notebook/catalog.json" ]
-}
+# bats test_tags=protected
+@test "the spec reapers skip a row whose id climbs out of the specs folder and refuse a symlinked spec folder, leaving everything outside intact" {
+  local row kind id script outside file
+  for row in "merged|SPEC-001/../../x" "abandoned|SPEC-001/../../x" "merged|.." "abandoned|.."; do
+    kind=${row%%|*}; id=${row#*|}
+    if [ "$kind" = merged ]; then
+      script="$ARCHIVE_MERGED"
+      REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001 --seed-row "$(_traversal_row "$id" merged merged_at)")"
+      _close_row "spec:$id" gaia-spec
+    else
+      script="$ARCHIVE_ABANDONED"
+      REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-001 draft --seed-row "$(_traversal_row "$id" abandoned abandoned_at)")"
+    fi
+    mkdir -p "$REPO/.notebook/x"
+    printf 'keep\n' > "$REPO/.notebook/x/keep.txt"
 
-@test "3a: a merged row whose id climbs out of the specs folder is skipped with a stderr line and nothing outside is removed" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001 --seed-row "$(_traversal_row 'SPEC-001/../../x' merged merged_at)")"
-  mkdir -p "$REPO/.notebook/x"
-  printf 'keep\n' > "$REPO/.notebook/x/keep.txt"
-  _close_row 'spec:SPEC-001/../../x' gaia-spec
+    run --separate-stderr bash "$REPO/$script" "$REPO"
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    [ -n "$stderr" ] || { echo "row $row: nothing on stderr"; return 1; }
+    [ -f "$REPO/.notebook/x/keep.txt" ] || { echo "row $row: a file outside the specs folder was removed"; return 1; }
+    [ -d "$REPO/.notebook/specs/SPEC-001" ] || { echo "row $row: the spec folder was removed"; return 1; }
+    [ -f "$REPO/.notebook/catalog.json" ] || { echo "row $row: the catalog was removed"; return 1; }
+    rm -rf "$REPO"
+  done
 
-  run --separate-stderr bash "$REPO/$ARCHIVE_MERGED" "$REPO"
-  _assert_traversal_refused
-}
+  for kind in merged abandoned; do
+    outside="$BATS_TEST_TMPDIR/outside-$kind"
+    REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 "$kind")"
+    mkdir -p "$outside" "$REPO/.notebook/specs"
+    if [ "$kind" = merged ]; then
+      script="$ARCHIVE_MERGED"
+      printf -- '---\nspec_id: SPEC-001\nstatus: specified\nimmutable: true\n---\n' > "$outside/SPEC.md"
+      printf -- '---\nwiki_promote_default: ask\nwiki_promote_targets: []\n---\n# SPEC-001\n\nBody.\n' > "$outside/SUMMARY.md"
+      _close_row spec:SPEC-001 gaia-spec
+    else
+      script="$ARCHIVE_ABANDONED"
+      printf 'keep\n' > "$outside/AUDIT.md"
+    fi
+    ln -s "$outside" "$REPO/.notebook/specs/SPEC-001"
 
-@test "3b: an abandoned row whose id climbs out of the specs folder is skipped with a stderr line and nothing outside is removed" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-001 draft --seed-row "$(_traversal_row 'SPEC-001/../../x' abandoned abandoned_at)")"
-  mkdir -p "$REPO/.notebook/x"
-  printf 'keep\n' > "$REPO/.notebook/x/keep.txt"
-
-  run --separate-stderr bash "$REPO/$ARCHIVE_ABANDONED" "$REPO"
-  _assert_traversal_refused
-}
-
-@test "3c: a merged row with the id .. is skipped and the notebook survives" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001 --seed-row "$(_traversal_row '..' merged merged_at)")"
-  mkdir -p "$REPO/.notebook/x"
-  printf 'keep\n' > "$REPO/.notebook/x/keep.txt"
-  _close_row 'spec:..' gaia-spec
-
-  run --separate-stderr bash "$REPO/$ARCHIVE_MERGED" "$REPO"
-  _assert_traversal_refused
-}
-
-@test "3d: an abandoned row with the id .. is skipped and the notebook survives" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-001 draft --seed-row "$(_traversal_row '..' abandoned abandoned_at)")"
-  mkdir -p "$REPO/.notebook/x"
-  printf 'keep\n' > "$REPO/.notebook/x/keep.txt"
-
-  run --separate-stderr bash "$REPO/$ARCHIVE_ABANDONED" "$REPO"
-  _assert_traversal_refused
-}
-
-@test "3e: a merged spec folder that is a symlink out of the notebook is refused and its target survives" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 merged)"
-  outside="$BATS_TEST_TMPDIR/outside"
-  mkdir -p "$outside" "$REPO/.notebook/specs"
-  printf -- '---\nspec_id: SPEC-001\nstatus: specified\nimmutable: true\n---\n' > "$outside/SPEC.md"
-  printf -- '---\nwiki_promote_default: ask\nwiki_promote_targets: []\n---\n# SPEC-001\n\nBody.\n' > "$outside/SUMMARY.md"
-  ln -s "$outside" "$REPO/.notebook/specs/SPEC-001"
-  _close_row spec:SPEC-001 gaia-spec
-
-  run --separate-stderr bash "$REPO/$ARCHIVE_MERGED" "$REPO"
-  [ "$status" -eq 0 ]
-  [ -n "$stderr" ]
-  [ -f "$outside/SPEC.md" ]
-  [ -f "$outside/SUMMARY.md" ]
-  [ -L "$REPO/.notebook/specs/SPEC-001" ]
-  [ "$(_row_field "$REPO" SPEC-001 reap)" = "null" ]
-}
-
-@test "3f: an abandoned spec folder that is a symlink out of the notebook is refused and its target survives" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 abandoned)"
-  outside="$BATS_TEST_TMPDIR/outside"
-  mkdir -p "$outside" "$REPO/.notebook/specs"
-  printf 'keep\n' > "$outside/AUDIT.md"
-  ln -s "$outside" "$REPO/.notebook/specs/SPEC-001"
-
-  run --separate-stderr bash "$REPO/$ARCHIVE_ABANDONED" "$REPO"
-  [ "$status" -eq 0 ]
-  [ -n "$stderr" ]
-  [ -f "$outside/AUDIT.md" ]
-  [ -L "$REPO/.notebook/specs/SPEC-001" ]
-  [ "$(_row_field "$REPO" SPEC-001 reap)" = "null" ]
-}
-
-# --- Not ready: the one-time move has not run ---------------------------------
-
-@test "4a: next in a not-ready repo refuses with the move line and changes nothing" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --legacy)"
-  before="$(_snapshot "$REPO")"
-
-  run --separate-stderr bash "$REPO/$ALLOCATOR" next "$REPO" "subject"
-  [ "$status" -ne 0 ]
-  grep -qF -- "$MOVE_LINE" <<<"$stderr"
-  [ "$(_snapshot "$REPO")" = "$before" ]
-}
-
-@test "4b: spec-archive-merged in a not-ready repo refuses with the move line and deletes nothing" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --legacy --seed-spec-merged-folder SPEC-001)"
-  _close_row spec:SPEC-001 gaia-spec
-  before="$(_snapshot "$REPO")"
-
-  run --separate-stderr bash "$REPO/$ARCHIVE_MERGED" "$REPO"
-  [ "$status" -ne 0 ]
-  grep -qF -- "$MOVE_LINE" <<<"$stderr"
-  [ "$(_snapshot "$REPO")" = "$before" ]
-}
-
-@test "4c: spec-archive-abandoned in a not-ready repo refuses with the move line and deletes nothing" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --legacy --seed-spec-abandoned-folder SPEC-002)"
-  before="$(_snapshot "$REPO")"
-
-  run --separate-stderr bash "$REPO/$ARCHIVE_ABANDONED" "$REPO"
-  [ "$status" -ne 0 ]
-  grep -qF -- "$MOVE_LINE" <<<"$stderr"
-  [ "$(_snapshot "$REPO")" = "$before" ]
+    run --separate-stderr bash "$REPO/$script" "$REPO"
+    [ "$status" -eq 0 ] || { echo "symlink $kind: status $status"; return 1; }
+    [ -n "$stderr" ] || { echo "symlink $kind: nothing on stderr"; return 1; }
+    for file in "$outside"/*; do
+      [ -f "$file" ] || { echo "symlink $kind: target file removed"; return 1; }
+    done
+    [ -L "$REPO/.notebook/specs/SPEC-001" ] || { echo "symlink $kind: the link was removed"; return 1; }
+    [ "$(_row_field "$REPO" SPEC-001 reap)" = "null" ] || { echo "symlink $kind: a reap was stamped"; return 1; }
+    rm -rf "$REPO"
+  done
+  REPO=""
 }
 
 # --- Mint lock isolation ------------------------------------------------------

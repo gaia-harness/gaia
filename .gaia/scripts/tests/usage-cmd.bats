@@ -46,68 +46,75 @@ seed_links() {
 
 # ---------- write refusals ----------
 
-@test "link: a ref failing the grammar exits 2 and writes nothing" {
+# reset_ledger: clears the telemetry directory so a later case in one test starts clean.
+reset_ledger() {
+  rm -rf "$TELEMETRY_DIRECTORY"
+  mkdir -p "$TELEMETRY_DIRECTORY"
+}
+
+@test "usage.sh write refusals: each refused input exits with its code and writes nothing, and the accepted neighbors (research declare, released lock) write" {
+  # link: a ref failing the grammar exits 2
   seed_links
   run run_usage link spec:spec-001 research:x
-  [ "$status" -eq 2 ]
-  cmp "$TEMPORARY_DIRECTORY/links-before" "$TELEMETRY_DIRECTORY/links.jsonl"
+  [ "$status" -eq 2 ] || { echo "case bad grammar: status $status" >&2; return 1; }
+  cmp "$TEMPORARY_DIRECTORY/links-before" "$TELEMETRY_DIRECTORY/links.jsonl" || { echo "case bad grammar: ledger changed" >&2; return 1; }
   run run_usage link spec:SPEC-002 'research:../x'
-  [ "$status" -eq 2 ]
-  cmp "$TEMPORARY_DIRECTORY/links-before" "$TELEMETRY_DIRECTORY/links.jsonl"
-}
+  [ "$status" -eq 2 ] || { echo "case dot-dot ref: status $status" >&2; return 1; }
+  cmp "$TEMPORARY_DIRECTORY/links-before" "$TELEMETRY_DIRECTORY/links.jsonl" || { echo "case dot-dot ref: ledger changed" >&2; return 1; }
 
-@test "declare: only research: and init: refs; a branch ref exits 2 and writes nothing" {
+  # declare: only research: and init: refs; a branch ref exits 2
+  reset_ledger
   run run_usage declare branch:fix/foo --session s1
-  [ "$status" -eq 2 ]
-  [ ! -e "$TELEMETRY_DIRECTORY/usage.jsonl" ]
+  [ "$status" -eq 2 ] || { echo "case declare branch ref: status $status" >&2; return 1; }
+  [ ! -e "$TELEMETRY_DIRECTORY/usage.jsonl" ] || { echo "case declare branch ref: wrote usage.jsonl" >&2; return 1; }
   run run_usage declare research:x --session s1 --at 2026-10-01T09:00:00Z
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "case declare research ref: status $status" >&2; return 1; }
   jq -e -s 'length == 1 and .[0].kind == "binding" and .[0].type == "declare" and .[0].ref == "research:x"
     and .[0].session_id == "s1" and .[0].ts == "2026-10-01T09:00:00Z" and .[0].source == "declare-command"
-    and .[0].invoking_session_id == null and .[0].sidechain == false and .[0].schema_version == 1' "$TELEMETRY_DIRECTORY/usage.jsonl"
-}
+    and .[0].invoking_session_id == null and .[0].sidechain == false and .[0].schema_version == 1' "$TELEMETRY_DIRECTORY/usage.jsonl" || { echo "case declare research ref: row shape" >&2; return 1; }
 
-@test "link: a cycle exits 1, names the path, and writes nothing" {
+  # link: a cycle exits 1 and names the path
+  reset_ledger
   seed_links
   run run_usage link research:a spec:SPEC-001
-  [ "$status" -eq 1 ]
-  grep -qxF '  cycle: research:a -> spec:SPEC-001 -> research:a' <<<"$output"
-  cmp "$TEMPORARY_DIRECTORY/links-before" "$TELEMETRY_DIRECTORY/links.jsonl"
+  [ "$status" -eq 1 ] || { echo "case cycle: status $status" >&2; return 1; }
+  grep -qxF '  cycle: research:a -> spec:SPEC-001 -> research:a' <<<"$output" || { echo "case cycle: path not named" >&2; return 1; }
+  cmp "$TEMPORARY_DIRECTORY/links-before" "$TELEMETRY_DIRECTORY/links.jsonl" || { echo "case cycle: ledger changed" >&2; return 1; }
   run run_usage link research:a research:a
-  [ "$status" -eq 1 ]
-  cmp "$TEMPORARY_DIRECTORY/links-before" "$TELEMETRY_DIRECTORY/links.jsonl"
-}
+  [ "$status" -eq 1 ] || { echo "case self cycle: status $status" >&2; return 1; }
+  cmp "$TEMPORARY_DIRECTORY/links-before" "$TELEMETRY_DIRECTORY/links.jsonl" || { echo "case self cycle: ledger changed" >&2; return 1; }
 
-@test "link: a cycle through a derived branch edge is refused too" {
+  # link: a cycle through a derived branch edge is refused too
+  reset_ledger
   printf '%s\n' '{"schema_version":1,"kind":"segment","key":"branch:plan/spec-005-x","session_id":"s","inherit":false,"first_ts":"2026-10-01T00:00:00Z","last_ts":"2026-10-01T00:00:00Z","messages":1,"by_model":{}}' >"$TELEMETRY_DIRECTORY/usage.jsonl"
   run run_usage link spec:SPEC-005 branch:plan/spec-005-x
-  [ "$status" -eq 1 ]
-  grep -qF '  cycle: ' <<<"$output"
-  grep -qF 'spec:SPEC-005 -> branch:plan/spec-005-x' <<<"$output"
-  [ ! -e "$TELEMETRY_DIRECTORY/links.jsonl" ]
-}
+  [ "$status" -eq 1 ] || { echo "case derived-edge cycle: status $status" >&2; return 1; }
+  grep -qF '  cycle: ' <<<"$output" || { echo "case derived-edge cycle: no cycle line" >&2; return 1; }
+  grep -qF 'spec:SPEC-005 -> branch:plan/spec-005-x' <<<"$output" || { echo "case derived-edge cycle: path not named" >&2; return 1; }
+  [ ! -e "$TELEMETRY_DIRECTORY/links.jsonl" ] || { echo "case derived-edge cycle: wrote links.jsonl" >&2; return 1; }
 
-@test "link: a held ledger lock exits 75 and writes nothing" {
+  # link: a held ledger lock exits 75
+  reset_ledger
   mkdir "$TELEMETRY_DIRECTORY/specs.lock.d"
   GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 GAIA_LEDGER_LOCK_TIMEOUT_SECONDS=1 GAIA_LEDGER_LOCK_POLL_SECONDS=0.1 \
     run run_usage link branch:fix/foo research:x
-  [ "$status" -eq 75 ]
-  grep -qF 'nothing was written' <<<"$output"
-  [ ! -e "$TELEMETRY_DIRECTORY/links.jsonl" ]
+  [ "$status" -eq 75 ] || { echo "case held lock: status $status" >&2; return 1; }
+  grep -qF 'nothing was written' <<<"$output" || { echo "case held lock: no nothing-written line" >&2; return 1; }
+  [ ! -e "$TELEMETRY_DIRECTORY/links.jsonl" ] || { echo "case held lock: wrote links.jsonl" >&2; return 1; }
   rmdir "$TELEMETRY_DIRECTORY/specs.lock.d"
   GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 run run_usage link branch:fix/foo research:x
-  [ "$status" -eq 0 ]
-  [ "$(wc -l <"$TELEMETRY_DIRECTORY/links.jsonl" | tr -d ' ')" -eq 1 ]
-}
+  [ "$status" -eq 0 ] || { echo "case released lock: status $status" >&2; return 1; }
+  [ "$(wc -l <"$TELEMETRY_DIRECTORY/links.jsonl" | tr -d ' ')" -eq 1 ] || { echo "case released lock: link count" >&2; return 1; }
 
-@test "lineage: an empty or missing path exits 2 with the no-SPEC line and writes nothing" {
+  # lineage: an empty or missing path exits 2 with the no-SPEC line
+  reset_ledger
   run run_usage lineage ""
-  [ "$status" -eq 2 ]
-  has_line "usage lineage: no SPEC file at ''"
+  [ "$status" -eq 2 ] || { echo "case lineage empty path: status $status" >&2; return 1; }
+  has_line "usage lineage: no SPEC file at ''" || return 1
   run run_usage lineage /nonexistent/SPEC.md
-  [ "$status" -eq 2 ]
-  has_line "usage lineage: no SPEC file at '/nonexistent/SPEC.md'"
-  [ ! -e "$TELEMETRY_DIRECTORY/links.jsonl" ]
+  [ "$status" -eq 2 ] || { echo "case lineage missing path: status $status" >&2; return 1; }
+  has_line "usage lineage: no SPEC file at '/nonexistent/SPEC.md'" || return 1
+  [ ! -e "$TELEMETRY_DIRECTORY/links.jsonl" ] || { echo "case lineage: wrote links.jsonl" >&2; return 1; }
 }
 
 # ---------- link --pr, link --merge, pr-branch ----------

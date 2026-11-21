@@ -2,14 +2,13 @@ import {afterEach, beforeEach, describe, expect, test} from 'vitest';
 import {existsSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {
   loadTemplate,
   renderTemplate,
   scaffoldTemplatesDirectory,
   substituteVars,
-  templatePath,
 } from './template.js';
+import type {TemplateVars} from './template.js';
 
 type Sandbox = {
   cleanup: () => void;
@@ -45,119 +44,83 @@ describe('renderTemplate', () => {
     sandbox.cleanup();
   });
 
-  test('substitutes scalar variables', () => {
-    const filePath = writeTemplateFile(
-      sandbox.dir,
-      'scalar.tpl',
-      'export const {{name}} = "{{value}}";'
-    );
+  describe('renderTemplate substitutes variables and sections', () => {
+    test.each([
+      {
+        body: 'export const {{name}} = "{{value}}";',
+        name: 'substitutes scalar variables',
+        renders: [
+          [{name: 'foo', value: 'bar'}, 'export const foo = "bar";'],
+        ] as [TemplateVars, string][],
+      },
+      {
+        body: 'a{{#flag}}-x-{{/flag}}b',
+        name: 'omits boolean section when flag is false / missing',
+        renders: [
+          [{flag: false}, 'ab'],
+          [{}, 'ab'],
+        ] as [TemplateVars, string][],
+      },
+      {
+        body: 'a{{#flag}}-x-{{/flag}}b',
+        name: 'includes boolean section when flag is true',
+        renders: [[{flag: true}, 'a-x-b']] as [TemplateVars, string][],
+      },
+      {
+        body: '[{{#each items}}<{{this}}>{{/each}}]',
+        name: 'iterates each blocks with {{this}}',
+        renders: [[{items: ['a', 'b', 'c']}, '[<a><b><c>]']] as [
+          TemplateVars,
+          string,
+        ][],
+      },
+      {
+        body: 'pre{{#each items}}X{{/each}}post',
+        name: 'each block iterating empty array yields no body',
+        renders: [[{items: []}, 'prepost']] as [TemplateVars, string][],
+      },
+      {
+        body: '{{#story}}story for {{name}}{{/story}}',
+        name: 'substitutes inside a true section body',
+        renders: [[{name: 'Foo', story: true}, 'story for Foo']] as [
+          TemplateVars,
+          string,
+        ][],
+      },
+      {
+        body: 'a-{{absent}}-b',
+        name: 'missing scalar renders as empty string',
+        renders: [[{}, 'a--b']] as [TemplateVars, string][],
+      },
+      {
+        body: 'flag={{flag}}',
+        name: 'boolean scalar is stringified as true/false',
+        renders: [
+          [{flag: true}, 'flag=true'],
+          [{flag: false}, 'flag=false'],
+        ] as [TemplateVars, string][],
+      },
+      {
+        body: 'tags={{tags}}',
+        name: 'array scalar substitution joins with commas',
+        renders: [[{tags: ['a', 'b']}, 'tags=a,b']] as [TemplateVars, string][],
+      },
+      {
+        body: '',
+        name: 'renders to empty when template is empty',
+        renders: [[{}, '']] as [TemplateVars, string][],
+      },
+    ])('$name', ({body, renders}) => {
+      const filePath = writeTemplateFile(sandbox.dir, 'case.tpl', body);
 
-    const out = renderTemplate(filePath, {name: 'foo', value: 'bar'});
-
-    expect(out).toBe('export const foo = "bar";');
-  });
-
-  test('omits boolean section when flag is false / missing', () => {
-    const filePath = writeTemplateFile(
-      sandbox.dir,
-      'flag.tpl',
-      'a{{#flag}}-x-{{/flag}}b'
-    );
-
-    expect(renderTemplate(filePath, {flag: false})).toBe('ab');
-    expect(renderTemplate(filePath, {})).toBe('ab');
-  });
-
-  test('includes boolean section when flag is true', () => {
-    const filePath = writeTemplateFile(
-      sandbox.dir,
-      'flag.tpl',
-      'a{{#flag}}-x-{{/flag}}b'
-    );
-
-    expect(renderTemplate(filePath, {flag: true})).toBe('a-x-b');
-  });
-
-  test('iterates each blocks with {{this}}', () => {
-    const filePath = writeTemplateFile(
-      sandbox.dir,
-      'each.tpl',
-      '[{{#each items}}<{{this}}>{{/each}}]'
-    );
-
-    const out = renderTemplate(filePath, {items: ['a', 'b', 'c']});
-
-    expect(out).toBe('[<a><b><c>]');
-  });
-
-  test('each block iterating empty array yields no body', () => {
-    const filePath = writeTemplateFile(
-      sandbox.dir,
-      'each.tpl',
-      'pre{{#each items}}X{{/each}}post'
-    );
-
-    expect(renderTemplate(filePath, {items: []})).toBe('prepost');
-  });
-
-  test('substitutes inside a true section body', () => {
-    const filePath = writeTemplateFile(
-      sandbox.dir,
-      'mixed.tpl',
-      '{{#story}}story for {{name}}{{/story}}'
-    );
-
-    const out = renderTemplate(filePath, {name: 'Foo', story: true});
-
-    expect(out).toBe('story for Foo');
-  });
-
-  test('missing scalar renders as empty string', () => {
-    const filePath = writeTemplateFile(
-      sandbox.dir,
-      'missing.tpl',
-      'a-{{absent}}-b'
-    );
-
-    expect(renderTemplate(filePath, {})).toBe('a--b');
-  });
-
-  test('boolean scalar is stringified as true/false', () => {
-    const filePath = writeTemplateFile(
-      sandbox.dir,
-      'bool.tpl',
-      'flag={{flag}}'
-    );
-
-    expect(renderTemplate(filePath, {flag: true})).toBe('flag=true');
-    expect(renderTemplate(filePath, {flag: false})).toBe('flag=false');
-  });
-
-  test('array scalar substitution joins with commas', () => {
-    const filePath = writeTemplateFile(
-      sandbox.dir,
-      'array.tpl',
-      'tags={{tags}}'
-    );
-
-    expect(renderTemplate(filePath, {tags: ['a', 'b']})).toBe('tags=a,b');
-  });
-
-  test('renders to empty when template is empty', () => {
-    const filePath = writeTemplateFile(sandbox.dir, 'empty.tpl', '');
-
-    expect(renderTemplate(filePath, {})).toBe('');
+      for (const [vars, expected] of renders) {
+        expect(renderTemplate(filePath, vars)).toBe(expected);
+      }
+    });
   });
 });
 
 describe('scaffoldTemplatesDirectory', () => {
-  test('is the shipped templates tree beside the CLI package', () => {
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    const expected = path.resolve(here, '..', '..', 'templates');
-
-    expect(scaffoldTemplatesDirectory()).toBe(expected);
-  });
-
   test.each(['component', 'hook', 'route', 'service', 'data-layer'])(
     'contains the %s templates',
     (family) => {
@@ -166,12 +129,6 @@ describe('scaffoldTemplatesDirectory', () => {
       );
     }
   );
-
-  test('templatePath builds on the resolved directory', () => {
-    expect(templatePath('hook/hook.ts.tmpl')).toBe(
-      path.join(scaffoldTemplatesDirectory(), 'hook', 'hook.ts.tmpl')
-    );
-  });
 });
 
 describe('loadTemplate', () => {

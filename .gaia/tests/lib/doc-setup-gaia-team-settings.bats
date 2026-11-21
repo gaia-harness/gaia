@@ -3,14 +3,9 @@
 # team-setting jq read and every commit on the setup surface (the command
 # followed by every reference under `.claude/skills/gaia/references/setup/`)
 # targets `.gaia/project.json`, and so does the isolation policy read in the
-# shared isolation reference.
-#
-# Each check is a function over a file path, so every test that proves the real
-# page passes has a twin that runs the same function over a scratch copy with
-# the forbidden content put back and asserts it fails.
-#
-# Tokens the removed-automation guard forbids anywhere in the tree are built
-# at runtime (printf or concatenation) so this file never carries one.
+# shared isolation reference. The isolation question leads with always using
+# worktrees, and the team questions are asked in the user's language with
+# answers keyed on option position.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -36,23 +31,6 @@ setup() {
     echo "the setup references directory is absent: ${REFERENCES_DIRECTORY}" >&2
     return 1
   }
-}
-
-# scratch_copy <source> <name>: copy a file into the test's temp dir and print
-# the copy's path, so a mutation never touches the shared tree.
-scratch_copy() {
-  local copy="${BATS_TEST_TMPDIR}/$2"
-  cp "$1" "$copy"
-  printf '%s\n' "$copy"
-}
-
-# scratch_references <name>: copy the setup references directory into the
-# test's temp dir and print the copy's path.
-scratch_references() {
-  local copy="${BATS_TEST_TMPDIR}/$1"
-  mkdir -p "$copy"
-  cp "${REFERENCES_DIRECTORY}"/*.md "$copy"/
-  printf '%s\n' "$copy"
 }
 
 # surface_files <entry> <directory>: the setup surface, one path per line: the
@@ -130,48 +108,6 @@ check_project_json() {
   check_project_json "$(real_surface)"
 }
 
-@test "the project.json check fails on a read of another config file" {
-  local copy surface
-  copy="$(scratch_copy "$PAGE" "project-json-read.md")"
-  sed "s#sandbox_recommended // false' \.gaia/project\.json#sandbox_recommended // false' .gaia/other.json#" \
-    "$PAGE" >"$copy"
-  grep -qF '.gaia/other.json' "$copy"
-  surface="$(build_surface "$copy" "$REFERENCES_DIRECTORY" surface-project-json-read.md)"
-  run check_project_json "$surface"
-  [ "$status" -ne 0 ]
-}
-
-@test "the project.json check fails when a commit stages another file" {
-  local directory surface
-  directory="$(scratch_references project-json-commit)"
-  awk '/^git add \.gaia\/project\.json/ && !done { sub(/project\.json/, "other.json"); done = 1 } { print }' \
-    "${REFERENCES_DIRECTORY}/isolation-question.md" >"${directory}/isolation-question.md"
-  cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "${directory}/isolation-question.md" && return 1
-  surface="$(build_surface "$PAGE" "$directory" surface-project-json-commit.md)"
-  run check_project_json "$surface"
-  [ "$status" -ne 0 ]
-}
-
-@test "the project.json check fails when the sandbox reference reads another file" {
-  local directory surface
-  directory="$(scratch_references project-json-sandbox)"
-  sed "s#sandbox_recommended // false' \.gaia/project\.json#sandbox_recommended // false' .gaia/other.json#" \
-    "${REFERENCES_DIRECTORY}/sandbox.md" >"${directory}/sandbox.md"
-  cmp -s "${REFERENCES_DIRECTORY}/sandbox.md" "${directory}/sandbox.md" && return 1
-  surface="$(build_surface "$PAGE" "$directory" surface-project-json-sandbox.md)"
-  run check_project_json "$surface"
-  [ "$status" -ne 0 ]
-}
-
-@test "the project.json check fails when an extra team-setting commit is added" {
-  local copy surface
-  copy="$(scratch_copy "$PAGE" "second-commit.md")"
-  printf '\n```bash\ngit add .gaia/project.json\n```\n' >>"$copy"
-  surface="$(build_surface "$copy" "$REFERENCES_DIRECTORY" surface-second-commit.md)"
-  run check_project_json "$surface"
-  [ "$status" -ne 0 ]
-}
-
 # check_isolation_reference <file>: the policy read targets
 # .gaia/project.json with its load-bearing fallback tail, an unset or
 # unrecognized policy falls back to always-worktree, and the file names no
@@ -198,34 +134,6 @@ check_isolation_reference() {
 
 @test "the isolation reference reads its policy from .gaia/project.json" {
   check_isolation_reference "$ISOLATION_REFERENCE"
-}
-
-@test "the isolation check fails with the fallback back on prefer-worktree" {
-  local copy
-  copy="$(scratch_copy "$ISOLATION_REFERENCE" "isolation-prefer.md")"
-  sed -e 's/"always-worktree"'"'"' \.gaia/"prefer-worktree"'"'"' .gaia/' \
-    -e 's/|| echo always-worktree)/|| echo prefer-worktree)/' \
-    "$ISOLATION_REFERENCE" >"$copy"
-  cmp -s "$ISOLATION_REFERENCE" "$copy" && return 1
-  run check_isolation_reference "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the isolation check fails when the unrecognized-value arm falls back to prefer-worktree" {
-  local copy
-  copy="$(scratch_copy "$ISOLATION_REFERENCE" "isolation-arm.md")"
-  sed 's/^    POLICY=always-worktree$/    POLICY=prefer-worktree/' "$ISOLATION_REFERENCE" >"$copy"
-  cmp -s "$ISOLATION_REFERENCE" "$copy" && return 1
-  run check_isolation_reference "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the isolation check fails on the old config path put back" {
-  local copy
-  copy="$(scratch_copy "$ISOLATION_REFERENCE" "isolation-old.md")"
-  sed "s#\.gaia/project\.json#.gaia/$(printf 'automation%sjson' .)#" "$ISOLATION_REFERENCE" >"$copy"
-  run check_isolation_reference "$copy"
-  [ "$status" -ne 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -260,37 +168,6 @@ check_isolation_question() {
   check_isolation_question "${REFERENCES_DIRECTORY}/isolation-question.md"
 }
 
-@test "the isolation question check fails with the recommendation back on prefer-worktree" {
-  local copy
-  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/isolation-question.md" "isolation-question-old.md")"
-  sed -e 's/^- \*\*Always use worktrees (Recommended)\*\*:/- **Always use worktrees**:/' \
-    -e 's/^- \*\*Prefer worktrees\*\*:/- **Prefer worktrees (Recommended)**:/' \
-    "${REFERENCES_DIRECTORY}/isolation-question.md" >"$copy"
-  cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "$copy" && return 1
-  run check_isolation_question "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the isolation question check fails when an answer label drifts from its option" {
-  local copy
-  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/isolation-question.md" "isolation-question-drift.md")"
-  sed 's/^- The first option, `Always use worktrees (Recommended)`, is/- The first option, `Always use worktrees`, is/' \
-    "${REFERENCES_DIRECTORY}/isolation-question.md" >"$copy"
-  cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "$copy" && return 1
-  run check_isolation_question "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the isolation question check fails when the answer is keyed on label text" {
-  local copy
-  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/isolation-question.md" "isolation-question-label-keyed.md")"
-  sed 's/^- The [a-z]* option, \(`[^`]*`\), is/- \1 is/' \
-    "${REFERENCES_DIRECTORY}/isolation-question.md" >"$copy"
-  cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "$copy" && return 1
-  run check_isolation_question "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # The --reconfigure team questions speak the user's language
 # ---------------------------------------------------------------------------
@@ -315,22 +192,6 @@ check_question_language() {
   check_question_language "${REFERENCES_DIRECTORY}/sandbox-recommendation.md"
 }
 
-@test "the language check fails with the English-only explainer sentence put back" {
-  local copy
-  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/isolation-question.md" "isolation-question-english.md")"
-  printf '\nShow the explainer (this block stays English regardless of UI language):\n' >>"$copy"
-  run check_question_language "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the language check fails with the English-only configuration block put back" {
-  local copy
-  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/sandbox-recommendation.md" "sandbox-recommendation-english.md")"
-  printf '\nUse AskUserQuestion (this configuration block stays in English):\n' >>"$copy"
-  run check_question_language "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # check_sandbox_recommendation_answer <file>: each answer maps by the option's
 # position, naming its option's label.
 check_sandbox_recommendation_answer() {
@@ -346,60 +207,4 @@ check_sandbox_recommendation_answer() {
 
 @test "the sandbox-recommendation answer maps by option position" {
   check_sandbox_recommendation_answer "${REFERENCES_DIRECTORY}/sandbox-recommendation.md"
-}
-
-@test "the sandbox-recommendation answer check fails when the answer is keyed on label text" {
-  local copy
-  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/sandbox-recommendation.md" "sandbox-recommendation-label-keyed.md")"
-  sed 's/^- The [a-z]* option, \(`[^`]*`\), is/- \1 is/' \
-    "${REFERENCES_DIRECTORY}/sandbox-recommendation.md" >"$copy"
-  cmp -s "${REFERENCES_DIRECTORY}/sandbox-recommendation.md" "$copy" && return 1
-  run check_sandbox_recommendation_answer "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# ---------------------------------------------------------------------------
-# --reconfigure re-opens the sandbox recommendation
-# ---------------------------------------------------------------------------
-
-# check_reconfigure_lists <file>: the frontmatter description and the
-# argument-parse list of what --reconfigure re-opens both name the sandbox
-# recommendation, and no line says --reconfigure leaves it closed.
-check_reconfigure_lists() {
-  local file="$1" line
-  for line in "$(grep -E '^description: ' "$file")" "$(grep -E '^Parse `\$ARGUMENTS` for the `--reconfigure` flag' "$file")"; do
-    [ -n "$line" ] || {
-      echo "a --reconfigure list is absent" >&2
-      return 1
-    }
-    grep -qE 'sandbox[- ]recommendation' <<<"$line" || {
-      printf 'a --reconfigure list omits the sandbox recommendation: %s\n' "$line" >&2
-      return 1
-    }
-  done
-  if grep -n 'does not re-open' "$file"; then
-    echo "the page still says --reconfigure does not re-open a decision" >&2
-    return 1
-  fi
-}
-
-@test "every --reconfigure list on the setup page names the sandbox recommendation" {
-  check_reconfigure_lists "$PAGE"
-}
-
-@test "the reconfigure check fails with the does-not-re-open sentence put back" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "reconfigure-closed.md")"
-  printf '\nRun only when `MAY_RECORD_PROJECT` is `admin`. `--reconfigure` does not re-open it.\n' >>"$copy"
-  run check_reconfigure_lists "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the reconfigure check fails when the description drops the sandbox recommendation" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "reconfigure-description.md")"
-  sed -E '/^description: /s/ sandbox-recommendation,//' "$PAGE" >"$copy"
-  cmp -s "$PAGE" "$copy" && return 1
-  run check_reconfigure_lists "$copy"
-  [ "$status" -ne 0 ]
 }

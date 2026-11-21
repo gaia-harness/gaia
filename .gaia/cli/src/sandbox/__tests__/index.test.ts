@@ -78,54 +78,44 @@ describe('gaia sandbox detect', () => {
     vi.restoreAllMocks();
   });
 
-  test('fully-injected darwin input is ready, printed as JSON', () => {
-    const exit = run(['detect', '--platform', 'darwin', '--json']);
+  test.each([
+    {
+      args: ['detect', '--platform', 'darwin', '--json'],
+      capability: 'ready',
+      installCommand: undefined,
+      name: 'fully-injected darwin input is ready, printed as JSON',
+    },
+    {
+      args: [
+        'detect',
+        '--platform',
+        'linux',
+        '--has-bwrap',
+        'false',
+        '--has-socat',
+        'false',
+        '--json',
+      ],
+      capability: 'needs-deps',
+      installCommand: 'sudo apt-get install bubblewrap socat',
+      name: 'fully-injected linux without deps is needs-deps',
+    },
+    {
+      args: ['detect', '--platform', 'win32', '--json'],
+      capability: 'unsupported',
+      installCommand: undefined,
+      name: 'win32 is unsupported',
+    },
+  ])('$name', ({args, capability, installCommand}) => {
+    const exit = run(args);
 
     expect(exit).toBe(0);
     const parsed = JSON.parse(stdio.outputs.join('').trim()) as Record<
       string,
       unknown
     >;
-    expect(parsed.capability).toBe('ready');
-  });
-
-  test('fully-injected linux without deps is needs-deps', () => {
-    const exit = run([
-      'detect',
-      '--platform',
-      'linux',
-      '--has-bwrap',
-      'false',
-      '--has-socat',
-      'false',
-      '--json',
-    ]);
-
-    expect(exit).toBe(0);
-    const parsed = JSON.parse(stdio.outputs.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(parsed.capability).toBe('needs-deps');
-    expect(parsed.installCommand).toBe('sudo apt-get install bubblewrap socat');
-  });
-
-  test('win32 is unsupported', () => {
-    const exit = run(['detect', '--platform', 'win32', '--json']);
-
-    expect(exit).toBe(0);
-    const parsed = JSON.parse(stdio.outputs.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(parsed.capability).toBe('unsupported');
-  });
-
-  test('an invalid --platform value exits non-zero', () => {
-    const exit = run(['detect', '--platform', 'bogus']);
-
-    expect(exit).toBe(EXIT_CODES.INVALID_ARGUMENTS);
-    expect(stdio.errors.join('')).toContain('--platform must be one of');
+    expect(parsed.capability).toBe(capability);
+    expect(parsed.installCommand).toBe(installCommand);
   });
 
   test('--help prints usage and exits 0', () => {
@@ -221,15 +211,6 @@ describe('gaia sandbox apply', () => {
     expect(exit).toBe(0);
     expect(existsSync(settingsPath)).toBe(true);
   });
-
-  test('missing --docker-present exits non-zero', () => {
-    const exit = run(['apply', '--registry', 'https://registry.npmjs.org/'], {
-      cwd: sandbox.root,
-    });
-
-    expect(exit).toBe(EXIT_CODES.INVALID_ARGUMENTS);
-    expect(stdio.errors.join('')).toContain('--docker-present is required');
-  });
 });
 
 describe('gaia sandbox record + status', () => {
@@ -281,20 +262,50 @@ describe('gaia sandbox record + status', () => {
     expect(parsed.outcome).toBe('declined');
     expect(parsed.capability).toBe('ready');
   });
+});
 
-  test('record with an invalid --outcome exits non-zero', () => {
-    const exit = run(
-      ['record', '--outcome', 'bogus', '--capability', 'ready'],
-      {cwd: sandbox.root}
-    );
+describe('gaia sandbox CLI bad input', () => {
+  let sandbox: Sandbox;
+  let stdio: ReturnType<typeof captureStdio>;
 
-    expect(exit).toBe(EXIT_CODES.INVALID_ARGUMENTS);
+  beforeEach(() => {
+    stdio = captureStdio();
+    sandbox = setupSandbox();
   });
 
-  test('an unknown subcommand still exits with the unknown-subcommand code', () => {
-    const exit = run(['bogus'], {cwd: sandbox.root});
+  afterEach(() => {
+    stdio.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
 
-    expect(exit).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    expect(stdio.errors.join('')).toContain('unknown_subcommand');
+  test.each([
+    {
+      args: ['detect', '--platform', 'bogus'],
+      exit: EXIT_CODES.INVALID_ARGUMENTS,
+      name: 'an invalid --platform value exits non-zero',
+      stderr: '--platform must be one of',
+    },
+    {
+      args: ['apply', '--registry', 'https://registry.npmjs.org/'],
+      exit: EXIT_CODES.INVALID_ARGUMENTS,
+      name: 'missing --docker-present exits non-zero',
+      stderr: '--docker-present is required',
+    },
+    {
+      args: ['record', '--outcome', 'bogus', '--capability', 'ready'],
+      exit: EXIT_CODES.INVALID_ARGUMENTS,
+      name: 'record with an invalid --outcome exits non-zero',
+      stderr: '',
+    },
+    {
+      args: ['bogus'],
+      exit: EXIT_CODES.UNKNOWN_SUBCOMMAND,
+      name: 'an unknown subcommand still exits with the unknown-subcommand code',
+      stderr: 'unknown_subcommand',
+    },
+  ])('$name', ({args, exit, stderr}) => {
+    expect(run(args, {cwd: sandbox.root})).toBe(exit);
+    expect(stdio.errors.join('')).toContain(stderr);
   });
 });

@@ -67,8 +67,42 @@ finding_codes() {
   [ -z "$output" ]
 }
 
-@test "parse refuses a SPEC that carries a uats key beside flows" {
-  write_spec \
+# expect_parse_refusal <row> <word the reason names> <frontmatter-lines...>:
+# the SPEC is refused with exit 2, no stdout and a reason naming the word.
+expect_parse_refusal() {
+  local row="$1" word="$2"
+  shift 2
+  write_spec "$@"
+  run lib_call flows_lib_parse_spec "$SPEC"
+  [ "$status" -eq 2 ] || { echo "row $row: status $status"; return 1; }
+  [ -z "$output" ] || { echo "row $row: output: $output"; return 1; }
+  grep -q "$word" "$STDERR_FILE" || { echo "row $row: reason does not name $word"; return 1; }
+}
+
+# expect_finding <row> <finding code> <frontmatter-lines...>: validate exits 0
+# and prints the code.
+expect_finding() {
+  local row="$1" code="$2"
+  shift 2
+  write_spec "$@"
+  run lib_call flows_lib_validate_spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+  finding_codes | grep -qx "$code" || { echo "row $row: no $code in: $output"; return 1; }
+}
+
+# expect_covers <row> <status> <expected output> <spec file lines...>
+expect_covers() {
+  local row="$1" expected_status="$2" expected_output="$3"
+  shift 3
+  printf '%s\n' "$@" >"$SPEC_FILE_UNDER_TEST"
+  run lib_call flows_lib_covers_paths "$SPEC_FILE_UNDER_TEST"
+  [ "$status" -eq "$expected_status" ] || { echo "row $row: status $status"; return 1; }
+  [ "$output" = "$expected_output" ] || { echo "row $row: output: $output"; return 1; }
+  [ "$expected_status" -eq 0 ] || [ ! -s "$STDERR_FILE" ] || { echo "row $row: stderr not empty"; return 1; }
+}
+
+@test "flows_lib_parse_spec refuses a SPEC with a uats key (beside or without flows), no flows key, or an empty flows list, exit 2 with a reason" {
+  expect_parse_refusal uats-beside-flows uats \
     'uats:' \
     '  - uat_id: UAT-001' \
     'flows:' \
@@ -76,91 +110,39 @@ finding_codes() {
     '    slug: sign-in' \
     '    name: A user signs in' \
     '    why: Sign in gates everything' \
-    '    covers: [app/pages/sign-in]'
-
-  run lib_call flows_lib_parse_spec "$SPEC"
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -q 'uats' "$STDERR_FILE"
-}
-
-@test "parse refuses a SPEC that carries a uats key and no flows key" {
-  write_spec \
+    '    covers: [app/pages/sign-in]' || return 1
+  expect_parse_refusal uats-without-flows uats \
     'uats:' \
-    '  - uat_id: UAT-001'
-
-  run lib_call flows_lib_parse_spec "$SPEC"
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -q 'uats' "$STDERR_FILE"
+    '  - uat_id: UAT-001' || return 1
+  expect_parse_refusal no-flows-key flows 'summary: nothing here' || return 1
+  expect_parse_refusal empty-flows flows 'flows: []' || return 1
 }
 
-@test "parse refuses a SPEC with no flows key" {
-  write_spec 'summary: nothing here'
-
-  run lib_call flows_lib_parse_spec "$SPEC"
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -q 'flows' "$STDERR_FILE"
-}
-
-@test "parse refuses a SPEC with an empty flows list" {
-  write_spec 'flows: []'
-
-  run lib_call flows_lib_parse_spec "$SPEC"
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  grep -q 'flows' "$STDERR_FILE"
-}
-
-@test "validate reports uats_key_present for a uats key" {
-  write_spec \
+@test "flows_lib_validate_spec reports each finding code: uats_key_present, missing_flows, flow_missing_field, bad_flow_id, duplicate_flow_id, bad_slug, flow_target_conflict, given_when_then_field, working_document_id" {
+  expect_finding uats-key uats_key_present \
     'uats:' \
-    '  - uat_id: UAT-001'
+    '  - uat_id: UAT-001' || return 1
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'uats_key_present'
-}
+  expect_finding no-flows-key missing_flows 'summary: nothing here' || return 1
 
-@test "validate reports missing_flows for a SPEC with no flows key" {
-  write_spec 'summary: nothing here'
-
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'missing_flows'
-}
-
-@test "validate reports flow_missing_field with the field's location" {
-  write_spec \
+  expect_finding missing-why flow_missing_field \
     'flows:' \
     '  - flow_id: FLOW-001' \
     '    slug: sign-in' \
     '    name: A user signs in' \
-    '    covers: [app/pages/sign-in]'
+    '    covers: [app/pages/sign-in]' || return 1
+  printf '%s\n' "$output" | grep -q "^flow_missing_field${TAB}.*${TAB}frontmatter.flows.FLOW-001.why\$" \
+    || { echo "row missing-why: no location in: $output"; return 1; }
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'flow_missing_field'
-  printf '%s\n' "$output" | grep -q "^flow_missing_field${TAB}.*${TAB}frontmatter.flows.FLOW-001.why\$"
-}
-
-@test "validate reports bad_flow_id for an id that is not FLOW and three or more digits" {
-  write_spec \
+  expect_finding short-id bad_flow_id \
     'flows:' \
     '  - flow_id: FLOW-1' \
     '    slug: sign-in' \
     '    name: A user signs in' \
     '    why: Sign in gates everything' \
-    '    covers: [app/pages/sign-in]'
+    '    covers: [app/pages/sign-in]' || return 1
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'bad_flow_id'
-}
-
-@test "validate reports duplicate_flow_id when two flows share an id" {
-  write_spec \
+  expect_finding shared-id duplicate_flow_id \
     'flows:' \
     '  - flow_id: FLOW-001' \
     '    slug: sign-in' \
@@ -171,168 +153,89 @@ finding_codes() {
     '    slug: sign-out' \
     '    name: A user signs out' \
     '    why: Sign out ends the session' \
-    '    covers: [app/pages/sign-out]'
+    '    covers: [app/pages/sign-out]' || return 1
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'duplicate_flow_id'
-}
-
-@test "validate reports bad_slug for a slug that is not kebab-case" {
-  write_spec \
+  expect_finding snake-case-slug bad_slug \
     'flows:' \
     '  - flow_id: FLOW-001' \
     '    slug: Sign_In' \
     '    name: A user signs in' \
     '    why: Sign in gates everything' \
-    '    covers: [app/pages/sign-in]'
+    '    covers: [app/pages/sign-in]' || return 1
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'bad_slug'
-}
-
-@test "validate reports flow_target_conflict when a flow has both covers and test_path" {
-  write_spec \
+  expect_finding covers-and-test-path flow_target_conflict \
     'flows:' \
     '  - flow_id: FLOW-001' \
     '    slug: sign-in' \
     '    name: A user signs in' \
     '    why: Sign in gates everything' \
     '    covers: [app/pages/sign-in]' \
-    '    test_path: .gaia/tests/lib/sign-in.bats'
+    '    test_path: .gaia/tests/lib/sign-in.bats' || return 1
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'flow_target_conflict'
-}
-
-@test "validate reports flow_target_conflict when a flow has neither covers nor test_path" {
-  write_spec \
+  expect_finding neither-target flow_target_conflict \
     'flows:' \
     '  - flow_id: FLOW-001' \
     '    slug: sign-in' \
     '    name: A user signs in' \
-    '    why: Sign in gates everything'
+    '    why: Sign in gates everything' || return 1
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'flow_target_conflict'
-}
-
-@test "validate reports flow_target_conflict for an empty covers list" {
-  write_spec \
+  expect_finding empty-covers flow_target_conflict \
     'flows:' \
     '  - flow_id: FLOW-001' \
     '    slug: sign-in' \
     '    name: A user signs in' \
     '    why: Sign in gates everything' \
-    '    covers: []'
+    '    covers: []' || return 1
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'flow_target_conflict'
-}
-
-@test "validate reports given_when_then_field for a given key on a flow" {
-  write_spec \
+  expect_finding given-key given_when_then_field \
     'flows:' \
     '  - flow_id: FLOW-001' \
     '    slug: sign-in' \
     '    name: A user signs in' \
     '    why: Sign in gates everything' \
     '    covers: [app/pages/sign-in]' \
-    '    given: a registered user'
+    '    given: a registered user' || return 1
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'given_when_then_field'
-}
-
-@test "validate reports working_document_id for a SPEC id in a flow name" {
-  write_spec \
+  expect_finding spec-id-in-name working_document_id \
     'flows:' \
     '  - flow_id: FLOW-001' \
     '    slug: sign-in' \
     '    name: A user signs in as SPEC-123 describes' \
     '    why: Sign in gates everything' \
-    '    covers: [app/pages/sign-in]'
+    '    covers: [app/pages/sign-in]' || return 1
+  printf '%s\n' "$output" | grep -q "^working_document_id${TAB}.*${TAB}frontmatter.flows.FLOW-001.name\$" \
+    || { echo "row spec-id-in-name: no location in: $output"; return 1; }
 
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'working_document_id'
-  printf '%s\n' "$output" | grep -q "^working_document_id${TAB}.*${TAB}frontmatter.flows.FLOW-001.name\$"
-}
-
-@test "validate reports working_document_id for a PLAN id in a flow why" {
-  write_spec \
+  expect_finding plan-id-in-why working_document_id \
     'flows:' \
     '  - flow_id: FLOW-001' \
     '    slug: sign-in' \
     '    name: A user signs in' \
     '    why: Sign in gates everything in PLAN-45' \
-    '    covers: [app/pages/sign-in]'
-
-  run lib_call flows_lib_validate_spec "$SPEC"
-  [ "$status" -eq 0 ]
-  finding_codes | grep -qx 'working_document_id'
+    '    covers: [app/pages/sign-in]' || return 1
 }
 
-@test "covers reads a declaration on the first line" {
-  printf '%s\n' \
+@test "flows_lib_covers_paths reads @covers declarations from the leading comment block in file order, and ignores one after the first import or returns 1 with none" {
+  expect_covers first-line 0 "$(printf 'app/pages/sign-in\napp/routes/drafts')" \
     '// @covers app/pages/sign-in app/routes/drafts' \
-    "import { test } from '@playwright/test';" >"$SPEC_FILE_UNDER_TEST"
-
-  run lib_call flows_lib_covers_paths "$SPEC_FILE_UNDER_TEST"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'app/pages/sign-in\napp/routes/drafts')" ]
-}
-
-@test "covers reads a declaration that follows a license comment" {
-  printf '%s\n' \
+    "import { test } from '@playwright/test';" || return 1
+  expect_covers after-license 0 'app/pages/sign-in' \
     '/* Copyright Example' \
     ' * Licensed under the MIT license.' \
     ' */' \
     '' \
     '// @covers app/pages/sign-in' \
-    "import { test } from '@playwright/test';" >"$SPEC_FILE_UNDER_TEST"
-
-  run lib_call flows_lib_covers_paths "$SPEC_FILE_UNDER_TEST"
-  [ "$status" -eq 0 ]
-  [ "$output" = 'app/pages/sign-in' ]
-}
-
-@test "covers reads every declaration line in file order" {
-  printf '%s\n' \
+    "import { test } from '@playwright/test';" || return 1
+  expect_covers every-line-in-order 0 "$(printf 'app/pages/sign-in\napp/routes/drafts\napp/services')" \
     '// @covers app/pages/sign-in' \
     '// @covers app/routes/drafts app/services' \
-    "import { test } from '@playwright/test';" >"$SPEC_FILE_UNDER_TEST"
-
-  run lib_call flows_lib_covers_paths "$SPEC_FILE_UNDER_TEST"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'app/pages/sign-in\napp/routes/drafts\napp/services')" ]
-}
-
-@test "covers ignores a declaration after the first import" {
-  printf '%s\n' \
+    "import { test } from '@playwright/test';" || return 1
+  expect_covers after-first-import 1 '' \
     "import { test } from '@playwright/test';" \
-    '// @covers app/pages/sign-in' >"$SPEC_FILE_UNDER_TEST"
-
-  run lib_call flows_lib_covers_paths "$SPEC_FILE_UNDER_TEST"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-  [ ! -s "$STDERR_FILE" ]
-}
-
-@test "covers returns status 1 for a file with no declaration" {
-  printf '%s\n' \
+    '// @covers app/pages/sign-in' || return 1
+  expect_covers no-declaration 1 '' \
     '// A flow spec with no declaration.' \
-    "import { test } from '@playwright/test';" >"$SPEC_FILE_UNDER_TEST"
-
-  run lib_call flows_lib_covers_paths "$SPEC_FILE_UNDER_TEST"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-  [ ! -s "$STDERR_FILE" ]
+    "import { test } from '@playwright/test';" || return 1
 }
 
 @test "the frontend package path and a subdirectory of it resolve against the real repository" {

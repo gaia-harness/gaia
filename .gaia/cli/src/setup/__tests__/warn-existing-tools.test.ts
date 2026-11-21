@@ -105,91 +105,78 @@ describe('setup warn-existing-tools', () => {
     expect(parsed.found).toEqual(found);
   });
 
-  test('detects .renovaterc.json and .github/renovate.json under same name', () => {
-    writeFileAt(sandbox.root, '.renovaterc.json', '{}\n');
-    writeFileAt(sandbox.root, '.github/renovate.json', '{}\n');
+  test.each<[string, [string, string][], string[]]>([
+    [
+      'detects .renovaterc.json and .github/renovate.json under same name',
+      [
+        ['.renovaterc.json', '{}\n'],
+        ['.github/renovate.json', '{}\n'],
+      ],
+      ['renovate'],
+    ],
+    [
+      'reports both when both exist',
+      [
+        ['.github/dependabot.yml', NPM_CONFIG],
+        ['renovate.json', '{}\n'],
+      ],
+      ['dependabot', 'renovate'],
+    ],
+    [
+      'deduplicates when both .yml and .yaml exist',
+      [
+        ['.github/dependabot.yml', NPM_CONFIG],
+        ['.github/dependabot.yaml', NPM_CONFIG],
+      ],
+      ['dependabot'],
+    ],
+  ])('%s', (_name, files, found) => {
+    for (const [file, contents] of files) {
+      writeFileAt(sandbox.root, file, contents);
+    }
 
     const exit = run(['--json'], {cwd: sandbox.root});
     expect(exit).toBe(0);
 
-    const parsed = JSON.parse(stdio.out.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(parsed.found).toEqual(['renovate']);
+    expect(readOutput(stdio).found).toEqual(found);
   });
 
-  test('reports both when both exist', () => {
-    writeFileAt(sandbox.root, '.github/dependabot.yml', NPM_CONFIG);
-    writeFileAt(sandbox.root, 'renovate.json', '{}\n');
-
-    const exit = run(['--json'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-
-    const parsed = JSON.parse(stdio.out.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(parsed.found).toEqual(['dependabot', 'renovate']);
-  });
-
-  test('deduplicates when both .yml and .yaml exist', () => {
-    writeFileAt(sandbox.root, '.github/dependabot.yml', NPM_CONFIG);
-    writeFileAt(sandbox.root, '.github/dependabot.yaml', NPM_CONFIG);
-
-    const exit = run(['--json'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-
-    const parsed = JSON.parse(stdio.out.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(parsed.found).toEqual(['dependabot']);
-  });
-
-  test('a config with only non-npm entries reports nothing', () => {
-    writeFileAt(sandbox.root, '.github/dependabot.yml', ACTIONS_CONFIG);
+  test.each(
+    [
+      {
+        contents: ACTIONS_CONFIG,
+        found: [],
+        isUnparseable: false,
+        name: 'a config with only non-npm entries reports nothing',
+      },
+      {
+        contents: 'version: 2\n',
+        found: [],
+        isUnparseable: false,
+        name: 'a config with no updates list reports nothing',
+      },
+      {
+        contents: `${ACTIONS_CONFIG}  - package-ecosystem: npm\n    directory: /\n`,
+        found: ['dependabot'],
+        isUnparseable: false,
+        name: 'an npm entry among other ecosystems reports dependabot',
+      },
+      {
+        contents: 'updates: [unclosed\n',
+        found: ['dependabot'],
+        isUnparseable: true,
+        name: 'an unparseable config reports dependabot and flags it unparseable',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {contents, found, isUnparseable}) => {
+    writeFileAt(sandbox.root, '.github/dependabot.yml', contents);
 
     const exit = run(['--json'], {cwd: sandbox.root});
     expect(exit).toBe(0);
 
     expect(readOutput(stdio)).toEqual({
-      dependabot_unparseable: false,
-      found: [],
-    });
-  });
-
-  test('a config with no updates list reports nothing', () => {
-    writeFileAt(sandbox.root, '.github/dependabot.yml', 'version: 2\n');
-
-    run(['--json'], {cwd: sandbox.root});
-
-    expect(readOutput(stdio).found).toEqual([]);
-  });
-
-  test('an npm entry among other ecosystems reports dependabot', () => {
-    writeFileAt(
-      sandbox.root,
-      '.github/dependabot.yml',
-      `${ACTIONS_CONFIG}  - package-ecosystem: npm\n    directory: /\n`
-    );
-
-    run(['--json'], {cwd: sandbox.root});
-
-    expect(readOutput(stdio)).toEqual({
-      dependabot_unparseable: false,
-      found: ['dependabot'],
-    });
-  });
-
-  test('an unparseable config reports dependabot and flags it unparseable', () => {
-    writeFileAt(sandbox.root, '.github/dependabot.yml', 'updates: [unclosed\n');
-
-    run(['--json'], {cwd: sandbox.root});
-
-    expect(readOutput(stdio)).toEqual({
-      dependabot_unparseable: true,
-      found: ['dependabot'],
+      dependabot_unparseable: isUnparseable,
+      found,
     });
   });
 

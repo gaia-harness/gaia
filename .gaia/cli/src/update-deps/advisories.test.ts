@@ -569,40 +569,51 @@ describe('advisories: the alerts count covers the lockfile', () => {
     expect(readPayload()).toMatchObject({count: 1, source: 'dependabot'});
   });
 
-  test('an alert or audit record on an accepted GHSA stays out of the count and the rows', async () => {
-    writeIgnoredGhsas([GHSA_A]);
+  test.each(
+    [
+      {
+        expected: {advisories: [], count: 0},
+        invocation: (): Invocation => ({
+          gh: ghStub({open: ghOk([alert({number: 1})])}),
+          pnpm: pnpmStub(auditOutput(auditAdvisory())),
+        }),
+        name: 'an alert or audit record on an accepted GHSA stays out of the count and the rows',
+        setup: (): void => {
+          writeIgnoredGhsas([GHSA_A]);
+        },
+      },
+      {
+        expected: {count: 0, source: 'dependabot'},
+        invocation: (): Invocation => ({
+          args: ['--count-only'],
+          gh: ghStub({
+            dismissed: ghOk([alert({number: 8, state: 'dismissed'})]),
+            open: ghOk([]),
+          }),
+          pnpm: pnpmStub(auditOutput(auditAdvisory())),
+        }),
+        name: 'an audit record on a dismissed alert stays out of the count',
+        setup: (): void => {},
+      },
+      {
+        expected: {count: 0},
+        invocation: (): Invocation => ({
+          args: ['--count-only'],
+          gh: ghStub({open: ghOk([])}),
+          pnpm: pnpmStub(auditOutput(auditAdvisory())),
+        }),
+        name: 'an audit-only record the baseline acknowledges stays out of the count',
+        setup: (): void => {
+          writeBaseline([{id: 1_098_765, module: 'cookie'}]);
+        },
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', async (_name, {expected, invocation, setup}) => {
+    setup();
 
-    await invoke({
-      gh: ghStub({open: ghOk([alert({number: 1})])}),
-      pnpm: pnpmStub(auditOutput(auditAdvisory())),
-    });
+    await invoke(invocation());
 
-    expect(readPayload()).toMatchObject({advisories: [], count: 0});
-  });
-
-  test('an audit record on a dismissed alert stays out of the count', async () => {
-    await invoke({
-      args: ['--count-only'],
-      gh: ghStub({
-        dismissed: ghOk([alert({number: 8, state: 'dismissed'})]),
-        open: ghOk([]),
-      }),
-      pnpm: pnpmStub(auditOutput(auditAdvisory())),
-    });
-
-    expect(readPayload()).toMatchObject({count: 0, source: 'dependabot'});
-  });
-
-  test('an audit-only record the baseline acknowledges stays out of the count', async () => {
-    writeBaseline([{id: 1_098_765, module: 'cookie'}]);
-
-    await invoke({
-      args: ['--count-only'],
-      gh: ghStub({open: ghOk([])}),
-      pnpm: pnpmStub(auditOutput(auditAdvisory())),
-    });
-
-    expect(readPayload().count).toBe(0);
+    expect(readPayload()).toMatchObject(expected);
   });
 
   test('full mode lists an audit-only advisory beside the alerts so the count has a row', async () => {
@@ -914,8 +925,31 @@ describe('advisories: enrichment and classification', () => {
     });
   });
 
-  test('an unreadable package registry exits INVALID_ARGUMENTS with the gaia-packages message and no payload, never an unowned package manifest', async () => {
-    rmSync(path.join(sandbox.root, 'apps', 'web', 'gaia.package.json'));
+  test.each(
+    [
+      {
+        invocation: (): Invocation => ({
+          gh: ghStub({
+            open: ghOk([alert({manifest: 'apps/web/package.json', number: 1})]),
+          }),
+        }),
+        message: 'gaia-packages: apps/web/gaia.package.json is missing',
+        name: 'an unreadable package registry exits INVALID_ARGUMENTS with the gaia-packages message and no payload, never an unowned package manifest',
+        setup: (): void => {
+          rmSync(path.join(sandbox.root, 'apps', 'web', 'gaia.package.json'));
+        },
+      },
+      {
+        invocation: (): Invocation => ({
+          args: ['--updates', path.join(sandbox.root, 'missing.json')],
+        }),
+        message: 'cannot read updates payload',
+        name: 'an unreadable --updates payload exits INVALID_ARGUMENTS with no payload',
+        setup: (): void => {},
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', async (_name, {invocation, message, setup}) => {
+    setup();
     const stderrWrites: string[] = [];
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
       stderrWrites.push(String(chunk));
@@ -923,25 +957,10 @@ describe('advisories: enrichment and classification', () => {
       return true;
     });
 
-    const exit = await invoke({
-      gh: ghStub({
-        open: ghOk([alert({manifest: 'apps/web/package.json', number: 1})]),
-      }),
-    });
+    const exit = await invoke(invocation());
 
     expect(exit).toBe(EXIT_CODES.INVALID_ARGUMENTS);
-    expect(stderrWrites.join('')).toContain(
-      'gaia-packages: apps/web/gaia.package.json is missing'
-    );
-    expect(existsSync(sandbox.emit)).toBe(false);
-  });
-
-  test('an unreadable --updates payload exits INVALID_ARGUMENTS with no payload', async () => {
-    expect(
-      await invoke({
-        args: ['--updates', path.join(sandbox.root, 'missing.json')],
-      })
-    ).toBe(EXIT_CODES.INVALID_ARGUMENTS);
+    expect(stderrWrites.join('')).toContain(message);
     expect(existsSync(sandbox.emit)).toBe(false);
   });
 

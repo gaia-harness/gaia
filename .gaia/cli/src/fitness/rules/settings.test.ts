@@ -105,34 +105,22 @@ describe('settings.env-secrets', () => {
     }
   });
 
-  test('reports a secret-shaped key with a non-empty value', () => {
-    expect(
-      idsFor({
-        files: {},
-        git: true,
-        settingsJson: {env: {SERVICE_API_KEY: 'abc'}},
-      })
-    ).toEqual(['settings.env-secrets']);
-  });
-
-  test('passes an empty value under a secret-shaped key', () => {
-    expect(
-      idsFor({
-        files: {},
-        git: true,
-        settingsJson: {env: {SERVICE_API_KEY: ''}},
-      })
-    ).toEqual([]);
-  });
-
-  test('passes an ordinary value', () => {
-    expect(
-      idsFor({
-        files: {},
-        git: true,
-        settingsJson: {env: {EXAMPLE_MODE: 'strict'}},
-      })
-    ).toEqual([]);
+  test.each([
+    [
+      'reports a secret-shaped key with a non-empty value',
+      {SERVICE_API_KEY: 'abc'},
+      ['settings.env-secrets'],
+    ],
+    [
+      'passes an empty value under a secret-shaped key',
+      {SERVICE_API_KEY: ''},
+      [],
+    ],
+    ['passes an ordinary value', {EXAMPLE_MODE: 'strict'}, []],
+  ])('%s', (_name, env, expected) => {
+    expect(idsFor({files: {}, git: true, settingsJson: {env}})).toEqual(
+      expected
+    );
   });
 
   test('leaves the machine-local file alone', () => {

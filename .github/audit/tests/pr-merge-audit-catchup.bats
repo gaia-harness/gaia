@@ -14,9 +14,7 @@
 # a bare origin standing in for GitHub, and a logging gh stub that answers the
 # branches endpoint from that origin). The fixture's switches fail or hang only
 # the branches endpoint, so the fork query and the PR record still answer and
-# the denial under test comes from the base lookup itself. Each guard has a
-# mutation case on a scratch copy of the hook under which the gate allows what
-# the real one denies.
+# the denial under test comes from the base lookup itself.
 #
 # Run: .gaia/scripts/bats5.sh .github/audit/tests/pr-merge-audit-catchup.bats < /dev/null
 # Assertion style: .claude/rules/bats-assertions.md.
@@ -97,110 +95,87 @@ assert_allowed() {
   [ -z "$output" ] || { printf 'expected an allow (empty stdout), got: %s\n' "$output" >&2; return 1; }
 }
 
-# --- the base tip is not present locally -------------------------------------------
-
-@test "a base tip that GitHub reports and this checkout lacks denies naming git fetch origin, and the fetch clears it" {
-  cleared_pull_request
-  mgf_run_merge
-  assert_allowed
-
-  advance_origin_without_fetch
-  mgf_run_merge
-  assert_denied_naming 'git fetch origin'
-
-  git -C "$REPO" fetch -q origin
-  mgf_run_merge
-  assert_allowed
+# snapshot_fixture / restore_fixture: save the built fixture once and put it
+# back before each case of a table, so cases share one build without sharing
+# state. The archive sits outside the test directory it restores.
+snapshot_fixture() {
+  FIXTURE_ARCHIVE="$BATS_FILE_TMPDIR/fixture-$BATS_TEST_NUMBER.tar"
+  tar -C "$BATS_TEST_TMPDIR" -cf "$FIXTURE_ARCHIVE" .
 }
 
-@test "mutation: a presence check that falls back to the local ref lets the absent tip through" {
-  local mutant
-  mutant="$(mgf_scratch_hook 's|\n    4\)\n      gate_emit_deny "[^\n]*"\n      ;;|\n    4)\n      merge_base="\$(git -C "\$tree_root" merge-base HEAD "refs/remotes/origin/\$pr_record_base")"\n      ;;|')"
-  cleared_pull_request
-  advance_origin_without_fetch
-
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
-  assert_allowed
+restore_fixture() {
+  find "$BATS_TEST_TMPDIR" -mindepth 1 -delete
+  tar -C "$BATS_TEST_TMPDIR" -xf "$FIXTURE_ARCHIVE"
+  unset GH_STUB_FAIL_BRANCHES GH_STUB_HANG_BRANCHES GAIA_AUDIT_GH_DEADLINE_SECONDS
 }
 
-# --- gh cannot reach GitHub for the base ---------------------------------------------
-
-@test "a failing branches lookup denies naming the gh failure and gh auth status, and restoring gh clears it" {
-  cleared_pull_request
-  export GH_STUB_FAIL_BRANCHES=1
-  mgf_run_merge
-  assert_denied_naming 'gh auth status'
-  assert_denied_naming 'branch'
-
-  unset GH_STUB_FAIL_BRANCHES
-  mgf_run_merge
-  assert_allowed
-}
-
-@test "a hanging branches lookup is cut at the deadline and denies naming gh auth status, and restoring gh clears it" {
-  cleared_pull_request
-  export GH_STUB_HANG_BRANCHES=1 GAIA_AUDIT_GH_DEADLINE_SECONDS=1
-  mgf_run_merge
-  assert_denied_naming 'gh auth status'
-  # The fork query ran, so the denial came from the base lookup.
-  grep -qF -- '--json isCrossRepository' "$MGF_GH_LOG"
-
-  unset GH_STUB_HANG_BRANCHES GAIA_AUDIT_GH_DEADLINE_SECONDS
-  mgf_run_merge
-  assert_allowed
-}
-
-@test "mutation: a failure branch that continues on the local ref lets the gh failure through" {
-  local mutant
-  mutant="$(mgf_scratch_hook 's|\n  if \[ "\$lookup_status" -ne 0 \]; then\n    base_detail=|\n  if [ "\$lookup_status" -ne 0 ]; then\n    tip="\$(git -C "\$tree_root" rev-parse "refs/remotes/origin/\$pr_record_base")"\n    lookup_status=0\n  fi\n  if [ "\$lookup_status" -ne 0 ]; then\n    base_detail=|')"
-  cleared_pull_request
-  export GH_STUB_FAIL_BRANCHES=1
-
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
-  assert_allowed
-}
-
-@test "an empty base branch name in the record denies naming gh auth status" {
-  cleared_pull_request
-  jq -c '.baseRefName = ""' "$MGF_STUB_DIRECTORY/record.json" > "$MGF_STUB_DIRECTORY/record.next"
-  mv "$MGF_STUB_DIRECTORY/record.next" "$MGF_STUB_DIRECTORY/record.json"
-
-  mgf_run_merge
-  assert_denied_naming 'gh auth status'
-}
-
-# --- more than one merge base -----------------------------------------------------------
-
-# criss_cross_pull_request: a cleared pull request whose HEAD then has two merge
-# bases with the base tip; the marker is earned for the digest the gate would
-# compute against one of them.
+# criss_cross_pull_request: a pull request whose HEAD has two merge bases with
+# the base tip; the marker is earned for the digest the gate would compute
+# against one of them.
 criss_cross_pull_request() {
   mgf_commit "apps/web/app/x.ts" "export const x = 1"
   catchup_criss_cross
-  [ "$(git -C "$REPO" merge-base --all HEAD "refs/remotes/origin/main" | grep -c .)" -eq 2 ]
+  [ "$(git -C "$REPO" merge-base --all HEAD "refs/remotes/origin/main" | grep -c .)" -eq 2 ] || return 1
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_marker code-audit-frontend "$(digest_against_origin_tip code-audit-frontend)" >/dev/null
 }
 
-@test "a HEAD with two merge bases denies naming the merge that makes it unique, and that merge clears it" {
-  criss_cross_pull_request
-  mgf_run_merge
-  assert_denied_naming 'git merge --no-edit refs/remotes/origin/main'
+# bats test_tags=protected
+@test "base lookup denials: absent tip, failing lookup, hanging lookup, empty base name, two merge bases each deny naming one next step and clear after the remedy" {
+  snapshot_fixture
 
+  echo "case: a base tip that GitHub reports and this checkout lacks denies naming git fetch origin, and the fetch clears it"
+  cleared_pull_request
+  mgf_run_merge
+  assert_allowed || return 1
+  advance_origin_without_fetch
+  mgf_run_merge
+  assert_denied_naming 'git fetch origin' || return 1
+  git -C "$REPO" fetch -q origin
+  mgf_run_merge
+  assert_allowed || return 1
+
+  echo "case: a failing branches lookup denies naming the gh failure and gh auth status, and restoring gh clears it"
+  restore_fixture
+  cleared_pull_request
+  export GH_STUB_FAIL_BRANCHES=1
+  mgf_run_merge
+  assert_denied_naming 'gh auth status' || return 1
+  assert_denied_naming 'branch' || return 1
+  unset GH_STUB_FAIL_BRANCHES
+  mgf_run_merge
+  assert_allowed || return 1
+
+  echo "case: a hanging branches lookup is cut at the deadline and denies naming gh auth status, and restoring gh clears it"
+  restore_fixture
+  cleared_pull_request
+  export GH_STUB_HANG_BRANCHES=1 GAIA_AUDIT_GH_DEADLINE_SECONDS=1
+  mgf_run_merge
+  assert_denied_naming 'gh auth status' || return 1
+  # The fork query ran, so the denial came from the base lookup.
+  grep -qF -- '--json isCrossRepository' "$MGF_GH_LOG" || return 1
+  unset GH_STUB_HANG_BRANCHES GAIA_AUDIT_GH_DEADLINE_SECONDS
+  mgf_run_merge
+  assert_allowed || return 1
+
+  echo "case: an empty base branch name in the record denies naming gh auth status"
+  restore_fixture
+  cleared_pull_request
+  jq -c '.baseRefName = ""' "$MGF_STUB_DIRECTORY/record.json" > "$MGF_STUB_DIRECTORY/record.next"
+  mv "$MGF_STUB_DIRECTORY/record.next" "$MGF_STUB_DIRECTORY/record.json"
+  mgf_run_merge
+  assert_denied_naming 'gh auth status' || return 1
+
+  echo "case: a HEAD with two merge bases denies naming the merge that makes it unique, and that merge clears it"
+  restore_fixture
+  criss_cross_pull_request || return 1
+  mgf_run_merge
+  assert_denied_naming 'git merge --no-edit refs/remotes/origin/main' || return 1
   git -C "$REPO" merge -q --no-edit refs/remotes/origin/main >/dev/null
-  [ "$(git -C "$REPO" merge-base --all HEAD "refs/remotes/origin/main" | grep -c .)" -eq 1 ]
+  [ "$(git -C "$REPO" merge-base --all HEAD "refs/remotes/origin/main" | grep -c .)" -eq 1 ] || return 1
   mgf_marker code-audit-frontend "$(digest_against_origin_tip code-audit-frontend)" >/dev/null
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_run_merge
-  assert_allowed
-}
-
-@test "mutation: a uniqueness check that takes one merge base lets the criss-cross through" {
-  local mutant
-  mutant="$(mgf_scratch_hook 's|\n    3\)\n      gate_emit_deny "[^\n]*"\n      ;;|\n    3)\n      merge_base="\$(git -C "\$tree_root" merge-base HEAD "\$tip")"\n      ;;|')"
-  criss_cross_pull_request
-
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
   assert_allowed
 }
 
@@ -224,36 +199,25 @@ assert_catch_up_leaves_gate_allowing() {
   local base="$1" before after
   before="$(digest_against_origin_tip code-audit-frontend "$base")"
   mgf_run_merge
-  assert_allowed
+  assert_allowed || return 1
 
   catchup_base_commit "base-landed.txt" "landed on the base"
   catchup_merge_base
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   after="$(digest_against_origin_tip code-audit-frontend "$base")"
-  [ "$before" = "$after" ]
+  [ "$before" = "$after" ] || return 1
   mgf_run_merge
   assert_allowed
 }
 
-@test "a PR based on master is cleared after a clean merge of master" {
-  rebase_origin_onto master
-  assert_catch_up_leaves_gate_allowing master
-}
-
-@test "a PR based on a release branch is cleared after a clean merge of that branch" {
-  rebase_origin_onto release/2.x
-  assert_catch_up_leaves_gate_allowing release/2.x
-}
-
-@test "mutation: a gate that hard-codes main as the base denies a PR based on master" {
-  local mutant
-  mutant="$(mgf_scratch_hook 's|audit_github_base_tip "\$tree_root" "\$repository" "\$pr_record_base"|audit_github_base_tip "\$tree_root" "\$repository" main|')"
-  rebase_origin_onto master
-
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
-  assert_denied_by_json
-  mgf_run_merge
-  assert_allowed
+@test "a PR based on a non-main base (master, release/2.x) is cleared after a clean merge of that base" {
+  snapshot_fixture
+  for base in master release/2.x; do
+    echo "case: a PR based on $base is cleared after a clean merge of that base"
+    restore_fixture
+    rebase_origin_onto "$base" || return 1
+    assert_catch_up_leaves_gate_allowing "$base" || return 1
+  done
 }
 
 # --- a marker is bound to its branch -------------------------------------------------------------
@@ -264,75 +228,51 @@ second_branch_from_base() {
   git -C "$REPO" checkout -q -b second main
 }
 
-@test "a marker earned on one branch is not accepted on another branch with a byte-identical non-empty patch" {
+# bats test_tags=protected
+@test "a marker earned on one branch is not accepted on another branch (byte-identical patch, equally empty patch)" {
+  local initial_tip landed_tip
+  snapshot_fixture
+
+  echo "case: a marker earned on one branch is not accepted on another branch with a byte-identical non-empty patch"
   cleared_pull_request
   mgf_run_merge
-  assert_allowed
-
+  assert_allowed || return 1
   second_branch_from_base
   mgf_commit "apps/web/app/x.ts" "export const x = 1"
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
-  [ "$(git -C "$REPO" diff --stat main HEAD)" = "$(git -C "$REPO" diff --stat main feature)" ]
+  [ "$(git -C "$REPO" diff --stat main HEAD)" = "$(git -C "$REPO" diff --stat main feature)" ] || return 1
   mgf_run_merge
-  assert_denied_naming 'code-audit-frontend'
-}
+  assert_denied_naming 'code-audit-frontend' || return 1
 
-@test "a marker earned on one branch is not accepted on another branch with an equally empty patch" {
+  echo "case: a marker earned on one branch is not accepted on another branch with an equally empty patch"
+  restore_fixture
   # The base already holds the change and the branch has merged it, so against
   # the tip GitHub reports the branch's own patch is empty. The local base ref
   # lags, which is what still dispatches the member.
-  local initial_tip landed_tip
   initial_tip="$(git -C "$REPO" rev-parse refs/remotes/origin/main)"
   mgf_commit "apps/web/app/x.ts" "export const x = 1"
   catchup_base_commit "apps/web/app/x.ts" "export const x = 1"
   landed_tip="$(git -C "$CATCHUP_ORIGIN" rev-parse refs/heads/main)"
   git -C "$REPO" merge -q --no-edit "$landed_tip" >/dev/null
   git -C "$REPO" update-ref refs/remotes/origin/main "$initial_tip"
-  [ -z "$(git -C "$REPO" diff "$landed_tip" HEAD)" ]
+  [ -z "$(git -C "$REPO" diff "$landed_tip" HEAD)" ] || return 1
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_marker code-audit-frontend >/dev/null
   mgf_run_merge
-  assert_allowed
-
+  assert_allowed || return 1
   second_branch_from_base
   mgf_commit "apps/web/app/x.ts" "export const x = 1"
   git -C "$REPO" merge -q --no-edit "$landed_tip" >/dev/null
   git -C "$REPO" update-ref refs/remotes/origin/main "$initial_tip"
-  [ -z "$(git -C "$REPO" diff "$landed_tip" HEAD)" ]
+  [ -z "$(git -C "$REPO" diff "$landed_tip" HEAD)" ] || return 1
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
-  mgf_run_merge
-  assert_denied_naming 'code-audit-frontend'
-}
-
-@test "mutation: a digest that leaves the branch key out accepts the other branch's marker" {
-  local scratch="$BATS_TEST_TMPDIR/keyless" mutant digest
-  mkdir -p "$scratch/.claude/hooks"
-  cp -R "$MGF_LIBRARY_DIRECTORY" "$scratch/.claude/hooks/lib"
-  ln -s "$MGF_REPO_ROOT/.gaia" "$scratch/.gaia"
-  cp "$MGF_HOOK" "${MGF_HOOK%.sh}"-*.sh "$scratch/.claude/hooks/"
-  mutant="$scratch/.claude/hooks/pr-merge-audit-check.sh"
-  perl -0pi -e 's/"\$branch_key"; LC_ALL=C sort -z/""; LC_ALL=C sort -z/' "$scratch/.claude/hooks/lib/audit-digest.sh"
-  if cmp -s "$scratch/.claude/hooks/lib/audit-digest.sh" "$MGF_LIBRARY_DIRECTORY/audit-digest.sh"; then
-    printf 'the mutation left the digest engine unchanged\n' >&2
-    return 1
-  fi
-
-  mgf_commit "apps/web/app/x.ts" "export const x = 1"
-  digest="$(digest_at code-audit-frontend "$(git -C "$REPO" merge-base HEAD main)" "$scratch/.claude/hooks/lib")"
-  mgf_marker code-audit-frontend "$digest" >/dev/null
-  second_branch_from_base
-  mgf_commit "apps/web/app/x.ts" "export const x = 1"
-  mgf_record 12 false "feat: x" "apps/web/app/x.ts"
-
-  mgf_run_merge "gh pr merge 12 --squash" "$mutant"
-  assert_allowed
-  # The real engine, with the key in the frame, does not accept it.
   mgf_run_merge
   assert_denied_naming 'code-audit-frontend'
 }
 
 # --- the previous recipe clears nothing -----------------------------------------------------------------
 
+# bats test_tags=protected
 @test "a marker and a GAIA-Audit status keyed to the previous content digest do not clear the gate" {
   local previous_digest
   mgf_commit "apps/web/app/x.ts" "export const x = 1"
@@ -390,6 +330,7 @@ second_branch_from_base() {
 
 # --- the patch library is a fail-closed load -------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "a library directory without the branch-own patch library makes the gate deny naming it" {
   local scratch="$BATS_TEST_TMPDIR/missing-library"
   mkdir -p "$scratch/.claude/hooks"

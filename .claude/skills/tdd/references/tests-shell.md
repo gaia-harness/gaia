@@ -7,6 +7,7 @@ Tests for the bash scripts your own skills and hooks run, using the pinned npm `
 - Suites go in `tests/shell/`, one `.bats` file per script under test, named after the script.
 - Build fixtures (fake repos, input files, stub commands) inside `$BATS_TEST_TMPDIR`, never in the working tree. bats deletes it after each test.
 - Run the script as a user would, through its public interface (arguments, stdin, exit code, stdout, stderr), not by sourcing its internals.
+- Pin a literal in a Markdown doc only when a script or hook parses it, and only in that parser's suite.
 
 ## Run them
 

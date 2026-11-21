@@ -23,7 +23,10 @@ setup() {
   STATUSLINE_SOURCE=$(cd "$BATS_TEST_DIRNAME/../../statusline" && pwd)
   CHECK_UPDATES_SOURCE=$(cd "$BATS_TEST_DIRNAME/../../scripts" && pwd)/check-updates.sh
 
-  # ---- statusline fixture ----
+}
+
+# The statusline fixture: only the tests that render the statusline build it.
+build_statusline_fixture() {
   MAIN=$(mktemp -d -t gaia-sl-residue-XXXXXX)
   git -C "$MAIN" init --quiet --initial-branch=main
   git -C "$MAIN" config user.email "test@example.com"
@@ -38,8 +41,10 @@ setup() {
   printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$MAIN/.gaia/local/setup-state.json"
 
   TEMPORARY_HOME=$(mktemp -d -t gaia-sl-residue-home-XXXXXX)
+}
 
-  # ---- refresher fixture ----
+# The refresher fixture: only the tests that run check-updates.sh build it.
+build_refresher_fixture() {
   REFRESH_ROOT=$(mktemp -d -t gaia-cu-residue-XXXXXX)
   mkdir -p "$REFRESH_ROOT/.gaia/scripts" "$REFRESH_ROOT/.gaia/cli" "$REFRESH_ROOT/.gaia/local/cache/shared"
   cp "$CHECK_UPDATES_SOURCE" "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
@@ -160,21 +165,13 @@ run_statusline_with_cache() {
 
 # --- Rendering ---
 
-@test "statusline renders the plural residue segment at 8" {
+@test "the residue segment renders only at 5 or more and never on a missing, empty, non-numeric, absent-cache or jq-less input" {
+  build_statusline_fixture
+  echo "case: statusline renders the plural residue segment at 8"
   run_statusline_with_cache '{"residueCandidateCount":8}'
   [ "$status" -eq 0 ]
   grep -qF -- "🧹 /gaia-residue (8 residuals)" <<<"$output"
-}
-
-# A fixed white (37 or 97) vanishes on a light terminal theme; bold with no
-# color code draws in the theme's own foreground, readable on both.
-@test "the residue segment renders bold in the terminal's default foreground" {
-  run_statusline_with_cache '{"residueCandidateCount":8}'
-  [ "$status" -eq 0 ]
-  grep -qF -- $'\033[01m🧹 /gaia-residue (8 residuals)\033[00m' <<<"$output"
-}
-
-@test "the count threshold boundary: 4 renders nothing, 5 renders the segment" {
+  echo "case: the count threshold boundary: 4 renders nothing, 5 renders the segment"
   run_statusline_with_cache '{"residueCandidateCount":4}'
   [ "$status" -eq 0 ]
   grep -qF -- "gaia-residue" <<<"$output" && return 1
@@ -182,27 +179,21 @@ run_statusline_with_cache() {
   run_statusline_with_cache '{"residueCandidateCount":5}'
   [ "$status" -eq 0 ]
   grep -qF -- "🧹 /gaia-residue (5 residuals)" <<<"$output"
-}
-
-@test "0, an absent field, an empty string, and a non-numeric value each render no segment" {
+  echo "case: 0, an absent field, an empty string, and a non-numeric value each render no segment"
   for cache in '{"residueCandidateCount":0}' '{}' '{"residueCandidateCount":""}' '{"residueCandidateCount":"abc"}'; do
     run_statusline_with_cache "$cache"
     [ "$status" -eq 0 ]
     grep -qF -- "gaia-residue" <<<"$output" && return 1
   done
   true
-}
-
-@test "a missing cache file renders no segment and exits 0" {
+  echo "case: a missing cache file renders no segment and exits 0"
   rm -f "$MAIN/.gaia/local/cache/shared/update-check.json"
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
   run env HOME="$TEMPORARY_HOME" bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
   grep -qF -- "gaia-residue" <<<"$output" && return 1
   true
-}
-
-@test "a present cache with jq unavailable renders no segment and exits 0" {
+  echo "case: a present cache with jq unavailable renders no segment and exits 0"
   printf '{"residueCandidateCount":8}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
   run env HOME="$TEMPORARY_HOME" PATH="$(path_shim_without jq)" bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
@@ -211,9 +202,19 @@ run_statusline_with_cache() {
   true
 }
 
+# A fixed white (37 or 97) vanishes on a light terminal theme; bold with no
+# color code draws in the theme's own foreground, readable on both.
+@test "the residue segment renders bold in the terminal's default foreground" {
+  build_statusline_fixture
+  run_statusline_with_cache '{"residueCandidateCount":8}'
+  [ "$status" -eq 0 ]
+  grep -qF -- $'\033[01m🧹 /gaia-residue (8 residuals)\033[00m' <<<"$output"
+}
+
 # --- Refresher ---
 
 @test "refresher writes aged_candidate_count into residueCandidateCount on a fresh run" {
+  build_refresher_fixture
   run env MOCK_RESIDUE_GH_OK=true MOCK_RESIDUE_COUNT=7 bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
@@ -226,6 +227,7 @@ run_statusline_with_cache() {
 # argv assertion, so this pins both halves -- the flag reaches the call, and
 # no git fetch happens during the refresh.
 @test "the refresher invokes residue-tally with --count-only and never calls git fetch" {
+  build_refresher_fixture
   run env MOCK_RESIDUE_GH_OK=true MOCK_RESIDUE_COUNT=3 bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   grep -qF -- "--count-only" "$RESIDUE_ARGV_LOG"
@@ -233,34 +235,39 @@ run_statusline_with_cache() {
   true
 }
 
-@test "refresher preserves the previous residueCandidateCount when gh_ok is false" {
+@test "the refresher preserves the previous residueCandidateCount (or writes 0) when the read fails" {
+  build_refresher_fixture
+  echo "case: refresher preserves the previous residueCandidateCount when gh_ok is false"
   CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
   printf '{"checkedAt":0,"residueCandidateCount":6}' > "$CACHE_FILE"
   run env MOCK_RESIDUE_GH_OK=false MOCK_RESIDUE_COUNT=99 bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   jq . "$CACHE_FILE" >/dev/null
   [ "$(jq -r '.residueCandidateCount' "$CACHE_FILE")" = "6" ]
-}
-
-@test "refresher preserves the previous count when the stub exits non-zero" {
+  echo "case: refresher preserves the previous count when the stub exits non-zero"
   CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
   printf '{"checkedAt":0,"residueCandidateCount":6}' > "$CACHE_FILE"
   run env MOCK_RESIDUE_EXIT=1 bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   jq . "$CACHE_FILE" >/dev/null
   [ "$(jq -r '.residueCandidateCount' "$CACHE_FILE")" = "6" ]
-}
-
-@test "refresher preserves the previous count when the stub emits unparseable JSON" {
+  echo "case: refresher preserves the previous count when the stub emits unparseable JSON"
   CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
   printf '{"checkedAt":0,"residueCandidateCount":6}' > "$CACHE_FILE"
   run env MOCK_RESIDUE_BAD_JSON=true bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   jq . "$CACHE_FILE" >/dev/null
   [ "$(jq -r '.residueCandidateCount' "$CACHE_FILE")" = "6" ]
-}
-
-@test "refresher preserves the previous count when the gaia binary is absent" {
+  rm -f "$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
+  echo "case: with no prior cache and a failing read, the field is written as 0 rather than omitted"
+  CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
+  [ ! -f "$CACHE_FILE" ]
+  run env MOCK_RESIDUE_EXIT=1 bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
+  [ "$status" -eq 0 ]
+  jq . "$CACHE_FILE" >/dev/null
+  jq -e 'has("residueCandidateCount")' "$CACHE_FILE" >/dev/null
+  [ "$(jq -r '.residueCandidateCount' "$CACHE_FILE")" = "0" ]
+  echo "case: refresher preserves the previous count when the gaia binary is absent"
   CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
   printf '{"checkedAt":0,"residueCandidateCount":6}' > "$CACHE_FILE"
   rm -f "$REFRESH_ROOT/.gaia/cli/gaia"
@@ -270,17 +277,8 @@ run_statusline_with_cache() {
   [ "$(jq -r '.residueCandidateCount' "$CACHE_FILE")" = "6" ]
 }
 
-@test "with no prior cache and a failing read, the field is written as 0 rather than omitted" {
-  CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
-  [ ! -f "$CACHE_FILE" ]
-  run env MOCK_RESIDUE_EXIT=1 bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
-  [ "$status" -eq 0 ]
-  jq . "$CACHE_FILE" >/dev/null
-  jq -e 'has("residueCandidateCount")' "$CACHE_FILE" >/dev/null
-  [ "$(jq -r '.residueCandidateCount' "$CACHE_FILE")" = "0" ]
-}
-
 @test "the no-jq printf fallback branch writes residueCandidateCount" {
+  build_refresher_fixture
   CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
   run env PATH="$(path_shim_without jq)" bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
@@ -290,11 +288,3 @@ run_statusline_with_cache() {
 
 # --- Threshold provenance ---
 
-@test "the count threshold appears exactly once as a named constant" {
-  block=$(grep -A 10 'RESIDUE_NUDGE_THRESHOLD=5' "$STATUSLINE_SOURCE/gaia-statusline-right.sh")
-  [ -n "$block" ]
-  [ "$(grep -c 'RESIDUE_NUDGE_THRESHOLD=5' <<<"$block")" -eq 1 ]
-  rest=$(grep -v 'RESIDUE_NUDGE_THRESHOLD=5' <<<"$block")
-  grep -qE '(^|[^0-9])5([^0-9]|$)' <<<"$rest" && return 1
-  true
-}

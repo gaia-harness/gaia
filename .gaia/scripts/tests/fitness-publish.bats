@@ -87,42 +87,36 @@ run_open() {
   git -C "$CLONE" show --name-only --format= HEAD | grep -q '^untracked.txt$'
 }
 
-@test "an in-place commit subcommand is a usage error and commits nothing" {
+# assert_usage_error_inert: the run exited 2 and nothing happened: no gh call,
+# no pushed branch, no commit on the fitness branch.
+assert_usage_error_inert() {
+  [ "$status" -eq 2 ]
+  [ ! -s "$SHIM_LOG" ]
+  remote_branch_exists fitness-branch && return 1
+  [ "$(git -C "$CLONE" rev-list --count main..fitness-branch)" -eq 0 ]
+}
+
+@test "usage errors exit 2 and run nothing: commit, merge, no subcommand, a missing option and an option-like branch" {
+  echo "case: an in-place commit subcommand"
   run bash "$PUBLISH_SCRIPT" commit --root "$CLONE" --message-file "$BASE/message.txt"
-  [ "$status" -eq 2 ]
-  [ "$(git -C "$CLONE" rev-list --count main..fitness-branch)" -eq 0 ]
-  remote_branch_exists fitness-branch && return 1
-  [ ! -s "$SHIM_LOG" ]
-}
+  assert_usage_error_inert
 
-@test "keeping for review runs nothing: no subcommand leaves the remote and the shim log untouched" {
+  echo "case: keeping for review, no subcommand"
   run bash "$PUBLISH_SCRIPT"
-  [ "$status" -eq 2 ]
-  [ ! -s "$SHIM_LOG" ]
-  remote_branch_exists fitness-branch && return 1
-  [ "$(git -C "$CLONE" rev-list --count main..fitness-branch)" -eq 0 ]
-}
+  assert_usage_error_inert
 
-@test "a merge subcommand is a usage error and calls nothing" {
+  echo "case: a merge subcommand"
   run bash "$PUBLISH_SCRIPT" merge --pr 1
-  [ "$status" -eq 2 ]
-  [ ! -s "$SHIM_LOG" ]
-  remote_branch_exists fitness-branch && return 1
-  true
-}
+  assert_usage_error_inert
 
-@test "open without a required option is a usage error and commits nothing" {
+  echo "case: open without a required option"
   run bash "$PUBLISH_SCRIPT" open --root "$CLONE" --branch fitness-branch --message-file "$BASE/message.txt"
-  [ "$status" -eq 2 ]
-  [ "$(git -C "$CLONE" rev-list --count main..fitness-branch)" -eq 0 ]
-  [ ! -s "$SHIM_LOG" ]
-}
+  assert_usage_error_inert
 
-@test "open refuses a branch name that looks like an option" {
+  echo "case: open with a branch name that looks like an option"
   run bash "$PUBLISH_SCRIPT" open --root "$CLONE" --branch=--force \
     --message-file "$BASE/message.txt" --title t --body-file "$BASE/body.txt"
-  [ "$status" -eq 2 ]
-  [ ! -s "$SHIM_LOG" ]
+  assert_usage_error_inert
 }
 
 @test "a rejecting remote fails the open, names the push and never opens a pull request" {

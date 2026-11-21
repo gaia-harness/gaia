@@ -147,20 +147,30 @@ describe('release scrub-wiki CLI', () => {
     expect(log).toContain('## [v3.0.0] 2026-05-07 | Released');
   });
 
-  test('exits 1 when wiki/ is missing', () => {
+  test.each([
+    {
+      args: [] as string[],
+      expected: 'wiki_dir_missing',
+      name: 'exits 1 when wiki/ is missing',
+      prepare: (root: string) => {
+        rmSync(path.join(root, 'wiki'), {force: true, recursive: true});
+      },
+      today: '2026-05-07',
+    },
+    {
+      args: ['--bogus'],
+      expected: 'unknown flag',
+      name: 'rejects unknown flags',
+      prepare: () => {},
+      today: undefined,
+    },
+  ])('$name', ({args, expected, prepare, today}) => {
     sandbox = setupSandbox('1.0.0');
-    rmSync(path.join(sandbox.root, 'wiki'), {force: true, recursive: true});
+    prepare(sandbox.root);
 
-    const exit = run([], {cwd: sandbox.root, today: '2026-05-07'});
+    const exit = run(args, {cwd: sandbox.root, today});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('wiki_dir_missing');
-  });
-
-  test('rejects unknown flags', () => {
-    sandbox = setupSandbox('1.0.0');
-    const exit = run(['--bogus'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
+    expect(stdio.errors.join('')).toContain(expected);
   });
 });
 
@@ -178,15 +188,33 @@ describe('release scrub-wiki --check', () => {
     vi.restoreAllMocks();
   });
 
-  test('passes on freshly-scrubbed files and writes nothing', () => {
+  test.each([
+    {
+      name: 'passes on freshly-scrubbed files and writes nothing',
+      today: '2026-07-21',
+    },
+    {
+      // The scrub date is non-deterministic relative to the CI run date (the
+      // tag can be pushed a day after the scrub commit), so the check
+      // normalizes dates out. A same-structure file for a different day still
+      // passes.
+      name: 'passes even when the committed scrub date differs from today',
+      today: '2027-01-01',
+    },
+    {
+      name: 'passes with a fresh log.md and no hot.md',
+      today: '2026-05-07',
+    },
+  ])('$name', ({today}) => {
     sandbox = setupSandbox('1.5.0');
     writeScrubbed(sandbox.root, '1.5.0', '2026-05-07');
+    expect(existsSync(path.join(sandbox.root, 'wiki', 'hot.md'))).toBe(false);
     const logBefore = readFileSync(
       path.join(sandbox.root, 'wiki', 'log.md'),
       'utf8'
     );
 
-    const exit = run(['--check'], {cwd: sandbox.root, today: '2026-07-21'});
+    const exit = run(['--check'], {cwd: sandbox.root, today});
     expect(exit).toBe(0);
     expect(stdio.errors.join('')).toBe('');
     // Rendered nothing: the committed file is byte-identical to before.
@@ -195,67 +223,50 @@ describe('release scrub-wiki --check', () => {
     ).toBe(logBefore);
   });
 
-  test('passes even when the committed scrub date differs from today', () => {
-    // The scrub date is non-deterministic relative to the CI run date (the tag
-    // can be pushed a day after the scrub commit), so the check normalizes
-    // dates out. A same-structure file for a different day still passes.
+  test.each([
+    {
+      name: 'detects a stale (unscrubbed) log.md',
+      prepare: () => {},
+      stderr: 'wiki/log.md',
+    },
+    {
+      // package.json says 1.5.0 but the committed wiki files claim v1.4.0: a
+      // version bump landed without a re-scrub. Structure matches, version
+      // does not, so it must still flag.
+      name: 'detects drift when committed files were scrubbed for another version',
+      prepare: (root: string) => {
+        writeScrubbed(root, '1.4.0', '2026-05-07');
+      },
+      stderr: '',
+    },
+    {
+      // log.md is the pre-existing stale dev content from setupSandbox.
+      name: 'writes nothing even when drift is detected',
+      prepare: () => {},
+      stderr: '',
+    },
+    {
+      name: 'exits 1 when log.md is missing entirely',
+      prepare: (root: string) => {
+        rmSync(path.join(root, 'wiki', 'log.md'), {force: true});
+      },
+      stderr: 'wiki/log.md',
+    },
+  ])('$name', ({prepare, stderr}) => {
     sandbox = setupSandbox('1.5.0');
-    writeScrubbed(sandbox.root, '1.5.0', '2026-05-07');
-
-    const exit = run(['--check'], {cwd: sandbox.root, today: '2027-01-01'});
-    expect(exit).toBe(0);
-  });
-
-  test('passes with a fresh log.md and no hot.md', () => {
-    sandbox = setupSandbox('1.5.0');
-    writeScrubbed(sandbox.root, '1.5.0', '2026-05-07');
-    expect(existsSync(path.join(sandbox.root, 'wiki', 'hot.md'))).toBe(false);
-
-    const exit = run(['--check'], {cwd: sandbox.root, today: '2026-05-07'});
-    expect(exit).toBe(0);
-    expect(stdio.errors.join('')).toBe('');
-  });
-
-  test('detects a stale (unscrubbed) log.md', () => {
-    sandbox = setupSandbox('1.5.0');
-
-    const exit = run(['--check'], {cwd: sandbox.root, today: '2026-05-07'});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('wiki/log.md');
-  });
-
-  test('detects drift when committed files were scrubbed for another version', () => {
-    // package.json says 1.5.0 but the committed wiki files claim v1.4.0: a
-    // version bump landed without a re-scrub. Structure matches, version does
-    // not, so it must still flag.
-    sandbox = setupSandbox('1.5.0');
-    writeScrubbed(sandbox.root, '1.4.0', '2026-05-07');
-
-    const exit = run(['--check'], {cwd: sandbox.root, today: '2026-05-07'});
-    expect(exit).toBe(1);
-  });
-
-  test('writes nothing even when drift is detected', () => {
-    sandbox = setupSandbox('1.5.0');
-    // log.md is the pre-existing stale dev content from setupSandbox.
-    const logBefore = readFileSync(
-      path.join(sandbox.root, 'wiki', 'log.md'),
-      'utf8'
-    );
+    prepare(sandbox.root);
+    const logPath = path.join(sandbox.root, 'wiki', 'log.md');
+    const readIfPresent = (): string | undefined =>
+      existsSync(logPath) ? readFileSync(logPath, 'utf8') : undefined;
+    const logBefore = readIfPresent();
 
     const exit = run(['--check'], {cwd: sandbox.root, today: '2026-05-07'});
     expect(exit).toBe(1);
-    expect(
-      readFileSync(path.join(sandbox.root, 'wiki', 'log.md'), 'utf8')
-    ).toBe(logBefore);
-  });
 
-  test('exits 1 when log.md is missing entirely', () => {
-    sandbox = setupSandbox('1.5.0');
-    rmSync(path.join(sandbox.root, 'wiki', 'log.md'), {force: true});
+    // An empty `stderr` asserts only the exit code and the no-write check.
+    expect(stdio.errors.join('')).toContain(stderr);
 
-    const exit = run(['--check'], {cwd: sandbox.root, today: '2026-05-07'});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('wiki/log.md');
+    // --check never writes: log.md is byte-identical (or still absent).
+    expect(readIfPresent()).toBe(logBefore);
   });
 });

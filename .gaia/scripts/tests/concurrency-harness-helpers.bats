@@ -25,41 +25,7 @@ SH
 
 # --- gaia_deliver_hook -----------------------------------------------------
 
-@test "gaia_deliver_hook delivers the payload on stdin byte-exact" {
-  run gaia_deliver_hook '{"a":1}' "$HOOK"
-  [ "$status" -eq 0 ]
-  grep -qF -- 'PAYLOAD=[{"a":1}]' <<<"$output"
-}
-
-@test "gaia_deliver_hook delivers a payload carrying quotes and shell metacharacters" {
-  # The whole reason the payload is positional rather than interpolated: any of
-  # these would terminate a quoted wrapper early and deliver something else.
-  payload='it'"'"'s {"k":"v"} $(boom) `boom` "quoted"'
-  run gaia_deliver_hook "$payload" "$HOOK"
-  [ "$status" -eq 0 ]
-  grep -qF -- 'PAYLOAD=[it'"'"'s {"k":"v"} $(boom) `boom` "quoted"]' <<<"$output"
-}
-
-@test "gaia_deliver_hook propagates the hook's own exit status" {
-  printf 'exit 7\n' > "$HOOK"
-  run gaia_deliver_hook 'x' "$HOOK"
-  [ "$status" -eq 7 ]
-}
-
 # --- run_with, the happy path ----------------------------------------------
-
-@test "run_with applies an assignment and runs the command" {
-  run run_with STUBVAR=applied -- gaia_deliver_hook '{"b":2}' "$HOOK"
-  [ "$status" -eq 0 ]
-  grep -qF -- 'PAYLOAD=[{"b":2}]' <<<"$output"
-  grep -qF -- 'STUB=[applied]' <<<"$output"
-}
-
-@test "run_with applies a value containing whitespace and quotes" {
-  run run_with STUBVAR="a b'\"c" -- gaia_deliver_hook 'x' "$HOOK"
-  [ "$status" -eq 0 ]
-  grep -qF -- 'STUB=[a b'"'"'"c]' <<<"$output"
-}
 
 @test "run_with leaks no assignment into the caller" {
   # Deliberately NOT wrapped in `run`. bats' `run` executes its command inside a
@@ -87,4 +53,37 @@ SH
   [ "$status" -eq 0 ]
   grep -qF -- "CWD=[$(cd "$directory" && pwd -P)]" <<<"$output"
   grep -qF -- 'STUB=[nested]' <<<"$output"
+}
+
+@test "gaia_deliver_hook delivers the payload byte-exact and returns the hook status" {
+  echo "case: the payload arrives on stdin byte-exact"
+  run gaia_deliver_hook '{"a":1}' "$HOOK"
+  [ "$status" -eq 0 ]
+  grep -qF -- 'PAYLOAD=[{"a":1}]' <<<"$output"
+
+  echo "case: a payload carrying quotes and shell metacharacters"
+  # The whole reason the payload is positional rather than interpolated: any of
+  # these would terminate a quoted wrapper early and deliver something else.
+  payload='it'"'"'s {"k":"v"} $(boom) `boom` "quoted"'
+  run gaia_deliver_hook "$payload" "$HOOK"
+  [ "$status" -eq 0 ]
+  grep -qF -- 'PAYLOAD=[it'"'"'s {"k":"v"} $(boom) `boom` "quoted"]' <<<"$output"
+
+  echo "case: the hook's own exit status propagates"
+  printf 'exit 7\n' > "$HOOK"
+  run gaia_deliver_hook 'x' "$HOOK"
+  [ "$status" -eq 7 ]
+}
+
+@test "run_with applies an assignment, including whitespace and quotes, and runs the command" {
+  echo "case: a plain assignment"
+  run run_with STUBVAR=applied -- gaia_deliver_hook '{"b":2}' "$HOOK"
+  [ "$status" -eq 0 ]
+  grep -qF -- 'PAYLOAD=[{"b":2}]' <<<"$output"
+  grep -qF -- 'STUB=[applied]' <<<"$output"
+
+  echo "case: a value containing whitespace and quotes"
+  run run_with STUBVAR="a b'\"c" -- gaia_deliver_hook 'x' "$HOOK"
+  [ "$status" -eq 0 ]
+  grep -qF -- 'STUB=[a b'"'"'"c]' <<<"$output"
 }

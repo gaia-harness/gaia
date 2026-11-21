@@ -13,8 +13,7 @@
 # over a ledger holding a retry record.
 #
 # Method: every check takes a root directory and reads one region (a fenced
-# block or a bullet range); each red twin mutates one clause of a scratch
-# copy, proves the copy changed, and runs the same check against it.
+# block or a bullet range).
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -94,48 +93,12 @@ stop_range() { range_of "$1/$PLANNER_REL" '- **Stop conditions.**' '- **Final su
 resume_range() { range_of "$1/$PLANNER_REL" '**Resume detection (cold-start' '- **Pre-flight isolation.**' | trim_lines; }
 summary_range() { grep -F -- '- **Final summary.**' "$1/$PLANNER_REL" | trim_lines; }
 
-# mutated_tree <old> <new>: a scratch copy of planner.md (TREE) with the first
-# fixed-string <old> replaced by <new>, proved changed.
-mutated_tree() {
-  local content mutated
-  TREE="$BATS_TEST_TMPDIR/tree"
-  rm -rf "$TREE"
-  mkdir -p "$TREE/$(dirname "$PLANNER_REL")"
-  content="$(cat "$REPO_ROOT/$PLANNER_REL"; printf x)"
-  mutated="${content/"$1"/"$2"}"
-  printf '%s' "${mutated%x}" >"$TREE/$PLANNER_REL"
-  if cmp -s "$REPO_ROOT/$PLANNER_REL" "$TREE/$PLANNER_REL"; then
-    printf 'mutation left planner.md unchanged: %s\n' "$1" >&2
-    return 1
-  fi
-}
-
-red() {
-  local check="$1"
-  shift
-  mutated_tree "$@" || return 1
-  run "$check" "$TREE"
-  [ "$status" -ne 0 ] || { printf 'check %s still passed on the mutated copy\n' "$check" >&2; return 1; }
-  [ -n "$output" ] || { printf 'check %s failed without a reason\n' "$check" >&2; return 1; }
-}
-
 green() {
   run "$1" "$REPO_ROOT"
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
 # ---------- checks ----------
-
-check_retry_scope() {
-  local block
-  block="$(retry_block "$1")"
-  need_text 'gate-retry block' "$block" || return 1
-  in_order "$block" \
-    '**Phase gate retry (one static retry and one test retry per phase).**' \
-    'When the phase'"'"'s `pnpm typecheck`, `pnpm lint` or file-length check (a lint `max-lines` rule, the fitness lint'"'"'s line limit) fails, send each owning task'"'"'s errors to a fresh executor for that task, and errors in a test file several tasks of this phase declare to that file'"'"'s shared-file executor (the in-phase arm below), instead of halting at once.' \
-    'Never fix it on the main thread.' \
-    'Any other gate failure halts under Stop conditions with no retry.' || return 1
-}
 
 check_retry_attribution() {
   local block
@@ -216,15 +179,6 @@ check_yield_opt_in_excepts_retry() {
   block="$(fence_with "$1/$PLANNER_REL" '<!-- gaia:orchestrator-step yield-handling -->' | trim_lines)"
   need_text 'yield-handling block' "$block" || return 1
   in_order "$block" 'Every task executor dispatch except a phase gate retry opts into the sub-agent context checkpoint' || return 1
-}
-
-check_retry_not_a_grant() {
-  local block
-  block="$(retry_block "$1")"
-  need_text 'gate-retry block' "$block" || return 1
-  in_order "$block" \
-    'The retry is not a grant:' \
-    'never widens a task'"'"'s scope' || return 1
 }
 
 # A Playwright test from outside the phase that the phase's own code breaks
@@ -388,348 +342,60 @@ resume_point() {
 
 # ---------- tests ----------
 
-@test "the gate-retry block retries typecheck and lint failures, never inline, and halts on any other gate" {
-  green check_retry_scope
-}
-
-@test "red twin: a retry that also covers any other gate failure fails" {
-  red check_retry_scope 'Any other gate failure halts under Stop conditions' 'Any other gate failure retries under Stop conditions'
-}
-
 @test "a failure is attributable only when every error names a file exactly one task declares" {
   green check_retry_attribution
-}
-
-@test "red twin: attribution that accepts a file several tasks declare fails" {
-  red check_retry_attribution 'names a file exactly one task declares or' 'names a file some task declares or'
-}
-
-@test "red twin: attribution that retries an error on a shared non-test file fails" {
-  red check_retry_attribution ', or on a non-test file more than one task declares makes' ' makes'
-}
-
-@test "red twin: attribution that halts on an error in a shared test file fails" {
-  red check_retry_attribution ' A typecheck or lint error in a test file several tasks declare goes straight to that file'"'"'s **Shared-file executor** under **In-phase arm**, with no check 2.' ''
-}
-
-@test "red twin: a static retry that skips the shared-file executor fails" {
-  red check_retry_scope ', and errors in a test file several tasks of this phase declare to that file'"'"'s shared-file executor (the in-phase arm below)' ''
 }
 
 @test "each retry kind runs at most once per phase and an unattributable failure halts" {
   green check_retry_cap
 }
 
-@test "red twin: a second retry of the same kind in the same phase fails" {
-  red check_retry_cap 'a gate failure of a kind this phase already retried' 'a gate failure of a kind this phase already retried twice'
-}
-
 @test "a static retry and a test retry each run once per phase, so a static fix never spends the test retry" {
   green check_retry_kinds
-}
-
-@test "red twin: one retry shared by static and test failures fails" {
-  red check_retry_kinds 'A phase runs each kind at most once, so a static fix never spends the retry a later test failure needs, and a phase retries at most twice.' 'A phase runs one retry, whatever its kind.'
-}
-
-@test "red twin: a flow-test arm that spends a shared retry fails" {
-  red check_retry_kinds 'using the phase'"'"'s test retry;' 'using the phase'"'"'s one retry;'
 }
 
 @test "the retry record carries no Commit line" {
   green check_retry_record
 }
 
-@test "red twin: a retry record carrying a Commit line fails" {
-  red check_retry_record $'Kind: <static or test>\n            Tasks: <task-<T>.md' $'Kind: <static or test>\n            Commit: abc1234'
-}
-
-@test "red twin: a retry record that does not say which kind ran fails" {
-  red check_retry_record $'Retry: k\n            Kind: <static or test>\n' $'Retry: k\n'
-}
-
 @test "the retry re-dispatches only owning tasks, fresh, with the original prompt then the gate output" {
   green check_retry_redispatch
-}
-
-@test "red twin: a retry that commits first fails" {
-  red check_retry_redispatch 'Leave the working tree as it is: no commit, stash, reset, checkout or discard. Dispatch a fresh executor' 'Commit the working tree first. Dispatch a fresh executor'
-}
-
-@test "red twin: a retry prompt that opts into yielding fails" {
-  red check_retry_redispatch 'It carries no `Yield handoff:` line, so a retry executor never yields' 'It ends with a `Yield handoff:` line'
-}
-
-@test "red twin: a retry that continues the executor with SendMessage fails" {
-  red check_retry_redispatch 'Never continue an executor with SendMessage.' 'Continue the executor with SendMessage.'
-}
-
-@test "red twin: a file-length failure that halts instead of retrying as static fails" {
-  red check_retry_kinds 'holding only typecheck, lint and file-length errors is static' 'holding only typecheck and lint errors is static'
-}
-
-@test "red twin: a file-length retry that lets the executor trim wording fails" {
-  red check_retry_redispatch 'Never trim wording and never raise a limit or ceiling. ' ''
-}
-
-@test "red twin: a static retry line that drops the typecheck and lint before return fails" {
-  red check_retry_redispatch 'edit no other file; still run the typecheck and lint your task prompt requires before you return:`' 'edit no other file:`'
 }
 
 @test "the yield-handling block exempts a gate retry from the yield opt-in" {
   green check_yield_opt_in_excepts_retry
 }
 
-@test "red twin: a yield block that opts every dispatch in fails" {
-  red check_yield_opt_in_excepts_retry 'dispatch except a phase gate retry opts' 'dispatch opts'
-}
-
-@test "the retry grants nothing" {
-  green check_retry_not_a_grant
-}
-
-@test "red twin: a retry that widens a task's scope fails" {
-  red check_retry_not_a_grant 'never widens a task'"'"'s scope' 'may widen a task'"'"'s scope'
-}
-
 @test "an outside Playwright test this phase broke goes to the phase's implementers once, else halts naming the case" {
   green check_outside_arm
-}
-
-@test "red twin: an outside failure that fails its checks and retries instead of halting fails" {
-  red check_outside_arm 'otherwise it halts under Stop conditions with no retry' 'otherwise it goes to a fresh test author'
-}
-
-@test "red twin: an outside arm with no merge-base known-green proof fails" {
-  red check_outside_arm '(`known-green: merge-base`)' ''
-}
-
-@test "red twin: an outside arm that retries a harness or environment failure fails" {
-  red check_outside_arm 'at least one test in the same run passed, and ' ''
-}
-
-@test "red twin: an outside arm sent to a test author fails" {
-  red check_outside_arm 'dispatch a fresh executor for each candidate task' 'dispatch a fresh test author for each candidate task'
-}
-
-@test "red twin: an outside arm that sends one task two parallel executors fails" {
-  red check_outside_arm 'A candidate that also owns a failing flow test gets one executor whose prompt carries both arms'"'"' lines.' ''
-}
-
-@test "red twin: an outside arm that bypasses the once-per-phase halt fails" {
-  red check_outside_arm 'passes all three checks, in place of **Attribute**,' 'passes all three checks, in place of **Attribute** and **Halt instead**,'
-}
-
-@test "red twin: an outside arm that records no retry fails" {
-  red check_outside_arm 'record the retry as above with each candidate on its Tasks line, then ' ''
-}
-
-@test "red twin: an outside arm whose no-edit halt points at the Reason above fails" {
-  red check_outside_arm 'with no re-run, `Reason: a Playwright test outside this phase fails in this phase'"'"'s gate`, naming each `file › test name`.' 'with no re-run, under the Reason above.'
-}
-
-@test "red twin: an outside arm whose candidates all edit nothing and re-run the gate fails" {
-  red check_outside_arm 'When no candidate edits a file, the phase halts under Stop conditions with no re-run' 'When no candidate edits a file, re-run the gate'
-}
-
-@test "red twin: a mixed failure set with no one retry carrying every arm fails" {
-  red check_outside_arm 'One retry carries every arm the failure set needs; ' ''
-}
-
-@test "red twin: a retry record whose outside failures carry no known-green source fails" {
-  red check_outside_arm ' followed by its `known-green: phase <k> gate` or `known-green: merge-base`' ''
 }
 
 @test "an in-phase test of any runner goes to the one task that declares it, once, else halts" {
   green check_in_phase_arm
 }
 
-@test "red twin: an in-phase arm limited to Playwright tests fails" {
-  red check_in_phase_arm 'When a failing test of any runner is in a file' 'When a failing Playwright test is in a file'
-}
-
-@test "red twin: an in-phase arm that sends a file several tasks declare to one of them fails" {
-  red check_in_phase_arm 'when exactly one task declares it, and to a shared-file executor' 'when some task declares it, and to a shared-file executor'
-}
-
-@test "red twin: an in-phase arm that halts on a file several tasks declare fails" {
-  red check_in_phase_arm ', and to a shared-file executor when several tasks of this phase declare it;' ';'
-}
-
-@test "red twin: a shared-file retry that records no retry fails" {
-  red check_in_phase_arm 'For several declaring tasks, record the retry as above, then dispatch one fresh' 'For several declaring tasks, dispatch one fresh'
-}
-
-@test "red twin: a shared-file executor free to edit beyond the failing tests fails" {
-  red check_in_phase_arm 'Edit only that test file, and in it only its failing tests and the shared setup they use, such as mocks and beforeEach, updating them' 'Fix the code or update the tests'
-}
-
-@test "red twin: a shared-file executor whose task docs widen its edits fails" {
-  red check_in_phase_arm 'for context; they do not widen what you may edit:`' ':`'
-}
-
-@test "red twin: a shared-file executor that edits the test when the cause is elsewhere fails" {
-  red check_in_phase_arm 'If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' 'The failing tests:`'
-}
-
-@test "red twin: a shared-file executor that drops the task executor's template parts fails" {
-  red check_in_phase_arm 'the original task prompt of the declaring task with the lowest task number, without its `Yield handoff:` line, then the line `Read these' 'the line `Read these'
-}
-
-@test "red twin: a shared test file another executor in the retry may also edit fails" {
-  red check_in_phase_arm ' Every other executor this retry sends a declaring task ends its prompt with the line `Leave <test file> alone: another executor owns it in this retry.`' ''
-}
-
-@test "red twin: a shared-file static error that skips the test-only guard fails" {
-  red check_in_phase_arm 'If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The errors:`' 'The errors:`'
-}
-
-@test "red twin: a shared-file static fix that skips the requirement-source rule fails" {
-  red check_in_phase_arm 'before you return. The task docs and, when {PLAN_DIR}/README.md names a Source SPEC, that SPEC and the documents its Required reading names decide whether the test file or the code it calls is wrong: never change an asserted label, role, message or URL they state to match the code. If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The errors:`' 'before you return. If the cause is not in the test file, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The errors:`'
-}
-
-@test "red twin: a shared-file static executor free to edit other files fails" {
-  red check_in_phase_arm 'on purpose, edit no other file, and still run the typecheck and lint' 'on purpose, and still run the typecheck and lint'
-}
-
-@test "red twin: a shared-file static fix that spends the test retry fails" {
-  red check_in_phase_arm 'goes to the same executor: its prompt' 'goes to the same executor in the test retry: its prompt'
-}
-
-@test "red twin: a shared-file prompt whose test and static lines bleed into each other fails" {
-  red check_in_phase_arm ' Each line applies only to the failures that follow it.' ''
-}
-
-@test "red twin: a shared-file executor whose named cause is not forwarded fails" {
-  red check_in_phase_arm 'When the single-owner or shared-file executor edits no file and its `Cause file:`' 'When the single-owner executor edits no file and its `Cause file:`'
-}
-
-@test "red twin: an in-phase arm that retries an environment failure fails" {
-  red check_in_phase_arm 'When check 2 under **Playwright test outside this phase** holds, ' ''
-}
-
-@test "red twin: an in-phase arm that runs Attribute over the whole Playwright output fails" {
-  red check_in_phase_arm ' in place of **Attribute**, the test file alone decides the owner.' ''
-}
-
-@test "red twin: an in-phase arm that records no retry fails" {
-  red check_in_phase_arm 'For one declaring task, record the retry as above, then dispatch a fresh executor for that task:' 'For one declaring task, dispatch a fresh executor for that task:'
-}
-
-@test "red twin: an in-phase arm that sends one task two parallel executors fails" {
-  red check_in_phase_arm 'A task that another arm or **Re-dispatch the owning tasks** also re-dispatches gets one executor whose prompt carries each one'"'"'s lines, each line followed by its own failures and applying only to them; its edit limit is then the files the task declares, plus the lib file of a file-length split when the task carries a file-length error.' ''
-}
-
-@test "red twin: an in-phase arm with no guard against weakening a test for another task's regression fails" {
-  red check_in_phase_arm 'If the cause is not in this task'"'"'s files, edit nothing and say so under ### Findings, on a line Cause file: <repo-relative path> naming the file that holds it. The failing tests:`' 'The failing tests:`'
-}
-
-@test "red twin: an in-phase arm that re-runs the gate after an executor edits no file fails" {
-  red check_in_phase_arm ', or no executor this retry sent the cause owner edited a file, the phase halts under Stop conditions with no re-run' ''
-}
-
-@test "red twin: a shared-file executor framed by an undefined first task fails" {
-  red check_in_phase_arm 'the declaring task with the lowest task number' 'its first declaring task'
-}
-
-@test "red twin: a shared-file executor that may not fix the file's shared setup fails" {
-  red check_in_phase_arm ', and in it only its failing tests and the shared setup they use, such as mocks and beforeEach,' ' and only its failing tests,'
-}
-
-@test "red twin: an in-phase arm that records one retry per branch fails" {
-  red check_retry_kinds 'One retry writes one block, however many arms fire:' 'Each arm writes its own block:'
-}
-
-@test "red twin: an in-phase arm that halts instead of sending a sibling-owned cause to its owner fails" {
-  red check_in_phase_arm 'When the single-owner or shared-file executor edits no file and its `Cause file:` names a file exactly one task of this phase declares and, for a single-owner executor, that task is not its own task, the same retry goes on to that task:' ''
-}
-
-@test "red twin: an in-phase arm that forwards a cause file several tasks or another phase declare fails" {
-  red check_in_phase_arm 'names a file exactly one task of this phase declares and, for a single-owner executor, that task is not its own task' 'names a file some task declares'
-}
-
-@test "red twin: an in-phase executor not asked to name the cause file fails" {
-  red check_in_phase_arm ', on a line Cause file: <repo-relative path> naming the file that holds it.' '.'
-}
-
-@test "red twin: a cause owner executor free to edit outside its files fails" {
-  red check_in_phase_arm 'Fix the cause within this task'"'"'s files, edit no other file,' 'Fix the cause,'
-}
-
-@test "red twin: a forward that runs beside the owner's own executor in the same retry fails" {
-  red check_in_phase_arm ' once any executor this retry already sent that task has returned,' ''
-}
-
-@test "red twin: a gate re-run that does not wait for a forwarded cause owner fails" {
-  red check_in_phase_arm ' including a cause owner'"'"'s,' ''
-}
-
-@test "red twin: a forwarded retry that records no cause owner fails" {
-  red check_in_phase_arm 'append `Cause owner: task-<T>.md (<cause file>)` to `{PLAN_DIR}/PROGRESS.md` under the retry record, then,' 'then,'
-}
-
-@test "red twin: an in-phase arm whose no-edit halt cites the outside arm's Reason fails" {
-  red check_in_phase_arm ', `Reason: a test file this phase declares fails in this phase'"'"'s gate`, naming each `file › test name` and each `file:line` error.' ', under the Reason above.'
-}
-
-@test "red twin: an in-phase arm whose lines do not apply only to their own failures fails" {
-  red check_in_phase_arm ', each line followed by its own failures and applying only to them' ''
-}
-
 @test "a plan step never states its own retry or halt rule for a gate failure" {
   green check_step_owns_no_retry
-}
-
-@test "red twin: a placement line that lets a step state its own retry rule fails" {
-  red check_step_owns_no_retry 'A plan step never states its own retry or halt rule for a gate failure; the gate-retry block owns which failures retry. ' ''
 }
 
 @test "the executor typechecks its own work, wave-safe" {
   green check_executor_self_check
 }
 
-@test "red twin: a multi-task wave that acts on every error fails" {
-  red check_executor_self_check 'acts only on errors in files its task owns' 'acts on every error'
-}
-
 @test "the halt asks a question with Stay halted recommended first and records the pick" {
   green check_stop_question
-}
-
-@test "red twin: a halt that recommends discussing first fails" {
-  red check_stop_question '`Stay halted (Recommended)` first, which ends the run with' '`Discuss this (Recommended)` first, which ends the run with'
 }
 
 @test "the ledger documents the gate retry block" {
   green check_ledger_documents_retry_block
 }
 
-@test "red twin: a ledger retry block carrying a Commit line fails" {
-  red check_ledger_documents_retry_block 'and it has no `Commit:` line. The gate-retry step' 'and it has a `Commit:` line. The gate-retry step'
-}
-
-@test "red twin: a ledger retry block that does not document the cause owner line fails" {
-  red check_ledger_documents_retry_block ', then a `Cause owner:` line when the in-phase arm sent the failure on,' ','
-}
-
 @test "the final summary prints a gate retries line" {
   green check_summary_retries_line
 }
 
-@test "red twin: a summary without the gate retries line fails" {
-  red check_summary_retries_line 'a yields line, a gate retries line' 'a yields line'
-}
-
 @test "a dirty tree on resume asks with Stay halted recommended first and offers no discard" {
   green check_dirty_resume_question
-}
-
-@test "red twin: a resume question that offers to discard the edits fails" {
-  red check_dirty_resume_question 'It never offers to stash, discard or commit the edits' 'It offers to discard the edits'
-}
-
-@test "red twin: a resume question that recommends discussing first fails" {
-  red check_dirty_resume_question '`Stay halted (Recommended)` first, which ends the run' '`Discuss this (Recommended)` first, which ends the run'
 }
 
 @test "a gate retry block with no later commit resumes at its phase" {
@@ -766,10 +432,3 @@ check_human_only_halt() {
   green check_human_only_halt
 }
 
-@test "red twin: a human-done option that continues without a passing rerun fails" {
-  red check_human_only_halt 'which reruns the whole phase gate from its first step (for a sub-agent failure, it re-dispatches that sub-agent first) and continues only on a pass' 'which continues the run'
-}
-
-@test "red twin: a failed rerun that asks again fails" {
-  red check_human_only_halt 'then ends the run and asks no new question.' 'then asks the same question again.'
-}

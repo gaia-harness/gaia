@@ -28,30 +28,26 @@ const resolveRuleSeverityForFile = async (
   return Array.isArray(entry) ? entry[0] : entry;
 };
 
-describe('unicorn/require-css-escape in the resolved project config', () => {
+describe('require-css-escape rules resolve to the right severity per file kind', () => {
   test.each([
-    ['app/utils/tests/example.test.ts', 0],
-    ['test/example.test.ts', 0],
-    ['app/sessions.server/example.ts', 0],
-    ['.playwright/e2e/example.spec.ts', 0],
-    ['app/hooks/tests/use-example.test.ts', 2],
-    ['app/root.tsx', 2],
+    ['unicorn/require-css-escape', 'app/utils/tests/example.test.ts', 0],
+    ['unicorn/require-css-escape', 'test/example.test.ts', 0],
+    ['unicorn/require-css-escape', 'app/sessions.server/example.ts', 0],
+    ['unicorn/require-css-escape', '.playwright/e2e/example.spec.ts', 0],
+    ['unicorn/require-css-escape', 'app/hooks/tests/use-example.test.ts', 2],
+    ['unicorn/require-css-escape', 'app/root.tsx', 2],
+    [
+      'browser-callback-css-escape/require-css-escape',
+      '.playwright/e2e/example.spec.ts',
+      2,
+    ],
   ])(
-    'resolves %s to severity %s',
-    async (relativePath, severity) => {
-      expect(await resolveRuleSeverityForFile(relativePath)).toBe(severity);
+    'resolves %s for %s to severity %s',
+    async (ruleId, relativePath, severity) => {
+      expect(await resolveRuleSeverityForFile(relativePath, ruleId)).toBe(
+        severity
+      );
     },
     60_000
   );
-});
-
-describe('browser-callback-css-escape/require-css-escape in the resolved project config', () => {
-  test('is an error in a Playwright spec', async () => {
-    expect(
-      await resolveRuleSeverityForFile(
-        '.playwright/e2e/example.spec.ts',
-        'browser-callback-css-escape/require-css-escape'
-      )
-    ).toBe(2);
-  }, 60_000);
 });

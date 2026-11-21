@@ -81,51 +81,71 @@ describe('normalizeChain and the fallback relationship', () => {
 });
 
 describe('normalizePnpmAudit', () => {
-  test('a null patched_versions is valid and maps to no patch', () => {
-    const result = normalizePnpmAudit(
-      auditReport(
-        auditAdvisory({
-          patched_versions: null,
-          patched_versions_unpublished: true,
-        })
-      )
-    );
-
-    expect(result.rejectedCount).toBe(0);
-    expect(result.records[0]?.firstPatchedVersion).toBeNull();
-  });
-
-  test('a malformed patched_versions rejects the record', () => {
-    const result = normalizePnpmAudit(
-      auditReport(auditAdvisory({patched_versions: '>=1.0.0; rm'}))
-    );
-
-    expect(result).toStrictEqual({records: [], rejectedCount: 1});
-  });
-
-  test('the first patched version is the range minimum', () => {
-    const result = normalizePnpmAudit(auditReport(auditAdvisory({})));
-
-    expect(result.records[0]?.firstPatchedVersion).toBe('0.7.0');
-  });
-
-  test.each([
-    ['a non-positive id', {id: -3}],
-    ['a malformed GHSA id', {github_advisory_id: 'GHSA-0000-0000-0000'}],
-    ['a module name with a space', {module_name: 'evil pkg'}],
-    ['an unknown severity', {severity: 'urgent'}],
+  // A rejected record leaves no record behind, so its first patched version
+  // reads as undefined.
+  test.each(
     [
-      'a finding version with a command',
-      {findings: [{paths: ['.>cookie'], version: '1.0.0; rm'}]},
-    ],
-    [
-      'a path segment with a metacharacter',
-      {findings: [{paths: ['.>$(x)>cookie'], version: '0.6.0'}]},
-    ],
-  ])('rejects %s', (_label, overrides) => {
-    expect(
-      normalizePnpmAudit(auditReport(auditAdvisory(overrides))).rejectedCount
-    ).toBe(1);
+      {
+        firstPatchedVersion: null,
+        name: 'a null patched_versions is valid and maps to no patch',
+        overrides: {patched_versions: null, patched_versions_unpublished: true},
+        rejectedCount: 0,
+      },
+      {
+        firstPatchedVersion: undefined,
+        name: 'a malformed patched_versions rejects the record',
+        overrides: {patched_versions: '>=1.0.0; rm'},
+        rejectedCount: 1,
+      },
+      {
+        firstPatchedVersion: '0.7.0',
+        name: 'the first patched version is the range minimum',
+        overrides: {},
+        rejectedCount: 0,
+      },
+      {
+        firstPatchedVersion: undefined,
+        name: 'rejects a non-positive id',
+        overrides: {id: -3},
+        rejectedCount: 1,
+      },
+      {
+        firstPatchedVersion: undefined,
+        name: 'rejects a malformed GHSA id',
+        overrides: {github_advisory_id: 'GHSA-0000-0000-0000'},
+        rejectedCount: 1,
+      },
+      {
+        firstPatchedVersion: undefined,
+        name: 'rejects a module name with a space',
+        overrides: {module_name: 'evil pkg'},
+        rejectedCount: 1,
+      },
+      {
+        firstPatchedVersion: undefined,
+        name: 'rejects an unknown severity',
+        overrides: {severity: 'urgent'},
+        rejectedCount: 1,
+      },
+      {
+        firstPatchedVersion: undefined,
+        name: 'rejects a finding version with a command',
+        overrides: {findings: [{paths: ['.>cookie'], version: '1.0.0; rm'}]},
+        rejectedCount: 1,
+      },
+      {
+        firstPatchedVersion: undefined,
+        name: 'rejects a path segment with a metacharacter',
+        overrides: {findings: [{paths: ['.>$(x)>cookie'], version: '0.6.0'}]},
+        rejectedCount: 1,
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {firstPatchedVersion, overrides, rejectedCount}) => {
+    const result = normalizePnpmAudit(auditReport(auditAdvisory(overrides)));
+
+    expect(result.rejectedCount).toBe(rejectedCount);
+    expect(result.records).toHaveLength(1 - rejectedCount);
+    expect(result.records[0]?.firstPatchedVersion).toBe(firstPatchedVersion);
   });
 });
 
@@ -150,106 +170,140 @@ const alert = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const ALERT_RECORD = {
+  epssPercentage: 0.25,
+  firstPatchedVersion: '0.7.0',
+  ghsa: 'GHSA-pxg6-pf52-xh8x',
+  manifestPath: 'pnpm-lock.yaml',
+  number: 41,
+  package: 'cookie',
+  relationship: 'transitive',
+  scope: 'runtime',
+  severity: 'high',
+  vulnerableRange: '< 0.7.0',
+};
+
 describe('normalizeAlerts', () => {
-  test('keeps the allowlisted fields, EPSS from the array shape', () => {
-    expect(normalizeAlerts([alert()], OPEN).records).toStrictEqual([
+  test.each(
+    [
       {
-        epssPercentage: 0.25,
-        firstPatchedVersion: '0.7.0',
-        ghsa: 'GHSA-pxg6-pf52-xh8x',
-        manifestPath: 'pnpm-lock.yaml',
-        number: 41,
-        package: 'cookie',
-        relationship: 'transitive',
-        scope: 'runtime',
-        severity: 'high',
-        vulnerableRange: '< 0.7.0',
+        alerts: [alert()],
+        name: 'keeps the allowlisted fields, EPSS from the array shape',
+        records: [ALERT_RECORD],
       },
-    ]);
-  });
-
-  test('reads the object EPSS shape and drops a non-finite one', () => {
-    const objectShape = alert({
-      security_advisory: {
-        epss: {percentage: 0.5},
-        ghsa_id: 'GHSA-pxg6-pf52-xh8x',
-        severity: 'high',
+      {
+        alerts: [
+          alert({
+            security_advisory: {
+              epss: {percentage: 0.5},
+              ghsa_id: 'GHSA-pxg6-pf52-xh8x',
+              severity: 'high',
+            },
+          }),
+          alert({
+            security_advisory: {
+              epss: [{percentage: 'high'}],
+              ghsa_id: 'GHSA-pxg6-pf52-xh8x',
+              severity: 'high',
+            },
+          }),
+        ],
+        name: 'reads the object EPSS shape and drops a non-finite one',
+        records: [
+          {...ALERT_RECORD, epssPercentage: 0.5},
+          {...ALERT_RECORD, epssPercentage: null},
+        ],
       },
+      {
+        alerts: [
+          alert({state: 'fixed'}),
+          alert({state: 'dismissed'}),
+          alert({
+            dependency: {
+              manifest_path: 'requirements.txt',
+              package: {ecosystem: 'pip', name: 'cookie'},
+            },
+          }),
+        ],
+        name: 'skips other states and ecosystems without counting them rejected',
+        records: [],
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {alerts, records}) => {
+    expect(normalizeAlerts(alerts, OPEN)).toStrictEqual({
+      records,
+      rejectedCount: 0,
     });
-    const textShape = alert({
-      security_advisory: {
-        epss: [{percentage: 'high'}],
-        ghsa_id: 'GHSA-pxg6-pf52-xh8x',
-        severity: 'high',
-      },
-    });
-
-    expect(
-      normalizeAlerts([objectShape, textShape], OPEN).records.map(
-        (record) => record.epssPercentage
-      )
-    ).toStrictEqual([0.5, null]);
-  });
-
-  test('skips other states and ecosystems without counting them rejected', () => {
-    const result = normalizeAlerts(
-      [
-        alert({state: 'fixed'}),
-        alert({state: 'dismissed'}),
-        alert({
-          dependency: {
-            manifest_path: 'requirements.txt',
-            package: {ecosystem: 'pip', name: 'cookie'},
-          },
-        }),
-      ],
-      OPEN
-    );
-
-    expect(result).toStrictEqual({records: [], rejectedCount: 0});
   });
 });
 
 describe('baseline', () => {
-  test('acknowledges only through pnpm ids, never by module name', () => {
-    const base = advisory({pnpmIds: [111]});
+  test.each(
+    [
+      {
+        checks: [
+          {
+            baseline: [999],
+            expected: {baselineAcknowledged: false, baselineIds: []},
+          },
+          {
+            baseline: [111],
+            expected: {baselineAcknowledged: true, baselineIds: [111]},
+          },
+        ],
+        name: 'acknowledges only through pnpm ids, never by module name',
+        pnpmIds: [111],
+      },
+      {
+        checks: [
+          {
+            baseline: [111],
+            expected: {baselineAcknowledged: false, baselineIds: []},
+          },
+        ],
+        name: 'an advisory with no pnpm ids is never acknowledged',
+        pnpmIds: [],
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {checks, pnpmIds}) => {
+    const base = advisory({pnpmIds});
 
-    expect(applyBaseline(base, new Set([999]))).toMatchObject({
-      baselineAcknowledged: false,
-      baselineIds: [],
-    });
-    expect(applyBaseline(base, new Set([111]))).toMatchObject({
-      baselineAcknowledged: true,
-      baselineIds: [111],
-    });
+    for (const {baseline, expected} of checks) {
+      expect(applyBaseline(base, new Set(baseline))).toMatchObject(expected);
+    }
   });
 
-  test('an advisory with no pnpm ids is never acknowledged', () => {
-    expect(
-      applyBaseline(advisory({pnpmIds: []}), new Set([111]))
-        .baselineAcknowledged
-    ).toBe(false);
-  });
+  const acknowledged = advisory({baselineAcknowledged: true, key: 'a'});
+  const open = advisory({key: 'b'});
 
-  test('the audit count drops acknowledged keys; the alerts count does not', () => {
-    const acknowledged = advisory({baselineAcknowledged: true, key: 'a'});
-    const open = advisory({key: 'b'});
-
-    expect(countAdvisories([], [acknowledged, open])).toBe(1);
-    expect(countAdvisories([acknowledged, open], [])).toBe(2);
-  });
-
-  test('the count is the union of alert keys and unacknowledged audit keys', () => {
-    expect(
-      countAdvisories(
-        [advisory({key: 'a'})],
-        [
-          advisory({key: 'a'}),
-          advisory({key: 'b'}),
-          advisory({baselineAcknowledged: true, key: 'c'}),
-        ]
-      )
-    ).toBe(2);
+  test.each(
+    [
+      {
+        checks: [
+          {alerts: [], audit: [acknowledged, open], count: 1},
+          {alerts: [acknowledged, open], audit: [], count: 2},
+        ],
+        name: 'the audit count drops acknowledged keys; the alerts count does not',
+      },
+      {
+        checks: [
+          {
+            alerts: [advisory({key: 'a'})],
+            audit: [
+              advisory({key: 'a'}),
+              advisory({key: 'b'}),
+              advisory({baselineAcknowledged: true, key: 'c'}),
+            ],
+            count: 2,
+          },
+        ],
+        name: 'the count is the union of alert keys and unacknowledged audit keys',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {checks}) => {
+    for (const {alerts, audit, count} of checks) {
+      expect(countAdvisories(alerts, audit)).toBe(count);
+    }
   });
 });
 
@@ -421,136 +475,138 @@ describe('a GHSA spanning several packages', () => {
 });
 
 describe('rankAdvisories', () => {
-  test('severity first, then EPSS descending, then key', () => {
-    const ranked = rankAdvisories([
-      advisory({epssPercentage: 0.1, key: 'high-low-epss', severity: 'high'}),
-      advisory({epssPercentage: 0.9, key: 'high-high-epss', severity: 'high'}),
-      advisory({epssPercentage: 0.01, key: 'critical', severity: 'critical'}),
-    ]);
-
-    expect(ranked.map((entry) => entry.key)).toStrictEqual([
-      'critical',
-      'high-high-epss',
-      'high-low-epss',
-    ]);
-  });
-
-  test('without EPSS it ranks by severity then key, null EPSS last', () => {
-    const ranked = rankAdvisories([
-      advisory({key: 'pnpm:2', severity: 'low'}),
-      advisory({key: 'pnpm:9', severity: 'high'}),
-      advisory({key: 'pnpm:3', severity: 'high'}),
-      advisory({epssPercentage: 0.001, key: 'pnpm:99', severity: 'high'}),
-    ]);
-
-    expect(ranked.map((entry) => entry.key)).toStrictEqual([
-      'pnpm:99',
-      'pnpm:3',
-      'pnpm:9',
-      'pnpm:2',
-    ]);
-  });
-
-  test('two equal advisories tie-break by key ascending', () => {
-    const ranked = rankAdvisories([advisory({key: 'b'}), advisory({key: 'a'})]);
-
-    expect(ranked.map((entry) => entry.key)).toStrictEqual(['a', 'b']);
+  test.each(
+    [
+      {
+        advisories: [
+          advisory({
+            epssPercentage: 0.1,
+            key: 'high-low-epss',
+            severity: 'high',
+          }),
+          advisory({
+            epssPercentage: 0.9,
+            key: 'high-high-epss',
+            severity: 'high',
+          }),
+          advisory({
+            epssPercentage: 0.01,
+            key: 'critical',
+            severity: 'critical',
+          }),
+        ],
+        keys: ['critical', 'high-high-epss', 'high-low-epss'],
+        name: 'severity first, then EPSS descending, then key',
+      },
+      {
+        advisories: [
+          advisory({key: 'pnpm:2', severity: 'low'}),
+          advisory({key: 'pnpm:9', severity: 'high'}),
+          advisory({key: 'pnpm:3', severity: 'high'}),
+          advisory({epssPercentage: 0.001, key: 'pnpm:99', severity: 'high'}),
+        ],
+        keys: ['pnpm:99', 'pnpm:3', 'pnpm:9', 'pnpm:2'],
+        name: 'without EPSS it ranks by severity then key, null EPSS last',
+      },
+      {
+        advisories: [advisory({key: 'b'}), advisory({key: 'a'})],
+        keys: ['a', 'b'],
+        name: 'two equal advisories tie-break by key ascending',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {advisories, keys}) => {
+    expect(rankAdvisories(advisories).map((entry) => entry.key)).toStrictEqual(
+      keys
+    );
   });
 });
 
 describe('classifyCandidates', () => {
   const headChain = [['frontend', 'react-router', 'cookie']];
 
-  test('no patched version blocks with no-patch and no candidates', () => {
+  test.each(
+    (
+      [
+        {
+          expected: {blockedReason: 'no-patch', candidates: []},
+          name: 'no patched version blocks with no-patch and no candidates',
+          overrides: {firstPatchedVersion: null},
+        },
+        {
+          expected: {
+            blockedReason: 'split-patch',
+            candidates: ['in-range-refresh'],
+          },
+          name: 'ranges patched at different versions offer no override and block with split-patch',
+          overrides: {
+            chains: headChain,
+            firstPatchedVersion: null,
+            patchedVersions: ['5.7.2', '7.5.2'],
+          },
+        },
+        {
+          expected: {blockedReason: 'release-age', candidates: []},
+          name: 'a patch inside the release-age window blocks with release-age',
+          overrides: {
+            insideReleaseAgeWindow: true,
+            patchEligibleAt: '2026-10-06T08:00:00.000Z',
+          },
+        },
+        {
+          expected: {blockedReason: null, candidates: ['override']},
+          name: 'a parent range that refuses the patch omits in-range-refresh',
+          overrides: {parentRangeAdmitsPatch: false},
+        },
+      ] satisfies {
+        expected: ReturnType<typeof classifyCandidates>;
+        name: string;
+        overrides: Partial<Advisory>;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, overrides}) => {
     expect(
-      classifyCandidates(
-        advisory({firstPatchedVersion: null}),
-        NO_OFFERS,
-        NO_APPLY
-      )
-    ).toStrictEqual({blockedReason: 'no-patch', candidates: []});
+      classifyCandidates(advisory(overrides), NO_OFFERS, NO_APPLY)
+    ).toStrictEqual(expected);
   });
 
-  test('ranges patched at different versions offer no override and block with split-patch', () => {
+  test.each(
+    [
+      {
+        applySet: NO_APPLY,
+        candidates: ['in-range-refresh', 'override', 'chain-head-major'],
+        name: 'a wave_b chain head with an empty apply set yields chain-head-major last',
+        offers: {waveA: new Set<string>(), waveB: new Set(['react-router'])},
+      },
+      {
+        applySet: NO_APPLY,
+        candidates: ['in-range-refresh', 'chain-head-minor', 'override'],
+        name: 'a wave_a chain head yields exactly one chain-head-minor',
+        offers: {waveA: new Set(['react-router']), waveB: new Set<string>()},
+      },
+      {
+        applySet: new Set(['react-router']),
+        candidates: ['in-range-refresh', 'chain-head-in-run', 'override'],
+        name: 'a head in the apply set yields chain-head-in-run and no chain-head-minor',
+        offers: {
+          waveA: new Set(['react-router']),
+          waveB: new Set(['react-router']),
+        },
+      },
+      {
+        applySet: NO_APPLY,
+        candidates: ['in-range-refresh', 'chain-head-minor', 'override'],
+        name: 'an empty apply set never yields chain-head-in-run',
+        offers: {
+          waveA: new Set(['react-router']),
+          waveB: new Set(['react-router']),
+        },
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {applySet, candidates, offers}) => {
     expect(
-      classifyCandidates(
-        advisory({
-          chains: headChain,
-          firstPatchedVersion: null,
-          patchedVersions: ['5.7.2', '7.5.2'],
-        }),
-        NO_OFFERS,
-        NO_APPLY
-      )
-    ).toStrictEqual({
-      blockedReason: 'split-patch',
-      candidates: ['in-range-refresh'],
-    });
-  });
-
-  test('a patch inside the release-age window blocks with release-age', () => {
-    expect(
-      classifyCandidates(
-        advisory({
-          insideReleaseAgeWindow: true,
-          patchEligibleAt: '2026-10-06T08:00:00.000Z',
-        }),
-        NO_OFFERS,
-        NO_APPLY
-      )
-    ).toStrictEqual({blockedReason: 'release-age', candidates: []});
-  });
-
-  test('a parent range that refuses the patch omits in-range-refresh', () => {
-    expect(
-      classifyCandidates(
-        advisory({parentRangeAdmitsPatch: false}),
-        NO_OFFERS,
-        NO_APPLY
-      ).candidates
-    ).toStrictEqual(['override']);
-  });
-
-  test('a wave_b chain head with an empty apply set yields chain-head-major last', () => {
-    expect(
-      classifyCandidates(
-        advisory({chains: headChain}),
-        {waveA: new Set(), waveB: new Set(['react-router'])},
-        NO_APPLY
-      ).candidates
-    ).toStrictEqual(['in-range-refresh', 'override', 'chain-head-major']);
-  });
-
-  test('a wave_a chain head yields exactly one chain-head-minor', () => {
-    expect(
-      classifyCandidates(
-        advisory({chains: headChain}),
-        {waveA: new Set(['react-router']), waveB: new Set()},
-        NO_APPLY
-      ).candidates
-    ).toStrictEqual(['in-range-refresh', 'chain-head-minor', 'override']);
-  });
-
-  test('a head in the apply set yields chain-head-in-run and no chain-head-minor', () => {
-    expect(
-      classifyCandidates(
-        advisory({chains: headChain}),
-        {waveA: new Set(['react-router']), waveB: new Set(['react-router'])},
-        new Set(['react-router'])
-      ).candidates
-    ).toStrictEqual(['in-range-refresh', 'chain-head-in-run', 'override']);
-  });
-
-  test('an empty apply set never yields chain-head-in-run', () => {
-    const offers = {
-      waveA: new Set(['react-router']),
-      waveB: new Set(['react-router']),
-    };
-
-    expect(
-      classifyCandidates(advisory({chains: headChain}), offers, NO_APPLY)
+      classifyCandidates(advisory({chains: headChain}), offers, applySet)
         .candidates
-    ).not.toContain('chain-head-in-run');
+    ).toStrictEqual(candidates);
   });
 });
 

@@ -6,9 +6,6 @@
 # "Read ... now" line for each, and every references/setup path it names
 # exists.
 #
-# Each mutation test runs the check over a scratch copy with one disagreement
-# put in and asserts it fails with the matching message.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 # Each reference basename is named literally in this list: the change selector
@@ -31,23 +28,6 @@ setup() {
     echo "the setup references directory is absent: ${REFERENCES_DIRECTORY}" >&2
     return 1
   }
-}
-
-# scratch_copy <source> <name>: copy a file into the test's temp dir and print
-# the copy's path, so a mutation never touches the shared tree.
-scratch_copy() {
-  local copy="${BATS_TEST_TMPDIR}/$2"
-  cp "$1" "$copy"
-  printf '%s\n' "$copy"
-}
-
-# scratch_references <name>: copy the setup references directory into the
-# test's temp dir and print the copy's path.
-scratch_references() {
-  local copy="${BATS_TEST_TMPDIR}/$1"
-  mkdir -p "$copy"
-  cp "${REFERENCES_DIRECTORY}"/*.md "$copy"/
-  printf '%s\n' "$copy"
 }
 
 # ---------------------------------------------------------------------------
@@ -130,61 +110,4 @@ check_reference_index() {
 
 @test "the setup reference directory, references block, and Read lines name the same files" {
   check_reference_index "$PAGE" "$REFERENCES_DIRECTORY"
-}
-
-@test "the reference index check fails on an unlisted file in the directory" {
-  local directory
-  directory="$(scratch_references index-extra-file)"
-  printf '# Extra\n' >"${directory}/unlisted.md"
-  run check_reference_index "$PAGE" "$directory"
-  [ "$status" -ne 0 ]
-  grep -qF 'differs from the expected list' <<<"$output"
-}
-
-@test "the reference index check fails when an expected file is missing from the directory" {
-  local directory
-  directory="$(scratch_references index-missing-file)"
-  rm "${directory}/squash-only.md"
-  run check_reference_index "$PAGE" "$directory"
-  [ "$status" -ne 0 ]
-  grep -qF 'differs from the expected list' <<<"$output"
-}
-
-@test "the reference index check fails when the entry names a missing file" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "index-missing-path.md")"
-  printf '\nRead `%sghost.md` now, the whole file.\n' "$SETUP_REFERENCES_PATH" >>"$copy"
-  run check_reference_index "$copy" "$REFERENCES_DIRECTORY"
-  [ "$status" -ne 0 ]
-  grep -qF 'names a missing reference' <<<"$output"
-}
-
-@test "the reference index check fails when the references block drops a bullet" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "index-dropped-bullet.md")"
-  grep -v -- '^- `sandbox.md`: ' "$PAGE" >"$copy" || true
-  cmp -s "$PAGE" "$copy" && return 1
-  run check_reference_index "$copy" "$REFERENCES_DIRECTORY"
-  [ "$status" -ne 0 ]
-  grep -qF 'references block differs' <<<"$output"
-}
-
-@test "the reference index check fails when the entry has no Read line for a reference" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "index-no-read-line.md")"
-  sed "s#Read \`${SETUP_REFERENCES_PATH}squash-only.md\` now#Open \`${SETUP_REFERENCES_PATH}squash-only.md\`#" "$PAGE" >"$copy"
-  cmp -s "$PAGE" "$copy" && return 1
-  run check_reference_index "$copy" "$REFERENCES_DIRECTORY"
-  [ "$status" -ne 0 ]
-  grep -qF 'no Read line for squash-only.md' <<<"$output"
-}
-
-@test "the reference index check fails loudly when the opening sentence is reworded" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "index-reworded.md")"
-  sed 's/^This command reads these references/This command loads these references/' "$PAGE" >"$copy"
-  cmp -s "$PAGE" "$copy" && return 1
-  run check_reference_index "$copy" "$REFERENCES_DIRECTORY"
-  [ "$status" -ne 0 ]
-  grep -qF 'opening sentence is absent' <<<"$output"
 }

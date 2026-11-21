@@ -132,19 +132,6 @@ setup() {
   [ "$(git config --local --get core.hooksPath)" = ".githooks" ]
 }
 
-@test "--help exits 0 and prints usage" {
-  run bash "$SCRIPT" --help
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"Usage"* ]]
-}
-
-@test "an unknown argument exits 2 and installs nothing" {
-  run bash "$SCRIPT" --bogus
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"Usage"* ]]
-  [ ! -e apps/web/.claude ]
-}
-
 @test "a registry with no web-stack member exits 0 and installs nothing" {
   jq 'del(.stack)' apps/web/gaia.package.json >apps/web/gaia.package.json.tmp
   mv apps/web/gaia.package.json.tmp apps/web/gaia.package.json

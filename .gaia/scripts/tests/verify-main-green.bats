@@ -77,94 +77,75 @@ open_issue() {
 
 # Red main refuses
 
-@test "red main: a failed push run refuses with exit 1, naming the run and the repair" {
+# bats test_tags=protected
+@test "red main refusals exit 1: failed run, open ci-red-main issue, issue over in-progress run, cancelled and skipped run" {
   write_run 555 completed failure
   run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 1 ]
-  assert_contains "https://example.test/actions/runs/555"
-  assert_contains "gh run rerun 555 --failed"
-  assert_contains "Fix main"
-}
+  [ "$status" -eq 1 ] || { echo "case failed run: got $status"; return 1; }
+  assert_contains "https://example.test/actions/runs/555" || { echo "case failed run: run not named"; return 1; }
+  assert_contains "gh run rerun 555 --failed" || { echo "case failed run: no repair"; return 1; }
+  assert_contains "Fix main" || { echo "case failed run: no Fix main"; return 1; }
 
-@test "red main: an open ci-red-main issue refuses even when the push run is green" {
+  write_run 40152721968 completed success
   open_issue
   run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 1 ]
-  assert_contains "https://example.test/issues/3100"
+  [ "$status" -eq 1 ] || { echo "case open issue, green run: got $status"; return 1; }
+  assert_contains "https://example.test/issues/3100" || { echo "case open issue, green run: issue not named"; return 1; }
+
+  write_run 556 in_progress none
+  run "$SCRIPT" --repo example/repo --branch main
+  [ "$status" -eq 1 ] || { echo "case open issue over in-progress run: got $status"; return 1; }
+
+  : > "$STUB_DIRECTORY/issues.txt"
+  local conclusion
+  for conclusion in cancelled skipped; do
+    write_run 557 completed "$conclusion"
+    run "$SCRIPT" --repo example/repo --branch main
+    [ "$status" -eq 1 ] || { echo "case $conclusion run: got $status"; return 1; }
+  done
 }
 
 # The reporter keys each workflow's issue by title, so the release gate must
 # read the label alone: a title or search filter would miss the distribution
 # harness's issue while Audit CI Tests is green.
-@test "red main: the issue listing filters by label only, so any workflow's red-main issue refuses" {
+@test "the issue listing reads open issues by the ci-red-main label only" {
   open_issue
   run "$SCRIPT" --repo example/repo --branch main
   [ "$status" -eq 1 ]
-  grep -E '^issue list ' "$GH_LOG" | grep -qF -- '--label ci-red-main'
+  grep -qF -- "issue list --repo example/repo --label ci-red-main --state open" "$GH_LOG"
   grep -E '^issue list ' "$GH_LOG" | grep -qE -- '--search|in:title|Audit CI Tests' && return 1
   assert_contains "the workflow its title names"
 }
 
-@test "red main: an open ci-red-main issue wins over an in-progress push run" {
-  open_issue
-  write_run 556 in_progress none
-  run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 1 ]
-}
-
-@test "red main: a cancelled or skipped push run is not success and refuses" {
-  write_run 557 completed cancelled
-  run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 1 ]
-  write_run 558 completed skipped
-  run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 1 ]
-}
-
-@test "pending: an in-progress push run refuses with exit 3 and says how to wait" {
+@test "pending runs exit 3: in-progress says how to wait, queued" {
   write_run 559 in_progress none
   run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 3 ]
-  assert_contains "gh run watch 559"
-}
+  [ "$status" -eq 3 ] || { echo "case in-progress: got $status"; return 1; }
+  assert_contains "gh run watch 559" || { echo "case in-progress: no wait hint"; return 1; }
 
-@test "pending: a queued push run refuses with exit 3" {
   write_run 560 queued none
   run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 3 ]
+  [ "$status" -eq 3 ] || { echo "case queued: got $status"; return 1; }
 }
 
-# Absent or unreadable signal refuses
-
-@test "absent signal: no push run for the release commit refuses with exit 2" {
+@test "absent or unreadable signal exits 2: no run, failed issue listing, failed runs query, unresolvable head, malformed runs line" {
   no_run
   run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 2 ]
-  assert_contains "$RELEASE_SHA"
-}
+  [ "$status" -eq 2 ] || { echo "case no run: got $status"; return 1; }
+  assert_contains "$RELEASE_SHA" || { echo "case no run: sha not named"; return 1; }
 
-@test "unreadable signal: a failed issue listing refuses with exit 2" {
-  touch "$STUB_DIRECTORY/issue-list-fails"
-  run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 2 ]
-}
+  write_run 40152721968 completed success
+  local flag
+  for flag in issue-list-fails runs-fail head-sha-fails; do
+    touch "$STUB_DIRECTORY/$flag"
+    run "$SCRIPT" --repo example/repo --branch main
+    [ "$status" -eq 2 ] || { echo "case $flag: got $status"; return 1; }
+    rm -f "$STUB_DIRECTORY/$flag"
+  done
 
-@test "unreadable signal: a failed runs query refuses with exit 2" {
-  touch "$STUB_DIRECTORY/runs-fail"
-  run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 2 ]
-}
-
-@test "unreadable signal: an unresolvable branch head refuses with exit 2" {
-  touch "$STUB_DIRECTORY/head-sha-fails"
-  run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 2 ]
-}
-
-@test "unreadable signal: a runs line in an unexpected shape refuses with exit 2" {
   printf 'garbage\n' > "$STUB_DIRECTORY/run.txt"
   run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 2 ]
+  [ "$status" -eq 2 ] || { echo "case malformed runs line: got $status"; return 1; }
 }
 
 # What it reads
@@ -173,12 +154,6 @@ open_issue() {
   run "$SCRIPT" --repo example/repo --branch main
   [ "$status" -eq 0 ]
   grep -qF -- "repos/example/repo/actions/workflows/audit-ci-tests.yml/runs?event=push&branch=main&head_sha=${RELEASE_SHA}" "$GH_LOG"
-}
-
-@test "the issue listing reads open issues carrying the ci-red-main label" {
-  run "$SCRIPT" --repo example/repo --branch main
-  [ "$status" -eq 0 ]
-  grep -qF -- "issue list --repo example/repo --label ci-red-main --state open" "$GH_LOG"
 }
 
 @test "--sha checks that commit and never resolves the branch head" {
@@ -196,12 +171,9 @@ open_issue() {
 
 # Usage errors
 
-@test "usage error: an unknown flag exits 2" {
+@test "usage errors exit 2: unknown flag, flag without value" {
   run "$SCRIPT" --skip-check
-  [ "$status" -eq 2 ]
-}
-
-@test "usage error: a value-taking flag with no value exits 2" {
+  [ "$status" -eq 2 ] || { echo "case unknown flag: got $status"; return 1; }
   run "$SCRIPT" --sha
-  [ "$status" -eq 2 ]
+  [ "$status" -eq 2 ] || { echo "case flag without value: got $status"; return 1; }
 }

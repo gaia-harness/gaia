@@ -1,34 +1,25 @@
 #!/usr/bin/env bats
-# Unit tests for the with-ledger-lock.sh shared mutex helper (Contract C1).
+# Unit tests for the with-ledger-lock.sh shared mutex helper.
 # The helper is sourced (it defines one function: with_ledger_lock); these
-# tests source a fresh copy from a tmp repo and exercise the function in
-# isolation.
+# tests source the working-tree script, which acts only on the lock directory
+# each call names, and exercise the function in isolation.
 
 setup() {
-  HELPERS="$BATS_TEST_DIRNAME/helpers"
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
-  LOCK_HELPER="$REPO/.gaia/scripts/spec/with-ledger-lock.sh"
+  LOCK_HELPER="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/scripts/spec/with-ledger-lock.sh"
   LOCK_DIRECTORY="$BATS_TEST_TMPDIR/lock-directory"
   mkdir -p "$LOCK_DIRECTORY"
 }
 
-teardown() {
-  if [ -n "${REPO:-}" ]; then
-    rm -rf "$REPO"
-  fi
-}
-
-@test "1: with_ledger_lock <d> true -> status 0" {
+@test "with_ledger_lock passes the command's status and stdout through and adds no output" {
+  echo "case: 1: with_ledger_lock <d> true -> status 0"
   run bash -c ". '$LOCK_HELPER'; with_ledger_lock '$LOCK_DIRECTORY' true"
   [ "$status" -eq 0 ]
-}
 
-@test "2: passthrough; command exit 7 propagates as status 7" {
+  echo "case: 2: passthrough; command exit 7 propagates as status 7"
   run bash -c ". '$LOCK_HELPER'; with_ledger_lock '$LOCK_DIRECTORY' bash -c 'exit 7'"
   [ "$status" -eq 7 ]
-}
 
-@test "3: helper writes nothing to stdout; only command stdout passes" {
+  echo "case: 3: helper writes nothing to stdout; only command stdout passes"
   run bash -c ". '$LOCK_HELPER'; with_ledger_lock '$LOCK_DIRECTORY' bash -c 'echo HELLO'"
   [ "$status" -eq 0 ]
   [ "$output" = "HELLO" ]
@@ -52,6 +43,7 @@ teardown() {
   [[ "$output" == *"NO_FLOCK_FILE"* ]]
 }
 
+# bats test_tags=protected
 @test "5: timeout; second caller waiting on a held lock returns 75, stderr 'timed out'" {
   # Holder acquires the mkdir lock and sleeps; a second call with a 1s
   # timeout cannot acquire it and must return 75.
@@ -102,6 +94,7 @@ teardown() {
   [[ "$output" == *"TWO"* ]]
 }
 
+# bats test_tags=protected
 @test "8: forced fallback; concurrent increments all land with a non-exclusive mkdir first on PATH" {
   # shellcheck source=/dev/null
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/non-exclusive-mkdir.sh"

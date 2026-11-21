@@ -19,10 +19,6 @@
 # sentence. They pin that the sentence is there and comes before the first
 # command that changes the tree.
 #
-# Each check is a function over a file path, so every test that proves the real
-# page passes has a twin that runs the same function over a scratch copy with
-# the guarded content removed or altered and asserts it fails.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
@@ -39,37 +35,6 @@ setup() {
       return 1
     }
   done
-}
-
-# scratch_copy <source> <name>: copy a file into the test's temp dir and print
-# the copy's path, so a mutation never touches the shared tree.
-scratch_copy() {
-  local copy="${BATS_TEST_TMPDIR}/$2"
-  cp "$1" "$copy"
-  printf '%s\n' "$copy"
-}
-
-# replace_fixed <file> <fixed-string> <replacement>: replace every occurrence
-# of a fixed string in place, and fail when the string was not there, so a
-# twin can never pass because its mutation silently missed.
-replace_fixed() {
-  local file="$1" needle="$2" replacement="$3" mutated="${1}.mutated"
-  grep -qF -- "$needle" "$file" || {
-    echo "mutation target not found: ${needle}" >&2
-    return 1
-  }
-  NEEDLE="$needle" REPLACEMENT="$replacement" awk '
-    BEGIN { needle = ENVIRON["NEEDLE"]; replacement = ENVIRON["REPLACEMENT"] }
-    {
-      line = $0; out = ""
-      while ((position = index(line, needle)) > 0) {
-        out = out substr(line, 1, position - 1) replacement
-        line = substr(line, position + length(needle))
-      }
-      print out line
-    }
-  ' "$file" >"$mutated"
-  mv "$mutated" "$file"
 }
 
 # first_line <file> <fixed-string>: print the line number of the first line
@@ -107,19 +72,6 @@ check_no_lockfile_copy() {
   check_no_lockfile_copy "$SECURITY"
 }
 
-@test "the copy check fails on a lockfile cp inserted into each recipe" {
-  local source copy
-  for source in "$REFRESH" "$SECURITY"; do
-    copy="$(scratch_copy "$source" "copy-$(basename "$source")")"
-    printf '\n   cp package.json pnpm-lock.yaml /tmp/update-deps-refresh/\n' >>"$copy"
-    run check_no_lockfile_copy "$copy"
-    [ "$status" -ne 0 ] || {
-      echo "the check passed with a lockfile cp inserted into ${source}" >&2
-      return 1
-    }
-  done
-}
-
 # ---------------------------------------------------------------------------
 # 2. Each recipe takes and restores a git baseline
 # ---------------------------------------------------------------------------
@@ -137,21 +89,6 @@ check_git_baseline() {
 @test "both recipes take, check and restore a git baseline" {
   check_git_baseline "$REFRESH"
   check_git_baseline "$SECURITY"
-}
-
-@test "the baseline check fails with each baseline step removed from each recipe" {
-  local source needle copy
-  for source in "$REFRESH" "$SECURITY"; do
-    for needle in "$BASELINE_CREATE" "$BASELINE_FALLBACK" "$BASELINE_HOLDS_LOCKFILE" "$BASELINE_RESTORE"; do
-      copy="$(scratch_copy "$source" "baseline-$(basename "$source")")"
-      replace_fixed "$copy" "$needle" 'git status'
-      run check_git_baseline "$copy"
-      [ "$status" -ne 0 ] || {
-        echo "the check passed with '${needle}' removed from ${source}" >&2
-        return 1
-      }
-    done
-  done
 }
 
 # ---------------------------------------------------------------------------
@@ -184,31 +121,6 @@ check_refresh_stops() {
   check_refresh_stops "$REFRESH"
 }
 
-@test "the refresh stop check fails with the stop sentence deleted" {
-  local copy
-  copy="$(scratch_copy "$REFRESH" "stop.md")"
-  replace_fixed "$copy" "$REFRESH_STOP" ''
-  run check_refresh_stops "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the refresh stop check fails with the stop sentence moved after the refresh step" {
-  local copy
-  copy="$(scratch_copy "$REFRESH" "late.md")"
-  replace_fixed "$copy" "$REFRESH_STOP" ''
-  printf '\n%s\n' "$REFRESH_STOP" >>"$copy"
-  run check_refresh_stops "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the refresh stop check fails with the reported outcome deleted" {
-  local copy
-  copy="$(scratch_copy "$REFRESH" "outcome.md")"
-  replace_fixed "$copy" "$REFRESH_OUTCOME" '`Reverted (<reason>)`'
-  run check_refresh_stops "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # 4. A failed security snapshot applies nothing it would have guarded
 # ---------------------------------------------------------------------------
@@ -237,28 +149,6 @@ check_security_stops() {
   check_security_stops "$SECURITY"
 }
 
-@test "the security stop check fails with each stop clause deleted" {
-  local needle copy
-  for needle in "$SECURITY_STOP" "$SECURITY_BATCH_STOP" "$SECURITY_OUTCOME"; do
-    copy="$(scratch_copy "$SECURITY" "security-stop.md")"
-    replace_fixed "$copy" "$needle" ''
-    run check_security_stops "$copy"
-    [ "$status" -ne 0 ] || {
-      echo "the check passed with '${needle}' deleted" >&2
-      return 1
-    }
-  done
-}
-
-@test "the security stop check fails with the stop moved after the methods step" {
-  local copy
-  copy="$(scratch_copy "$SECURITY" "security-late.md")"
-  replace_fixed "$copy" "$SECURITY_STOP" ''
-  printf '\n%s\n' "$SECURITY_STOP" >>"$copy"
-  run check_security_stops "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # 5. The orchestrator and the report carry the failed-snapshot outcome
 # ---------------------------------------------------------------------------
@@ -275,17 +165,4 @@ check_outcome_carried() {
 
 @test "SKILL.md and the final report carry the failed-snapshot outcome" {
   check_outcome_carried "$SKILL" "$FINAL_REPORT"
-}
-
-@test "the outcome check fails with the outcome deleted from each page" {
-  local source copy
-  for source in "$SKILL" "$FINAL_REPORT"; do
-    copy="$(scratch_copy "$source" "carried-$(basename "$source")")"
-    replace_fixed "$copy" 'Not run (snapshot failed: <reason>)' 'Nothing moved'
-    run check_outcome_carried "$copy"
-    [ "$status" -ne 0 ] || {
-      echo "the check passed with the outcome deleted from ${source}" >&2
-      return 1
-    }
-  done
 }

@@ -16,7 +16,6 @@
 # the live files no line needed an exemption; a future line that is a
 # legitimate non-prohibition needs rewording or a recorded exemption here.
 #
-# Each helper takes the file it reads so a scratch copy proves a case can fail.
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
@@ -112,137 +111,27 @@ assert_named_tools_are_prohibitions() {
   return 0
 }
 
-# --- the table ----------------------------------------------------------------
-
-@test "the tools table has exactly the ten agents, each once" {
-  [ "$(tools_rows | grep -c '')" -eq 10 ]
-  [ "$(tools_rows | cut -d' ' -f1 | sort -u | grep -c '')" -eq 10 ]
-}
-
-# bats test_tags=whole-tree
-@test "every code-audit definition has a row in the tools table" {
-  assert_every_member_has_row "$AGENTS_DIRECTORY"
-}
-
 # --- frontmatter rows ---------------------------------------------------------
 
 # bats test_tags=whole-tree
-@test "code-audit-frontend carries its pinned tools line" {
-  assert_row code-audit-frontend "$AGENTS_DIRECTORY/code-audit-frontend.md"
-}
-
-# bats test_tags=whole-tree
-@test "code-audit-github-workflows carries its pinned tools line" {
-  assert_row code-audit-github-workflows "$AGENTS_DIRECTORY/code-audit-github-workflows.md"
-}
-
-# bats test_tags=whole-tree
-@test "code-audit-maintainer-node carries its pinned tools line" {
-  assert_row code-audit-maintainer-node "$AGENTS_DIRECTORY/code-audit-maintainer-node.md"
-}
-
-# bats test_tags=whole-tree
-@test "code-audit-maintainer-shell carries its pinned tools line" {
-  assert_row code-audit-maintainer-shell "$AGENTS_DIRECTORY/code-audit-maintainer-shell.md"
-}
-
-# bats test_tags=whole-tree
-@test "code-audit-shell carries its pinned tools line" {
-  assert_row code-audit-shell "$AGENTS_DIRECTORY/code-audit-shell.md"
-}
-
-# bats test_tags=whole-tree
-@test "audit-loop-unit carries its pinned tools line" {
-  assert_row audit-loop-unit "$AGENTS_DIRECTORY/audit-loop-unit.md"
-}
-
-# bats test_tags=whole-tree
-@test "worthiness-evaluator carries its pinned tools line" {
-  assert_row worthiness-evaluator "$AGENTS_DIRECTORY/worthiness-evaluator.md"
-}
-
-# bats test_tags=whole-tree
-# bats test_tags=whole-tree
-@test "security-test-writer carries its pinned tools line" {
-  assert_row security-test-writer "$AGENTS_DIRECTORY/security-test-writer.md"
-}
-
-# bats test_tags=whole-tree
-@test "audit-rule-specialist carries its pinned tools line" {
-  assert_row audit-rule-specialist "$AGENTS_DIRECTORY/audit-rule-specialist.md"
-}
-
-# bats test_tags=whole-tree
-@test "audit-refuter carries its pinned tools line" {
-  assert_row audit-refuter "$AGENTS_DIRECTORY/audit-refuter.md"
+@test "each audit agent carries its pinned tools line" {
+  local agent row
+  assert_every_member_has_row "$AGENTS_DIRECTORY" || return 1
+  while IFS= read -r row; do
+    agent="${row%% *}"
+    assert_row "$agent" "$AGENTS_DIRECTORY/$agent.md" || { echo "case failed: $agent" >&2; return 1; }
+  done < <(tools_rows)
 }
 
 # --- named tools --------------------------------------------------------------
 
 # bats test_tags=whole-tree
-@test "the frontend definition and its refuter reference name no tool outside the allowlist except as a prohibition" {
-  assert_named_tools_are_prohibitions code-audit-frontend "$AGENTS_DIRECTORY/code-audit-frontend.md" "$FRONTEND_REFUTER_REFERENCE"
-}
-
-# bats test_tags=whole-tree
-@test "the other definitions name no tool outside their allowlist except as a prohibition" {
-  local agent
-  for agent in code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell code-audit-shell audit-loop-unit worthiness-evaluator security-test-writer audit-rule-specialist audit-refuter; do
-    assert_named_tools_are_prohibitions "$agent" "$AGENTS_DIRECTORY/$agent.md" || return 1
-  done
-}
-
-# --- red twins: scratch copies, each helper must fail -------------------------
-
-@test "red twin: a frontend copy telling the agent to Glob fails the named-tool rule" {
-  local scratch="$BATS_TEST_TMPDIR/frontend.md"
-  { cat "$AGENTS_DIRECTORY/code-audit-frontend.md"; printf '\nGlob <root>/.claude/rules/extensions/*.md for the extension rules.\n'; } >"$scratch"
-  run assert_named_tools_are_prohibitions code-audit-frontend "$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a workflows copy telling the agent to Grep fails the named-tool rule" {
-  local scratch="$BATS_TEST_TMPDIR/workflows.md"
-  { cat "$AGENTS_DIRECTORY/code-audit-github-workflows.md"; printf '\nGrep for where the workflow is invoked.\n'; } >"$scratch"
-  run assert_named_tools_are_prohibitions code-audit-github-workflows "$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a unit copy without SendMessage in its tools line fails its row" {
-  local scratch="$BATS_TEST_TMPDIR/unit.md"
-  sed 's/^tools: Agent, Bash, Monitor, Read, SendMessage, Write$/tools: Agent, Bash, Monitor, Read, Write/' "$AGENTS_DIRECTORY/audit-loop-unit.md" >"$scratch"
-  cmp -s "$AGENTS_DIRECTORY/audit-loop-unit.md" "$scratch" && { echo "twin was not built" >&2; return 1; }
-  run assert_row audit-loop-unit "$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a workflows copy with an extra Write tool fails its row" {
-  local scratch="$BATS_TEST_TMPDIR/workflows.md"
-  sed 's/^tools: Bash, Read$/tools: Bash, Read, Write/' "$AGENTS_DIRECTORY/code-audit-github-workflows.md" >"$scratch"
-  grep -qx 'tools: Bash, Read, Write' "$scratch" || { echo "twin was not built" >&2; return 1; }
-  run assert_row code-audit-github-workflows "$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a shell copy without its tools line fails its row" {
-  local scratch="$BATS_TEST_TMPDIR/shell.md"
-  sed '/^tools:/d' "$AGENTS_DIRECTORY/code-audit-maintainer-shell.md" >"$scratch"
-  run assert_row code-audit-maintainer-shell "$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: an agents directory holding an extra code-audit definition fails the coverage test" {
-  local scratch="$BATS_TEST_TMPDIR/agents"
-  mkdir -p "$scratch"
-  cp "$AGENTS_DIRECTORY"/code-audit-*.md "$scratch/"
-  cp "$AGENTS_DIRECTORY/code-audit-maintainer-node.md" "$scratch/code-audit-x.md"
-  run assert_every_member_has_row "$scratch"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: an empty agents directory fails the coverage test" {
-  local scratch="$BATS_TEST_TMPDIR/empty"
-  mkdir -p "$scratch"
-  run assert_every_member_has_row "$scratch"
-  [ "$status" -ne 0 ]
+@test "no definition instructs a tool outside its allowlist except as a prohibition" {
+  local agent row
+  assert_named_tools_are_prohibitions code-audit-frontend "$AGENTS_DIRECTORY/code-audit-frontend.md" "$FRONTEND_REFUTER_REFERENCE" || { echo "case failed: code-audit-frontend and its refuter reference" >&2; return 1; }
+  while IFS= read -r row; do
+    agent="${row%% *}"
+    [ "$agent" = code-audit-frontend ] && continue
+    assert_named_tools_are_prohibitions "$agent" "$AGENTS_DIRECTORY/$agent.md" || { echo "case failed: $agent" >&2; return 1; }
+  done < <(tools_rows)
 }

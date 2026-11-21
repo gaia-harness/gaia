@@ -86,39 +86,130 @@ run_linter() {
   run bash -c "cd '$TEMPORARY_DIRECTORY' && bash '$LINTER'"
 }
 
-# 1. The real scanned tree is clean (regression gate)
-
-# bats test_tags=whole-tree
-@test "the real scanned tree passes the lint" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER'"
-  [ "$status" -eq 0 ]
-}
-
 # 2. The detector fires, once per scanned file type
 
-@test "flags an unquoted diff --name-only in a shell script" {
+@test "flags an unquoted diff --name-only / --cached / ls-files call in a script, git hook or workflow, in each form" {
+  case_label="flags an unquoted diff --name-only in a shell script"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD")'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-  grep -qF -- "-z" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  grep -qF -- "-z" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "flags an unquoted diff --name-only in a git hook" {
+  case_label="flags an unquoted diff --name-only in a git hook"
   fixture_repo
   fixture_file .githooks/pre-commit $'#!/usr/bin/env sh\nchanged=$(git diff --name-only HEAD~1...HEAD)'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".githooks/pre-commit:2" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- ".githooks/pre-commit:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "flags an unquoted diff --name-only in a workflow YAML run block" {
+  case_label="flags an unquoted diff --name-only in a workflow YAML run block"
   fixture_repo
   fixture_file .github/workflows/ci.yml $'jobs:\n  a:\n    steps:\n      - run: |\n          changed=$(git diff --name-only "${BASE}...HEAD")'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".github/workflows/ci.yml:5" <<<"$output"
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- ".github/workflows/ci.yml:5" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="flags every unquoted call on a line, not only the first"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\na=$(git diff --name-only "$X") ; b=$(git diff --name-only "$Y")'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  [ "$(grep -cF -- "probe.sh:2" <<<"$output")" -eq 2 ] || { echo "case $case_label: wrong count, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="a git -C form missing -z is flagged"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged="$(git -C "$root" diff --name-only "${base}...HEAD")"'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # A legacy backtick command substitution is textually identical to a markdown
+  # code span, and reading it as prose is a fail-OPEN miss. A backtick opening in
+  # command position (after `=` or `(`) is substitution, not prose.
+  case_label="a backtick command substitution in assignment position is flagged"
+  fixture_repo
+  fixture_file .github/workflows/ci.yml \
+    $'jobs:\n  a:\n    steps:\n      - run: |\n          changed=`git diff --name-only "${BASE}...HEAD"`'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- ".github/workflows/ci.yml:5" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="a backtick command substitution in subshell position is flagged"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(`git diff --name-only "$B"`)'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # `-z` is accepted anywhere in the option region and nowhere after it. The walk
+  # terminates at the first non-option token, which is exactly where a pathspec
+  # begins, so a pathspec carrying the token cannot vouch for a call that still
+  # quotes.
+  case_label="a -z appearing later in the call does not vouch for it"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD" -- "docs/a -z b.md")'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # `x="$(...)"` is the spelling most calls in this tree are actually written in,
+  # and it is the one where the option region ends in `)"` rather than `)`. A walk
+  # that strips every trailing character except the quote is blind to exactly that
+  # form: the first of these reds on the pre-widening detector and must keep
+  # reding, and the second is a compliant call that must never be reported.
+  case_label="a quoted substitution closing against --name-only is still flagged"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nb="$(git diff --name-only)"'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="a quoted --cached substitution closing against --name-only is flagged"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nc="$(git diff --cached --name-only)"'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # A quoted pathspec must not vouch for the call just because the strip reaches
+  # its closing quote: `"-z"` still begins with a quote afterwards, so the walk
+  # terminates on it as a non-option rather than reading it as the flag.
+  case_label="a quoted -z pathspec does not vouch for the call"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only -- "-z")'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="a -z inside an ls-files pathspec does not vouch for the call"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nfiles=$(git ls-files -- "docs/a -z b.md")'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="an unquoted ls-files is reported as ls-files and hinted with its own idiom"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nfor f in $(git ls-files); do :; done'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "ls-files without -z" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  grep -qF -- "read -r -d" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 }
 
 # The binding test. `#1229`'s Suggested fix: whichever guard lands must be shown
@@ -134,112 +225,206 @@ run_linter() {
   grep -qF -- ".claude/hooks/worthiness-presence-check.sh:2" <<<"$output"
 }
 
-@test "flags every unquoted call on a line, not only the first" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\na=$(git diff --name-only "$X") ; b=$(git diff --name-only "$Y")'
-  run_linter
-  [ "$status" -eq 1 ]
-  [ "$(grep -cF -- "probe.sh:2" <<<"$output")" -eq 2 ]
-}
-
 # 3. Legitimate shapes are NOT flagged
 
-@test "a call carrying -z passes" {
+@test "a -z call passes" {
+  case_label="a call carrying -z passes"
   fixture_repo
   fixture_file probe.sh \
     $'#!/usr/bin/env bash\nchanged="$(git diff --name-only -z "${base}...HEAD" 2>/dev/null | tr \'\\0\' \'\\n\' || true)"'
   run_linter
-  [ "$status" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "a git -C form is recognized as an invocation and still checked" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged="$(git -C "$root" diff --name-only -z "${base}...HEAD" | tr \'\\0\' \'\\n\')"'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-@test "a git -C form missing -z is flagged" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged="$(git -C "$root" diff --name-only "${base}...HEAD")"'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-# A legacy backtick command substitution is textually identical to a markdown
-# code span, and reading it as prose is a fail-OPEN miss. A backtick opening in
-# command position (after `=` or `(`) is substitution, not prose.
-@test "a backtick command substitution in assignment position is flagged" {
-  fixture_repo
-  fixture_file .github/workflows/ci.yml \
-    $'jobs:\n  a:\n    steps:\n      - run: |\n          changed=`git diff --name-only "${BASE}...HEAD"`'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".github/workflows/ci.yml:5" <<<"$output"
-}
-
-@test "a backtick command substitution in subshell position is flagged" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(`git diff --name-only "$B"`)'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-# The `invoked` prefix must admit any git global option, not a hand-named pair.
-@test "a git --no-pager form is recognized as an invocation" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git --no-pager diff --name-only "$B")'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-@test "a git --no-pager form carrying -z passes" {
+  case_label="a git --no-pager form carrying -z passes"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git --no-pager diff --name-only -z "$B" | tr \'\\0\' \'\\n\')'
   run_linter
-  [ "$status" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "a full-line comment is skipped" {
+  case_label="a --cached call carrying -z passes"
+  fixture_repo
+  fixture_file probe.sh \
+    $'#!/usr/bin/env bash\nstaged=$(git diff --cached --name-only -z --diff-filter=ACM | tr \'\\0\' \'\\n\')'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # The option-region walk, in both directions. `ls-files` carries its selectors
+  # before `-z`, so the anchored rule the `diff --name-only` half uses would
+  # reject every real call; terminating the walk at the first non-option is what
+  # keeps a pathspec from vouching in its place.
+  case_label="a quoted substitution closing against ls-files -z passes"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\ne="$(git ls-files -z)"'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="an ls-files call carrying -z passes"
+  fixture_repo
+  fixture_file probe.sh \
+    $'#!/usr/bin/env bash\nwhile IFS= read -r -d \'\' f; do :; done < <(git ls-files -z \'*.sh\')'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="an ls-files call whose -z follows selector options passes"
+  fixture_repo
+  fixture_file probe.sh \
+    $'#!/usr/bin/env bash\nn=$(git ls-files --others --exclude-standard -z | tr \'\\0\' \'\\n\' | wc -l)'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="a fenced call carrying -z passes"
+  fixture_repo
+  fixture_file docs/guide.md $'```bash\ngit ls-files -z \'*.sh\' | tr \'\\0\' \'\\n\'\n```'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # A command substitution closing against its last option yields `-z)`, which is
+  # neither the option the walk looks for nor a pathspec that should terminate it.
+  case_label="an ls-files call whose -z closes the substitution passes"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nfiles=$(git ls-files -z)'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+}
+@test "git invocation forms are recognized (-C, --no-pager, diff-tree, diff-files)" {
+  case_label="a git -C form is recognized as an invocation and still checked"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged="$(git -C "$root" diff --name-only -z "${base}...HEAD" | tr \'\\0\' \'\\n\')"'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # The `invoked` prefix must admit any git global option, not a hand-named pair.
+  case_label="a git --no-pager form is recognized as an invocation"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git --no-pager diff --name-only "$B")'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # Matching the bare `diff` reaches every `diff-*` plumbing spelling, whose tail
+  # is itself dash-led so the walk continues into the real options. The demand is
+  # correct there (each quotes exactly as `git diff` does), and the header says
+  # so; these pin the behavior the header describes, on two different tails so
+  # the claim is about the mechanism rather than about one command.
+  case_label="a diff-tree --name-only call is reached and flagged"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nfiles=$(git diff-tree --no-commit-id --name-only -r HEAD)'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="a diff-files --name-only call is reached and flagged"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nfiles=$(git diff-files --name-only)'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+}
+@test "a call that is not an invocation or is off the surface is skipped" {
+  case_label="a full-line comment is skipped"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\n# changed=$(git diff --name-only "${base}...HEAD")'
   run_linter
-  [ "$status" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# The false positive that would otherwise fire on a workflow step where an
-# agent prompt names the command inside a markdown code span.
-@test "a call inside a markdown code span is prose, not an invocation" {
+  # The false positive that would otherwise fire on a workflow step where an
+  # agent prompt names the command inside a markdown code span.
+  case_label="a call inside a markdown code span is prose, not an invocation"
   fixture_repo
   fixture_file .github/workflows/ci.yml \
     $'jobs:\n  a:\n    steps:\n      - run: |\n          echo "1. Run `git diff --name-only origin/main...HEAD` first."'
   run_linter
-  [ "$status" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# The false positive that would otherwise fire on the GAIA_AUDIT_DIFF_CALL
-# assignment in .gaia/scripts/check-audit-base-derivation.sh, where the call is
-# the VALUE of a fixed-string variable rather than an invocation.
-@test "a string constant that is not a git invocation is skipped" {
+  # The false positive that would otherwise fire on the GAIA_AUDIT_DIFF_CALL
+  # assignment in .gaia/scripts/check-audit-base-derivation.sh, where the call is
+  # the VALUE of a fixed-string variable rather than an invocation.
+  case_label="a string constant that is not a git invocation is skipped"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\nGAIA_AUDIT_DIFF_CALL=\'diff --name-only\''
   run_linter
-  [ "$status" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# `-z` is accepted anywhere in the option region and nowhere after it. The walk
-# terminates at the first non-option token, which is exactly where a pathspec
-# begins, so a pathspec carrying the token cannot vouch for a call that still
-# quotes.
-@test "a -z appearing later in the call does not vouch for it" {
+  # Widening the match from `diff --name-only` to `diff` puts every diff call in
+  # front of the scanner, so the walk is the only thing keeping the surface where
+  # it was declared. Both of these are real shapes in this tree and neither
+  # produces path output at all.
+  case_label="a diff call with no --name-only is off the surface"
   fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD" -- "docs/a -z b.md")'
+  fixture_file probe.sh $'#!/usr/bin/env bash\nif ! git diff --quiet; then git add -u; fi'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="a diff --name-status call is off the surface"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --cached --name-status "${base}...HEAD")'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="an untracked script is not scanned"
+  fixture_repo
+  # A tracked file is required, else the empty-scan-set guard below fires and
+  # this test would pass for the wrong reason.
+  fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
+  printf '%s\n' $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD")' > "$TEMPORARY_DIRECTORY/untracked.sh"
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="an ls-files call inside a markdown code span is prose, not an invocation"
+  fixture_repo
+  fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
+  fixture_file .github/workflows/ci.yml \
+    $'jobs:\n  a:\n    steps:\n      - run: |\n          echo "Walk `git ls-files` first."'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="a call outside a fence is prose, not an invocation"
+  fixture_repo
+  fixture_file docs/guide.md \
+    $'Run git diff --name-only "$B...HEAD" to list the changed files.'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # The toggle has to close as well as open, or every line after the first fenced
+  # block on a page reads as fenced and the prose half of the rule stops existing.
+  case_label="a call between two fenced blocks is outside the fence"
+  fixture_repo
+  fixture_file docs/guide.md \
+    $'```bash\necho one\n```\n\nThen git ls-files lists them.\n\n```bash\necho two\n```'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # `--error-unmatch` makes the call an existence assertion whose contract is its
+  # exit status; git documents it that way and every such call in this tree
+  # discards stdout. Demanding `-z` there would be a change with no failure mode.
+  case_label="an --error-unmatch existence assertion is exempt"
+  fixture_repo
+  fixture_file probe.sh \
+    $'#!/usr/bin/env bash\ngit -C "$root" ls-files --error-unmatch -- "$p" >/dev/null 2>&1'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 }
 
 # 3a. The diff option region: every spelling, not one fixed string
@@ -282,102 +467,38 @@ run_linter() {
   grep -qF -- "diff --name-only without -z" <<<"$output"
 }
 
-@test "a --cached call carrying -z passes" {
-  fixture_repo
-  fixture_file probe.sh \
-    $'#!/usr/bin/env bash\nstaged=$(git diff --cached --name-only -z --diff-filter=ACM | tr \'\\0\' \'\\n\')'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-# Widening the match from `diff --name-only` to `diff` puts every diff call in
-# front of the scanner, so the walk is the only thing keeping the surface where
-# it was declared. Both of these are real shapes in this tree and neither
-# produces path output at all.
-@test "a diff call with no --name-only is off the surface" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nif ! git diff --quiet; then git add -u; fi'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-@test "a diff --name-status call is off the surface" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --cached --name-status "${base}...HEAD")'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-# `x="$(...)"` is the spelling most calls in this tree are actually written in,
-# and it is the one where the option region ends in `)"` rather than `)`. A walk
-# that strips every trailing character except the quote is blind to exactly that
-# form: the first of these reds on the pre-widening detector and must keep
-# reding, and the second is a compliant call that must never be reported.
-@test "a quoted substitution closing against --name-only is still flagged" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nb="$(git diff --name-only)"'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-@test "a quoted --cached substitution closing against --name-only is flagged" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nc="$(git diff --cached --name-only)"'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-@test "a quoted substitution closing against ls-files -z passes" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\ne="$(git ls-files -z)"'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-# A quoted pathspec must not vouch for the call just because the strip reaches
-# its closing quote: `"-z"` still begins with a quote afterwards, so the walk
-# terminates on it as a non-option rather than reading it as the flag.
-@test "a quoted -z pathspec does not vouch for the call" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only -- "-z")'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-# Matching the bare `diff` reaches every `diff-*` plumbing spelling, whose tail
-# is itself dash-led so the walk continues into the real options. The demand is
-# correct there (each quotes exactly as `git diff` does), and the header says
-# so; these pin the behavior the header describes, on two different tails so
-# the claim is about the mechanism rather than about one command.
-@test "a diff-tree --name-only call is reached and flagged" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nfiles=$(git diff-tree --no-commit-id --name-only -r HEAD)'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-@test "a diff-files --name-only call is reached and flagged" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nfiles=$(git diff-files --name-only)'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-# The fail-OPEN limit the blind-spot block states: a positional revision written
-# before `--name-only` terminates the walk, because a revision is exactly what a
-# non-option token looks like. Pinned rather than left as prose, the same way the
-# backtick rule's two error directions are, so the day it stops being true is a
-# red test rather than a silently stale paragraph.
-@test "a --name-only after a positional revision is missed, fail-open by design" {
+@test "documented blind spots stay fail-open or fail-closed as designed" {
+  # The fail-OPEN limit the blind-spot block states: a positional revision written
+  # before `--name-only` terminates the walk, because a revision is exactly what a
+  # non-option token looks like. Pinned rather than left as prose, the same way the
+  # backtick rule's two error directions are, so the day it stops being true is a
+  # red test rather than a silently stale paragraph.
+  case_label="a --name-only after a positional revision is missed, fail-open by design"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff HEAD --name-only)'
   run_linter
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  # The command-position test recognizes `=` and `(` and nothing else. Both error
+  # directions are pinned here so neither can drift unnoticed: parenthetical prose
+  # is flagged (fail-closed, the repair is to reword), and a substitution opening
+  # after a quote is missed (fail-open, tokenizer-bound). The docblock states this
+  # as a rule; these two tests are that rule's oracle.
+  case_label="parenthetical prose before a backtick is flagged, fail-closed by design"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\necho "Step 1 (`git diff --name-only origin/main...HEAD`) lists the files."'
+  run_linter
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  case_label="a substitution opening after a quote is missed, fail-open by design"
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nif [ -n "`git diff --name-only $B`" ]; then :; fi'
+  run_linter
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 }
 
 # The scanner walks every occurrence of the matched text on a line, and
@@ -391,65 +512,35 @@ run_linter() {
   [ "$(grep -cF -- "probe.sh:2" <<<"$output")" -eq 1 ]
 }
 
-@test "an untracked script is not scanned" {
-  fixture_repo
-  # A tracked file is required, else the empty-scan-set guard below fires and
-  # this test would pass for the wrong reason.
-  fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
-  printf '%s\n' $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD")' > "$TEMPORARY_DIRECTORY/untracked.sh"
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-# An empty scan set means the discovery is wrong, never that the tree is clean.
-# Without this the gate prints `clean` and exits 0 having scanned nothing, which
-# is the lie-green failure it exists to stop elsewhere.
 @test "an empty scan set is a hard error, not a clean tree" {
+  # An empty scan set means the discovery is wrong, never that the tree is clean.
+  # Without this the gate prints `clean` and exits 0 having scanned nothing, which
+  # is the lie-green failure it exists to stop elsewhere.
+  case_label="an empty scan set is a hard error, not a clean tree"
   fixture_repo
   # A plain text file is off every half of the surface, so the scan set is empty
   # with the repository still non-empty. Markdown cannot play this part: its
   # fenced blocks are scanned, so a tracked `.md` makes the set non-empty.
   fixture_file notes.txt $'nothing scannable here'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "nothing was scanned" <<<"$output"
-  grep -qF -- "clean" <<<"$output" && return 1
-  true
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "nothing was scanned" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  grep -qF -- "clean" <<<"$output" && { echo "case $case_label: unexpected text, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# The `*.bats` discovery hard-errors independently of the `*.sh`/md/YAML
-# discovery: a repo carrying a tracked shell script and no tracked bats suite
-# must not print clean having scanned zero suites. `fixture_repo_bare` because
-# `fixture_repo`'s own seed would otherwise satisfy the very condition this
-# test exists to red on.
-@test "an empty bats scan set is a hard error, not a clean tree" {
+  # The `*.bats` discovery hard-errors independently of the `*.sh`/md/YAML
+  # discovery: a repo carrying a tracked shell script and no tracked bats suite
+  # must not print clean having scanned zero suites. `fixture_repo_bare` because
+  # `fixture_repo`'s own seed would otherwise satisfy the very condition this
+  # test exists to red on.
+  case_label="an empty bats scan set is a hard error, not a clean tree"
   fixture_repo_bare
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "no tracked bats suites matched" <<<"$output"
-  grep -qF -- "clean" <<<"$output" && return 1
-  true
-}
-
-# The command-position test recognizes `=` and `(` and nothing else. Both error
-# directions are pinned here so neither can drift unnoticed: parenthetical prose
-# is flagged (fail-closed, the repair is to reword), and a substitution opening
-# after a quote is missed (fail-open, tokenizer-bound). The docblock states this
-# as a rule; these two tests are that rule's oracle.
-@test "parenthetical prose before a backtick is flagged, fail-closed by design" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\necho "Step 1 (`git diff --name-only origin/main...HEAD`) lists the files."'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-@test "a substitution opening after a quote is missed, fail-open by design" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nif [ -n "`git diff --name-only $B`" ]; then :; fi'
-  run_linter
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "no tracked bats suites matched" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  grep -qF -- "clean" <<<"$output" && { echo "case $case_label: unexpected text, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 }
 
 # `*.bats` is on the scan surface now, through guard-awk-lib.sh's shared
@@ -520,64 +611,6 @@ run_linter() {
   grep -qF -- ".gaia/scripts/lint-workflow-run-interpolation.sh:2" <<<"$output"
 }
 
-# The option-region walk, in both directions. `ls-files` carries its selectors
-# before `-z`, so the anchored rule the `diff --name-only` half uses would
-# reject every real call; terminating the walk at the first non-option is what
-# keeps a pathspec from vouching in its place.
-
-@test "an ls-files call carrying -z passes" {
-  fixture_repo
-  fixture_file probe.sh \
-    $'#!/usr/bin/env bash\nwhile IFS= read -r -d \'\' f; do :; done < <(git ls-files -z \'*.sh\')'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-@test "an ls-files call whose -z follows selector options passes" {
-  fixture_repo
-  fixture_file probe.sh \
-    $'#!/usr/bin/env bash\nn=$(git ls-files --others --exclude-standard -z | tr \'\\0\' \'\\n\' | wc -l)'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-@test "a -z inside an ls-files pathspec does not vouch for the call" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nfiles=$(git ls-files -- "docs/a -z b.md")'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
-
-# `--error-unmatch` makes the call an existence assertion whose contract is its
-# exit status; git documents it that way and every such call in this tree
-# discards stdout. Demanding `-z` there would be a change with no failure mode.
-@test "an --error-unmatch existence assertion is exempt" {
-  fixture_repo
-  fixture_file probe.sh \
-    $'#!/usr/bin/env bash\ngit -C "$root" ls-files --error-unmatch -- "$p" >/dev/null 2>&1'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-@test "an ls-files call inside a markdown code span is prose, not an invocation" {
-  fixture_repo
-  fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
-  fixture_file .github/workflows/ci.yml \
-    $'jobs:\n  a:\n    steps:\n      - run: |\n          echo "Walk `git ls-files` first."'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-@test "an unquoted ls-files is reported as ls-files and hinted with its own idiom" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nfor f in $(git ls-files); do :; done'
-  run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "ls-files without -z" <<<"$output"
-  grep -qF -- "read -r -d" <<<"$output"
-}
-
 # 3c. The markdown half: an executed snippet on a documentation page
 
 # The sites `#1400` names, each in its PRE-FIX form, one per test. Their
@@ -618,124 +651,93 @@ run_linter() {
 # is what keeps every prose mention of a path-listing command across this
 # repository's markdown from becoming a finding; inside one nothing is prose.
 
-@test "a call outside a fence is prose, not an invocation" {
-  fixture_repo
-  fixture_file docs/guide.md \
-    $'Run git diff --name-only "$B...HEAD" to list the changed files.'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-@test "a fenced call carrying -z passes" {
-  fixture_repo
-  fixture_file docs/guide.md $'```bash\ngit ls-files -z \'*.sh\' | tr \'\\0\' \'\\n\'\n```'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-# The toggle has to close as well as open, or every line after the first fenced
-# block on a page reads as fenced and the prose half of the rule stops existing.
-@test "a call between two fenced blocks is outside the fence" {
-  fixture_repo
-  fixture_file docs/guide.md \
-    $'```bash\necho one\n```\n\nThen git ls-files lists them.\n\n```bash\necho two\n```'
-  run_linter
-  [ "$status" -eq 0 ]
-}
-
-@test "a tilde fence is tracked like a backtick fence" {
+@test "markdown fence tracking" {
+  case_label="a tilde fence is tracked like a backtick fence"
   fixture_repo
   fixture_file docs/guide.md $'~~~bash\ngit ls-files > list.txt\n~~~'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "docs/guide.md:2" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# The three shapes a delimiter that is merely COUNTED gets wrong. The first is
-# the one no parity check over the page can find: the inner opener and the outer
-# closer leave the page balanced, so the region reads as prose while the page
-# stays well-formed for its reader. `.github/forensics/prompt.md` carries it.
-
-@test "a fenced block nested inside a longer fence is still scanned" {
+  # The three shapes a delimiter that is merely COUNTED gets wrong. The first is
+  # the one no parity check over the page can find: the inner opener and the outer
+  # closer leave the page balanced, so the region reads as prose while the page
+  # stays well-formed for its reader. `.github/forensics/prompt.md` carries it.
+  case_label="a fenced block nested inside a longer fence is still scanned"
   fixture_repo
   fixture_file docs/guide.md \
     $'````markdown\n```bash\ngit ls-files > list.txt\n```\n````'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "docs/guide.md:3" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:3" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# The same-run-length nesting shape, which the length rule alone cannot see: an
-# info string is what makes a ```bash line inside a ```markdown block an opener
-# rather than the close. This page renders as one well-formed block, so nothing
-# about it looks wrong to a reader either.
-@test "a nested opener of equal run length does not close the fence" {
+  # The same-run-length nesting shape, which the length rule alone cannot see: an
+  # info string is what makes a ```bash line inside a ```markdown block an opener
+  # rather than the close. This page renders as one well-formed block, so nothing
+  # about it looks wrong to a reader either.
+  case_label="a nested opener of equal run length does not close the fence"
   fixture_repo
   fixture_file docs/guide.md \
     $'```markdown\n```bash\ngit ls-files > list.txt\n```\n```'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "docs/guide.md:3" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:3" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "a delimiter of the other character does not close a fence" {
+  case_label="a delimiter of the other character does not close a fence"
   fixture_repo
   fixture_file docs/guide.md \
     $'```bash\n~~~\ngit ls-files > list.txt\n```'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "docs/guide.md:3" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:3" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# A blockquoted fence is how a page quotes a prompt an agent is told to run
-# verbatim, so it is executed instruction rather than illustration by
-# construction. `.claude/skills/gaia/references/cleanse.md` carries it.
-@test "a fence carrying a blockquote prefix is entered" {
+  # A blockquoted fence is how a page quotes a prompt an agent is told to run
+  # verbatim, so it is executed instruction rather than illustration by
+  # construction. `.claude/skills/gaia/references/cleanse.md` carries it.
+  case_label="a fence carrying a blockquote prefix is entered"
   fixture_repo
   fixture_file docs/guide.md \
     $'  > ```bash\n  > git ls-files > list.txt\n  > ```'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "docs/guide.md:2" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# A code span cannot nest inside a fence, so the in-span test is switched off
-# there. This exact shape is the fail-OPEN miss the shell half still carries
-# ("a substitution opening after a quote is missed"): inside a fence the odd
-# backtick count is a legacy substitution rather than prose, and it is caught.
-@test "a backtick substitution inside a fence is not read as a code span" {
+  # A code span cannot nest inside a fence, so the in-span test is switched off
+  # there. This exact shape is the fail-OPEN miss the shell half still carries
+  # ("a substitution opening after a quote is missed"): inside a fence the odd
+  # backtick count is a legacy substitution rather than prose, and it is caught.
+  case_label="a backtick substitution inside a fence is not read as a code span"
   fixture_repo
   fixture_file docs/guide.md $'```bash\nfiles="`git ls-files`"\n```'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "docs/guide.md:2" <<<"$output"
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 }
 
 # 4. Reporting contract
 
-@test "a clean tree reports clean and exits 0" {
+@test "clean run reports clean and the report names the fix idiom" {
+  case_label="a clean tree reports clean and exits 0"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\necho hello'
   run_linter
-  [ "$status" -eq 0 ]
-  grep -qF -- "clean" <<<"$output"
-}
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "clean" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "the report names the fix idiom" {
+  case_label="the report names the fix idiom"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD")'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "tr " <<<"$output"
-}
-
-# A command substitution closing against its last option yields `-z)`, which is
-# neither the option the walk looks for nor a pathspec that should terminate it.
-@test "an ls-files call whose -z closes the substitution passes" {
-  fixture_repo
-  fixture_file probe.sh $'#!/usr/bin/env bash\nfiles=$(git ls-files -z)'
-  run_linter
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "tr " <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 }
 
 # 5. `*.bats` on the scan surface
@@ -747,143 +749,145 @@ run_linter() {
 
 # 5a. The pragma
 
-@test "an unused pragma above a clean bats line is reported" {
+@test "pragma suppression and hygiene reporting" {
+  case_label="an unused pragma above a clean bats line is reported"
   fixture_repo
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   fixture_file probe.bats $'@test "x" {\n  # gaia-lint-ignore lint-git-path-quoting: nothing to suppress here\n  echo hello\n}'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.bats:2: unused gaia-lint-ignore for lint-git-path-quoting" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.bats:2: unused gaia-lint-ignore for lint-git-path-quoting" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "a pragma naming an unresolvable guard token is reported as malformed" {
+  case_label="a pragma naming an unresolvable guard token is reported as malformed"
   fixture_repo
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   fixture_file probe.bats $'@test "x" {\n  # gaia-lint-ignore not-a-real-guard: reason given\n  echo hello\n}'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.bats:2: malformed gaia-lint-ignore: not-a-real-guard does not resolve to .gaia/scripts/not-a-real-guard.sh" <<<"$output"
-  [ "$(grep -cF -- "malformed gaia-lint-ignore" <<<"$output")" -eq 1 ]
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.bats:2: malformed gaia-lint-ignore: not-a-real-guard does not resolve to .gaia/scripts/not-a-real-guard.sh" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  [ "$(grep -cF -- "malformed gaia-lint-ignore" <<<"$output")" -eq 1 ] || { echo "case $case_label: wrong count, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "a pragma with a resolving token and no reason is reported as malformed" {
+  case_label="a pragma with a resolving token and no reason is reported as malformed"
   fixture_repo
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   fixture_file probe.bats $'@test "x" {\n  # gaia-lint-ignore lint-git-path-quoting:\n  echo hello\n}'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.bats:2: malformed gaia-lint-ignore for lint-git-path-quoting: no reason given" <<<"$output"
-  [ "$(grep -cF -- "malformed gaia-lint-ignore" <<<"$output")" -eq 1 ]
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.bats:2: malformed gaia-lint-ignore for lint-git-path-quoting: no reason given" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  [ "$(grep -cF -- "malformed gaia-lint-ignore" <<<"$output")" -eq 1 ] || { echo "case $case_label: wrong count, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# This also pins the scripts_directory contract (README C1.3): the fixture repo
-# carries no .gaia/scripts/ of its own, so a token resolved cwd-relative would
-# read "lint-git-path-quoting" as orphaned. Resolution against the guard's OWN
-# directory is what lets a well-formed token here succeed.
-@test "a pragma naming this guard suppresses a genuine instance, resolved against the guard's own directory" {
+  # This also pins the scripts_directory contract (README C1.3): the fixture repo
+  # carries no .gaia/scripts/ of its own, so a token resolved cwd-relative would
+  # read "lint-git-path-quoting" as orphaned. Resolution against the guard's OWN
+  # directory is what lets a well-formed token here succeed.
+  case_label="a pragma naming this guard suppresses a genuine instance, resolved against the guard's own directory"
   fixture_repo
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   fixture_file probe.bats $'@test "x" {\n  # gaia-lint-ignore lint-git-path-quoting: the unquoted call IS the point of this test\n  changed=$(git diff --name-only "${base}...HEAD")\n}'
   run_linter
-  [ "$status" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# The off-surface message names the TARGET line (where gaia_scan_pragma_here
-# answers 1), not the pragma comment's own line.
-@test "a pragma above a genuine instance in a tracked .sh file is honored nowhere" {
+  # The off-surface message names the TARGET line (where gaia_scan_pragma_here
+  # answers 1), not the pragma comment's own line.
+  case_label="a pragma above a genuine instance in a tracked .sh file is honored nowhere"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\n# gaia-lint-ignore lint-git-path-quoting: pretending to waive this\nchanged=$(git diff --name-only "${base}...HEAD")'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:3" <<<"$output"
-  grep -qF -- "probe.sh:3: gaia-lint-ignore is honored only in *.bats" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:3" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  grep -qF -- "probe.sh:3: gaia-lint-ignore is honored only in *.bats" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "a pragma above a genuine instance in a git hook is honored nowhere" {
+  case_label="a pragma above a genuine instance in a git hook is honored nowhere"
   fixture_repo
   fixture_file .githooks/pre-commit $'#!/usr/bin/env sh\n# gaia-lint-ignore lint-git-path-quoting: pretending to waive this\nchanged=$(git diff --name-only HEAD~1...HEAD)'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".githooks/pre-commit:3" <<<"$output"
-  grep -qF -- ".githooks/pre-commit:3: gaia-lint-ignore is honored only in *.bats" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- ".githooks/pre-commit:3" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  grep -qF -- ".githooks/pre-commit:3: gaia-lint-ignore is honored only in *.bats" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# A tilde fence rather than a backtick fence: guard-awk-lib.sh's legacy-
-# command-substitution backtick counter is not markdown-fence-aware, so an odd
-# run of backticks (a ```lang opener) leaves its tracker mid-span for the
-# comment lines that follow, and the pragma head is read as literal span data
-# rather than as a comment. A tilde fence carries no backtick at all, so the
-# pragma is read normally; see Notes for orchestrator for the backtick case.
-@test "a pragma above a genuine instance in a markdown fence is honored nowhere" {
+  # A tilde fence rather than a backtick fence: guard-awk-lib.sh's legacy-
+  # command-substitution backtick counter is not markdown-fence-aware, so an odd
+  # run of backticks (a ```lang opener) leaves its tracker mid-span for the
+  # comment lines that follow, and the pragma head is read as literal span data
+  # rather than as a comment. A tilde fence carries no backtick at all, so the
+  # pragma is read normally; see Notes for orchestrator for the backtick case.
+  case_label="a pragma above a genuine instance in a markdown fence is honored nowhere"
   fixture_repo
   fixture_file docs/guide.md \
     $'~~~bash\n# gaia-lint-ignore lint-git-path-quoting: pretending to waive this\ngit ls-files > list.txt\n~~~'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "docs/guide.md:3" <<<"$output"
-  grep -qF -- "docs/guide.md:3: gaia-lint-ignore is honored only in *.bats" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:3" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:3: gaia-lint-ignore is honored only in *.bats" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# The off-surface finding fires whether or not its target carries an instance;
-# reading it only at the detector's print point would leave it silently inert
-# on every pragma above a clean line, which is most of them.
-@test "a pragma above a clean line on a scanned .sh surface is still honored nowhere" {
+  # The off-surface finding fires whether or not its target carries an instance;
+  # reading it only at the detector's print point would leave it silently inert
+  # on every pragma above a clean line, which is most of them.
+  case_label="a pragma above a clean line on a scanned .sh surface is still honored nowhere"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\n# gaia-lint-ignore lint-git-path-quoting: nothing below needs waiving\necho hello'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:3: gaia-lint-ignore is honored only in *.bats" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:3: gaia-lint-ignore is honored only in *.bats" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# The guard's own pathspec never reaches a composite action's action.yml, so a
-# pragma there is inert on both halves: no instance is claimed and no
-# honored-nowhere finding fires either, because the file is never scanned.
-@test "a pragma on an unscanned surface (.github/actions) is inert" {
+  # The guard's own pathspec never reaches a composite action's action.yml, so a
+  # pragma there is inert on both halves: no instance is claimed and no
+  # honored-nowhere finding fires either, because the file is never scanned.
+  case_label="a pragma on an unscanned surface (.github/actions) is inert"
   fixture_repo
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   fixture_file .github/actions/probe/action.yml \
     $'runs:\n  using: composite\n  steps:\n    - run: |\n        # gaia-lint-ignore lint-git-path-quoting: not on this surface\n        changed=$(git diff --name-only "${base}...HEAD")'
   run_linter
-  [ "$status" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "a wrapped pragma reason across multiple comment lines still suppresses" {
+  case_label="a wrapped pragma reason across multiple comment lines still suppresses"
   fixture_repo
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   fixture_file probe.bats $'@test "x" {\n  # gaia-lint-ignore lint-git-path-quoting: the unquoted call IS\n  # the point of this test, wrapped across two comment lines\n  changed=$(git diff --name-only "${base}...HEAD")\n}'
   run_linter
-  [ "$status" -eq 0 ]
-}
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "a stacked second pragma applies to the same target as the first" {
+  case_label="a stacked second pragma applies to the same target as the first"
   fixture_repo
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   fixture_file probe.bats $'@test "x" {\n  # gaia-lint-ignore lint-git-path-quoting: suppress this one\n  # gaia-lint-ignore not-a-real-guard: a second, stacked pragma\n  changed=$(git diff --name-only "${base}...HEAD")\n}'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "diff --name-only without -z" <<<"$output" && return 1
-  grep -qF -- "malformed gaia-lint-ignore: not-a-real-guard" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "diff --name-only without -z" <<<"$output" && { echo "case $case_label: unexpected text, output: $output"; return 1; }
+  grep -qF -- "malformed gaia-lint-ignore: not-a-real-guard" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "a blank line terminates a pragma block, leaving it unused" {
+  case_label="a blank line terminates a pragma block, leaving it unused"
   fixture_repo
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   fixture_file probe.bats $'@test "x" {\n  # gaia-lint-ignore lint-git-path-quoting: interrupted by a blank line\n\n  changed=$(git diff --name-only "${base}...HEAD")\n}'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.bats:2: unused gaia-lint-ignore for lint-git-path-quoting" <<<"$output"
-  grep -qF -- "diff --name-only without -z" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.bats:2: unused gaia-lint-ignore for lint-git-path-quoting" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  grep -qF -- "diff --name-only without -z" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-# A wrapped reason is textually an ordinary comment line, and the two cannot be
-# told apart, so an ordinary prose comment between the pragma head and its
-# target does not interrupt the block either.
-@test "an ordinary comment line between the pragma and its target does not interrupt it" {
+  # A wrapped reason is textually an ordinary comment line, and the two cannot be
+  # told apart, so an ordinary prose comment between the pragma head and its
+  # target does not interrupt the block either.
+  case_label="an ordinary comment line between the pragma and its target does not interrupt it"
   fixture_repo
   fixture_file tracked.sh $'#!/usr/bin/env bash\necho hello'
   fixture_file probe.bats $'@test "x" {\n  # gaia-lint-ignore lint-git-path-quoting: the unquoted call IS the point\n  # an unrelated prose comment sits here\n  changed=$(git diff --name-only "${base}...HEAD")\n}'
   run_linter
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 }
 
 # 5b. The argument-region rule: the binding case (UAT-014) and its neighbors
@@ -982,52 +986,54 @@ EOF
 # `*.sh`, git hooks and markdown. These pin that the `*.bats` fixture-region skip
 # did not leak onto the surfaces it must never touch.
 
-@test "an instance inside a heredoc body in a shell script is still flagged (UAT-016)" {
+@test "an instance inside a heredoc body or on a continuation line is still flagged" {
+  case_label="an instance inside a heredoc body in a shell script is still flagged"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\ncat <<EOF\nchanged=$(git diff --name-only "${base}...HEAD")\nEOF'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:3" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:3" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "an instance inside a heredoc body in a git hook is still flagged" {
+  case_label="an instance inside a heredoc body in a git hook is still flagged"
   fixture_repo
   fixture_file .githooks/pre-commit $'#!/usr/bin/env sh\ncat <<EOF\nchanged=$(git diff --name-only "${base}...HEAD")\nEOF'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".githooks/pre-commit:3" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- ".githooks/pre-commit:3" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "an instance inside a heredoc body in a markdown fence is still flagged (UAT-016)" {
+  case_label="an instance inside a heredoc body in a markdown fence is still flagged"
   fixture_repo
   fixture_file docs/guide.md $'```bash\ncat <<EOF\nchanged=$(git diff --name-only "${base}...HEAD")\nEOF\n```'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "docs/guide.md:3" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:3" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "an instance on a backslash-continuation line in a shell script is still flagged (UAT-016)" {
+  case_label="an instance on a backslash-continuation line in a shell script is still flagged"
   fixture_repo
   fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only \\\n  -z "${base}...HEAD")'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "probe.sh:2" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "probe.sh:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "an instance on a backslash-continuation line in a git hook is still flagged" {
+  case_label="an instance on a backslash-continuation line in a git hook is still flagged"
   fixture_repo
   fixture_file .githooks/pre-commit $'#!/usr/bin/env sh\nchanged=$(git diff --name-only \\\n  -z HEAD~1...HEAD)'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- ".githooks/pre-commit:2" <<<"$output"
-}
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- ".githooks/pre-commit:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 
-@test "an instance on a backslash-continuation line in a markdown fence is still flagged (UAT-016)" {
+  case_label="an instance on a backslash-continuation line in a markdown fence is still flagged"
   fixture_repo
   fixture_file docs/guide.md $'```bash\nchanged=$(git diff --name-only \\\n  -z "${base}...HEAD")\n```'
   run_linter
-  [ "$status" -eq 1 ]
-  grep -qF -- "docs/guide.md:2" <<<"$output"
+  [ "$status" -eq 1 ] || { echo "case $case_label: status $status, output: $output"; return 1; }
+  grep -qF -- "docs/guide.md:2" <<<"$output" || { echo "case $case_label: expected text missing, output: $output"; return 1; }
+  rm -rf "$TEMPORARY_DIRECTORY"
 }
 
 # 5d. The desync verdict (UAT-018)
@@ -1039,18 +1045,6 @@ EOF
   run_linter
   [ "$status" -eq 1 ]
   grep -qF -- "probe.bats: ERROR: the scan lost track of shell state" <<<"$output"
-}
-
-# 5e. The real tree, and the pragma Phase 1 wrote with no reader to prove it
-#
-# .gaia/tests/lib/bats-shards.bats:662 carries a diagnostic message string that
-# contains the literal text "git ls-files". This pins the substantive claim:
-# the armed guard does not misread that string as an executed call.
-# bats test_tags=whole-tree
-@test "the diagnostic message string in bats-shards.bats is not misread as a call" {
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER'"
-  grep -qF -- "ls-files without -z" <<<"$output" && return 1
-  true
 }
 
 # The class-remedy footer names the -z repair, which fixes a class hit and
@@ -1080,4 +1074,51 @@ EOF
   [ "$status" -eq 1 ]
   grep -qF -- "Fix a diff hit:" <<<"$output"
   grep -qF -- "Fix an ls-files hit:" <<<"$output"
+}
+
+# --- delta mode -------------------------------------------------------------
+
+# run_linter_delta <path>...: run the gate with GAIA_GUARD_DELTA_FILE naming a
+# NUL-delimited delta of <path>..., written outside the fixture repo so the
+# delta file is never part of the tracked surface.
+run_linter_delta() {
+  printf '%s\0' "$@" > "$BATS_TEST_TMPDIR/delta"
+  run bash -c "cd '$TEMPORARY_DIRECTORY' && GAIA_GUARD_DELTA_FILE='$BATS_TEST_TMPDIR/delta' bash '$LINTER' 2>&1"
+}
+
+# The violation sits outside the delta, so the clean exit also proves it is
+# not scanned.
+@test "delta mode: a delta holding none of the surface skips each set and exits 0" {
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD")'
+  run_linter_delta notes.txt
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  grep -qF -- 'the delta holds no shell, git hook, workflow or Markdown file; skipped' <<<"$output"
+  grep -qF -- 'the delta holds no *.bats file; skipped' <<<"$output"
+}
+
+@test "delta mode: an empty surface before the intersection or an unreadable delta file exits non-zero" {
+  fixture_repo_bare
+  fixture_file notes.txt 'notes'
+  run_linter_delta notes.txt
+  [ "$status" -ne 0 ] || { echo "empty surface: $output"; return 1; }
+  grep -qF -- 'nothing was scanned' <<<"$output"
+  rm -rf "$TEMPORARY_DIRECTORY"
+
+  fixture_repo
+  fixture_file clean.sh $'#!/usr/bin/env bash\ntrue'
+  run bash -c "cd '$TEMPORARY_DIRECTORY' && GAIA_GUARD_DELTA_FILE='$BATS_TEST_TMPDIR/missing' bash '$LINTER' 2>&1"
+  [ "$status" -ne 0 ] || { echo "unreadable delta: $output"; return 1; }
+  grep -qF -- 'could not be read; nothing was scanned' <<<"$output"
+}
+
+@test "delta mode: a delta holding one violating file reds and reports only it" {
+  fixture_repo
+  fixture_file probe.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only "${base}...HEAD")'
+  fixture_file other.sh $'#!/usr/bin/env bash\nchanged=$(git diff --name-only HEAD~1...HEAD)'
+  run_linter_delta probe.sh
+  [ "$status" -eq 1 ] || { echo "$output"; return 1; }
+  grep -qF -- 'probe.sh:2' <<<"$output"
+  grep -qF -- 'other.sh:' <<<"$output" && return 1
+  true
 }

@@ -92,41 +92,30 @@ describe('wiki log-prepend', () => {
     vi.restoreAllMocks();
   });
 
-  test('prepends a SKIP entry under [Unreleased]', () => {
-    sandbox = setupSandbox(SAMPLE_LOG);
-
-    const exit = run(
-      ['--sha', 'def5678', '--decision', 'SKIP', '--reason', 'test'],
-      {cwd: sandbox.root, today: '2026-05-07'}
-    );
-    expect(exit).toBe(0);
-
-    const written = readFileSync(sandbox.logPath, 'utf8');
-    expect(written).toContain('- 2026-05-07 def5678 SKIP - test');
-    // The new entry should appear before the existing entry.
-    const newIndex = written.indexOf('def5678');
-    const oldIndex = written.indexOf('abc1234');
-    expect(newIndex).toBeLessThan(oldIndex);
-  });
-
-  test('prepends a WORTHY entry', () => {
-    sandbox = setupSandbox(SAMPLE_LOG);
-
-    const exit = run(
-      ['--sha', '0123456', '--decision', 'WORTHY', '--reason', 'added module'],
-      {cwd: sandbox.root, today: '2026-05-07'}
-    );
-    expect(exit).toBe(0);
-
-    const written = readFileSync(sandbox.logPath, 'utf8');
-    expect(written).toContain('- 2026-05-07 0123456 WORTHY - added module');
-  });
-
-  test('prepends a RE_ANCHOR entry', () => {
-    sandbox = setupSandbox(SAMPLE_LOG);
-
-    const exit = run(
-      [
+  const logPrependWritesEachDecisionCases: readonly {
+    args: readonly string[];
+    entry: string;
+    name: string;
+  }[] = [
+    {
+      args: ['--sha', 'def5678', '--decision', 'SKIP', '--reason', 'test'],
+      entry: '- 2026-05-07 def5678 SKIP - test',
+      name: 'prepends a SKIP entry under [Unreleased]',
+    },
+    {
+      args: [
+        '--sha',
+        '0123456',
+        '--decision',
+        'WORTHY',
+        '--reason',
+        'added module',
+      ],
+      entry: '- 2026-05-07 0123456 WORTHY - added module',
+      name: 'prepends a WORTHY entry',
+    },
+    {
+      args: [
         '--sha',
         'feedbac',
         '--decision',
@@ -134,79 +123,83 @@ describe('wiki log-prepend', () => {
         '--reason',
         're-anchored after history rewrite',
       ],
-      {cwd: sandbox.root, today: '2026-05-07'}
-    );
+      entry:
+        '- 2026-05-07 feedbac RE_ANCHOR - re-anchored after history rewrite',
+      name: 'prepends a RE_ANCHOR entry',
+    },
+  ];
+
+  test.each(
+    logPrependWritesEachDecisionCases.map((row) => [row.name, row] as const)
+  )('%s', (_name, {args, entry}) => {
+    sandbox = setupSandbox(SAMPLE_LOG);
+
+    const exit = run([...args], {cwd: sandbox.root, today: '2026-05-07'});
     expect(exit).toBe(0);
 
     const written = readFileSync(sandbox.logPath, 'utf8');
-    expect(written).toContain(
-      '- 2026-05-07 feedbac RE_ANCHOR - re-anchored after history rewrite'
-    );
+    expect(written).toContain(entry);
+    expect(written.indexOf(entry)).toBeLessThan(written.indexOf('abc1234'));
   });
 
-  test('rejects invalid --decision', () => {
-    sandbox = setupSandbox(SAMPLE_LOG);
+  const logPrependRefusalsCases: readonly {
+    args: readonly string[];
+    errors: readonly string[];
+    logBody: string;
+    name: string;
+  }[] = [
+    {
+      args: ['--sha', 'def5678', '--decision', 'MAYBE', '--reason', 'oops'],
+      errors: ['--decision must be', 'RE_ANCHOR'],
+      logBody: SAMPLE_LOG,
+      name: 'rejects invalid --decision',
+    },
+    {
+      args: ['--decision', 'SKIP', '--reason', 'r'],
+      errors: ['--sha is required'],
+      logBody: SAMPLE_LOG,
+      name: 'rejects missing --sha',
+    },
+    ...['constructor', 'toString', 'valueOf', '__proto__'].map((token) => ({
+      args: [token, 'swallowed'],
+      errors: [`unknown flag: ${token}`],
+      logBody: SAMPLE_LOG,
+      name: `rejects a flag named after an Object.prototype key (${token})`,
+    })),
+    {
+      args: ['--sha', 'abc', '--decision', 'SKIP'],
+      errors: ['--reason is required'],
+      logBody: SAMPLE_LOG,
+      name: 'rejects missing --reason',
+    },
+    {
+      args: ['--sha', 'abc', '--decision', 'SKIP', '--reason', 'r'],
+      errors: ['frontmatter'],
+      logBody: '# Log\n\nno frontmatter\n',
+      name: 'exits 1 when frontmatter fence is missing',
+    },
+    {
+      args: ['--sha', 'abc', '--decision', 'SKIP', '--reason', 'r'],
+      errors: ['frontmatter'],
+      logBody: '---\ntype: meta\n\n# Log\n',
+      name: 'exits 1 when frontmatter is unterminated',
+    },
+  ];
 
-    const exit = run(
-      ['--sha', 'def5678', '--decision', 'MAYBE', '--reason', 'oops'],
-      {cwd: sandbox.root}
-    );
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--decision must be');
-    expect(stdio.errors.join('')).toContain('RE_ANCHOR');
-  });
+  test.each(logPrependRefusalsCases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {args, errors, logBody}) => {
+      sandbox = setupSandbox(logBody);
 
-  test('rejects missing --sha', () => {
-    sandbox = setupSandbox(SAMPLE_LOG);
-
-    const exit = run(['--decision', 'SKIP', '--reason', 'r'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--sha is required');
-  });
-
-  test.each(['constructor', 'toString', 'valueOf', '__proto__'])(
-    'rejects a flag named after an Object.prototype key (%s)',
-    (token) => {
-      sandbox = setupSandbox(SAMPLE_LOG);
-
-      const exit = run([token, 'swallowed'], {cwd: sandbox.root});
+      const exit = run([...args], {cwd: sandbox.root});
 
       expect(exit).toBe(1);
-      expect(stdio.errors.join('')).toContain(`unknown flag: ${token}`);
+
+      for (const error of errors) {
+        expect(stdio.errors.join('')).toContain(error);
+      }
     }
   );
-
-  test('rejects missing --reason', () => {
-    sandbox = setupSandbox(SAMPLE_LOG);
-
-    const exit = run(['--sha', 'abc', '--decision', 'SKIP'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--reason is required');
-  });
-
-  test('exits 1 when frontmatter fence is missing', () => {
-    sandbox = setupSandbox('# Log\n\nno frontmatter\n');
-
-    const exit = run(['--sha', 'abc', '--decision', 'SKIP', '--reason', 'r'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('frontmatter');
-  });
-
-  test('exits 1 when frontmatter is unterminated', () => {
-    sandbox = setupSandbox('---\ntype: meta\n\n# Log\n');
-
-    const exit = run(['--sha', 'abc', '--decision', 'SKIP', '--reason', 'r'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('frontmatter');
-  });
 
   test('inserts after closing fence when no H2 heading exists', () => {
     const minimal = '---\ntype: meta\n---\n\n# Log\n';

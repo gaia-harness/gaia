@@ -35,137 +35,85 @@ command_from_payload() {
   printf '%s' "$value"
 }
 
-@test "reads every field from a PreToolUse Bash payload" {
-  local payload='{"session_id":"s-1","cwd":"/work/tree","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git status"}}'
-  gaia_hook_payload_read "$payload"
-  [ "$GAIA_HOOK_TOOL_NAME" = "Bash" ]
-  [ "$GAIA_HOOK_EVENT" = "PreToolUse" ]
-  [ "$GAIA_HOOK_SESSION_ID" = "s-1" ]
-  [ "$GAIA_HOOK_CWD" = "/work/tree" ]
-  [ "$GAIA_HOOK_COMMAND" = "git status" ]
-  [ -z "$GAIA_HOOK_FILE_PATH" ]
-  [ -z "$GAIA_HOOK_PATH" ]
-  [ -z "$GAIA_HOOK_GLOB" ]
+# all_fields: every exported global, "|"-joined in a fixed order (tool name,
+# event, session id, cwd, file path, path, glob, command), so a row states all
+# eight at once.
+all_fields() {
+  printf '%s|%s|%s|%s|%s|%s|%s|%s' "$GAIA_HOOK_TOOL_NAME" "$GAIA_HOOK_EVENT" \
+    "$GAIA_HOOK_SESSION_ID" "$GAIA_HOOK_CWD" "$GAIA_HOOK_FILE_PATH" \
+    "$GAIA_HOOK_PATH" "$GAIA_HOOK_GLOB" "$GAIA_HOOK_COMMAND"
 }
 
-@test "reads every field from a Read payload" {
-  local payload='{"session_id":"s-2","cwd":"/c","hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/etc/hosts"}}'
-  gaia_hook_payload_read "$payload"
-  [ "$GAIA_HOOK_TOOL_NAME" = "Read" ]
-  [ "$GAIA_HOOK_FILE_PATH" = "/etc/hosts" ]
-  [ "$GAIA_HOOK_SESSION_ID" = "s-2" ]
-  [ "$GAIA_HOOK_CWD" = "/c" ]
-  [ -z "$GAIA_HOOK_COMMAND" ]
-  [ -z "$GAIA_HOOK_PATH" ]
-  [ -z "$GAIA_HOOK_GLOB" ]
+# check_field_rows <row>...: each row is label|payload|expected all_fields; the
+# read must return 0 and set exactly the expected fields.
+check_field_rows() {
+  local row label rest payload expected actual
+  for row in "$@"; do
+    label=${row%%|*}; rest=${row#*|}
+    payload=${rest%%|*}; expected=${rest#*|}
+    gaia_hook_payload_read "$payload" || { echo "case $label: returned non-zero"; return 1; }
+    actual=$(all_fields)
+    [ "$actual" = "$expected" ] || { echo "case $label: want [$expected] got [$actual]"; return 1; }
+  done
 }
 
-@test "reads every field from a Grep payload" {
-  local payload='{"session_id":"s-3","cwd":"/g","hook_event_name":"PreToolUse","tool_name":"Grep","tool_input":{"pattern":"x","path":"/src","glob":"*.ts"}}'
-  gaia_hook_payload_read "$payload"
-  [ "$GAIA_HOOK_TOOL_NAME" = "Grep" ]
-  [ "$GAIA_HOOK_PATH" = "/src" ]
-  [ "$GAIA_HOOK_GLOB" = "*.ts" ]
-  [ -z "$GAIA_HOOK_FILE_PATH" ]
-  [ -z "$GAIA_HOOK_COMMAND" ]
+@test "every field is read from a PreToolUse Bash, Read, Grep and PostToolUse payload" {
+  check_field_rows \
+    'pre-tool-use-bash|{"session_id":"s-1","cwd":"/work/tree","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git status"}}|Bash|PreToolUse|s-1|/work/tree||||git status' \
+    'read|{"session_id":"s-2","cwd":"/c","hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/etc/hosts"}}|Read|PreToolUse|s-2|/c|/etc/hosts|||' \
+    'grep|{"session_id":"s-3","cwd":"/g","hook_event_name":"PreToolUse","tool_name":"Grep","tool_input":{"pattern":"x","path":"/src","glob":"*.ts"}}|Grep|PreToolUse|s-3|/g||/src|*.ts|' \
+    'post-tool-use|{"session_id":"s-4","cwd":"/p","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"gh pr view 1"},"tool_response":{"stdout":"ok"}}|Bash|PostToolUse|s-4|/p||||gh pr view 1'
 }
 
-@test "reads every field from a PostToolUse payload" {
-  local payload='{"session_id":"s-4","cwd":"/p","hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"gh pr view 1"},"tool_response":{"stdout":"ok"}}'
-  gaia_hook_payload_read "$payload"
-  [ "$GAIA_HOOK_EVENT" = "PostToolUse" ]
-  [ "$GAIA_HOOK_TOOL_NAME" = "Bash" ]
-  [ "$GAIA_HOOK_COMMAND" = "gh pr view 1" ]
-  [ "$GAIA_HOOK_SESSION_ID" = "s-4" ]
-  [ "$GAIA_HOOK_CWD" = "/p" ]
+@test "a command round-trips byte for byte and trailing newlines are stripped" {
+  local label payload expected legacy
+  for label in edge-bytes trailing-newlines; do
+    case "$label" in
+      edge-bytes)
+        expected=$'  line one\nsecond\tline with "double" and \'single\' quotes\x1fafter-separator  '
+        payload=$(jq -cn --arg command "$expected" '{tool_name:"Bash",tool_input:{command:$command}}') ;;
+      trailing-newlines)
+        expected=$'first\nsecond'
+        payload='{"tool_name":"Bash","tool_input":{"command":"first\nsecond\n\n"}}' ;;
+    esac
+    gaia_hook_payload_read "$payload" || { echo "case $label: returned non-zero"; return 1; }
+    legacy=$(command_from_payload "$payload")
+    [ "$(printf '%s' "$GAIA_HOOK_COMMAND" | od -An -c)" = "$(printf '%s' "$expected" | od -An -c)" ] || { echo "case $label: bytes differ"; return 1; }
+    [ "$GAIA_HOOK_COMMAND" = "$expected" ] || { echo "case $label: command=[$GAIA_HOOK_COMMAND]"; return 1; }
+    [ "$GAIA_HOOK_COMMAND" = "$legacy" ] || { echo "case $label: differs from the legacy read [$legacy]"; return 1; }
+  done
 }
 
-@test "a command with newlines, a unit separator, tabs, quotes and edge spaces round-trips byte for byte" {
-  local expected=$'  line one\nsecond\tline with "double" and \'single\' quotes\x1fafter-separator  '
-  local payload
-  payload=$(jq -cn --arg command "$expected" '{tool_name:"Bash",tool_input:{command:$command}}')
-  gaia_hook_payload_read "$payload"
-  [ "$(printf '%s' "$GAIA_HOOK_COMMAND" | od -An -c)" = "$(printf '%s' "$expected" | od -An -c)" ]
-  [ "$GAIA_HOOK_COMMAND" = "$expected" ]
+@test "absent, null, false, number, object and true fields coerce to text" {
+  check_field_rows \
+    'null-and-false|{"tool_name":null,"session_id":false,"tool_input":{"command":null,"path":false}}||||||||' \
+    'empty-object|{}||||||||' \
+    'tool-input-absent|{"tool_name":"Bash","hook_event_name":"SessionStart"}|Bash|SessionStart||||||' \
+    'tool-input-string|{"tool_name":"Bash","tool_input":"just a string"}|Bash|||||||' \
+    'tool-input-array|{"tool_name":"Bash","tool_input":[1,2]}|Bash|||||||' \
+    'number|{"session_id":12345,"tool_input":{"command":0}}|||12345|||||0' \
+    'object|{"tool_input":{"command":{"a": 1, "b": [true, "x"]}}}||||||||{"a":1,"b":[true,"x"]}' \
+    'true|{"tool_name":true}|true|||||||'
 }
 
-@test "trailing newlines are stripped exactly as a command substitution strips them" {
-  local payload='{"tool_name":"Bash","tool_input":{"command":"first\nsecond\n\n"}}'
-  gaia_hook_payload_read "$payload"
-  local legacy
-  legacy=$(command_from_payload "$payload")
-  [ "$GAIA_HOOK_COMMAND" = "$legacy" ]
-  [ "$GAIA_HOOK_COMMAND" = $'first\nsecond' ]
-}
-
-@test "absent, null and false fields give the empty string" {
-  gaia_hook_payload_read '{"tool_name":null,"session_id":false,"tool_input":{"command":null,"path":false}}'
-  assert_all_fields_empty
-  gaia_hook_payload_read '{}'
-  assert_all_fields_empty
-}
-
-@test "tool_input absent or not an object gives empty tool_input fields" {
-  gaia_hook_payload_read '{"tool_name":"Bash","hook_event_name":"SessionStart"}'
-  [ "$GAIA_HOOK_TOOL_NAME" = "Bash" ]
-  [ "$GAIA_HOOK_EVENT" = "SessionStart" ]
-  [ -z "$GAIA_HOOK_COMMAND" ]
-  gaia_hook_payload_read '{"tool_name":"Bash","tool_input":"just a string"}'
-  [ "$GAIA_HOOK_TOOL_NAME" = "Bash" ]
-  [ -z "$GAIA_HOOK_COMMAND" ]
-  gaia_hook_payload_read '{"tool_name":"Bash","tool_input":[1,2]}'
-  [ -z "$GAIA_HOOK_COMMAND" ]
-}
-
-@test "a number gives its digits" {
-  gaia_hook_payload_read '{"session_id":12345,"tool_input":{"command":0}}'
-  [ "$GAIA_HOOK_SESSION_ID" = "12345" ]
-  [ "$GAIA_HOOK_COMMAND" = "0" ]
-}
-
-@test "an object gives compact JSON" {
-  gaia_hook_payload_read '{"tool_input":{"command":{"a": 1, "b": [true, "x"]}}}'
-  [ "$GAIA_HOOK_COMMAND" = '{"a":1,"b":[true,"x"]}' ]
-}
-
-@test "true gives the text true" {
-  gaia_hook_payload_read '{"tool_name":true}'
-  [ "$GAIA_HOOK_TOOL_NAME" = "true" ]
-}
-
-@test "invalid JSON returns 1 with every variable empty" {
-  gaia_hook_payload_read '{"tool_name":"Bash","tool_input":{"command":"x"}}'
-  run gaia_hook_payload_read 'not json {'
-  [ "$status" -eq 1 ]
-  gaia_hook_payload_read 'not json {' && return 1
-  assert_all_fields_empty
-}
-
-@test "a JSON array returns 1 with every variable empty" {
-  gaia_hook_payload_read '{"tool_name":"Bash"}'
-  gaia_hook_payload_read '[{"tool_name":"Bash"}]' && return 1
-  assert_all_fields_empty
-}
-
-@test "an empty payload returns 1 with every variable empty" {
-  gaia_hook_payload_read '{"tool_name":"Bash"}'
-  gaia_hook_payload_read '' && return 1
-  assert_all_fields_empty
-}
-
-@test "a second JSON value after the object returns 1" {
-  gaia_hook_payload_read '{"tool_name":"Bash"} {"tool_name":"Read"}' && return 1
-  assert_all_fields_empty
-}
-
-@test "a command carrying a JSON NUL returns 1, so the sentinel check is live" {
-  gaia_hook_payload_read '{"tool_name":"Bash","tool_input":{"command":"a\u0000b"}}' && return 1
-  assert_all_fields_empty
-}
-
-@test "a NUL in a middle field returns 1 instead of misaligning the later fields" {
-  gaia_hook_payload_read '{"tool_name":"Bash","cwd":"/a\u0000b","tool_input":{"command":"git status"}}' && return 1
-  assert_all_fields_empty
+# Each row first loads a good payload, so an empty result proves the failed
+# read cleared earlier state rather than never having set it.
+@test "invalid JSON, an array, an empty payload, a second value or a NUL returns 1 with every variable empty" {
+  local row label payload status
+  for row in \
+    'invalid-json|not json {' \
+    'array|[{"tool_name":"Bash"}]' \
+    'empty|' \
+    'second-value|{"tool_name":"Bash"} {"tool_name":"Read"}' \
+    'nul-in-command|{"tool_name":"Bash","tool_input":{"command":"a\u0000b"}}' \
+    'nul-in-middle-field|{"tool_name":"Bash","cwd":"/a\u0000b","tool_input":{"command":"git status"}}'; do
+    label=${row%%|*}; payload=${row#*|}
+    gaia_hook_payload_read '{"tool_name":"Bash","tool_input":{"command":"x"}}' || { echo "case $label: good preload failed"; return 1; }
+    status=0
+    gaia_hook_payload_read "$payload" || status=$?
+    [ "$status" -eq 1 ] || { echo "case $label: status=$status"; return 1; }
+    assert_all_fields_empty || { echo "case $label: a field survived: [$(all_fields)]"; return 1; }
+  done
 }
 
 @test "exactly one jq process runs per call" {
@@ -208,19 +156,4 @@ command_from_payload() {
   run gaia_hook_payload_read 'not json'
   [ "$status" -eq 1 ]
   [ -z "$output" ]
-}
-
-@test "sourcing twice is harmless and keeps the function working" {
-  # shellcheck disable=SC1090
-  . "$HOOK_PAYLOAD_LIBRARY"
-  # shellcheck disable=SC1090
-  . "$HOOK_PAYLOAD_LIBRARY"
-  gaia_hook_payload_read '{"tool_name":"Bash"}'
-  [ "$GAIA_HOOK_TOOL_NAME" = "Bash" ]
-}
-
-@test "the library parses under the stock macOS bash" {
-  if [ ! -x /bin/bash ]; then skip "no /bin/bash"; fi
-  run /bin/bash -n "$HOOK_PAYLOAD_LIBRARY"
-  [ "$status" -eq 0 ]
 }

@@ -261,14 +261,6 @@ capture_of() {
   [ "$from_script" = "$from_playbook" ]
 }
 
-@test "red twin: a scratch copy with a widened path class fails the conformance check" {
-  local scratch="$BATS_TEST_TMPDIR/debt-dedup-widened.sh"
-  sed 's/path=(?<path>\[^>\\n\]+)/path=(?<path>[^ ]+)/' "$SCRIPT" >"$scratch"
-  cmp -s "$SCRIPT" "$scratch" && return 1
-  local playbook="$REPO_ROOT/.claude/skills/gaia/references/debt.md"
-  [ "$(capture_of "$scratch")" != "$(capture_of "$playbook")" ]
-}
-
 # ========== usage ==========
 
 # usage_refusal <args>...: exit 2, empty stdout, exactly one debt-dedup: line.

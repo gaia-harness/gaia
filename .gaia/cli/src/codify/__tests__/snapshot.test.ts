@@ -179,42 +179,52 @@ describe('codify-ledger snapshot', () => {
       expect(statSync(sandbox.snapshotPath).mtimeMs).toBe(beforeMtime);
     });
 
-    test('a pre-SPEC tally is refused as malformed_tally', () => {
-      writeTally(sandbox, {
-        candidate_count: 1,
-        candidates: [],
-        gh_ok: true,
-        unclassified: null,
-        window_days: 90,
-      });
+    test.each([
+      {
+        code: EXIT_CODES.PAYLOAD_VALIDATION_FAILED,
+        name: 'a pre-SPEC tally is refused as malformed_tally',
+        prepare: (tallyPath: string) => {
+          writeFileSync(
+            tallyPath,
+            JSON.stringify({
+              candidate_count: 1,
+              candidates: [],
+              gh_ok: true,
+              unclassified: null,
+              window_days: 90,
+            }),
+            'utf8'
+          );
+        },
+        reason: 'malformed_tally',
+        tallyArgument: (tallyPath: string) => tallyPath,
+      },
+      {
+        code: EXIT_CODES.PAYLOAD_VALIDATION_FAILED,
+        name: 'invalid JSON is refused as malformed_tally',
+        prepare: (tallyPath: string) => {
+          writeFileSync(tallyPath, 'not json', 'utf8');
+        },
+        reason: 'malformed_tally',
+        tallyArgument: (tallyPath: string) => tallyPath,
+      },
+      {
+        code: EXIT_CODES.STORAGE_INACCESSIBLE,
+        name: 'a missing tally file is refused as tally_file_unreadable',
+        prepare: () => {},
+        reason: 'tally_file_unreadable',
+        tallyArgument: () => 'does-not-exist.json',
+      },
+    ])('$name', ({code: expectedCode, prepare, reason, tallyArgument}) => {
+      prepare(sandbox.tallyPath);
 
-      const code = runSnapshot(['record', '--tally-file', sandbox.tallyPath], {
-        cwd: sandbox.root,
-      });
-
-      expect(code).toBe(EXIT_CODES.PAYLOAD_VALIDATION_FAILED);
-      expect(io.err.join('')).toContain('malformed_tally');
-    });
-
-    test('invalid JSON is refused as malformed_tally', () => {
-      writeFileSync(sandbox.tallyPath, 'not json', 'utf8');
-
-      const code = runSnapshot(['record', '--tally-file', sandbox.tallyPath], {
-        cwd: sandbox.root,
-      });
-
-      expect(code).toBe(EXIT_CODES.PAYLOAD_VALIDATION_FAILED);
-      expect(io.err.join('')).toContain('malformed_tally');
-    });
-
-    test('a missing tally file is refused as tally_file_unreadable', () => {
       const code = runSnapshot(
-        ['record', '--tally-file', 'does-not-exist.json'],
+        ['record', '--tally-file', tallyArgument(sandbox.tallyPath)],
         {cwd: sandbox.root}
       );
 
-      expect(code).toBe(EXIT_CODES.STORAGE_INACCESSIBLE);
-      expect(io.err.join('')).toContain('tally_file_unreadable');
+      expect(code).toBe(expectedCode);
+      expect(io.err.join('')).toContain(reason);
     });
 
     test('overwrites a malformed snapshot (RT-015)', () => {
@@ -260,35 +270,18 @@ describe('codify-ledger snapshot', () => {
   });
 
   describe('arguments', () => {
-    test('record with no flag exits 1 and writes nothing', () => {
-      const code = runSnapshot(['record'], {cwd: sandbox.root});
+    test.each([
+      ['record with no flag exits 1 and writes nothing', ['record']],
+      ['record --tally-file with no value exits 1', ['record', '--tally-file']],
+      ['record --bogus x exits 1', ['record', '--bogus', 'x']],
+      ['unknown verb exits 1', ['frobnicate']],
+    ])('%s', (_label, argv) => {
+      const code = runSnapshot(argv, {cwd: sandbox.root});
 
       expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
       expect(() => readFileSync(sandbox.snapshotPath, 'utf8')).toThrow(
         /ENOENT/
       );
-    });
-
-    test('record --tally-file with no value exits 1', () => {
-      const code = runSnapshot(['record', '--tally-file'], {
-        cwd: sandbox.root,
-      });
-
-      expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    });
-
-    test('record --bogus x exits 1', () => {
-      const code = runSnapshot(['record', '--bogus', 'x'], {
-        cwd: sandbox.root,
-      });
-
-      expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-    });
-
-    test('unknown verb exits 1', () => {
-      const code = runSnapshot(['frobnicate'], {cwd: sandbox.root});
-
-      expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
     });
   });
 });

@@ -127,164 +127,76 @@ verdict_of() {
   jq -r '.[0].verdict' "$RESULTS"
 }
 
-@test "a suite naming a changed file is selected in full" {
-  write_case "$SELECTED" .gaia/tests/lib/selected.bats "reads the thing"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 0 ]
-  [ "$(verdict_of)" = selected-full ]
+@test "replay verdict per change kind and suite kind" {
+  local label head_name suite test_name extra expected_status expected_verdict stderr_needle head
+  # One fixture copy serves every case: each case writes its own input file,
+  # and the one case that rewrites a fixture suite runs last.
+  while IFS='|' read -r label head_name suite test_name extra expected_status expected_verdict stderr_needle; do
+    [ -n "$label" ] || continue
+    if [ "$label" = mark-removed ]; then
+      grep -v 'test_tags' "$BATS_TEST_TMPDIR/repo/.gaia/tests/lib/marked.bats" >"$BATS_TEST_TMPDIR/marked.tmp"
+      mv "$BATS_TEST_TMPDIR/marked.tmp" "$BATS_TEST_TMPDIR/repo/.gaia/tests/lib/marked.bats"
+    fi
+    head="${!head_name}"
+    rm -f "$RESULTS"
+    write_case "$head" "$suite" "$test_name" "$extra"
+    run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
+    [ "$status" -eq "$expected_status" ] || { echo "case $label: status $status, expected $expected_status"; return 1; }
+    [ "$(verdict_of)" = "$expected_verdict" ] || { echo "case $label: verdict $(verdict_of), expected $expected_verdict"; return 1; }
+    if [ -n "$stderr_needle" ]; then
+      printf '%s\n' "$output" | grep -qF -- "$stderr_needle" || { echo "case $label: stderr does not name $stderr_needle"; return 1; }
+    fi
+  done <<'CASES'
+selected|SELECTED|.gaia/tests/lib/selected.bats|reads the thing||0|selected-full|
+whole-tree-test-mark|UNRELATED|.gaia/tests/lib/marked.bats|marked test||0|whole-tree-marked|
+unmarked-unrelated|UNRELATED|.gaia/tests/lib/marked.bats|unmarked test||1|miss|unmarked test
+lockfile-dependency|LOCKFILE|.gaia/tests/lib/dependency.bats|dependency test||0|dependency-full|
+lockfile-no-dependency-mark|LOCKFILE|.gaia/tests/lib/dependency-plain.bats|dependency plain test||1|miss|
+harness-only|HELPER|.gaia/tests/lib/plain.bats|plain test||0|harness-full|
+concurrency-scoped|SCOPED|.gaia/tests/concurrency/meter.bats|meter test||0|leg-armed|
+concurrency-no-filter|NOWHERE|.gaia/tests/concurrency/meter.bats|meter test||1|miss|
+commitlint-filter|COMMITLINT|.gaia/tests/commitlint/lint.bats|lint test||0|leg-armed|
+commitlint-scoped-only|SCOPED|.gaia/tests/commitlint/lint.bats|lint test||1|miss|
+gone-with-marked-successor|UNRELATED|.gaia/tests/lib/marked.bats|renamed away|{"successor_suite": ".gaia/tests/lib/marked.bats", "successor_test": "marked test"}|0|whole-tree-marked|
+gone-without-successor|UNRELATED|.gaia/tests/lib/marked.bats|renamed away||1|test-gone-today|
+suite-successor-file-marked|UNRELATED|.gaia/tests/lib/plain.bats|gone|{"successor_suite": ".gaia/tests/lib/filemarked.bats", "successor_test": null}|0|whole-tree-marked|
+suite-successor-unmarked|UNRELATED|.gaia/tests/lib/marked.bats|gone|{"successor_suite": ".gaia/tests/lib/plain.bats", "successor_test": null}|1|miss|
+suite-successor-single-test-mark|UNRELATED|.gaia/tests/lib/plain.bats|gone|{"successor_suite": ".gaia/tests/lib/marked.bats", "successor_test": null}|1|miss|
+mark-removed|UNRELATED|.gaia/tests/lib/marked.bats|marked test||1|miss|marked test
+CASES
 }
 
-@test "a test carrying the whole-tree test mark is kept on an unrelated change" {
-  write_case "$UNRELATED" .gaia/tests/lib/marked.bats "marked test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 0 ]
-  [ "$(verdict_of)" = whole-tree-marked ]
-}
-
-@test "an unmarked test on an unrelated change is a miss, exit 1, named on stderr" {
-  write_case "$UNRELATED" .gaia/tests/lib/marked.bats "unmarked test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 1 ]
-  [ "$(verdict_of)" = miss ]
-  printf '%s\n' "$output" | grep -qF -- "unmarked test"
-}
-
-@test "removing the mark turns the marked case into a miss" {
-  local suite="$BATS_TEST_TMPDIR/repo/.gaia/tests/lib/marked.bats"
-  grep -v 'test_tags' "$suite" >"$suite.tmp"
-  mv "$suite.tmp" "$suite"
-  write_case "$UNRELATED" .gaia/tests/lib/marked.bats "marked test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 1 ]
-  [ "$(verdict_of)" = miss ]
-  printf '%s\n' "$output" | grep -qF -- "marked test"
-}
-
-@test "a lockfile change keeps an installed-dependencies suite" {
-  write_case "$LOCKFILE" .gaia/tests/lib/dependency.bats "dependency test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 0 ]
-  [ "$(verdict_of)" = dependency-full ]
-}
-
-@test "a lockfile change on a suite without the dependency mark is a miss" {
-  write_case "$LOCKFILE" .gaia/tests/lib/dependency-plain.bats "dependency plain test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 1 ]
-  [ "$(verdict_of)" = miss ]
-}
-
-@test "a harness-only change runs the whole shard" {
-  write_case "$HELPER" .gaia/tests/lib/plain.bats "plain test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 0 ]
-  [ "$(verdict_of)" = harness-full ]
-}
-
-@test "a concurrency suite is armed by a path in the scoped filter" {
-  write_case "$SCOPED" .gaia/tests/concurrency/meter.bats "meter test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 0 ]
-  [ "$(verdict_of)" = leg-armed ]
-}
-
-@test "a concurrency suite is a miss when the change touches no filter" {
-  write_case "$NOWHERE" .gaia/tests/concurrency/meter.bats "meter test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 1 ]
-  [ "$(verdict_of)" = miss ]
-}
-
-@test "a commitlint suite is armed by the commitlint filter" {
-  write_case "$COMMITLINT" .gaia/tests/commitlint/lint.bats "lint test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 0 ]
-  [ "$(verdict_of)" = leg-armed ]
-}
-
-@test "a commitlint suite is a miss on a change only the scoped filter holds" {
-  write_case "$SCOPED" .gaia/tests/commitlint/lint.bats "lint test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 1 ]
-  [ "$(verdict_of)" = miss ]
-}
-
-@test "a test that is gone resolves to its marked successor" {
-  write_case "$UNRELATED" .gaia/tests/lib/marked.bats "renamed away" \
-    '{"successor_suite": ".gaia/tests/lib/marked.bats", "successor_test": "marked test"}'
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 0 ]
-  [ "$(verdict_of)" = whole-tree-marked ]
-}
-
-@test "a gone test without a successor is test-gone-today, exit 1" {
-  write_case "$UNRELATED" .gaia/tests/lib/marked.bats "renamed away"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 1 ]
-  [ "$(verdict_of)" = test-gone-today ]
-}
-
-@test "a whole-suite successor on a file-marked suite is whole-tree-marked" {
-  write_case "$UNRELATED" .gaia/tests/lib/plain.bats "gone" \
-    '{"successor_suite": ".gaia/tests/lib/filemarked.bats", "successor_test": null}'
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 0 ]
-  [ "$(verdict_of)" = whole-tree-marked ]
-}
-
-@test "a whole-suite successor on an unmarked suite is a miss" {
-  write_case "$UNRELATED" .gaia/tests/lib/marked.bats "gone" \
-    '{"successor_suite": ".gaia/tests/lib/plain.bats", "successor_test": null}'
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 1 ]
-  [ "$(verdict_of)" = miss ]
-}
-
-@test "a whole-suite successor does not count a single-test mark" {
-  write_case "$UNRELATED" .gaia/tests/lib/plain.bats "gone" \
-    '{"successor_suite": ".gaia/tests/lib/marked.bats", "successor_test": null}'
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 1 ]
-  [ "$(verdict_of)" = miss ]
-}
-
-@test "a commit absent from the repository exits 2" {
-  write_case "$UNRELATED" .gaia/tests/lib/marked.bats "marked test"
-  jq '.[0].head = "0123456789012345678901234567890123456789"' "$CASES" >"$CASES.tmp"
-  mv "$CASES.tmp" "$CASES"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 2 ]
-  printf '%s\n' "$output" | grep -qF -- "0123456789012345678901234567890123456789"
-}
-
-@test "a merge_base equal to head exits 2" {
-  write_case "$UNRELATED" .gaia/tests/lib/marked.bats "marked test"
-  jq '.[0].merge_base = .[0].head' "$CASES" >"$CASES.tmp"
-  mv "$CASES.tmp" "$CASES"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 2 ]
-  printf '%s\n' "$output" | grep -qF -- "merge_base"
-}
-
-@test "malformed JSON exits 2" {
-  printf '[{"run_id": 1,\n' >"$CASES"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 2 ]
-  printf '%s\n' "$output" | grep -qi -- "json"
-}
-
-@test "a workflow with no filter block exits 2" {
-  printf 'name: fixture\njobs:\n  shards:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' \
-    >"$BATS_TEST_TMPDIR/repo/.github/workflows/audit-ci-tests.yml"
-  write_case "$UNRELATED" .gaia/tests/lib/marked.bats "marked test"
-  run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
-  [ "$status" -eq 2 ]
-  printf '%s\n' "$output" | grep -qi -- "filter"
-}
-
-@test "a missing output argument exits 2" {
-  run bash "$SCRIPT" --input "$CASES"
-  [ "$status" -eq 2 ]
+@test "malformed input exits 2 naming the fault" {
+  local case_name needle grep_flags
+  for case_name in absent-commit merge-base-equals-head malformed-json no-filter-block; do
+    case "$case_name" in
+      absent-commit)
+        needle="0123456789012345678901234567890123456789"
+        grep_flags=-qF
+        write_case "$UNRELATED" .gaia/tests/lib/marked.bats "marked test"
+        jq '.[0].head = "0123456789012345678901234567890123456789"' "$CASES" >"$CASES.tmp"
+        mv "$CASES.tmp" "$CASES" ;;
+      merge-base-equals-head)
+        needle="merge_base"
+        grep_flags=-qF
+        write_case "$UNRELATED" .gaia/tests/lib/marked.bats "marked test"
+        jq '.[0].merge_base = .[0].head' "$CASES" >"$CASES.tmp"
+        mv "$CASES.tmp" "$CASES" ;;
+      malformed-json)
+        needle="json"
+        grep_flags=-qi
+        printf '[{"run_id": 1,\n' >"$CASES" ;;
+      no-filter-block)
+        needle="filter"
+        grep_flags=-qi
+        printf 'name: fixture\njobs:\n  shards:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' \
+          >"$BATS_TEST_TMPDIR/repo/.github/workflows/audit-ci-tests.yml"
+        write_case "$UNRELATED" .gaia/tests/lib/marked.bats "marked test" ;;
+    esac
+    run bash "$SCRIPT" --input "$CASES" --output "$RESULTS" --repo "$BATS_TEST_TMPDIR/repo"
+    [ "$status" -eq 2 ] || { echo "case $case_name: status $status"; return 1; }
+    printf '%s\n' "$output" | grep "$grep_flags" -- "$needle" || { echo "case $case_name: output does not name $needle"; return 1; }
+  done
 }
 
 @test "results are one entry per case in input order with the six fields" {

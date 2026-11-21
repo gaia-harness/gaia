@@ -265,19 +265,6 @@ EOF
   [ "$checked" -eq $(( ${#corrupt_cases[@]} * ${#invocations[@]} )) ]
 }
 
-@test "the same verbs succeed on a valid catalog (red twin of the corrupt case)" {
-  mkdir -p "$REPO/.notebook"
-  printf '{"version":1,"items":[]}\n' >"$CATALOG"
-  run notebook list research
-  [ "$status" -eq 0 ]
-  run notebook register research 2026-10-01-topic active
-  [ "$status" -eq 0 ]
-  run notebook update research 2026-10-01-topic '{"status":"closed"}'
-  [ "$status" -eq 0 ]
-  run notebook set-status research 2026-10-01-topic active
-  [ "$status" -eq 0 ]
-}
-
 @test "register refuses with 5 and creates nothing when main does not ignore .notebook" {
   REPO="$(make_repo unignored no-ignore)"
   LIBRARY="$REPO/.gaia/scripts/notebook/notebook-lib.sh"

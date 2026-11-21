@@ -77,25 +77,24 @@ free_port() {
   [ ! -e "$STUB_LOG" ]
 }
 
-@test "port taken on 127.0.0.1: exit 1, message names the port and the ask-first sentence, storybook never called" {
-  port="$(free_port)"
-  tree="$(provisioned_worktree taken 1 "$port")"
-  start_listener "$port" 127.0.0.1
-  run launch_in "$tree"
-  [ "$status" -eq 1 ]
-  case "$output" in *"port $port, this tree's Storybook port, is already in use"*) ;; *) return 1 ;; esac
-  case "$output" in *"Never stop a process on a port another live tree owns without asking the user first."*) ;; *) return 1 ;; esac
-  [ ! -e "$STUB_LOG" ]
-}
-
-@test "port taken on ::1: exit 1 and storybook never called" {
-  port="$(free_port)"
-  tree="$(provisioned_worktree takensix 1 "$port")"
-  if ! start_listener "$port" ::1; then skip "this host has no IPv6 loopback"; fi
-  run launch_in "$tree"
-  [ "$status" -eq 1 ]
-  case "$output" in *"port $port, this tree's Storybook port, is already in use"*) ;; *) return 1 ;; esac
-  [ ! -e "$STUB_LOG" ]
+@test "port taken: exit 1, message names the port, storybook never called (127.0.0.1 and ::1)" {
+  local family
+  for family in 127.0.0.1 ::1; do
+    port="$(free_port)"
+    tree="$(provisioned_worktree "taken-${family//:/six}" 1 "$port")"
+    if ! start_listener "$port" "$family"; then
+      [ "$family" = "::1" ] && continue
+      echo "case $family: listener did not start" >&2
+      return 1
+    fi
+    run launch_in "$tree"
+    [ "$status" -eq 1 ] || { echo "case $family: status $status" >&2; return 1; }
+    case "$output" in *"port $port, this tree's Storybook port, is already in use"*) ;; *) echo "case $family: no port message" >&2; return 1 ;; esac
+    if [ "$family" = "127.0.0.1" ]; then
+      case "$output" in *"Never stop a process on a port another live tree owns without asking the user first."*) ;; *) echo "case $family: no ask-first sentence" >&2; return 1 ;; esac
+    fi
+    [ ! -e "$STUB_LOG" ] || { echo "case $family: storybook was called" >&2; return 1; }
+  done
 }
 
 @test "free port: storybook gets dev -p <port> --exact-port plus passed-through args, PORT and SBCONFIG_PORT set to the port" {

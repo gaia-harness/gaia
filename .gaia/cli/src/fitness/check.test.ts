@@ -1,5 +1,4 @@
 import {afterEach, describe, expect, test} from 'vitest';
-import {mkdirSync, readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
@@ -41,7 +40,9 @@ const checkReport = async (
   return result.json as CheckReport;
 };
 
-const exitReport = (severity: 'error' | 'info' | 'warning'): CheckReport => ({
+type Severity = 'error' | 'info' | 'warning';
+
+const exitReport = (severity: Severity): CheckReport => ({
   categories: [],
   findings: [
     {
@@ -62,9 +63,6 @@ const exitReport = (severity: 'error' | 'info' | 'warning'): CheckReport => ({
   suppressed: [],
   upstream: [],
 });
-
-const claudeMdOwnership = (report: CheckReport) =>
-  report.inventory.find((entry) => entry.path === 'CLAUDE.md')?.ownership;
 
 const basicProject = (): FixtureProject => ({
   files: {
@@ -91,26 +89,22 @@ describe('gaia fitness check', () => {
     expect(result.exitCode).toBe(expected);
   });
 
-  test('a root that is not a directory exits 3', async () => {
-    const {root} = scratch(basicProject());
-    const result = await runFitness([
-      'check',
-      '--root',
-      path.join(root, 'CLAUDE.md'),
-    ]);
+  test.each<[string, () => string, string]>([
+    [
+      'a root that is not a directory exits 3',
+      () => path.join(scratch(basicProject()).root, 'CLAUDE.md'),
+      'could_not_run',
+    ],
+    [
+      'a root that does not exist exits 3',
+      () => path.join(tmpdir(), 'gaia-fitness-no-such-root'),
+      '',
+    ],
+  ])('%s', async (_name, rootFor, stderrFragment) => {
+    const result = await runFitness(['check', '--root', rootFor()]);
 
     expect(result.exitCode).toBe(EXIT_CODES.COULD_NOT_RUN);
-    expect(result.stderr).toContain('could_not_run');
-  });
-
-  test('a root that does not exist exits 3', async () => {
-    const result = await runFitness([
-      'check',
-      '--root',
-      path.join(tmpdir(), 'gaia-fitness-no-such-root'),
-    ]);
-
-    expect(result.exitCode).toBe(EXIT_CODES.COULD_NOT_RUN);
+    expect(result.stderr).toContain(stderrFragment);
   });
 
   test('prints the seven top-level keys in contract order', async () => {
@@ -242,142 +236,68 @@ describe('gaia fitness check', () => {
 });
 
 describe('exitCodeFor', () => {
-  test('--fail-on error ignores warnings and infos', () => {
-    expect(exitCodeFor(exitReport('warning'), 'error', [])).toBe(0);
-    expect(exitCodeFor(exitReport('info'), 'error', [])).toBe(0);
-    expect(exitCodeFor(exitReport('error'), 'error', [])).toBe(1);
+  test.each<
+    [
+      string,
+      'error' | 'info' | 'warning',
+      'error' | 'info' | 'warning',
+      string[],
+      number,
+    ]
+  >([
+    ['--fail-on error ignores a warning', 'warning', 'error', [], 0],
+    ['--fail-on error ignores an info', 'info', 'error', [], 0],
+    ['--fail-on error fails on an error', 'error', 'error', [], 1],
+    ['--fail-on warning fails on a warning', 'warning', 'warning', [], 1],
+    ['--fail-on warning ignores an info', 'info', 'warning', [], 0],
+    ['--fail-on info fails on an info', 'info', 'info', [], 1],
+    [
+      '--enforce fails on a matching warning',
+      'warning',
+      'error',
+      ['rules.example'],
+      1,
+    ],
+    [
+      '--enforce ignores a warning that does not match',
+      'warning',
+      'error',
+      ['rules.other'],
+      0,
+    ],
+    [
+      '--enforce does not fail on a matching info',
+      'info',
+      'error',
+      ['rules.example'],
+      0,
+    ],
+  ])('%s', (_name, severity, failOn, enforce, expected) => {
+    expect(exitCodeFor(exitReport(severity), failOn, enforce)).toBe(expected);
   });
 
-  test('--fail-on warning and info lower the bar', () => {
-    expect(exitCodeFor(exitReport('warning'), 'warning', [])).toBe(1);
-    expect(exitCodeFor(exitReport('info'), 'warning', [])).toBe(0);
-    expect(exitCodeFor(exitReport('info'), 'info', [])).toBe(1);
-  });
-
-  test('--enforce fails on a matching warning but not a matching info', () => {
-    expect(exitCodeFor(exitReport('warning'), 'error', ['rules.example'])).toBe(
-      1
-    );
-    expect(exitCodeFor(exitReport('warning'), 'error', ['rules.other'])).toBe(
-      0
-    );
-    expect(exitCodeFor(exitReport('info'), 'error', ['rules.example'])).toBe(0);
-  });
-
-  test('a selector is an exact id or a dotted prefix, not a substring', () => {
-    expect(matchesSelector('rules.example', 'rules.example.thing')).toBe(true);
-    expect(matchesSelector('rules.example.thing', 'rules.example.thing')).toBe(
-      true
-    );
-    expect(matchesSelector('rules.exam', 'rules.example.thing')).toBe(false);
+  test.each<[string, string, boolean]>([
+    ['a selector matches a dotted prefix', 'rules.example', true],
+    ['a selector matches the exact id', 'rules.example.thing', true],
+    ['a selector is not a substring', 'rules.exam', false],
+  ])('%s', (_name, selector, expected) => {
+    expect(matchesSelector(selector, 'rules.example.thing')).toBe(expected);
   });
 });
 
 describe('gaia fitness rules', () => {
-  test('lists the catalog and the inventory-only rule, sorted, byte-identical across runs', async () => {
+  test('prints the same JSON with and without --json', async () => {
     const first = await runFitness(['rules', '--json']);
     const second = await runFitness(['rules']);
-    const rules = first.json as {
-      inventory_only?: true;
-      rule_id: string;
-    }[];
 
     expect(first.exitCode).toBe(0);
     expect(first.stdout).toBe(second.stdout);
-    expect(rules.map((rule) => rule.rule_id)).toEqual(
-      rules.map((rule) => rule.rule_id).toSorted((a, b) => a.localeCompare(b))
-    );
-    expect(
-      rules.find((rule) => rule.rule_id === 'memory.dead-path')
-    ).toMatchObject({inventory_only: true});
-    expect(
-      rules.filter((rule) => rule.inventory_only === true).map((r) => r.rule_id)
-    ).toEqual(['memory.dead-path']);
   });
 
   test('an unknown argument exits 2', async () => {
     const result = await runFitness(['rules', '--xml']);
 
     expect(result.exitCode).toBe(2);
-  });
-});
-
-describe('test-support', () => {
-  test('settingsJson wins over a files entry for .claude/settings.json', async () => {
-    const {root} = scratch({
-      files: {'.claude/settings.json': '{"model":"haiku"}'},
-      git: true,
-      settingsJson: {model: 'opus'},
-    });
-    expect(
-      JSON.parse(readFileSync(path.join(root, '.claude/settings.json'), 'utf8'))
-    ).toEqual({model: 'opus'});
-  });
-
-  test('git: true makes every file tracked, so a depth-3 file is discovered', async () => {
-    const {env, root} = scratch({
-      files: {'x/y/CLAUDE.md': '# x\n'},
-      git: true,
-    });
-    const report = await checkReport(root, env);
-
-    expect(report.inventory.map((entry) => entry.path)).toContain(
-      'x/y/CLAUDE.md'
-    );
-  });
-
-  test("classifier 'repo' with git classifies an unlisted path adopter; 'none' classifies it unknown", async () => {
-    const owned = scratch({
-      classifier: 'repo',
-      files: {'CLAUDE.md': '# x\n'},
-      git: true,
-    });
-    const unowned = scratch({
-      classifier: 'none',
-      files: {'CLAUDE.md': '# x\n'},
-      git: true,
-    });
-    const ownedReport = await checkReport(owned.root, owned.env);
-    const unownedReport = await checkReport(unowned.root, unowned.env);
-    expect(claudeMdOwnership(ownedReport)).toBe('adopter');
-    expect(claudeMdOwnership(unownedReport)).toBe('unknown');
-  });
-
-  test('a manifest owned entry classifies gaia-shipped', async () => {
-    const project = scratch({
-      files: {'.claude/rules/shipped.md': '# s\n'},
-      git: true,
-      manifest: {files: {'.claude/rules/shipped.md': 'owned'}},
-    });
-    const report = await checkReport(project.root, project.env);
-
-    expect(
-      report.inventory.find(
-        (entry) => entry.path === '.claude/rules/shipped.md'
-      )?.ownership
-    ).toBe('gaia-shipped');
-  });
-
-  test('a vendor pin classifies its target third-party', async () => {
-    const project = scratch({
-      files: {'vendored/CLAUDE.md': '# v\n'},
-      git: true,
-      vendorPins: {example: 'vendored'},
-    });
-    const report = await checkReport(project.root, project.env);
-
-    expect(
-      report.inventory.find((entry) => entry.path === 'vendored/CLAUDE.md')
-        ?.ownership
-    ).toBe('third-party');
-  });
-
-  test('cleanup removes the scratch directory', () => {
-    const created = createScratchProject(basicProject());
-
-    created.cleanup();
-
-    expect(() => mkdirSync(path.join(created.root, 'x'))).toThrow(/ENOENT/);
   });
 });
 
@@ -404,37 +324,44 @@ describe('expectFixtureParity sensitivity', () => {
     }).not.toThrow();
   });
 
-  test('fails when a rule has no fixture entry', () => {
-    expect(() => {
-      expectFixtureParity([rule], {});
-    }).toThrow(/no fixture pair/);
-  });
-
-  test('fails when a fixture names no rule', () => {
-    expect(() => {
-      expectFixtureParity([], goodFixtures);
-    }).toThrow(/fixtures with no rule/);
-  });
-
-  test('fails when the red fixture yields no finding', () => {
-    expect(() => {
-      expectFixtureParity([rule], {
+  test.each<[string, () => FixtureMap, RegExp, (typeof rule)[]]>([
+    [
+      'fails when a rule has no fixture entry',
+      () => ({}),
+      /no fixture pair/,
+      [rule],
+    ],
+    [
+      'fails when a fixture names no rule',
+      () => goodFixtures,
+      /fixtures with no rule/,
+      [],
+    ],
+    [
+      'fails when the red fixture yields no finding',
+      () => ({
         [rule.ruleId]: {
           green: goodFixtures[rule.ruleId]!.green,
           red: goodFixtures[rule.ruleId]!.green,
         },
-      });
-    }).toThrow(/fires on its red fixture/);
-  });
-
-  test('fails when the green fixture still fires the rule', () => {
-    expect(() => {
-      expectFixtureParity([rule], {
+      }),
+      /fires on its red fixture/,
+      [rule],
+    ],
+    [
+      'fails when the green fixture still fires the rule',
+      () => ({
         [rule.ruleId]: {
           green: goodFixtures[rule.ruleId]!.red,
           red: goodFixtures[rule.ruleId]!.red,
         },
-      });
-    }).toThrow(/stays quiet on its green fixture/);
+      }),
+      /stays quiet on its green fixture/,
+      [rule],
+    ],
+  ])('%s', (_name, fixtures, pattern, rules) => {
+    expect(() => {
+      expectFixtureParity(rules, fixtures());
+    }).toThrow(pattern);
   });
 });

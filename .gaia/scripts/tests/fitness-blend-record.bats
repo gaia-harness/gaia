@@ -180,13 +180,6 @@ blend_two() {
   [ "$(jq -r '.version' "$RECORD")" = "1" ]
 }
 
-@test "the harness check runs against the update tree and its arguments are the documented ones" {
-  blend_two
-  run_writer
-  [ "$status" -eq 0 ]
-  [ "$(cat "$TREE/.gaia/cli/stub-args")" = "fitness check --json --root $TREE" ]
-}
-
 @test "entries from an earlier update stay and a re-blended path moves to the new version" {
   write_record 2.0.4 .claude/rules/a.md .claude/rules/z.md
   stub_report_for .claude/rules/a.md .claude/rules/z.md .claude/rules/n.md

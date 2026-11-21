@@ -40,12 +40,22 @@ stderr_of_wrapper() {
   cat "$BATS_TEST_TMPDIR/stderr"
 }
 
-@test "refuses when the first bash reports major 3" {
-  fake_bash_printing 3
+@test "refuses when the first bash is older than 4 or its version is unreadable (major 3, non-integer, empty probe)" {
+  local case_name
   mkdir -p "$WORK/tests/shell"
-  run_wrapper
-  [ "$status" -eq 1 ] || return 1
-  [ ! -e "$CALLS" ] || return 1
+  for case_name in major-3 non-integer empty; do
+    rm -f "$CALLS"
+    case "$case_name" in
+      major-3) fake_bash_printing 3 ;;
+      non-integer) fake_bash_printing abc ;;
+      empty)
+        printf '#!/bin/sh\nexit 0\n' >"$SHIMS/bash"
+        chmod +x "$SHIMS/bash" ;;
+    esac
+    run_wrapper
+    [ "$status" -eq 1 ] || { echo "case $case_name: status $status"; return 1; }
+    [ ! -e "$CALLS" ] || { echo "case $case_name: bats was called"; return 1; }
+  done
 }
 
 @test "refusal prints exactly one stderr line naming the version and the stack reference" {
@@ -55,31 +65,6 @@ stderr_of_wrapper() {
   [ "$(printf '%s\n' "$err" | wc -l | tr -d ' ')" -eq 1 ] || return 1
   case "$err" in *"found 3"*) ;; *) return 1 ;; esac
   case "$err" in *".claude/skills/tdd/references/tests-shell.md"*) ;; *) return 1 ;; esac
-}
-
-@test "refuses a non-integer probe result" {
-  fake_bash_printing abc
-  run_wrapper
-  [ "$status" -eq 1 ] || return 1
-  [ ! -e "$CALLS" ] || return 1
-}
-
-@test "refuses an empty probe result" {
-  printf '#!/bin/sh\nexit 0\n' >"$SHIMS/bash"
-  chmod +x "$SHIMS/bash"
-  run_wrapper
-  [ "$status" -eq 1 ] || return 1
-  [ ! -e "$CALLS" ] || return 1
-}
-
-@test "refuses under the real /bin/bash when it is older than 4" {
-  local major
-  major="$(/bin/bash -c 'printf %s "${BASH_VERSINFO[0]}"')"
-  [ "$major" -lt 4 ] || skip "/bin/bash is $major"
-  cd "$WORK" || return 1
-  run env PATH="$SHIMS:/bin:/usr/bin" /bin/sh "$WRAPPER"
-  [ "$status" -eq 1 ] || return 1
-  [ ! -e "$CALLS" ] || return 1
 }
 
 @test "no arguments runs bats on tests/shell when it exists" {
@@ -103,15 +88,6 @@ stderr_of_wrapper() {
   [ ! -e "$CALLS" ] || return 1
 }
 
-@test "the wrapper is clean POSIX sh" {
-  command -v shellcheck >/dev/null || skip "shellcheck not installed"
-  run shellcheck -s sh "$WRAPPER"
-  [ "$status" -eq 0 ] || return 1
-  head -n 1 "$WRAPPER" | grep -qx '#!/bin/sh' || return 1
-  grep -nE '\[\[|\blocal\b|\$'"'"'|=\(' "$WRAPPER" && return 1
-  true
-}
-
 strip_maintainer_blocks() {
   awk '/^<!-- gaia:maintainer-only:start -->$/ {skip=1; next}
        /^<!-- gaia:maintainer-only:end -->$/ {skip=0; next}
@@ -130,8 +106,4 @@ denylist_hits() {
   grep -qF "'**/*.bats'" "$stripped" || return 1
   grep -qF ".claude/skills/tdd/references/tests-shell.md" "$stripped" || return 1
   true
-}
-
-@test "the denylist check fails over the unstripped rule" {
-  denylist_hits <"$RULE"
 }

@@ -124,40 +124,6 @@ describe.each(SCAFFOLDERS)('gaia scaffold $name package root', (scaffolder) => {
     rmSync(root, {force: true, recursive: true});
   });
 
-  test.each([
-    ['the repo root', ''],
-    ['inside apps/web/', 'apps/web'],
-  ])(
-    'built-in default writes under apps/web/ when run from %s',
-    (_label, cwdRelative) => {
-      const packageDir = path.join(root, 'apps', 'web');
-      writeBuiltinDescriptor(root);
-      seedPackage(packageDir, scaffolder.seed);
-      const cwd = path.join(root, cwdRelative);
-
-      expect(scaffolder.run(cwd)).toBe(EXIT_CODES.OK);
-
-      for (const relative of scaffolder.expected) {
-        expect(existsSync(path.join(packageDir, relative))).toBe(true);
-      }
-      // The failing state of the old code: a root-relative write.
-      expect(existsSync(path.join(root, 'app'))).toBe(false);
-      expect(existsSync(path.join(root, 'test'))).toBe(false);
-    }
-  );
-
-  test('a path-"." registry keeps the app at the repo root', () => {
-    writeFrontendRegistry(root, '.');
-    seedPackage(root, scaffolder.seed);
-
-    expect(scaffolder.run(root)).toBe(EXIT_CODES.OK);
-
-    for (const relative of scaffolder.expected) {
-      expect(existsSync(path.join(root, relative))).toBe(true);
-    }
-    expect(existsSync(path.join(root, 'apps', 'web'))).toBe(false);
-  });
-
   test('a malformed registry refuses with the gaia-packages message and writes nothing', () => {
     mkdirSync(path.join(root, '.gaia'), {recursive: true});
     writeFileSync(path.join(root, '.gaia/packages.json'), '{not json');
@@ -198,72 +164,135 @@ describe.each(SCAFFOLDERS)('gaia scaffold $name web member', (scaffolder) => {
     rmSync(root, {force: true, recursive: true});
   });
 
-  test('a web member named storefront receives the scaffold, from inside a non-web member', () => {
-    writeMemberRegistry(root, [
-      {name: 'lib', path: 'packages/lib', web: false},
-      {name: 'storefront', path: 'apps/storefront'},
-    ]);
-    seedPackage(path.join(root, 'apps/storefront'), scaffolder.seed);
+  describe('scaffold resolves the package root for each layout', () => {
+    test.each([
+      {
+        absent: ['app', 'test'],
+        cwd: '',
+        exists: ['apps/web'],
+        extra: [] as string[],
+        missing: [] as string[],
+        name: 'built-in default writes under apps/web/ when run from the repo root',
+        setup: (): void => {
+          writeBuiltinDescriptor(root);
+          seedPackage(path.join(root, 'apps', 'web'), scaffolder.seed);
+        },
+      },
+      {
+        absent: ['app', 'test'],
+        cwd: 'apps/web',
+        exists: ['apps/web'],
+        extra: [] as string[],
+        missing: [] as string[],
+        name: 'built-in default writes under apps/web/ when run from inside apps/web/',
+        setup: (): void => {
+          writeBuiltinDescriptor(root);
+          seedPackage(path.join(root, 'apps', 'web'), scaffolder.seed);
+        },
+      },
+      {
+        absent: ['apps/web'],
+        cwd: '',
+        exists: ['.'],
+        extra: [] as string[],
+        missing: [] as string[],
+        name: 'a path-"." registry keeps the app at the repo root',
+        setup: (): void => {
+          writeFrontendRegistry(root, '.');
+          seedPackage(root, scaffolder.seed);
+        },
+      },
+      {
+        absent: ['packages/lib/app', 'apps/web'],
+        cwd: 'packages/lib',
+        exists: ['apps/storefront'],
+        extra: [] as string[],
+        missing: [] as string[],
+        name: 'a web member named storefront receives the scaffold, from inside a non-web member',
+        setup: (): void => {
+          writeMemberRegistry(root, [
+            {name: 'lib', path: 'packages/lib', web: false},
+            {name: 'storefront', path: 'apps/storefront'},
+          ]);
+          seedPackage(path.join(root, 'apps/storefront'), scaffolder.seed);
+        },
+      },
+      {
+        absent: [] as string[],
+        cwd: '',
+        exists: ['apps/admin'],
+        extra: ['--package', 'admin'],
+        missing: ['apps/storefront'],
+        name: '--package picks one of two web members',
+        setup: (): void => {
+          writeMemberRegistry(root, [
+            {name: 'storefront', path: 'apps/storefront'},
+            {name: 'admin', path: 'apps/admin'},
+          ]);
+          seedPackage(path.join(root, 'apps/storefront'), scaffolder.seed);
+          seedPackage(path.join(root, 'apps/admin'), scaffolder.seed);
+        },
+      },
+    ])('$name', ({absent, cwd, exists, extra, missing, setup}) => {
+      setup();
 
-    expect(scaffolder.run(path.join(root, 'packages/lib'))).toBe(EXIT_CODES.OK);
+      expect(scaffolder.run(path.join(root, cwd), extra)).toBe(EXIT_CODES.OK);
 
-    for (const relative of scaffolder.expected) {
-      expect(existsSync(path.join(root, 'apps/storefront', relative))).toBe(
-        true
-      );
-    }
-    expect(existsSync(path.join(root, 'packages/lib/app'))).toBe(false);
-    expect(existsSync(path.join(root, 'apps', 'web'))).toBe(false);
+      for (const packageDir of exists) {
+        for (const relative of scaffolder.expected) {
+          expect(existsSync(path.join(root, packageDir, relative))).toBe(true);
+        }
+      }
+
+      for (const packageDir of missing) {
+        for (const relative of scaffolder.expected) {
+          expect(existsSync(path.join(root, packageDir, relative))).toBe(false);
+        }
+      }
+
+      for (const relative of absent) {
+        expect(existsSync(path.join(root, relative))).toBe(false);
+      }
+    });
   });
 
-  test('--package naming a non-web member refuses, names the web member, and changes no file', () => {
-    writeMemberRegistry(root, [
-      {name: 'lib', path: 'packages/lib', web: false},
-      {name: 'storefront', path: 'apps/storefront'},
-    ]);
-    seedPackage(path.join(root, 'apps/storefront'), scaffolder.seed);
-    const before = snapshot();
+  describe('scaffold refuses a wrong or ambiguous web member', () => {
+    test.each([
+      {
+        extra: ['--package', 'lib'],
+        members: [
+          {name: 'lib', path: 'packages/lib', web: false},
+          {name: 'storefront', path: 'apps/storefront'},
+        ],
+        name: '--package naming a non-web member refuses, names the web member, and changes no file',
+        named: ['storefront'],
+        seeded: ['apps/storefront'],
+      },
+      {
+        extra: [] as string[],
+        members: [
+          {name: 'storefront', path: 'apps/storefront'},
+          {name: 'admin', path: 'apps/admin'},
+        ],
+        name: 'two web members with no flag refuse naming both and change no file',
+        named: ['storefront', 'admin'],
+        seeded: ['apps/storefront', 'apps/admin'],
+      },
+    ])('$name', ({extra, members, named, seeded}) => {
+      writeMemberRegistry(root, members);
 
-    expect(scaffolder.run(root, ['--package', 'lib'])).toBe(
-      EXIT_CODES.CONFIG_INVALID
-    );
+      for (const memberDir of seeded) {
+        seedPackage(path.join(root, memberDir), scaffolder.seed);
+      }
+      const before = snapshot();
 
-    expect(stderrWrites.join('')).toContain('storefront');
-    expect(snapshot()).toEqual(before);
-  });
+      expect(scaffolder.run(root, extra)).toBe(EXIT_CODES.CONFIG_INVALID);
 
-  test('two web members with no flag refuse naming both and change no file', () => {
-    writeMemberRegistry(root, [
-      {name: 'storefront', path: 'apps/storefront'},
-      {name: 'admin', path: 'apps/admin'},
-    ]);
-    seedPackage(path.join(root, 'apps/storefront'), scaffolder.seed);
-    seedPackage(path.join(root, 'apps/admin'), scaffolder.seed);
-    const before = snapshot();
-
-    expect(scaffolder.run(root)).toBe(EXIT_CODES.CONFIG_INVALID);
-
-    expect(stderrWrites.join('')).toContain('storefront');
-    expect(stderrWrites.join('')).toContain('admin');
-    expect(snapshot()).toEqual(before);
-  });
-
-  test('--package picks one of two web members', () => {
-    writeMemberRegistry(root, [
-      {name: 'storefront', path: 'apps/storefront'},
-      {name: 'admin', path: 'apps/admin'},
-    ]);
-    seedPackage(path.join(root, 'apps/storefront'), scaffolder.seed);
-    seedPackage(path.join(root, 'apps/admin'), scaffolder.seed);
-
-    expect(scaffolder.run(root, ['--package', 'admin'])).toBe(EXIT_CODES.OK);
-
-    for (const relative of scaffolder.expected) {
-      expect(existsSync(path.join(root, 'apps/admin', relative))).toBe(true);
-      expect(existsSync(path.join(root, 'apps/storefront', relative))).toBe(
-        false
-      );
-    }
+      for (const memberName of named) {
+        expect(stderrWrites.join('')).toContain(memberName);
+      }
+      expect(snapshot()).toEqual(before);
+    });
   });
 });
 

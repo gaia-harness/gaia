@@ -81,16 +81,6 @@ describe('commands acting on the web member, by stack', () => {
     expect(stripBranding(['--title', 'Shop'], {cwd: root})).toBe(EXIT_CODES.OK);
   });
 
-  test('strip-branding refuses two web members, naming both', () => {
-    register([STOREFRONT, ADMIN]);
-
-    expect(stripBranding(['--title', 'Shop'], {cwd: root})).toBe(
-      EXIT_CODES.CONFIG_INVALID
-    );
-    expect(errors.join('')).toContain('storefront');
-    expect(errors.join('')).toContain('admin');
-  });
-
   test('the dependency compute finds a web member named storefront', () => {
     register([LIBRARY, STOREFRONT]);
 
@@ -118,13 +108,33 @@ describe('commands acting on the web member, by stack', () => {
     expect(existsSync(path.join(root, 'packages/lib/.env'))).toBe(false);
   });
 
-  test('the environment seed refuses two web members, naming both', () => {
+  test.each([
+    [
+      'strip-branding',
+      () => stripBranding(['--title', 'Shop'], {cwd: root}),
+      ['storefront', 'admin'],
+    ],
+    [
+      'the environment seed',
+      () => bootstrapEnvironment([], {cwd: root}),
+      ['admin'],
+    ],
+    [
+      'rename, with no flag',
+      () => renameProject(['--title', 'Shop', '--kebab', 'shop'], {cwd: root}),
+      ['admin'],
+    ],
+  ])('%s refuses two web members, naming them', (_name, invoke, named) => {
     register([STOREFRONT, ADMIN]);
+    const before = listing();
 
-    expect(bootstrapEnvironment([], {cwd: root})).toBe(
-      EXIT_CODES.CONFIG_INVALID
-    );
-    expect(errors.join('')).toContain('admin');
+    expect(invoke()).toBe(EXIT_CODES.CONFIG_INVALID);
+
+    for (const member of named) {
+      expect(errors.join('')).toContain(member);
+    }
+
+    expect(listing()).toEqual(before);
   });
 
   test('rename with --package naming a non-web member refuses and changes no file', () => {
@@ -138,17 +148,6 @@ describe('commands acting on the web member, by stack', () => {
       )
     ).toBe(EXIT_CODES.CONFIG_INVALID);
     expect(errors.join('')).toContain('storefront');
-    expect(listing()).toEqual(before);
-  });
-
-  test('rename refuses two web members with no flag and changes no file', () => {
-    register([STOREFRONT, ADMIN]);
-    const before = listing();
-
-    expect(
-      renameProject(['--title', 'Shop', '--kebab', 'shop'], {cwd: root})
-    ).toBe(EXIT_CODES.CONFIG_INVALID);
-    expect(errors.join('')).toContain('admin');
     expect(listing()).toEqual(before);
   });
 });

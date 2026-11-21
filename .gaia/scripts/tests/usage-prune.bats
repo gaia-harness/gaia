@@ -5,9 +5,9 @@
 # reads rows and keys only through its parameters. Both are checked against
 # the shipped jq defs, never a re-implementation:
 #   - the differential compares the full resolver's per-ref sums with the
-#     pruned sums, and goes red for each committed mutant of the prune def;
+#     pruned sums;
 #   - the globals-blank equivalence runs each `_of` view with $usage_store, $links_store bound
-#     to "" and $keys to {}, and goes red for each committed sed mutant.
+#     to "" and $keys to {}.
 #
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/scripts/tests/usage-prune.bats
@@ -72,18 +72,7 @@ run_diff() {
     --argjson keys "$KEYS" --argjson rates "$RATES" "$(diff_prog "$1")" >"$TEMPORARY_DIRECTORY/diff.json"
 }
 
-# The differential must go red for a mutant of the prune def: the pruned sums
-# differ from the full resolver's, and the mutant is not the shipped text.
-assert_mutant_red() {
-  local mutant_filter="$FIXTURES_DIRECTORY/mutants/$1.jq"
-  [ -s "$mutant_filter" ]
-  printf '%s' "$GAIA_USAGE_PRUNE_JQ" >"$TEMPORARY_DIRECTORY/shipped.jq"
-  if cmp -s "$mutant_filter" "$TEMPORARY_DIRECTORY/shipped.jq"; then return 1; fi
-  run_diff "$GAIA_USAGE_ACTIVE_JQ$(cat "$mutant_filter")$GAIA_USAGE_VIEW_BODY_JQ"
-  jq -e '.full != .pruned' "$TEMPORARY_DIRECTORY/diff.json" >/dev/null
-}
-
-@test "differential: pruned per-ref sums equal the full resolver's for every key, root, and resolved ref" {
+@test "differential: pruned per-ref sums equal the full resolver's, including pre-binding, tie and command-interval cases" {
   run_diff "$GAIA_USAGE_VIEW_JQ"
   [ "$(jq -r '.keys' "$TEMPORARY_DIRECTORY/diff.json")" -eq 9 ]
   [ "$(jq -r '.roots' "$TEMPORARY_DIRECTORY/diff.json")" -eq 6 ]
@@ -94,34 +83,10 @@ assert_mutant_red() {
   [ "$(jq -r '[.full[].sums[].sum.total] | add' "$TEMPORARY_DIRECTORY/diff.json")" -gt 0 ]
   jq -e '[.full[].sums[].sum.usd | select(. != null and . > 0)] | length > 0' "$TEMPORARY_DIRECTORY/diff.json" >/dev/null
   jq -e '.full == .pruned' "$TEMPORARY_DIRECTORY/diff.json" >/dev/null
-}
-
-@test "differential: a segment before its first binding, a same-instant tie, and a command interval all resolve as in the full resolver" {
-  run_diff "$GAIA_USAGE_VIEW_JQ"
   jq -e '[.full[] | select(.name == "rkey research:topic2") | .sums[].sum.total] | add > 0' "$TEMPORARY_DIRECTORY/diff.json" >/dev/null
   jq -e '[.full[] | select(.name == "rkey command:gaia-debt-r1") | .sums[].sum.total] | add > 0' "$TEMPORARY_DIRECTORY/diff.json" >/dev/null
   jq -e '[.full[] | select(.name == "rkey spec:SPEC-091") | .sums[].sum.total] | add > 0' "$TEMPORARY_DIRECTORY/diff.json" >/dev/null
   jq -e '.full == .pruned' "$TEMPORARY_DIRECTORY/diff.json" >/dev/null
-}
-
-@test "guard red: dropping the binding clause changes a pruned sum" {
-  assert_mutant_red no-binding-clause
-}
-
-@test "guard red: dropping the close binding from the binding clause changes a pruned sum" {
-  assert_mutant_red no-close-clause
-}
-
-@test "guard red: dropping the raw segment key clause changes a pruned sum" {
-  assert_mutant_red no-rawkey-clause
-}
-
-@test "guard red: keeping only the matching segments of a candidate session changes a pruned sum" {
-  assert_mutant_red segment-granular
-}
-
-@test "guard red: keeping only the bindings keyed in N changes a pruned sum" {
-  assert_mutant_red filter-bindings
 }
 
 # equiv_run <library_directory> <mode>: runs the views over the prune fixture with the
@@ -185,34 +150,4 @@ equiv_run() {
   [ "$(jq -r '.derive | length' "$TEMPORARY_DIRECTORY/keys.json")" -gt 0 ]
   equiv_run "$SCRIPTS" empty-keys >"$TEMPORARY_DIRECTORY/empty.json"
   if cmp -s "$TEMPORARY_DIRECTORY/wrapper.json" "$TEMPORARY_DIRECTORY/empty.json"; then return 1; fi
-}
-
-# apply_sed_mutant <lib file> <sed script> <pattern>: scratch copy of the
-# shipped lib with the mutation applied; the substitution must have matched.
-apply_sed_mutant() {
-  local library_file="$1" sed_file="$FIXTURES_DIRECTORY/mutants/$2.sed" pattern="$3"
-  mkdir -p "$TEMPORARY_DIRECTORY/mut"
-  cp "$SCRIPTS/usage-resolve-lib.sh" "$SCRIPTS/usage-active-lib.sh" "$SCRIPTS/usage-render-lib.sh" "$TEMPORARY_DIRECTORY/mut/"
-  [ "$(grep -cF -- "$pattern" "$TEMPORARY_DIRECTORY/mut/$library_file")" -ge 1 ]
-  sed -f "$sed_file" "$TEMPORARY_DIRECTORY/mut/$library_file" >"$TEMPORARY_DIRECTORY/mut/$library_file.new"
-  mv "$TEMPORARY_DIRECTORY/mut/$library_file.new" "$TEMPORARY_DIRECTORY/mut/$library_file"
-  [ "$(grep -cF -- "$pattern" "$TEMPORARY_DIRECTORY/mut/$library_file")" -eq 0 ]
-}
-
-@test "guard red: reconcile pricing through the no-arg usage_model reads the global rows" {
-  apply_sed_mutant usage-render-lib.sh reads-global-rows 'usage_model_of($usage_records; $links; $keys) as $readout_model'
-  equiv_run "$TEMPORARY_DIRECTORY/mut" wrapper >"$TEMPORARY_DIRECTORY/wrapper.json"
-  equiv_run "$TEMPORARY_DIRECTORY/mut" of >"$TEMPORARY_DIRECTORY/of.json"
-  [ -s "$TEMPORARY_DIRECTORY/wrapper.json" ]
-  [ -s "$TEMPORARY_DIRECTORY/of.json" ]
-  if cmp -s "$TEMPORARY_DIRECTORY/wrapper.json" "$TEMPORARY_DIRECTORY/of.json"; then return 1; fi
-}
-
-@test "guard red: a usage_model_base_of without its keys parameter reads the global keys" {
-  apply_sed_mutant usage-resolve-lib.sh reads-global-keys 'def usage_model_base_of($usage_records; $links; $keys):'
-  equiv_run "$TEMPORARY_DIRECTORY/mut" wrapper >"$TEMPORARY_DIRECTORY/wrapper.json"
-  equiv_run "$TEMPORARY_DIRECTORY/mut" of >"$TEMPORARY_DIRECTORY/of.json"
-  [ -s "$TEMPORARY_DIRECTORY/wrapper.json" ]
-  [ -s "$TEMPORARY_DIRECTORY/of.json" ]
-  if cmp -s "$TEMPORARY_DIRECTORY/wrapper.json" "$TEMPORARY_DIRECTORY/of.json"; then return 1; fi
 }

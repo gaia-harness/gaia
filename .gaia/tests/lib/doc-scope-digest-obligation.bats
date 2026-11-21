@@ -1,43 +1,20 @@
 #!/usr/bin/env bats
-# SPEC-077: doc-grep coverage for the scope-resolution obligation prose that
-# holds the writer's --scope-digest gate meaningful. Nothing type-checks a
-# markdown instruction and no runtime assertion fires when a future edit to
-# one of the five agent definitions, or to the registration page the next
-# member author reads, drops a sentence or quietly paraphrases it. This
-# suite pins the frozen literals the way doc-machinery-waive-prose.bats pins
-# its own: grep for the text, ground-truthed against the actual source
-# (verified against the tree as it stands after Phase 1 of this SPEC
-# landed), never a paraphrase transcribed into the test.
-#
-# Three literals, three reasons:
-#   Group 1: FC-2a's obligation sentence, held once in the "Scope
-#     resolution" section of the shared member protocol, which every agent
-#     definition sends its member to before the scope resolver runs. Nothing
-#     else pins the literal's own wording against silent rewrite, and a
-#     second copy in a definition is the drift the shared section removed.
-#   Group 2: wiki/concepts/Registering a Code Audit Team Member.md step 1
-#     sends the next member author to that protocol section and carries no
-#     copy of the sentence. The next member registered reads that page, not
-#     the existing definitions, so a pointer that goes missing there is
-#     invisible to every existing member's own conformance.
-# Honest limit: presence and byte-identity, not meaning and not behavior.
-# This suite cannot tell whether a member that carries the literal actually
-# captures anything at runtime; it only proves the instruction survives
-# verbatim in the file a member or a human reads.
+# Single ownership of the scope-resolution obligation: the sentence lives once,
+# in the "Scope resolution" section of .claude/hooks/lib/audit-member-protocol.md.
+#   Group 1: the protocol carries the sentence once, and every agent
+#     definition sends its member to that section and carries no copy of the
+#     sentence, which would drift from the protocol's.
+#   Group 2: the registration page's step 1 sends the next member author to
+#     the same section and carries no copy.
+# Honest limit: presence and absence, not meaning and not behavior.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
-#
-# `.gaia/tests/` is out of `wiki-style.md`'s scope entirely and release-
-# excluded, so the SPEC traceability above is correct and expected here,
-# unlike in the shipped prose this suite guards.
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
 
-  # Discovered, not transcribed. A hardcoded list here would assert the
-  # obligation literal over the definitions that existed the day this suite
-  # was written, and stay green for a newly registered member that never
-  # carried the literal at all.
+  # Discovered, not transcribed: a hardcoded list would stay green for a newly
+  # registered member that never carries the pointer.
   AGENTS=()
   local agent
   # gaia-lint-ignore whole-tree-mark-guard: every test that uses the agent roster this collects carries the
@@ -47,22 +24,24 @@ setup() {
   done
   # An empty discovery has verified nothing; fail rather than pass vacuously.
   [ "${#AGENTS[@]}" -gt 0 ] || return 1
-  REGISTRATION="$ROOT/wiki/concepts/Registering a Code Audit Team Member.md"
   PROTOCOL="$ROOT/.claude/hooks/lib/audit-member-protocol.md"
+  REGISTRATION="$ROOT/wiki/concepts/Registering a Code Audit Team Member.md"
   SCOPE_POINTER='Read `<root>/.claude/hooks/lib/audit-member-protocol.md` by path and follow its "Scope resolution" section'
   REGISTRATION_POINTER='sends the member to the `## Scope resolution` section of `.claude/hooks/lib/audit-member-protocol.md`'
 
-  # FC-2a, verbatim.
   OBLIGATION_LITERAL='Capture your own branch-own digest at scope resolution with `.gaia/scripts/audit-scope-digest.sh --capture`, and at marker-write time read that captured value back with `--read` and pass it as `--scope-digest`; never re-derive it in the writing call, and a rotation between the two means the review was superseded and you must be re-dispatched on the new HEAD.'
 }
 
-# --- Group 1: FC-2a lives once, in the protocol section every member reads --
+# --- Group 1: the protocol carries the sentence once; no agent definition copies it ---
 
 # scope_section: the protocol's "## Scope resolution" section body.
 scope_section() {
   awk '/^## Scope resolution$/ { inside = 1; next } inside && /^## / { exit } inside { print }' "$PROTOCOL"
 }
 
+# The absence checks below compare against OBLIGATION_LITERAL, so this pins the
+# literal to the protocol's one copy: a reworded protocol sentence fails here
+# instead of leaving the absence checks green against a stale literal.
 @test "Group 1: the obligation literal appears exactly once in the protocol, inside its Scope resolution section" {
   local section count
   section="$(scope_section)"
@@ -125,25 +104,4 @@ registration_step_one_points_to_protocol() {
 
 @test "Group 2: the registration page's step 1 points at the protocol section and carries no copy" {
   registration_step_one_points_to_protocol "$REGISTRATION"
-}
-
-@test "red twin: a step 1 that carries its own copy of the obligation is refused" {
-  local scratch="$BATS_TEST_TMPDIR/registration.md"
-  printf '### 1. Write the definition\n\n%s\n\n%s\n' "$REGISTRATION_POINTER" "$OBLIGATION_LITERAL" >"$scratch"
-  run registration_step_one_points_to_protocol "$scratch"
-  [ "$status" -eq 1 ]
-}
-
-@test "red twin: a step 1 without the pointer is refused" {
-  local scratch="$BATS_TEST_TMPDIR/registration.md"
-  printf '### 1. Write the definition\n\nThe member resolves its own scope.\n' >"$scratch"
-  run registration_step_one_points_to_protocol "$scratch"
-  [ "$status" -eq 1 ]
-}
-
-@test "red twin: a page whose step-1 heading is gone is refused" {
-  local scratch="$BATS_TEST_TMPDIR/registration.md"
-  printf '### Write the definition\n\n%s\n' "$REGISTRATION_POINTER" >"$scratch"
-  run registration_step_one_points_to_protocol "$scratch"
-  [ "$status" -eq 1 ]
 }

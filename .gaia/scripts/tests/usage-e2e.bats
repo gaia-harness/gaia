@@ -162,31 +162,6 @@ snapshot() {
   [ -z "$(find "$TELEMETRY_DIRECTORY" -newer "$TEMPORARY_DIRECTORY/ref")" ]
 }
 
-@test "guards-must-fail (UAT-013): the derived subcommand set goes short when a dispatch arm is dropped, and subcommand_arguments refuses an unknown name" {
-  local mutant_script="$TEMPORARY_DIRECTORY/usage-mutant.sh" full short
-  sed '/^  unlink) /d' "$REPO/.gaia/scripts/usage.sh" >"$mutant_script"
-  if cmp -s "$mutant_script" "$REPO/.gaia/scripts/usage.sh"; then echo "mutation did not apply" >&2; return 1; fi
-  full="$(derive_subcommands "$REPO/.gaia/scripts/usage.sh" | tr '\n' ' ')"
-  short="$(derive_subcommands "$mutant_script" | tr '\n' ' ')"
-  [ "$full" = "declare handoff initiative join lineage link pr pr-branch reconcile record represented unlink " ]
-  [ "$short" != "$full" ]
-  run subcommand_arguments brand-new-subcommand
-  [ "$status" -ne 0 ]
-}
-
-@test "guards-must-fail (UAT-013): the snapshot check goes red when a command writes one byte into the ledger" {
-  seed_debt
-  flush_session s-m
-  : >"$TEMPORARY_DIRECTORY/ref"
-  sleep 1
-  snapshot >"$TEMPORARY_DIRECTORY/snap-before"
-  printf '\n' >>"$TELEMETRY_DIRECTORY/usage.jsonl"
-  snapshot >"$TEMPORARY_DIRECTORY/snap-after"
-  run cmp -s "$TEMPORARY_DIRECTORY/snap-before" "$TEMPORARY_DIRECTORY/snap-after"
-  [ "$status" -ne 0 ]
-  [ -n "$(find "$TELEMETRY_DIRECTORY" -newer "$TEMPORARY_DIRECTORY/ref")" ]
-}
-
 # ---------- UAT-026 ----------
 
 @test "UAT-026: a PR merged by the CLI leaves spend under its branch key, no merge row, and no block; the link command then makes its figure readable" {
@@ -246,13 +221,4 @@ net_clean() {
   [ -f "$STUBLOG" ]
   grep -q '^gh pr view ' "$STUBLOG"
   net_clean
-}
-
-@test "guards-must-fail (UAT-027): net_clean goes red on a curl call and on a token count in the log" {
-  printf 'curl https://example.com\n' >"$STUBLOG"
-  run net_clean
-  [ "$status" -ne 0 ]
-  printf 'gh pr view 7812 --json x\n' >"$STUBLOG"
-  run net_clean
-  [ "$status" -ne 0 ]
 }

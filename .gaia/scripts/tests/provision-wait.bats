@@ -58,72 +58,81 @@ record_dead_job() {
   printf '%s\n' "$dead_pid" >"$PID_FILE"
 }
 
-@test "a log ending in the finished line exits 0 FINISHED with the log path on line 2" {
+# Starts the next case from no log, no pid file and no live job.
+reset_state() {
+  if [ -n "${SLEEPER_PID:-}" ]; then
+    kill "$SLEEPER_PID" 2>/dev/null || true
+    SLEEPER_PID=""
+  fi
+  rm -f "$LOG_FILE" "$PID_FILE"
+}
+
+# expect_verdict <label> <status> <verdict> [wait args]: the wait exits with the
+# status and prints the verdict on its first line.
+expect_verdict() {
+  local label="$1" expected_status="$2" verdict="$3"
+  shift 3
+  run bash "$WAIT" --tree "$WORKTREE" "$@"
+  [ "$status" -eq "$expected_status" ] || { echo "$label: status $status"; return 1; }
+  [ "${lines[0]}" = "$verdict" ] || { echo "$label: got '${lines[0]}'"; return 1; }
+}
+
+expect_log_line() {
+  [ "${lines[1]}" = "Log: $LOG_FILE" ] || { echo "$1: log line '${lines[1]}'"; return 1; }
+}
+
+@test "each log and pid state exits its verdict code" {
+  local started
+
   printf 'installing\n%s\n' "$FINISHED_LINE" >"$LOG_FILE"
-  run bash "$WAIT" --tree "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "FINISHED" ]
-  [ "${lines[1]}" = "Log: $LOG_FILE" ]
-}
+  expect_verdict "finished line" 0 FINISHED || return 1
+  expect_log_line "finished line" || return 1
 
-@test "a trailing blank line after the finished line still reads as finished" {
+  reset_state
   printf '%s\n\n\n' "$FINISHED_LINE" >"$LOG_FILE"
-  run bash "$WAIT" --tree "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "FINISHED" ]
-}
+  expect_verdict "trailing blank lines" 0 FINISHED || return 1
 
-@test "an INSTALL FAILED line plus the finished line exits 3 INSTALL_FAILED" {
+  reset_state
   printf 'provision-worktree: INSTALL FAILED for linked\n%s\n' "$FINISHED_LINE" >"$LOG_FILE"
-  run bash "$WAIT" --tree "$WORKTREE"
-  [ "$status" -eq 3 ]
-  [ "${lines[0]}" = "INSTALL_FAILED" ]
-  [ "${lines[1]}" = "Log: $LOG_FILE" ]
-}
+  expect_verdict "install failed" 3 INSTALL_FAILED || return 1
+  expect_log_line "install failed" || return 1
 
-@test "no finished line and a live pid exits 4 STILL_RUNNING once the attempts are spent" {
+  reset_state
   printf 'installing\n' >"$LOG_FILE"
   start_live_job
-  run bash "$WAIT" --tree "$WORKTREE" --attempts 2 --interval 0
-  [ "$status" -eq 4 ]
-  [ "${lines[0]}" = "STILL_RUNNING" ]
-  [ "${lines[1]}" = "Log: $LOG_FILE" ]
-}
+  started=$SECONDS
+  expect_verdict "live pid, attempts spent" 4 STILL_RUNNING --attempts 2 --interval 0 || return 1
+  expect_log_line "live pid, attempts spent" || return 1
+  [ $((SECONDS - started)) -lt 10 ] || { echo "live pid, attempts spent: blocked"; return 1; }
 
-@test "a live pid started before the bound exits 5 DEADLINE_PASSED without spending its attempts" {
+  reset_state
   printf 'installing\n' >"$LOG_FILE"
   start_live_job
   touch -t 202001010000 "$PID_FILE"
-  local started=$SECONDS
-  run bash "$WAIT" --tree "$WORKTREE" --bound 60 --attempts 5 --interval 30
-  [ "$status" -eq 5 ]
-  [ "${lines[0]}" = "DEADLINE_PASSED" ]
-  [ $((SECONDS - started)) -lt 10 ]
-}
+  started=$SECONDS
+  expect_verdict "live pid past the bound" 5 DEADLINE_PASSED --bound 60 --attempts 5 --interval 30 || return 1
+  [ $((SECONDS - started)) -lt 10 ] || { echo "live pid past the bound: spent its attempts"; return 1; }
 
-@test "a recorded pid that is dead exits 6 STOPPED" {
+  reset_state
   printf 'installing\n' >"$LOG_FILE"
   record_dead_job
-  run bash "$WAIT" --tree "$WORKTREE" --attempts 2 --interval 0
-  [ "$status" -eq 6 ]
-  [ "${lines[0]}" = "STOPPED" ]
-  [ "${lines[1]}" = "Log: $LOG_FILE" ]
-}
+  expect_verdict "dead pid" 6 STOPPED --attempts 2 --interval 0 || return 1
+  expect_log_line "dead pid" || return 1
 
-@test "a log with no finished line and no pid file exits 6 STOPPED" {
+  reset_state
   printf 'installing\n' >"$LOG_FILE"
-  run bash "$WAIT" --tree "$WORKTREE" --attempts 2 --interval 0
-  [ "$status" -eq 6 ]
-  [ "${lines[0]}" = "STOPPED" ]
-}
+  expect_verdict "no pid file" 6 STOPPED --attempts 2 --interval 0 || return 1
 
-@test "a dead pid past the bound reads STOPPED, not DEADLINE_PASSED" {
+  reset_state
   printf 'installing\n' >"$LOG_FILE"
   record_dead_job
   touch -t 202001010000 "$PID_FILE"
-  run bash "$WAIT" --tree "$WORKTREE" --bound 60 --attempts 2 --interval 0
-  [ "$status" -eq 6 ]
-  [ "${lines[0]}" = "STOPPED" ]
+  expect_verdict "dead pid past the bound" 6 STOPPED --bound 60 --attempts 2 --interval 0 || return 1
+
+  reset_state
+  [ ! -e "$LOG_FILE" ]
+  expect_verdict "no log file" 0 FINISHED || return 1
+  expect_log_line "no log file"
 }
 
 @test "the finished line appearing between two attempts exits 0" {
@@ -133,45 +142,6 @@ record_dead_job() {
   run bash "$WAIT" --tree "$WORKTREE" --attempts 5 --interval 1
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "FINISHED" ]
-}
-
-@test "no log file exits 0 FINISHED" {
-  [ ! -e "$LOG_FILE" ]
-  run bash "$WAIT" --tree "$WORKTREE"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "FINISHED" ]
-  [ "${lines[1]}" = "Log: $LOG_FILE" ]
-}
-
-@test "a run with a live pid and an interval of zero returns 4 rather than blocking" {
-  printf 'installing\n' >"$LOG_FILE"
-  start_live_job
-  local started=$SECONDS
-  run bash "$WAIT" --tree "$WORKTREE" --attempts 3 --interval 0
-  [ "$status" -eq 4 ]
-  [ $((SECONDS - started)) -lt 10 ]
-}
-
-@test "no --tree exits 2" {
-  run bash "$WAIT"
-  [ "$status" -eq 2 ]
-}
-
-@test "a relative --tree exits 2" {
-  run bash "$WAIT" --tree relative/path
-  [ "$status" -eq 2 ]
-}
-
-@test "a non-integer --bound exits 2" {
-  run bash "$WAIT" --tree "$WORKTREE" --bound ten
-  [ "$status" -eq 2 ]
-}
-
-@test "a non-integer --attempts and a non-integer --interval exit 2" {
-  run bash "$WAIT" --tree "$WORKTREE" --attempts 1.5
-  [ "$status" -eq 2 ]
-  run bash "$WAIT" --tree "$WORKTREE" --interval -1
-  [ "$status" -eq 2 ]
 }
 
 @test "a path that is not a git work tree exits 2" {

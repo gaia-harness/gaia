@@ -105,24 +105,17 @@ describe('mergeStatusline', () => {
     });
   });
 
-  test('idempotent: existing canonical block is preserved untouched', () => {
-    const source = {
-      env: {},
-      statusLine: {
-        command: CANONICAL_STATUSLINE_COMMAND,
-        refreshInterval: 15,
-        type: 'command',
-      },
-    };
-    const merged = mergeStatusline(source);
-    expect(merged).toBe(source);
-  });
-
-  test('overwrites a non-canonical statusLine', () => {
-    const merged = mergeStatusline({
-      env: {},
-      statusLine: {command: 'bash other.sh', type: 'command'},
-    });
+  test.each([
+    [
+      'overwrites a non-canonical statusLine',
+      {command: 'bash other.sh', type: 'command'},
+    ],
+    [
+      'upgrades a canonical command that lacks refreshInterval',
+      {command: CANONICAL_STATUSLINE_COMMAND, type: 'command'},
+    ],
+  ])('rewrites to the canonical block: %s', (_name, statusLine) => {
+    const merged = mergeStatusline({env: {}, statusLine});
     expect(merged.statusLine).toEqual({
       command: CANONICAL_STATUSLINE_COMMAND,
       refreshInterval: 15,
@@ -130,24 +123,15 @@ describe('mergeStatusline', () => {
     });
   });
 
-  test('upgrades a canonical command that lacks refreshInterval', () => {
-    const merged = mergeStatusline({
-      env: {},
-      statusLine: {command: CANONICAL_STATUSLINE_COMMAND, type: 'command'},
-    });
-    expect(merged.statusLine).toEqual({
-      command: CANONICAL_STATUSLINE_COMMAND,
-      refreshInterval: 15,
-      type: 'command',
-    });
-  });
-
-  test('keeps a canonical command whose refreshInterval was tuned', () => {
+  test.each([
+    ['idempotent: existing canonical block is preserved untouched', 15],
+    ['keeps a canonical command whose refreshInterval was tuned', 30],
+  ])('returns the same object: %s', (_name, refreshInterval) => {
     const source = {
       env: {},
       statusLine: {
         command: CANONICAL_STATUSLINE_COMMAND,
-        refreshInterval: 30,
+        refreshInterval,
         type: 'command',
       },
     };
@@ -243,33 +227,23 @@ describe('init wire-statusline CLI', () => {
     expect(after).toBe(first);
   });
 
-  test('exit 1 on any flag, leaving settings untouched', () => {
-    sandbox = setupSandbox(true);
-    const before = readFileSync(
-      path.join(sandbox.root, '.claude', 'settings.json'),
-      'utf8'
-    );
-    const exit = run(['--mode', 'project'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag: --mode');
-    const after = readFileSync(
-      path.join(sandbox.root, '.claude', 'settings.json'),
-      'utf8'
-    );
-    expect(after).toBe(before);
-  });
-
-  test('exit 1 when project settings.json is malformed', () => {
+  test.each([
+    [
+      'any flag, leaving settings untouched',
+      `${JSON.stringify(FIXTURE_SETTINGS, null, 2)}\n`,
+      ['--mode', 'project'],
+      'unknown flag: --mode',
+    ],
+    ['malformed project settings.json', '{ broken', [], 'settings_malformed'],
+  ])('exits 1 on %s', (_name, settings, args, message) => {
     sandbox = setupSandbox(false);
     mkdirSync(path.join(sandbox.root, '.claude'), {recursive: true});
-    writeFileSync(
-      path.join(sandbox.root, '.claude', 'settings.json'),
-      '{ broken',
-      'utf8'
-    );
+    const settingsPath = path.join(sandbox.root, '.claude', 'settings.json');
+    writeFileSync(settingsPath, settings, 'utf8');
 
-    const exit = run([], {cwd: sandbox.root});
+    const exit = run(args, {cwd: sandbox.root});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('settings_malformed');
+    expect(stdio.errors.join('')).toContain(message);
+    expect(readFileSync(settingsPath, 'utf8')).toBe(settings);
   });
 });

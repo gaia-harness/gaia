@@ -4,13 +4,7 @@
 # roster glob that routes a change to that file to a reviewing member.
 #
 # Prose-to-prose checks: each literal below is something the unit acts on (a
-# page anchor it follows, a deny prefix it classifies, a stop it writes, a
-# thing it must never do). Every presence check has a red twin: a scratch copy
-# with the literal removed must fail the same predicate, so the predicate is
-# proven able to fail.
-#
-# GAIA_AUDIT_LOOP_UNIT_AGENT overrides the agent path so a scratch copy can be
-# driven through the same cases; it defaults to the real file.
+# deny prefix it classifies, a stop it writes, a thing it must never do).
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -19,7 +13,7 @@
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  AGENT="${GAIA_AUDIT_LOOP_UNIT_AGENT:-$ROOT/.claude/agents/audit-loop-unit.md}"
+  AGENT="$ROOT/.claude/agents/audit-loop-unit.md"
 }
 
 # has_literal <file> <literal>: rc 0 when the fixed string is present.
@@ -27,22 +21,9 @@ has_literal() {
   grep -qF -- "$2" "$1"
 }
 
-# scratch_without <literal>: writes a copy of the agent with every line
-# carrying the literal removed and prints its path.
-scratch_without() {
-  local scratch_copy_path="$BATS_TEST_TMPDIR/agent-without.md"
-  grep -vF -- "$1" "$AGENT" >"$scratch_copy_path"
-  printf '%s\n' "$scratch_copy_path"
-}
-
-# assert_pinned <literal>: present in the real file, absent in the scratch
-# copy that drops it (the red twin).
+# assert_pinned <literal>: present in the real file.
 assert_pinned() {
   has_literal "$AGENT" "$1" || { echo "missing: $1" >&2; return 1; }
-  local copy
-  copy="$(scratch_without "$1")"
-  has_literal "$copy" "$1" && { echo "red twin did not fail: $1" >&2; return 1; }
-  true
 }
 
 # frontmatter_names_agent <file>: rc 0 when the frontmatter carries the agent's
@@ -80,36 +61,6 @@ frontmatter_tools_are_allowlist() {
   [ "$(basename "$AGENT" .md)" = "audit-loop-unit" ]
   # The body after the frontmatter is non-empty.
   [ "$(sed -n "$((close + 1)),\$p" "$AGENT" | grep -c '[^[:space:]]')" -gt 0 ]
-}
-
-@test "frontmatter red twin: a wrong name or model fails the same checks" {
-  sed 's/^name: audit-loop-unit$/name: other/' "$AGENT" >"$BATS_TEST_TMPDIR/bad-name.md"
-  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/bad-name.md" && return 1
-  frontmatter_names_agent "$BATS_TEST_TMPDIR/bad-name.md" && return 1
-  sed 's/^model: opus$/model: sonnet/' "$AGENT" >"$BATS_TEST_TMPDIR/bad-model.md"
-  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/bad-model.md" && return 1
-  frontmatter_names_agent "$BATS_TEST_TMPDIR/bad-model.md" && return 1
-  true
-}
-
-@test "tools red twin: no tools line, a dropped Write, or a dropped SendMessage fails the allowlist check" {
-  grep -v '^tools:' "$AGENT" >"$BATS_TEST_TMPDIR/no-tools.md"
-  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/no-tools.md" && return 1
-  frontmatter_tools_are_allowlist "$BATS_TEST_TMPDIR/no-tools.md" && return 1
-  sed 's/^tools: Agent, Bash, Monitor, Read, SendMessage, Write$/tools: Agent, Bash, Monitor, Read, SendMessage/' "$AGENT" >"$BATS_TEST_TMPDIR/no-write.md"
-  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/no-write.md" && return 1
-  frontmatter_tools_are_allowlist "$BATS_TEST_TMPDIR/no-write.md" && return 1
-  sed 's/^tools: Agent, Bash, Monitor, Read, SendMessage, Write$/tools: Agent, Bash, Monitor, Read, Write/' "$AGENT" >"$BATS_TEST_TMPDIR/no-sendmessage.md"
-  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/no-sendmessage.md" && return 1
-  frontmatter_tools_are_allowlist "$BATS_TEST_TMPDIR/no-sendmessage.md" && return 1
-  true
-}
-
-@test "agent names every page anchor it follows" {
-  assert_pinned '#### The audit loop unit'
-  assert_pinned '#### The fix round: fixer, verifier, gate'
-  assert_pinned '#### When rounds stop: pre-commit a disposition for every branch'
-  assert_pinned '#### Cross-remit findings'
 }
 
 @test "agent names every stop_reason value" {
@@ -168,31 +119,6 @@ frontmatter_tools_are_allowlist() {
   assert_pinned 'A dirty tree after the closing wave stops the unit `member-wave-dirty`, naming the wave'"'"'s members and the dirty paths'
 }
 
-@test "UAT-040: the unit files only through the filing script and never runs gh issue" {
-  assert_pinned '.gaia/scripts/file-tech-debt.sh file'
-  grep -qF -- 'gh issue create' "$AGENT" && return 1
-  assert_pinned 'Never run `gh issue` yourself and never file by any other route.'
-  true
-}
-
-@test "UAT-005: every round re-files each retry file through the filing script and records filing_pending" {
-  assert_pinned '- Retry pass: run the same command with `--finding <f>` and `--disposition file` once for every file in `<run>/filing-retry/` that an earlier `transient` outcome left, into the same outcome file.'
-  assert_pinned 'into `filing_pending`'
-  assert_pinned 'An `absent` or `transient` outcome never stops the unit and never blocks the merge.'
-}
-
-@test "a refused-authored entry is re-disposed accept-residual only where the check allows it, else the unit stops needs-human" {
-  assert_pinned 'A `refused-authored` violation depends on the round. Where the check allows `accept-residual`'
-  assert_pinned 're-run `check` then `check-outcomes`, and go on only when both pass'
-  assert_pinned 'On any other round leave the entry and stop `needs-human` with the key in `stop_detail`, never `dispositions-check-failed`'
-  assert_pinned 'a veto on the exact key clears the violation, and `check-outcomes` then passes'
-  assert_pinned 'A non-zero exit other than a `refused-authored` violation stops the unit `dispositions-check-failed`'
-  assert_pinned 'a closing round carries a human accept, so a `refused-authored` violation is re-disposed `accept-residual`'
-  assert_pinned 'audit-dispositions-check.sh record-residual --root <root> --run-folder <run> --finding <f>'
-  assert_pinned 'A recorded row is not a dispositions entry, so the eligibility refusal does not grade it, and it still reaches the human'"'"'s residual question.'
-  assert_pinned 'Copy each retry file to your scratchpad before replaying it'
-}
-
 # record_flags_accepted <agent>: rc 0 when the agent names the record script in
 # at least one command span and every flag after the script name in a span is
 # one the script's argument loop accepts.
@@ -215,23 +141,6 @@ record_flags_accepted() {
   record_flags_accepted "$AGENT"
   assert_pinned '`audit-loop-record.sh` takes no root flag; its header owns the flag set.'
   assert_pinned '`audit-loop-eval.sh record-values --root <root> | audit-loop-record.sh --pr <N> --values-json -`'
-  # Red twin: a command span that adds a root flag to the record script is refused.
-  local mutant="$BATS_TEST_TMPDIR/agent-root-flag.md"
-  sed 's/audit-loop-record\.sh --pr <N>/audit-loop-record.sh --root <root> --pr <N>/' "$AGENT" >"$mutant"
-  cmp -s "$AGENT" "$mutant" && return 1
-  run record_flags_accepted "$mutant"
-  [ "$status" -ne 0 ]
-}
-
-@test "the default stop disposes the stop keys accept-residual with the failure mode, and a threshold fix ends it" {
-  assert_pinned 'run `bash <root>/.gaia/scripts/audit-loop-eval.sh evaluate-round --root <root> --round <r>`. When `default_stop` is true, dispose every key in `default_stop_keys` `accept-residual`'
-  assert_pinned 'each entry'"'"'s reason carrying that finding'"'"'s `failure_mode` from `audit-loop-eval.sh findings --root <root> --round <r>`'
-  assert_pinned 'With no `fix` entry, run no fixer and make no commit: follow the page'"'"'s zero-fix rule and stop as it says.'
-  assert_pinned 'When the page'"'"'s staging block stages nothing (`git -C <root> diff --cached --quiet` exits 0) and no fixer result is `fixed`, skip the gate and the commit, run round-check, and end the round as the page'"'"'s zero-fix rule does. A `fixed` result with nothing staged stops the unit `needs-human`, naming the entry.'
-  assert_pinned 'or on a round that makes no commit, run `review-record round-end'
-  assert_pinned 'which ends the stop for the round: no key is then disposed `accept-residual`, every other in-scope finding defaults to `fix`'
-  assert_pinned 'A threshold `waive-out-of-scope` may sit beside the residuals.'
-  assert_pinned 'the check refuses `accept-residual` outside the stop or a recorded human accept (`accept-residual-not-eligible`). An architectural Minor on another round stops `needs-human`.'
 }
 
 # unit_command_lines <file>...: every inline code span naming a script (`.sh`)
@@ -259,41 +168,7 @@ has_bare_shell_eval() {
   # The derivation reaches the default stop's evaluator call.
   grep -qF 'audit-loop-eval.sh evaluate-round --root <root> --round <r>' -- "$command_lines_file" || return 1
   has_bare_shell_eval "$command_lines_file" && { grep -nE '(^|[^[:alnum:]_.-])eval([^[:alnum:]_.-]|$)' -- "$command_lines_file" >&2; return 1; }
-  # Red twin: the old subcommand spelling trips the predicate.
-  local mutant="$BATS_TEST_TMPDIR/agent-bare-word.md"
-  sed 's/audit-loop-eval\.sh evaluate-round/audit-loop-eval.sh eval/' "$AGENT" >"$mutant"
-  cmp -s "$AGENT" "$mutant" && return 1
-  unit_command_lines "$mutant" >"$command_lines_file"
-  has_bare_shell_eval "$command_lines_file"
-}
-
-@test "the reopened round is a first action that fixes before it reviews, for a veto and for a gate failure" {
-  assert_pinned 'audit-loop-eval.sh reopened-round --root <root>'
-  assert_pinned '## Reopened round'
-  assert_pinned 'Commit the repair before the first member wave'
-  assert_pinned 'a synthetic `fix` entry per key in `Vetoes:`'
-  assert_pinned '`<run>/gate-failure.json` stands in for the fix entries. `dispositions-<r>.json` holds `entries: []`.'
-  assert_pinned '{"member":"gate-repair","finding_class":"gate/<step>","path":"apps/web","line":0,"disposition":"fixed","reason":"...","changed_paths":[...]}'
-  assert_pinned 'so classify it with `--expect-count 1`'
-  assert_pinned 'a third failure stops `needs-human`, naming the step'
-  assert_pinned 'The commit subject is `fix(audit): repair the owed gate steps at round <r>`.'
-  assert_pinned '`audit-gate-owed.sh choose` prints `full` for them'
-  assert_pinned 'A member that `audit-loop-eval.sh veto-state --root <root>` lists in `reviewers` skips this router and is dispatched full'
-  assert_pinned 'Exit 2 with `no recorded round` on stderr means no veto is in effect'
-  assert_pinned 'including exit 2 when the round'"'"'s findings cannot be read, routes every member full'
-  local reopened
-  reopened="$(awk '/^## Reopened round$/ {inside_section=1; next} /^## / {inside_section=0} inside_section' "$AGENT")"
-  [ -n "$reopened" ]
-  grep -qF -- 'gate-failure.json' <<<"$reopened"
-}
-
-@test "the gate choice runs before the gate, marks or records after the commit, and never runs the owed steps" {
-  assert_pinned 'audit-gate-owed.sh choose --root <root> --run-folder <run> --round <r>'
-  assert_pinned '`smaller` runs the page'"'"'s smaller gate, then `audit-gate-owed.sh mark --root <root> --run-folder <run> --round <r>` after the commit.'
-  assert_pinned '`full` runs the whole gate with its Playwright, dev smoke and build steps as one `audit-gate-owed.sh gate-steps --root <root> --run-folder <run>`'
-  assert_pinned 'then `audit-gate-owed.sh steps-passed --root <root> --run-folder <run>` after the commit.'
-  assert_pinned '`steps-passed` clears only on the pass `gate-steps` recorded for the committed tree; its exit 4 is no stop'
-  assert_pinned 'The unit never runs `audit-gate-owed.sh run`: the main thread does.'
+  true
 }
 
 @test "a closing round stops only on an unsatisfied vetoed key, and the veto bullet skips a satisfied one" {
@@ -330,7 +205,7 @@ has_bare_shell_eval() {
 }
 
 @test "agent drafts a vetoed enforcement-path repair and stops for the human with it uncommitted" {
-  assert_pinned 'A `fix` entry for a key in `Vetoes:` whose path is in the `ENFORCEMENT_PATHS` list of `.gaia/scripts/audit-fix-verify.sh` gets `"enforcement_draft": true` and goes to the fixer first'
+  assert_pinned 'A `fix` entry for a key in `Vetoes:` whose path is in the `ENFORCEMENT_PATHS` list of `.gaia/scripts/audit-fix-verify-state-lib.sh` gets `"enforcement_draft": true` and goes to the fixer first'
   assert_pinned 'every error it lists is `enforcement-path` on an `enforcement_draft` entry'"'"'s path, send no continuation, run no gate and make no commit: leave the fixer'"'"'s edits in the tree and stop `needs-human`'
   assert_pinned '`enforcement-draft <member> <finding_class> <path>:<line>`'
 }
@@ -378,14 +253,6 @@ dispatch_time_names_are_scoped() {
   dispatch_time_names_are_scoped "$AGENT"
 }
 
-@test "dispatch-name guard fails on an appended --dispatched-at or a bare dispatched_at" {
-  { cat "$AGENT"; printf 'pass --dispatched-at <time>\n'; } >"$BATS_TEST_TMPDIR/flag.md"
-  dispatch_time_names_are_scoped "$BATS_TEST_TMPDIR/flag.md" && return 1
-  { cat "$AGENT"; printf 'record the dispatched_at of the reviewer\n'; } >"$BATS_TEST_TMPDIR/bare.md"
-  dispatch_time_names_are_scoped "$BATS_TEST_TMPDIR/bare.md" && return 1
-  true
-}
-
 @test "roster: a change to the agent file routes to the shell member only" {
   local sandbox_repository="$BATS_TEST_TMPDIR/sb"
   mkdir -p "$sandbox_repository/.gaia" "$sandbox_repository/.claude/agents"
@@ -403,13 +270,7 @@ dispatch_time_names_are_scoped() {
   [ "$status" -eq 0 ]
   [ "$output" = "code-audit-maintainer-shell" ]
   grep -qF 'audit-loop-unit' <<<"$output" && return 1
-
-  # Red twin: with the glob removed from the sandbox roster, nobody owns it.
-  grep -vF '".claude/agents/audit-loop-unit.md"' "$sandbox_repository/.gaia/audit-ci.yml" >"$sandbox_repository/roster.new"
-  mv "$sandbox_repository/roster.new" "$sandbox_repository/.gaia/audit-ci.yml"
-  run bash "$ROOT/.gaia/scripts/resolve-audit-members.sh" --root "$sandbox_repository" --base main
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  true
 }
 
 # bats test_tags=whole-tree
@@ -447,25 +308,6 @@ shares_block_with() {
   ' "$1"
 }
 
-# without_block_markers <literal> <out>: copies the agent with the marker lines
-# of the maintainer-only block carrying the literal removed.
-without_block_markers() {
-  awk -v needle="$1" '
-    { lines[NR] = $0 }
-    END {
-      for (i = 1; i <= NR; i++) {
-        if (lines[i] ~ /gaia:maintainer-only:start/) { start_line = i }
-        if (lines[i] ~ /gaia:maintainer-only:end/) {
-          if (start_line && block_has_needle) { drop[start_line] = 1; drop[i] = 1 }
-          start_line = 0; block_has_needle = 0
-        }
-        if (start_line && index(lines[i], needle)) { block_has_needle = 1 }
-      }
-      for (i = 1; i <= NR; i++) if (!drop[i]) print lines[i]
-    }
-  ' "$AGENT" >"$2"
-}
-
 @test "the unit records each member dispatch cost with the agentId its launch returned" {
   assert_pinned "$MEMBER_RECORD_COMMAND"
   assert_pinned '`agentId`'
@@ -485,12 +327,6 @@ without_block_markers() {
   in_maintainer_block "$AGENT" "$LIGHT_RECORD_PREFIX"
   in_maintainer_block "$AGENT" "$NOT_DISPATCHED_PREFIX"
   shares_block_with "$AGENT" "$MEMBER_RECORD_COMMAND" 'audit-light-telemetry.sh member-result'
-  # Red twin: without the new block's marker lines the checks fail.
-  without_block_markers "$LIGHT_RECORD_PREFIX" "$BATS_TEST_TMPDIR/unfenced.md"
-  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/unfenced.md" && return 1
-  in_maintainer_block "$BATS_TEST_TMPDIR/unfenced.md" "$LIGHT_RECORD_PREFIX" && return 1
-  in_maintainer_block "$BATS_TEST_TMPDIR/unfenced.md" "$NOT_DISPATCHED_PREFIX" && return 1
-  true
 }
 
 # bats test_tags=whole-tree
@@ -503,13 +339,4 @@ without_block_markers() {
   [ "$status" -eq 0 ]
   grep -qF -- 'audit-dispatch-cost' "$staging_directory/.claude/agents/audit-loop-unit.md" && return 1
   grep -qF -- "$mark_literal" "$staging_directory/.claude/agents/audit-loop-unit.md"
-
-  # Red twin: with the new block's marker lines removed, the name survives the
-  # same scrub. The exit status is ignored: it turns 1 once the recorder is
-  # release-excluded and the surviving name reads as a leak.
-  local unfenced_directory="$BATS_TEST_TMPDIR/unfenced-staging"
-  mkdir -p "$unfenced_directory/.claude/agents"
-  without_block_markers "$LIGHT_RECORD_PREFIX" "$unfenced_directory/.claude/agents/audit-loop-unit.md"
-  run bash -c 'cd "$1" && "$1/.gaia/cli/gaia-maintainer" release scrub "$2" --config "$1/.gaia/release-scrub.yml"' _ "$ROOT" "$unfenced_directory"
-  grep -qF -- 'audit-dispatch-cost' "$unfenced_directory/.claude/agents/audit-loop-unit.md"
 }

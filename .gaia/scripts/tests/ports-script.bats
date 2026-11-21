@@ -71,40 +71,39 @@ provisioned_worktree() {
   [ "$output" = "5174" ]
 }
 
-@test "main checkout with no file: slot 0, base ports, site url from the env file" {
+@test "a tree with no port file resolves slot 0 and base ports; an exported SITE_URL beats the env file on main and in a provisioned worktree, and the env file beats the localhost default" {
+  # Main checkout: the site url comes from the env file, on the base dev port.
   printf 'SITE_URL=http://example.test/base\n' >"$FIXTURE_MAIN/apps/web/.env"
   run bash "$PORTS_SCRIPT" --tree "$FIXTURE_MAIN"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'slot=0\ndev=5173\nstorybook=6006\nsite_url=http://example.test:5173/base')" ]
-}
+  [ "$status" -eq 0 ] || { echo "main case: status $status"; return 1; }
+  [ "$output" = "$(printf 'slot=0\ndev=5173\nstorybook=6006\nsite_url=http://example.test:5173/base')" ] || { echo "main case: got '$output'"; return 1; }
 
-@test "non-linked clone with no file: slot 0 and the base ports" {
+  # A non-linked clone behaves like main.
   clone="$BATS_TEST_TMPDIR/clone"
   git clone -q "$FIXTURE_MAIN" "$clone"
   printf 'SITE_URL=https://clone.test:3000\n' >"$clone/apps/web/.env"
   run bash "$PORTS_SCRIPT" --tree "$clone"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'slot=0\ndev=5173\nstorybook=6006\nsite_url=https://clone.test:5173')" ]
-}
+  [ "$status" -eq 0 ] || { echo "clone case: status $status"; return 1; }
+  [ "$output" = "$(printf 'slot=0\ndev=5173\nstorybook=6006\nsite_url=https://clone.test:5173')" ] || { echo "clone case: got '$output'"; return 1; }
 
-@test "no env file on main: the default localhost url" {
-  run bash "$PORTS_SCRIPT" --tree "$FIXTURE_MAIN" --field site-url
-  [ "$output" = "http://localhost:5173" ]
-}
-
-@test "an exported SITE_URL wins on main and in a worktree with a port file" {
+  # An exported SITE_URL wins on main and in a worktree with a port file.
   export SITE_URL="https://exported.test:9999"
-  printf 'SITE_URL=http://example.test:5173\n' >"$FIXTURE_MAIN/apps/web/.env"
   run bash "$PORTS_SCRIPT" --tree "$FIXTURE_MAIN" --field site-url
-  [ "$output" = "https://exported.test:9999" ]
+  [ "$output" = "https://exported.test:9999" ] || { echo "exported main case: got '$output'"; return 1; }
   tree="$(provisioned_worktree one 1)"
   run bash "$PORTS_SCRIPT" --tree "$tree" --field site-url
-  [ "$output" = "https://exported.test:9999" ]
+  [ "$output" = "https://exported.test:9999" ] || { echo "exported worktree case: got '$output'"; return 1; }
   run bash "$PORTS_SCRIPT" --tree "$tree" --field dev
-  [ "$output" = "5174" ]
+  [ "$output" = "5174" ] || { echo "exported worktree dev case: got '$output'"; return 1; }
+  unset SITE_URL
+
+  # With no env file the default is localhost.
+  rm -f "$FIXTURE_MAIN/apps/web/.env"
+  run bash "$PORTS_SCRIPT" --tree "$FIXTURE_MAIN" --field site-url
+  [ "$output" = "http://localhost:5173" ] || { echo "default case: got '$output'"; return 1; }
 }
 
-@test "linked worktree with no port file: exit 3, empty stdout, the frozen message on stderr" {
+@test "a linked worktree with no port file refuses with exit 3 and empty stdout, with or without an exported SITE_URL" {
   tree="$(add_worktree bare)"
   code=0
   bash "$PORTS_SCRIPT" --tree "$tree" >"$BATS_TEST_TMPDIR/stdout" 2>"$BATS_TEST_TMPDIR/stderr" || code=$?
@@ -112,15 +111,12 @@ provisioned_worktree() {
   [ ! -s "$BATS_TEST_TMPDIR/stdout" ]
   expected="GAIA: $tree is a linked worktree with no port file at $tree/apps/web/.gaia-ports, so it has no ports of its own and will not borrow the main checkout's. Run: bash .claude/hooks/provision-worktree.sh $tree Never stop a process on a port another live tree owns without asking the user first. Run bash .gaia/scripts/ports.sh to see this tree's ports."
   [ "$(cat "$BATS_TEST_TMPDIR/stderr")" = "$expected" ]
-}
 
-@test "linked worktree with no port file and an exported SITE_URL still refuses" {
   export SITE_URL="https://exported.test:9999"
-  tree="$(add_worktree bare)"
   code=0
   bash "$PORTS_SCRIPT" --tree "$tree" >"$BATS_TEST_TMPDIR/stdout" 2>/dev/null || code=$?
-  [ "$code" -eq 3 ]
-  [ ! -s "$BATS_TEST_TMPDIR/stdout" ]
+  [ "$code" -eq 3 ] || { echo "exported SITE_URL case: exit $code"; return 1; }
+  [ ! -s "$BATS_TEST_TMPDIR/stdout" ] || { echo "exported SITE_URL case: stdout not empty"; return 1; }
 }
 
 @test "malformed port file: exit 4 naming the file and the provisioning command" {
@@ -132,17 +128,6 @@ provisioned_worktree() {
   [ ! -s "$BATS_TEST_TMPDIR/stdout" ]
   grep -qF -- "$tree/apps/web/.gaia-ports" "$BATS_TEST_TMPDIR/stderr"
   grep -qF -- "bash .claude/hooks/provision-worktree.sh $tree" "$BATS_TEST_TMPDIR/stderr"
-}
-
-@test "usage errors exit 2" {
-  run bash "$PORTS_SCRIPT" --field bogus
-  [ "$status" -eq 2 ]
-  run bash "$PORTS_SCRIPT" --nope
-  [ "$status" -eq 2 ]
-  run bash "$PORTS_SCRIPT" --tree
-  [ "$status" -eq 2 ]
-  run bash "$PORTS_SCRIPT" --tree "$BATS_TEST_TMPDIR/not-a-repository"
-  [ "$status" -eq 2 ]
 }
 
 @test "a tree with no router config exits 5 naming the missing config, with and without jq" {

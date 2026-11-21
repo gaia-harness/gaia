@@ -166,33 +166,27 @@ drive_consumer() {
   grep -qF 'GAIA_AWK_IDENTITY=bwk' <<<"$output"
 }
 
-@test "resolver: neither mawk nor a reachable BWK path yields status 5 and an empty GAIA_AWK" {
+@test "resolver: an unusable interpreter yields status 5 (none reachable) or 6 (unsanctioned, gawk included)" {
   run resolve "/usr/bin:/bin" "" "$TEMPORARY_DIRECTORY/does-not-exist" "$NO_MAWK"
   [ "$status" -eq 0 ]
-  grep -qxF 'GAIA_AWK=' <<<"$output"
-  grep -qF 'GAIA_AWK_STATUS=5' <<<"$output"
-}
+  grep -qxF 'GAIA_AWK=' <<<"$output" || { echo "no mawk and no BWK: $output"; return 1; }
+  grep -qF 'GAIA_AWK_STATUS=5' <<<"$output" || { echo "no mawk and no BWK: $output"; return 1; }
 
-@test "resolver: an explicit GAIA_AWK naming a nonexistent path yields status 5" {
   run resolve "/usr/bin:/bin" "$TEMPORARY_DIRECTORY/does-not-exist-either" ""
   [ "$status" -eq 0 ]
-  grep -qxF 'GAIA_AWK=' <<<"$output"
-  grep -qF 'GAIA_AWK_STATUS=5' <<<"$output"
-}
+  grep -qxF 'GAIA_AWK=' <<<"$output" || { echo "nonexistent GAIA_AWK: $output"; return 1; }
+  grep -qF 'GAIA_AWK_STATUS=5' <<<"$output" || { echo "nonexistent GAIA_AWK: $output"; return 1; }
 
-@test "resolver: an explicit GAIA_AWK naming an unsanctioned interpreter yields status 6" {
   run resolve "/usr/bin:/bin" "$TEMPORARY_DIRECTORY/busybox-awk" ""
   [ "$status" -eq 0 ]
-  grep -qF "GAIA_AWK=$TEMPORARY_DIRECTORY/busybox-awk" <<<"$output"
-  grep -qF 'GAIA_AWK_STATUS=6' <<<"$output"
-  grep -qF 'GAIA_AWK_IDENTITY=BusyBox v1.36 awk' <<<"$output"
-}
+  grep -qF "GAIA_AWK=$TEMPORARY_DIRECTORY/busybox-awk" <<<"$output" || { echo "unsanctioned interpreter: $output"; return 1; }
+  grep -qF 'GAIA_AWK_STATUS=6' <<<"$output" || { echo "unsanctioned interpreter: $output"; return 1; }
+  grep -qF 'GAIA_AWK_IDENTITY=BusyBox v1.36 awk' <<<"$output" || { echo "unsanctioned interpreter: $output"; return 1; }
 
-@test "resolver: gawk is never sanctioned even when named explicitly" {
   run resolve "/usr/bin:/bin" "$TEMPORARY_DIRECTORY/gawk-stub" ""
   [ "$status" -eq 0 ]
-  grep -qF 'GAIA_AWK_STATUS=6' <<<"$output"
-  grep -qF 'GAIA_AWK_IDENTITY=GNU Awk' <<<"$output"
+  grep -qF 'GAIA_AWK_STATUS=6' <<<"$output" || { echo "gawk: $output"; return 1; }
+  grep -qF 'GAIA_AWK_IDENTITY=GNU Awk' <<<"$output" || { echo "gawk: $output"; return 1; }
 }
 
 @test "resolver: a binary literally named awk is identified by its banner, not its name" {
@@ -218,7 +212,7 @@ drive_consumer() {
   [ -n "$output" ]
 }
 
-@test "consumers: every guard-awk-lib.sh consumer refuses at status 6 on an unsanctioned interpreter, and never misreports it as the exit-2 missing-library case" {
+@test "consumers: every guard-awk-lib.sh consumer refuses at status 6 on an unsanctioned interpreter and at status 5 with no awk, never misreporting either as the exit-2 missing-library case" {
   local guard_name
   while IFS= read -r guard_name; do
     run drive_consumer "$guard_name" "/usr/bin:/bin" "$TEMPORARY_DIRECTORY/busybox-awk" ""
@@ -226,23 +220,15 @@ drive_consumer() {
     grep -qF 'unsanctioned interpreter' <<<"$output" || { echo "guard=$guard_name missing the unsanctioned-interpreter message: $output"; return 1; }
     grep -qF 'BusyBox v1.36 awk' <<<"$output" || { echo "guard=$guard_name message does not name what it found: $output"; return 1; }
     grep -qF 'guard-awk-lib.sh is missing' <<<"$output" && { echo "guard=$guard_name misreported status 6 as the exit-2 missing-library case: $output"; return 1; }
-  done < <(consumers)
-  # A `while read` loop's own exit status is the final (EOF-failing) `read`,
-  # not the last passing iteration, so an explicit `true` is what makes a
-  # loop of all-passing iterations read as a passing test rather than a
-  # failing one. Matches the idiom at .gaia/scripts/tests/guard-awk-lib.bats:1234.
-  true
-}
-
-@test "consumers: every guard-awk-lib.sh consumer refuses at status 5 with no awk at all, distinct from both the status-6 and exit-2 messages" {
-  local guard_name
-  while IFS= read -r guard_name; do
     run drive_consumer "$guard_name" "/usr/bin:/bin" "" "$TEMPORARY_DIRECTORY/does-not-exist" "$NO_MAWK"
     [ "$status" -eq 5 ] || { echo "guard=$guard_name expected status 5, got $status: $output"; return 1; }
     grep -qF 'no awk interpreter found' <<<"$output" || { echo "guard=$guard_name missing the no-awk message: $output"; return 1; }
     grep -qF 'guard-awk-lib.sh is missing' <<<"$output" && { echo "guard=$guard_name misreported status 5 as the exit-2 missing-library case: $output"; return 1; }
     grep -qF 'unsanctioned interpreter' <<<"$output" && { echo "guard=$guard_name misreported status 5 as the status-6 case: $output"; return 1; }
   done < <(consumers)
+  # The loop body ends in a `grep ... && { ...; }` guard, which returns 1 when
+  # the row passes, so the loop's status is non-zero on success; `true` makes
+  # the test's last status the pass.
   true
 }
 

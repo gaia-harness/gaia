@@ -57,12 +57,15 @@ EOF
   printf '[]\n' >"$cache/audit-$id/findings/self-review.json"
 }
 
-@test "the draft is saved with today's stamp, the row is readied with its intent and every cache is cleared" {
+@test "save copies the draft with only the updated stamp changed, readies the row and clears caches" {
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
   seed_draft "$REPO" SPEC-001 "[]"
+  sed "s/^updated: 2026-01-02\$/updated: $TODAY/" "$REPO/.gaia/local/cache/draft-SPEC-001.md" >"$BATS_TEST_TMPDIR/expected.md"
 
   run bash "$REPO/$SAVE" "$REPO" SPEC-001
   [ "$status" -eq 0 ]
+
+  echo "case: the draft is saved with today's stamp, the row is readied with its intent and every cache is cleared"
   spec="$REPO/.notebook/specs/SPEC-001/SPEC.md"
   [ "${lines[0]}" = "$spec" ]
   [ -f "$spec" ]
@@ -75,50 +78,53 @@ EOF
   [ ! -e "$REPO/.gaia/local/cache/gate1-SPEC-001.json" ]
   [ ! -e "$REPO/.gaia/local/cache/spec-session-SPEC-001.json" ]
   [ ! -e "$REPO/.gaia/local/cache/audit-SPEC-001" ]
+
+  echo "case: only the frontmatter's updated line changes; the rest of the draft is copied byte for byte"
+  cmp "$BATS_TEST_TMPDIR/expected.md" "$spec"
 }
 
-@test "only the frontmatter's updated line changes; the rest of the draft is copied byte for byte" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
-  seed_draft "$REPO" SPEC-001 "[]"
-  sed "s/^updated: 2026-01-02\$/updated: $TODAY/" "$REPO/.gaia/local/cache/draft-SPEC-001.md" >"$BATS_TEST_TMPDIR/expected.md"
-
-  run bash "$REPO/$SAVE" "$REPO" SPEC-001
-  [ "$status" -eq 0 ]
-  cmp "$BATS_TEST_TMPDIR/expected.md" "$REPO/.notebook/specs/SPEC-001/SPEC.md"
-}
-
-@test "research lineage entries are recorded on the row and issue entries are not" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
+@test "research lineage entries are recorded on the row, issue entries and empty lineage are not" {
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft --seed-spec SPEC-002 draft)"
   seed_draft "$REPO" SPEC-001 "[research:first-topic, issue:12, \"research:second-topic\"]"
+  seed_draft "$REPO" SPEC-002 "[]"
 
+  echo "case: research lineage entries are recorded on the row and issue entries are not"
   run bash "$REPO/$SAVE" "$REPO" SPEC-001
   [ "$status" -eq 0 ]
   [ "$(jq -c '[.items[] | select(.id == "SPEC-001")][0].links.research' "$REPO/.notebook/catalog.json")" = '["first-topic","second-topic"]' ]
-}
 
-@test "an empty lineage leaves the row without research links" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
-  seed_draft "$REPO" SPEC-001 "[]"
-
-  run bash "$REPO/$SAVE" "$REPO" SPEC-001
+  echo "case: an empty lineage leaves the row without research links"
+  run bash "$REPO/$SAVE" "$REPO" SPEC-002
   [ "$status" -eq 0 ]
-  [ "$(jq -c '[.items[] | select(.id == "SPEC-001")][0].links.research // "none"' "$REPO/.notebook/catalog.json")" = '"none"' ]
+  [ "$(jq -c '[.items[] | select(.id == "SPEC-002")][0].links.research // "none"' "$REPO/.notebook/catalog.json")" = '"none"' ]
 }
 
-@test "a missing draft refuses before anything is written" {
+@test "save refuses a missing draft, an unresolvable folder or malformed arguments" {
+  # The missing-draft and malformed-argument cases write nothing, so they share
+  # one repo; the unresolvable folder needs a not-ready notebook of its own.
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
 
+  echo "case: a missing draft refuses before anything is written"
   run bash "$REPO/$SAVE" "$REPO" SPEC-001
   [ "$status" -eq 1 ]
   [[ "$output" == *"no draft"* ]]
   [ ! -e "$REPO/.notebook/specs/SPEC-001" ]
   [ "$(_row_field "$REPO" SPEC-001 status)" = "draft" ]
-}
 
-@test "an unresolvable SPEC folder refuses and keeps every cache" {
+  echo "case: malformed arguments are usage errors"
+  run bash "$REPO/$SAVE" "$REPO"
+  [ "$status" -eq 2 ]
+  run bash "$REPO/$SAVE" relative/root SPEC-001
+  [ "$status" -eq 2 ]
+  run bash "$REPO/$SAVE" "$REPO" "SPEC-001/../x"
+  [ "$status" -eq 2 ]
+  run bash "$REPO/$SAVE" "$REPO" SPEC-1
+  [ "$status" -eq 2 ]
+
+  echo "case: an unresolvable SPEC folder refuses and keeps every cache"
+  rm -rf "$REPO"
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --legacy --seed-spec SPEC-001 draft)"
   seed_draft "$REPO" SPEC-001 "[]"
-
   run bash "$REPO/$SAVE" "$REPO" SPEC-001
   [ "$status" -eq 1 ]
   [[ "$output" == *"cannot resolve"* ]]
@@ -149,17 +155,4 @@ EOF
   [ "${lines[0]}" = "$REPO/.notebook/specs/SPEC-001/SPEC.md" ]
   [ -f "$REPO/.notebook/specs/SPEC-001/SPEC.md" ]
   [ "$(_row_field "$REPO" SPEC-001 status)" = "ready" ]
-}
-
-@test "malformed arguments are usage errors" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
-
-  run bash "$REPO/$SAVE" "$REPO"
-  [ "$status" -eq 2 ]
-  run bash "$REPO/$SAVE" relative/root SPEC-001
-  [ "$status" -eq 2 ]
-  run bash "$REPO/$SAVE" "$REPO" "SPEC-001/../x"
-  [ "$status" -eq 2 ]
-  run bash "$REPO/$SAVE" "$REPO" SPEC-1
-  [ "$status" -eq 2 ]
 }

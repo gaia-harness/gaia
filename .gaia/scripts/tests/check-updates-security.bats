@@ -82,64 +82,6 @@ assert_security() {
   [ "$(jq -r '.securityUnavailableReason' "$CACHE_FILE")" = "$3" ]
 }
 
-@test "dependabot payload caches its count and an empty reason" {
-  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":2,"reasons":[]}'
-  run_refresher
-  assert_security 2 dependabot ""
-}
-
-@test "pnpm-audit payload caches its count with the alerts reason" {
-  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"pnpm-audit","count":2,"reasons":["forbidden"]}'
-  run_refresher
-  assert_security 2 pnpm-audit forbidden
-}
-
-@test "unavailable payload caches null with its joined reasons" {
-  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"unavailable","count":null,"reasons":["forbidden","pnpm-audit-failed"]}'
-  run_refresher
-  assert_security null unavailable "forbidden,pnpm-audit-failed"
-}
-
-@test "the refresh asks for the count only" {
-  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":0,"reasons":[]}'
-  run_refresher
-  grep -qF -- "--count-only" "$MOCK_LOG"
-}
-
-@test "a failing advisories verb overwrites a prior count with null" {
-  printf '{"checkedAt":1,"securityCount":3,"securitySource":"dependabot","securityUnavailableReason":""}' > "$CACHE_FILE"
-  export MOCK_ADVISORIES_EXIT=1
-  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":3,"reasons":[]}'
-  run_refresher
-  assert_security null unavailable cli-failed
-}
-
-@test "an empty payload writes null and cli-failed" {
-  unset MOCK_ADVISORIES_PAYLOAD
-  run_refresher
-  assert_security null unavailable cli-failed
-}
-
-@test "an invalid payload writes null and cli-failed" {
-  export MOCK_ADVISORIES_PAYLOAD='not json'
-  run_refresher
-  assert_security null unavailable cli-failed
-}
-
-@test "a source outside the known set maps to unavailable and cli-failed" {
-  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"evil","count":5,"reasons":[]}'
-  run_refresher
-  assert_security null unavailable cli-failed
-  grep -qF -- "evil" "$CACHE_FILE" && return 1
-  true
-}
-
-@test "a non-integer count maps to unavailable and cli-failed" {
-  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":1.5,"reasons":[]}'
-  run_refresher
-  assert_security null unavailable cli-failed
-}
-
 @test "a reason token outside the closed set is dropped and never executed" {
   export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"pnpm-audit","count":1,"reasons":["$(touch pwned)","forbidden"]}'
   cd "$BATS_TEST_TMPDIR"
@@ -165,23 +107,6 @@ assert_security() {
   [ "$status" -eq 0 ]
   [ -s "$CACHE_FILE" ]
   assert_security null unavailable jq-missing
-}
-
-@test "a fresh cache with no securitySource is refreshed once" {
-  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":4,"reasons":[]}'
-  printf '{"checkedAt":%s,"outdatedCount":0}' "$(date +%s)" > "$CACHE_FILE"
-  run_refresher
-  [ -s "$MOCK_LOG" ]
-  assert_security 4 dependabot ""
-}
-
-@test "a fresh cache that has securitySource is not refreshed" {
-  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":4,"reasons":[]}'
-  printf '{"checkedAt":%s,"outdatedCount":0,"securityCount":1,"securitySource":"dependabot","securityUnavailableReason":"","fitnessBasisVersion":""}' "$(date +%s)" > "$CACHE_FILE"
-  run bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh" < /dev/null
-  [ "$status" -eq 0 ]
-  [ ! -e "$MOCK_LOG" ]
-  [ "$(jq -c '.securityCount' "$CACHE_FILE")" = "1" ]
 }
 
 @test "a security-only advisory still caches its count when nothing is outdated" {
@@ -212,4 +137,84 @@ assert_security() {
     *"📦 /update-deps (1 security)"*) ;;
     *) return 1 ;;
   esac
+}
+
+# reset_case: a clean cache and mock state, so each row of a case table starts
+# from the setup state.
+reset_case() {
+  rm -f "$CACHE_FILE" "$MOCK_LOG"
+  unset MOCK_ADVISORIES_PAYLOAD MOCK_ADVISORIES_EXIT MOCK_ACTIONABLE
+}
+
+@test "a valid advisories payload caches its count, source and reasons" {
+  echo "case: dependabot payload caches its count and an empty reason"
+  reset_case
+  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":2,"reasons":[]}'
+  run_refresher
+  assert_security 2 dependabot ""
+
+  echo "case: pnpm-audit payload caches its count with the alerts reason"
+  reset_case
+  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"pnpm-audit","count":2,"reasons":["forbidden"]}'
+  run_refresher
+  assert_security 2 pnpm-audit forbidden
+
+  echo "case: unavailable payload caches null with its joined reasons"
+  reset_case
+  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"unavailable","count":null,"reasons":["forbidden","pnpm-audit-failed"]}'
+  run_refresher
+  assert_security null unavailable "forbidden,pnpm-audit-failed"
+}
+
+@test "an unusable advisories result caches null, unavailable and cli-failed" {
+  echo "case: a failing advisories verb overwrites a prior count with null"
+  reset_case
+  printf '{"checkedAt":1,"securityCount":3,"securitySource":"dependabot","securityUnavailableReason":""}' > "$CACHE_FILE"
+  export MOCK_ADVISORIES_EXIT=1
+  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":3,"reasons":[]}'
+  run_refresher
+  assert_security null unavailable cli-failed
+
+  echo "case: an empty payload writes null and cli-failed"
+  reset_case
+  run_refresher
+  assert_security null unavailable cli-failed
+
+  echo "case: an invalid payload writes null and cli-failed"
+  reset_case
+  export MOCK_ADVISORIES_PAYLOAD='not json'
+  run_refresher
+  assert_security null unavailable cli-failed
+
+  echo "case: a source outside the known set maps to unavailable and cli-failed"
+  reset_case
+  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"evil","count":5,"reasons":[]}'
+  run_refresher
+  assert_security null unavailable cli-failed
+  grep -qF -- "evil" "$CACHE_FILE" && return 1
+
+  echo "case: a non-integer count maps to unavailable and cli-failed"
+  reset_case
+  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":1.5,"reasons":[]}'
+  run_refresher
+  assert_security null unavailable cli-failed
+}
+
+@test "a fresh cache is refreshed only when it lacks securitySource" {
+  echo "case: a fresh cache with no securitySource is refreshed once"
+  reset_case
+  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":4,"reasons":[]}'
+  printf '{"checkedAt":%s,"outdatedCount":0}' "$(date +%s)" > "$CACHE_FILE"
+  run_refresher
+  [ -s "$MOCK_LOG" ]
+  assert_security 4 dependabot ""
+
+  echo "case: a fresh cache that has securitySource is not refreshed"
+  reset_case
+  export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":4,"reasons":[]}'
+  printf '{"checkedAt":%s,"outdatedCount":0,"securityCount":1,"securitySource":"dependabot","securityUnavailableReason":"","fitnessBasisVersion":""}' "$(date +%s)" > "$CACHE_FILE"
+  run bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh" < /dev/null
+  [ "$status" -eq 0 ]
+  [ ! -e "$MOCK_LOG" ]
+  [ "$(jq -c '.securityCount' "$CACHE_FILE")" = "1" ]
 }

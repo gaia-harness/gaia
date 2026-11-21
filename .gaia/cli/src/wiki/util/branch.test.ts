@@ -39,83 +39,71 @@ describe('inspectWorkingTree', () => {
     expect(seen).toEqual([['status', '--porcelain=v1', '-z', '-uall']]);
   });
 
-  test('classifies a spaced wiki path as a wiki change', () => {
-    const status = inspectWorkingTree(
-      '/repo',
-      runnerReturning(' M wiki/concepts/Wiki Sync.md\0')
-    );
+  const inspectWorkingTreeClassificationCases: readonly {
+    hasNonWikiChanges: boolean;
+    hasWikiChanges: boolean;
+    name: string;
+    paths: readonly string[];
+    stdout: string;
+  }[] = [
+    {
+      hasNonWikiChanges: false,
+      hasWikiChanges: true,
+      name: 'classifies a spaced wiki path as a wiki change',
+      paths: ['wiki/concepts/Wiki Sync.md'],
+      stdout: ' M wiki/concepts/Wiki Sync.md\0',
+    },
+    {
+      hasNonWikiChanges: false,
+      hasWikiChanges: true,
+      name: 'handles an added (untracked) spaced wiki page',
+      paths: ['wiki/decisions/TDD RED Verification.md'],
+      stdout: '?? wiki/decisions/TDD RED Verification.md\0',
+    },
+    {
+      hasNonWikiChanges: true,
+      hasWikiChanges: false,
+      name: 'flags a spaced non-wiki path as a non-wiki change',
+      paths: ['app/some dir/a file.ts'],
+      stdout: ' M app/some dir/a file.ts\0',
+    },
+    {
+      hasNonWikiChanges: true,
+      hasWikiChanges: false,
+      name: 'reports both halves of a rename',
+      paths: ['app/new.ts', 'app/old.ts'],
+      stdout: 'R  app/new.ts\0app/old.ts\0',
+    },
+    {
+      hasNonWikiChanges: false,
+      hasWikiChanges: true,
+      name: 'keeps a non-ASCII wiki rename on the wiki side of the split',
+      paths: ['wiki/concepts/Café Notes.md', 'wiki/concepts/Cafe Notes.md'],
+      stdout: 'R  wiki/concepts/Café Notes.md\0wiki/concepts/Cafe Notes.md\0',
+    },
+    {
+      hasNonWikiChanges: true,
+      hasWikiChanges: true,
+      name: 'classifies a mix of a wiki edit and a non-wiki edit',
+      paths: ['wiki/concepts/Wiki Sync.md', 'package.json'],
+      stdout: ' M wiki/concepts/Wiki Sync.md\0 M package.json\0',
+    },
+    {
+      hasNonWikiChanges: false,
+      hasWikiChanges: false,
+      name: 'reports a clean tree as neither wiki nor non-wiki',
+      paths: [],
+      stdout: '',
+    },
+  ];
 
-    expect(status.paths).toEqual(['wiki/concepts/Wiki Sync.md']);
-    expect(status.hasWikiChanges).toBe(true);
-    expect(status.hasNonWikiChanges).toBe(false);
-  });
+  test.each(
+    inspectWorkingTreeClassificationCases.map((row) => [row.name, row] as const)
+  )('%s', (_name, {hasNonWikiChanges, hasWikiChanges, paths, stdout}) => {
+    const status = inspectWorkingTree('/repo', runnerReturning(stdout));
 
-  test('handles an added (untracked) spaced wiki page', () => {
-    const status = inspectWorkingTree(
-      '/repo',
-      runnerReturning('?? wiki/decisions/TDD RED Verification.md\0')
-    );
-
-    expect(status.paths).toEqual(['wiki/decisions/TDD RED Verification.md']);
-    expect(status.hasWikiChanges).toBe(true);
-  });
-
-  test('flags a spaced non-wiki path as a non-wiki change', () => {
-    const status = inspectWorkingTree(
-      '/repo',
-      runnerReturning(' M app/some dir/a file.ts\0')
-    );
-
-    expect(status.paths).toEqual(['app/some dir/a file.ts']);
-    expect(status.hasNonWikiChanges).toBe(true);
-    expect(status.hasWikiChanges).toBe(false);
-  });
-
-  test('reports both halves of a rename', () => {
-    const status = inspectWorkingTree(
-      '/repo',
-      runnerReturning('R  app/new.ts\0app/old.ts\0')
-    );
-
-    expect(status.paths).toEqual(['app/new.ts', 'app/old.ts']);
-    expect(status.hasNonWikiChanges).toBe(true);
-  });
-
-  test('keeps a non-ASCII wiki rename on the wiki side of the split', () => {
-    const status = inspectWorkingTree(
-      '/repo',
-      runnerReturning(
-        'R  wiki/concepts/Café Notes.md\0wiki/concepts/Cafe Notes.md\0'
-      )
-    );
-
-    expect(status.paths).toEqual([
-      'wiki/concepts/Café Notes.md',
-      'wiki/concepts/Cafe Notes.md',
-    ]);
-    expect(status.hasWikiChanges).toBe(true);
-    expect(status.hasNonWikiChanges).toBe(false);
-  });
-
-  test('classifies a mix of a wiki edit and a non-wiki edit', () => {
-    const status = inspectWorkingTree(
-      '/repo',
-      runnerReturning(' M wiki/concepts/Wiki Sync.md\0 M package.json\0')
-    );
-
-    expect(status.paths).toEqual([
-      'wiki/concepts/Wiki Sync.md',
-      'package.json',
-    ]);
-    expect(status.hasWikiChanges).toBe(true);
-    expect(status.hasNonWikiChanges).toBe(true);
-  });
-
-  test('reports a clean tree as neither wiki nor non-wiki', () => {
-    const status = inspectWorkingTree('/repo', runnerReturning(''));
-
-    expect(status.paths).toEqual([]);
-    expect(status.hasWikiChanges).toBe(false);
-    expect(status.hasNonWikiChanges).toBe(false);
+    expect(status.paths).toEqual(paths);
+    expect(status.hasWikiChanges).toBe(hasWikiChanges);
+    expect(status.hasNonWikiChanges).toBe(hasNonWikiChanges);
   });
 });

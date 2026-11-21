@@ -111,76 +111,7 @@ tree_digest() {
 
 # ========== stops ==========
 
-@test "dirty-tree: an untracked file" {
-  printf 'x\n' >"$REPO/stray.txt"
-  assert_stop dirty-tree
-}
-
-@test "linked-worktree: a launch from a linked worktree" {
-  git -C "$REPO" worktree add -q -b side "$BATS_TEST_TMPDIR/linked"
-  assert_stop linked-worktree "$BATS_TEST_TMPDIR/linked"
-}
-
-@test "not-root-launch: a launch from a subdirectory" {
-  assert_stop not-root-launch "$REPO/$LEGACY/app"
-}
-
-@test "plan-in-execution: a RUNNING file under the notebook" {
-  mkdir -p "$REPO/.notebook/specs/SPEC-1/plan"
-  : >"$REPO/.notebook/specs/SPEC-1/plan/RUNNING"
-  assert_stop plan-in-execution
-}
-
-@test "default-branch-behind: a branch that is not the default" {
-  git -C "$REPO" checkout -q -b topic
-  assert_stop default-branch-behind
-}
-
-@test "default-branch-behind: a default branch that is not level with origin" {
-  local head
-  head="$(git -C "$REPO" rev-parse HEAD)"
-  printf 'x\n' >"$REPO/later.txt"
-  commit_all "$REPO"
-  git -C "$REPO" update-ref refs/remotes/origin/main "$head"
-  git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
-  assert_stop default-branch-behind
-}
-
-@test "registry-path: no member at the app path" {
-  printf '[{"name":"tools","path":"tools"}]\n' >"$REPO/.gaia/packages.json"
-  commit_all "$REPO"
-  assert_stop registry-path
-}
-
-@test "both-trees-present: the old and the new app directory both exist" {
-  mkdir -p "$REPO/apps/web"
-  printf '{}\n' >"$REPO/apps/web/package.json"
-  commit_all "$REPO"
-  assert_stop both-trees-present
-}
-
-@test "member-named-web: another member already holds the name the app is renamed to" {
-  printf '[{"name":"frontend","path":"%s"},{"name":"web","path":"tools/web"}]\n' "$LEGACY" \
-    >"$REPO/.gaia/packages.json"
-  commit_all "$REPO"
-  assert_stop member-named-web
-}
-
 # ========== passes ==========
-
-@test "a clean default branch passes as fresh" {
-  crossing "$REPO" preflight
-  [ "$status" -eq 0 ]
-  [ "$output" = "CROSSING_PASS fresh" ]
-}
-
-@test "an absent registry passes as the app at the old path" {
-  git -C "$REPO" rm -q .gaia/packages.json
-  commit_all "$REPO"
-  crossing "$REPO" preflight
-  [ "$status" -eq 0 ]
-  [ "$output" = "CROSSING_PASS fresh" ]
-}
 
 @test "a kept member name passes with no question and stays through the move" {
   printf '[{"name":"storefront","path":"%s"}]\n' "$LEGACY" >"$REPO/.gaia/packages.json"
@@ -230,7 +161,90 @@ tree_digest() {
   diff <(tree_digest "$REPO") <(tree_digest "$other")
 }
 
-@test "resume: a stray registry entry at the new path also passes" {
+# fresh_case: a pristine copy of the seeded project at $REPO, so each row of a
+# case table starts from the setup state without another git init.
+fresh_case() {
+  rm -rf "$REPO"
+  cp -R "$BATS_TEST_TMPDIR/template" "$REPO"
+}
+
+@test "preflight stop rows print CROSSING_STOP, a next step and change nothing" {
+  cp -R "$REPO" "$BATS_TEST_TMPDIR/template"
+
+  echo "case: dirty-tree: an untracked file"
+  fresh_case
+  printf 'x\n' >"$REPO/stray.txt"
+  assert_stop dirty-tree
+
+  echo "case: linked-worktree: a launch from a linked worktree"
+  fresh_case
+  git -C "$REPO" worktree add -q -b side "$BATS_TEST_TMPDIR/linked"
+  assert_stop linked-worktree "$BATS_TEST_TMPDIR/linked"
+
+  echo "case: not-root-launch: a launch from a subdirectory"
+  fresh_case
+  assert_stop not-root-launch "$REPO/$LEGACY/app"
+
+  echo "case: plan-in-execution: a RUNNING file under the notebook"
+  fresh_case
+  mkdir -p "$REPO/.notebook/specs/SPEC-1/plan"
+  : >"$REPO/.notebook/specs/SPEC-1/plan/RUNNING"
+  assert_stop plan-in-execution
+
+  echo "case: default-branch-behind: a branch that is not the default"
+  fresh_case
+  git -C "$REPO" checkout -q -b topic
+  assert_stop default-branch-behind
+
+  echo "case: default-branch-behind: a default branch that is not level with origin"
+  fresh_case
+  local head
+  head="$(git -C "$REPO" rev-parse HEAD)"
+  printf 'x\n' >"$REPO/later.txt"
+  commit_all "$REPO"
+  git -C "$REPO" update-ref refs/remotes/origin/main "$head"
+  git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  assert_stop default-branch-behind
+
+  echo "case: registry-path: no member at the app path"
+  fresh_case
+  printf '[{"name":"tools","path":"tools"}]\n' >"$REPO/.gaia/packages.json"
+  commit_all "$REPO"
+  assert_stop registry-path
+
+  echo "case: both-trees-present: the old and the new app directory both exist"
+  fresh_case
+  mkdir -p "$REPO/apps/web"
+  printf '{}\n' >"$REPO/apps/web/package.json"
+  commit_all "$REPO"
+  assert_stop both-trees-present
+
+  echo "case: member-named-web: another member already holds the name the app is renamed to"
+  fresh_case
+  printf '[{"name":"frontend","path":"%s"},{"name":"web","path":"tools/web"}]\n' "$LEGACY" \
+    >"$REPO/.gaia/packages.json"
+  commit_all "$REPO"
+  assert_stop member-named-web
+}
+
+@test "preflight passes: fresh for a clean tree, an absent registry; resume for a stray new-path entry" {
+  cp -R "$REPO" "$BATS_TEST_TMPDIR/template"
+
+  echo "case: a clean default branch passes as fresh"
+  crossing "$REPO" preflight
+  [ "$status" -eq 0 ]
+  [ "$output" = "CROSSING_PASS fresh" ]
+
+  echo "case: an absent registry passes as the app at the old path"
+  fresh_case
+  git -C "$REPO" rm -q .gaia/packages.json
+  commit_all "$REPO"
+  crossing "$REPO" preflight
+  [ "$status" -eq 0 ]
+  [ "$output" = "CROSSING_PASS fresh" ]
+
+  echo "case: resume: a stray registry entry at the new path also passes"
+  fresh_case
   crossing "$REPO" move
   [ "$status" -eq 0 ]
   git -C "$REPO" checkout -q -b update/x

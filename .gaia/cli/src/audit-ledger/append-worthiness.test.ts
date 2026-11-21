@@ -170,21 +170,25 @@ describe('append-worthiness', () => {
     ]);
   });
 
-  test('rejects an unknown verdict', () => {
-    expect(() =>
-      runWriter([TEST_FILE_REL, 'renders formatted price', 'maybe'])
-    ).toThrow(/verdict/i);
-  });
-
-  test('rejects a non-keep verdict with no artifact', () => {
-    expect(() =>
-      runWriter([TEST_FILE_REL, 'renders formatted price', 'delete'])
-    ).toThrow(/artifact/i);
-  });
-
-  test('fails when the named test is not found in the file', () => {
-    expect(() => runWriter([TEST_FILE_REL, 'no such test', 'keep'])).toThrow(
-      /no such test/i
-    );
+  test.each(
+    [
+      {
+        args: [TEST_FILE_REL, 'renders formatted price', 'maybe'],
+        error: /verdict/i,
+        name: 'rejects an unknown verdict',
+      },
+      {
+        args: [TEST_FILE_REL, 'renders formatted price', 'delete'],
+        error: /artifact/i,
+        name: 'rejects a non-keep verdict with no artifact',
+      },
+      {
+        args: [TEST_FILE_REL, 'no such test', 'keep'],
+        error: /no such test/i,
+        name: 'fails when the named test is not found in the file',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, row) => {
+    expect(() => runWriter(row.args)).toThrow(row.error);
   });
 });

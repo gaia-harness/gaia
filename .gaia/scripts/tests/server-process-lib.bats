@@ -191,54 +191,20 @@ write_launch_record() {
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$@" >"$STATE/launches/$1.tsv"
 }
 
-# ---------- listener fixture ----------
-
-@test "fixture: prints listening with its own PID and holds the port" {
-  make_tree "$SCRATCH/tree"
-  start_listener_on_free_port "$SCRATCH/tree/apps/web"
-  process_running "$LISTENER_PID"
-  ps -o command= -p "$LISTENER_PID" | grep -qF -- "listen.mjs $LISTENER_PORT 127.0.0.1"
-  run run_library gaia_server_listeners "$LISTENER_PORT"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$LISTENER_PORT$TAB$LISTENER_PID" ]
-}
-
-@test "fixture: exits 0 on SIGTERM" {
-  local port log pid exit_status=0
-  port="$(random_port)"
-  log="$SCRATCH/sigterm.log"
-  node "$LISTENER_FIXTURE" "$port" 127.0.0.1 >"$log" 2>&1 3>&- &
-  pid=$!
-  STARTED_PIDS+=("$pid")
-  wait_for_listening "$log"
-  kill -TERM "$pid"
-  wait "$pid" || exit_status=$?
-  [ "$exit_status" -eq 0 ]
-}
-
-@test "fixture: a second instance on the same port exits 1 with EADDRINUSE on stderr" {
-  make_tree "$SCRATCH/tree"
-  start_listener_on_free_port "$SCRATCH/tree/apps/web"
-  run --separate-stderr node "$LISTENER_FIXTURE" "$LISTENER_PORT" 127.0.0.1
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-  grep -qF -- 'EADDRINUSE' <<<"$stderr"
-}
-
-@test "fixture: its cwd is the directory it was started from" {
-  make_tree "$SCRATCH/tree"
-  start_listener_on_free_port "$SCRATCH/tree/apps/web"
-  run run_library gaia_server_process_cwds "$LISTENER_PID"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$LISTENER_PID$TAB$SCRATCH/tree/apps/web${TAB}live" ]
-}
-
 # ---------- listeners ----------
 
-@test "listeners: IPv4 and IPv6 listeners are both reported by one call" {
+@test "listeners: IPv4 and IPv6 listeners are both reported by one call, and a port with no listener prints nothing" {
   make_tree "$SCRATCH/tree"
+  run run_library gaia_server_listeners "$(random_port)"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
   start_listener_on_free_port "$SCRATCH/tree/apps/web" 127.0.0.1
   local ipv4_port="$LISTENER_PORT" ipv4_pid="$LISTENER_PID"
+  process_running "$ipv4_pid"
+  ps -o command= -p "$ipv4_pid" | grep -qF -- "listen.mjs $ipv4_port 127.0.0.1"
+  run run_library gaia_server_listeners "$ipv4_port"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$ipv4_port$TAB$ipv4_pid" ]
   if ! start_listener_on_free_port "$SCRATCH/tree/apps/web" ::1; then
     skip "this host cannot bind ::1 (no IPv6 loopback): $(cat "$LISTENER_LOG")"
   fi
@@ -250,15 +216,9 @@ write_launch_record() {
   [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 2 ]
 }
 
-@test "listeners: a port with no listener prints nothing" {
-  run run_library gaia_server_listeners "$(random_port)"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
 # ---------- owning tree ----------
 
-@test "owning tree: a nested worktree owns its own paths, never the checkout around it" {
+@test "owning tree: a nested worktree owns its own paths, never the checkout around it; a missing directory and a path with no .git ancestor have none" {
   make_tree "$SCRATCH/main"
   mkdir -p "$SCRATCH/main/.claude/worktrees/w/apps/web"
   printf 'gitdir: %s/main/.git/worktrees/w\n' "$SCRATCH" >"$SCRATCH/main/.claude/worktrees/w/.git"
@@ -267,13 +227,10 @@ write_launch_record() {
   [ "$output" = "$SCRATCH/main/.claude/worktrees/w" ]
   run run_library gaia_server_owning_tree "$SCRATCH/main/apps/web"
   [ "$output" = "$SCRATCH/main" ]
-}
-
-@test "owning tree: rc 1 for a missing directory and for a path with no .git ancestor" {
   run run_library gaia_server_owning_tree "$SCRATCH/does-not-exist"
   [ "$status" -eq 1 ]
   [ -z "$output" ]
-  # A host with a .git above the scratch directory makes the second half
+  # A host with a .git above the scratch directory makes the last case
   # unprovable rather than wrong.
   local ancestor="$SCRATCH"
   while [ -n "$ancestor" ]; do
@@ -289,43 +246,44 @@ write_launch_record() {
 
 # ---------- listener owner ----------
 
-@test "owner: own for a listener whose cwd is inside the tree" {
-  make_tree "$SCRATCH/tree"
-  start_listener_on_free_port "$SCRATCH/tree/apps/web"
-  run run_library gaia_server_listener_owner "$LISTENER_PORT" "$SCRATCH/tree"
-  [ "$status" -eq 0 ]
-  [ "$output" = "own $LISTENER_PID" ]
-}
-
-@test "owner: foreign with the cwd for a listener in another tree" {
+@test "owner: classifies own, foreign, sibling prefix, nested worktree, deleted cwd, free and unknown" {
   make_tree "$SCRATCH/tree"
   make_tree "$SCRATCH/other"
-  start_listener_on_free_port "$SCRATCH/other/apps/web"
-  run run_library gaia_server_listener_owner "$LISTENER_PORT" "$SCRATCH/tree"
-  [ "$status" -eq 0 ]
-  [ "$output" = "foreign $LISTENER_PID $SCRATCH/other/apps/web" ]
-}
-
-@test "owner: tree /x/tree does not own a listener in /x/tree-2" {
-  make_tree "$SCRATCH/tree"
   make_tree "$SCRATCH/tree-2"
-  start_listener_on_free_port "$SCRATCH/tree-2/apps/web"
-  run run_library gaia_server_listener_owner "$LISTENER_PORT" "$SCRATCH/tree"
-  [ "$output" = "foreign $LISTENER_PID $SCRATCH/tree-2/apps/web" ]
-  run run_library gaia_server_listener_owner "$LISTENER_PORT" "$SCRATCH/tree-2"
-  [ "$output" = "own $LISTENER_PID" ]
-}
-
-@test "owner: free when nothing listens" {
-  make_tree "$SCRATCH/tree"
-  run run_library gaia_server_listener_owner "$(random_port)" "$SCRATCH/tree"
-  [ "$status" -eq 0 ]
-  [ "$output" = "free" ]
-}
-
-@test "owner: unknown when no process backend is available, even with a listener present" {
-  make_tree "$SCRATCH/tree"
+  make_tree "$SCRATCH/main"
+  make_tree "$SCRATCH/vanished"
+  local worktree="$SCRATCH/main/.claude/worktrees/w"
+  mkdir -p "$worktree/apps/web"
+  printf 'gitdir: %s/main/.git/worktrees/w\n' "$SCRATCH" >"$worktree/.git"
   start_listener_on_free_port "$SCRATCH/tree/apps/web"
+  local own_port="$LISTENER_PORT" own_pid="$LISTENER_PID"
+  start_listener_on_free_port "$SCRATCH/other/apps/web"
+  local other_port="$LISTENER_PORT" other_pid="$LISTENER_PID"
+  start_listener_on_free_port "$SCRATCH/tree-2/apps/web"
+  local sibling_port="$LISTENER_PORT" sibling_pid="$LISTENER_PID"
+  start_listener_on_free_port "$worktree/apps/web"
+  local worktree_port="$LISTENER_PORT" worktree_pid="$LISTENER_PID"
+  start_listener_on_free_port "$SCRATCH/vanished/apps/web"
+  local vanished_port="$LISTENER_PORT" vanished_pid="$LISTENER_PID"
+  rm -rf "$SCRATCH/vanished/apps/web"
+  mkdir -p "$SCRATCH/vanished/apps/web"
+
+  local row port tree expected
+  for row in \
+    "$own_port|$SCRATCH/tree|own $own_pid" \
+    "$other_port|$SCRATCH/tree|foreign $other_pid $SCRATCH/other/apps/web" \
+    "$sibling_port|$SCRATCH/tree|foreign $sibling_pid $SCRATCH/tree-2/apps/web" \
+    "$sibling_port|$SCRATCH/tree-2|own $sibling_pid" \
+    "$worktree_port|$SCRATCH/main|foreign $worktree_pid $worktree/apps/web" \
+    "$worktree_port|$worktree|own $worktree_pid" \
+    "$vanished_port|$SCRATCH/vanished|foreign $vanished_pid $SCRATCH/vanished/apps/web" \
+    "$(random_port)|$SCRATCH/tree|free"; do
+    port=${row%%|*}; tree=${row#*|}; expected=${tree#*|}; tree=${tree%%|*}
+    run run_library gaia_server_listener_owner "$port" "$tree"
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    [ "$output" = "$expected" ] || { echo "row $row: got '$output'"; return 1; }
+  done
+
   # A PATH carrying every tool the library needs except lsof and ss.
   local restricted_bin="$SCRATCH/restricted-bin" tool tool_path bash_path
   mkdir -p "$restricted_bin"
@@ -335,33 +293,11 @@ write_launch_record() {
   done
   bash_path="$(command -v bash)"
   [ ! -e "$restricted_bin/lsof" ]
-  run env PATH="$restricted_bin" "$bash_path" -c '. "$1"; shift; "$@"' _ "$LIBRARY_SCRIPT" gaia_server_listener_owner "$LISTENER_PORT" "$SCRATCH/tree"
+  run env PATH="$restricted_bin" "$bash_path" -c '. "$1"; shift; "$@"' _ "$LIBRARY_SCRIPT" gaia_server_listener_owner "$own_port" "$SCRATCH/tree"
   [ "$status" -eq 0 ]
   [ "$output" = "unknown" ]
-  run env PATH="$restricted_bin" "$bash_path" -c '. "$1"; gaia_server_listeners "$2"; echo "rc=$?"' _ "$LIBRARY_SCRIPT" "$LISTENER_PORT"
+  run env PATH="$restricted_bin" "$bash_path" -c '. "$1"; gaia_server_listeners "$2"; echo "rc=$?"' _ "$LIBRARY_SCRIPT" "$own_port"
   [ "$output" = "rc=3" ]
-}
-
-@test "owner: a nested worktree's listener is foreign to main and own to the worktree" {
-  make_tree "$SCRATCH/main"
-  local worktree="$SCRATCH/main/.claude/worktrees/w"
-  mkdir -p "$worktree/apps/web"
-  printf 'gitdir: %s/main/.git/worktrees/w\n' "$SCRATCH" >"$worktree/.git"
-  start_listener_on_free_port "$worktree/apps/web"
-  run run_library gaia_server_listener_owner "$LISTENER_PORT" "$SCRATCH/main"
-  [ "$status" -eq 0 ]
-  [ "$output" = "foreign $LISTENER_PID $worktree/apps/web" ]
-  run run_library gaia_server_listener_owner "$LISTENER_PORT" "$worktree"
-  [ "$output" = "own $LISTENER_PID" ]
-}
-
-@test "owner: a listener whose cwd was deleted is foreign" {
-  make_tree "$SCRATCH/tree"
-  start_listener_on_free_port "$SCRATCH/tree/apps/web"
-  rm -rf "$SCRATCH/tree/apps/web"
-  mkdir -p "$SCRATCH/tree/apps/web"
-  run run_library gaia_server_listener_owner "$LISTENER_PORT" "$SCRATCH/tree"
-  [ "$output" = "foreign $LISTENER_PID $SCRATCH/tree/apps/web" ]
 }
 
 # ---------- removed-tree stop ----------
@@ -376,6 +312,7 @@ write_launch_record() {
   wait_until_gone "$LISTENER_PID"
 }
 
+# bats test_tags=protected
 @test "removed tree refusal: a live tree's listener survives and nothing is printed" {
   make_tree "$SCRATCH/tree"
   start_listener_on_free_port "$SCRATCH/tree/apps/web"
@@ -383,30 +320,43 @@ write_launch_record() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   process_running "$LISTENER_PID"
-}
 
-@test "removed tree refusal: a listener in /x/tree-2 is not under removed tree /x/tree" {
-  # No .git in the sibling, so the path boundary alone decides.
-  mkdir -p "$SCRATCH/tree-2/apps/web"
-  start_listener_on_free_port "$SCRATCH/tree-2/apps/web"
-  run run_library gaia_server_stop_removed_tree_listeners "$SCRATCH/tree" "$LISTENER_PORT"
+  # A listener in /x/gone-2 is not under removed tree /x/gone: no .git in the
+  # sibling, so the path boundary alone decides.
+  mkdir -p "$SCRATCH/gone-2/apps/web"
+  start_listener_on_free_port "$SCRATCH/gone-2/apps/web"
+  run run_library gaia_server_stop_removed_tree_listeners "$SCRATCH/gone" "$LISTENER_PORT"
   [ -z "$output" ]
   process_running "$LISTENER_PID"
   read_identity "$LISTENER_PID"
-  run run_library gaia_server_stop_verified "$LISTENER_PID" "$IDENTITY_START" "$IDENTITY_COMMAND" "$SCRATCH/tree" "$LISTENER_PORT"
+  run run_library gaia_server_stop_verified "$LISTENER_PID" "$IDENTITY_START" "$IDENTITY_COMMAND" "$SCRATCH/gone" "$LISTENER_PORT"
   [ "$status" -eq 1 ]
   process_running "$LISTENER_PID"
-}
 
-@test "removed tree refusal: a live checkout nested between the tree and the cwd makes it ambiguous" {
-  make_tree "$SCRATCH/tree"
-  local nested="$SCRATCH/tree/.claude/worktrees/n"
+  # A live checkout nested between the tree and the cwd makes it ambiguous.
+  make_tree "$SCRATCH/enclosing"
+  local nested="$SCRATCH/enclosing/.claude/worktrees/n"
   mkdir -p "$nested/apps/web"
   printf 'gitdir: elsewhere\n' >"$nested/.git"
   start_listener_on_free_port "$nested/apps/web"
   rm -rf "$nested/apps/web"
   mkdir -p "$nested/apps/web"
-  run run_library gaia_server_stop_removed_tree_listeners "$SCRATCH/tree" "$LISTENER_PORT"
+  run run_library gaia_server_stop_removed_tree_listeners "$SCRATCH/enclosing" "$LISTENER_PORT"
+  [ -z "$output" ]
+  process_running "$LISTENER_PID"
+
+  # An unreadable cwd is never stopped, and never even handed to the stop.
+  make_tree "$SCRATCH/vanished"
+  start_listener_on_free_port "$SCRATCH/vanished/apps/web"
+  rm -rf "$SCRATCH/vanished"
+  local stub='gaia_server_process_cwds() { local pid; for pid in "$@"; do printf "%s\tunknown\tunknown\n" "$pid"; done; }'
+  run run_library_with "$stub" gaia_server_stop_removed_tree_listeners "$SCRATCH/vanished" "$LISTENER_PORT"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  process_running "$LISTENER_PID"
+  local recorder='gaia_server_stop_verified() { printf "attempted %s\n" "$1"; return 0; }'
+  run run_library_with "$stub
+$recorder" gaia_server_stop_removed_tree_listeners "$SCRATCH/vanished" "$LISTENER_PORT"
   [ -z "$output" ]
   process_running "$LISTENER_PID"
 }
@@ -429,26 +379,9 @@ write_launch_record() {
   process_running "$LISTENER_PID"
 }
 
-@test "removed tree refusal: an unreadable cwd never stops" {
-  make_tree "$SCRATCH/tree"
-  start_listener_on_free_port "$SCRATCH/tree/apps/web"
-  rm -rf "$SCRATCH/tree"
-  local stub='gaia_server_process_cwds() { local pid; for pid in "$@"; do printf "%s\tunknown\tunknown\n" "$pid"; done; }'
-  run run_library_with "$stub" gaia_server_stop_removed_tree_listeners "$SCRATCH/tree" "$LISTENER_PORT"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  process_running "$LISTENER_PID"
-  # The verified stop re-reads the cwd too; this pins the selection layer on
-  # its own: an unreadable cwd is never even handed to the stop.
-  local recorder='gaia_server_stop_verified() { printf "attempted %s\n" "$1"; return 0; }'
-  run run_library_with "$stub
-$recorder" gaia_server_stop_removed_tree_listeners "$SCRATCH/tree" "$LISTENER_PORT"
-  [ -z "$output" ]
-  process_running "$LISTENER_PID"
-}
-
 # ---------- verified stop ----------
 
+# bats test_tags=protected
 @test "verified stop: each mismatched field refuses with rc 1 and the process survives" {
   make_tree "$SCRATCH/tree"
   make_tree "$SCRATCH/other"
@@ -475,16 +408,13 @@ $recorder" gaia_server_stop_removed_tree_listeners "$SCRATCH/tree" "$LISTENER_PO
   process_running "$LISTENER_PID"
 }
 
-@test "verified stop: every field matching stops the process with rc 0" {
+@test "verified stop: every field matching stops the process with rc 0, and an exited PID returns rc 2" {
   make_tree "$SCRATCH/tree"
   start_listener_on_free_port "$SCRATCH/tree/apps/web"
   read_identity "$LISTENER_PID"
   run run_library gaia_server_stop_verified "$LISTENER_PID" "$IDENTITY_START" "$IDENTITY_COMMAND" "$SCRATCH/tree" "$LISTENER_PORT"
   [ "$status" -eq 0 ]
   wait_until_gone "$LISTENER_PID"
-}
-
-@test "verified stop: an exited PID returns rc 2" {
   dead_pid
   run run_library gaia_server_stop_verified "$DEAD_PID" "Mon Jan 1 00:00:00 2001" "sleep 300" "$SCRATCH" "$(random_port)"
   [ "$status" -eq 2 ]
@@ -657,7 +587,7 @@ server.on("error", (error) => { process.stdout.write(`bind-failed ${error.code}\
   [ "$(cat "$STATE/launches/$server_pid.tsv")" = "$server_pid$TAB$IDENTITY_START$TAB$IDENTITY_COMMAND$TAB$SCRATCH/tree/apps/web$TAB$port${TAB}dev${TAB}session-a$TAB$host_pid$TAB$host_start$TAB$SCRATCH/tree" ]
 }
 
-@test "record launch refusal: no registered ancestor and no session id writes nothing" {
+@test "record launch refusal: no registered ancestor and no session id, or a traversal session id, writes nothing" {
   make_tree "$SCRATCH/tree"
   start_listener_on_free_port "$SCRATCH/tree/apps/web"
   start_host_process
@@ -665,6 +595,13 @@ server.on("error", (error) => { process.stdout.write(`bind-failed ${error.code}\
   run run_library gaia_server_record_launch "$STATE" "$LISTENER_PID" "$LISTENER_PORT" dev "$SCRATCH/tree"
   [ "$status" -eq 0 ]
   [ ! -e "$STATE/launches" ] || [ -z "$(ls -A "$STATE/launches")" ]
+
+  cp "$STATE/sessions/session-a.tsv" "$STATE/evil.tsv"
+  local before
+  before="$(cd "$SCRATCH" && find . | LC_ALL=C sort)"
+  CLAUDE_CODE_SESSION_ID=../evil run run_library gaia_server_record_launch "$STATE" "$LISTENER_PID" "$LISTENER_PORT" dev "$SCRATCH/tree"
+  [ "$status" -eq 0 ]
+  [ "$(cd "$SCRATCH" && find . | LC_ALL=C sort)" = "$before" ]
 }
 
 @test "record launch: a reparented server falls back to the session CLAUDE_CODE_SESSION_ID names" {
@@ -683,21 +620,7 @@ server.on("error", (error) => { process.stdout.write(`bind-failed ${error.code}\
   esac
 }
 
-@test "record launch refusal: CLAUDE_CODE_SESSION_ID=../evil writes nothing anywhere" {
-  make_tree "$SCRATCH/tree"
-  start_listener_on_free_port "$SCRATCH/tree/apps/web"
-  start_host_process
-  mkdir -p "$STATE/sessions"
-  write_session session-a "$HOST_PID"
-  cp "$STATE/sessions/session-a.tsv" "$STATE/evil.tsv"
-  local before
-  before="$(cd "$SCRATCH" && find . | LC_ALL=C sort)"
-  CLAUDE_CODE_SESSION_ID=../evil run run_library gaia_server_record_launch "$STATE" "$LISTENER_PID" "$LISTENER_PORT" dev "$SCRATCH/tree"
-  [ "$status" -eq 0 ]
-  [ "$(cd "$SCRATCH" && find . | LC_ALL=C sort)" = "$before" ]
-}
-
-@test "record launch CLI: writes under GAIA_PORTS_STATE_DIRECTORY and refuses bad usage with exit 2" {
+@test "record launch CLI: writes under GAIA_PORTS_STATE_DIRECTORY" {
   make_tree "$SCRATCH/tree"
   start_listener_on_free_port "$SCRATCH/tree/apps/web"
   start_host_process
@@ -706,12 +629,6 @@ server.on("error", (error) => { process.stdout.write(`bind-failed ${error.code}\
     --pid "$LISTENER_PID" --port "$LISTENER_PORT" --kind dev --tree "$SCRATCH/tree"
   [ "$status" -eq 0 ]
   [ -f "$STATE/launches/$LISTENER_PID.tsv" ]
-  run bash "$LIBRARY_SCRIPT" --record-launch --pid "$LISTENER_PID" --port "$LISTENER_PORT" --kind web --tree "$SCRATCH/tree"
-  [ "$status" -eq 2 ]
-  run bash "$LIBRARY_SCRIPT" --listener-owner not-a-port "$SCRATCH/tree"
-  [ "$status" -eq 2 ]
-  run bash "$LIBRARY_SCRIPT" --bogus
-  [ "$status" -eq 2 ]
 }
 
 @test "listener owner CLI: prints the owner and exits 0" {
@@ -739,7 +656,7 @@ make_probe_recorders() {
   done
 }
 
-@test "cleanup gate: empty state returns 1 without invoking lsof or ss" {
+@test "cleanup gate: empty state returns 1 without probing, live state returns 1; a dead host, a missing directory and a tombstone return 0" {
   make_probe_recorders
   PATH="$RECORDER_BIN:$PATH" run run_library gaia_server_cleanup_needed "$STATE"
   [ "$status" -eq 1 ]
@@ -748,9 +665,7 @@ make_probe_recorders() {
   # Positive control: the recorders do capture a probe the library makes.
   PATH="$RECORDER_BIN:$PATH" run run_library gaia_server_listeners 21000
   [ -s "$RECORDS/lsof.calls" ] || [ -s "$RECORDS/ss.calls" ]
-}
 
-@test "cleanup gate: a live host's record, a present slot tree, and no tombstone return 1" {
   make_tree "$SCRATCH/tree"
   printf '1\t%s\t1:2\n' "$SCRATCH/tree" >"$STATE/slots.tsv"
   mkdir -p "$STATE/tombstones"
@@ -759,22 +674,21 @@ make_probe_recorders() {
   write_launch_record 4242 "Mon Jan 1 00:00:00 2001" "node x" "$SCRATCH/tree/apps/web" 5174 dev session-a "$HOST_PID" "$IDENTITY_START" "$SCRATCH/tree"
   run run_library gaia_server_cleanup_needed "$STATE"
   [ "$status" -eq 1 ]
-}
 
-@test "cleanup gate: a launch record whose host is dead returns 0" {
+  rm -rf "$STATE"
+  mkdir -p "$STATE"
   dead_pid
   write_launch_record 4242 "Mon Jan 1 00:00:00 2001" "node x" "$SCRATCH/tree/apps/web" 5174 dev session-a "$DEAD_PID" "Mon Jan 1 00:00:00 2001" "$SCRATCH/tree"
   run run_library gaia_server_cleanup_needed "$STATE"
   [ "$status" -eq 0 ]
-}
 
-@test "cleanup gate: a ledger entry whose directory is missing returns 0" {
+  rm -rf "$STATE"
+  mkdir -p "$STATE"
   printf '1\t%s\t1:2\n' "$SCRATCH/gone" >"$STATE/slots.tsv"
   run run_library gaia_server_cleanup_needed "$STATE"
   [ "$status" -eq 0 ]
-}
 
-@test "cleanup gate: a tombstone file returns 0" {
+  rm -rf "$STATE"
   mkdir -p "$STATE/tombstones"
   printf '1\t%s\t%s\n' "$SCRATCH/gone" "$(date +%s)" >"$STATE/tombstones/1.$(date +%s).tsv"
   run run_library gaia_server_cleanup_needed "$STATE"

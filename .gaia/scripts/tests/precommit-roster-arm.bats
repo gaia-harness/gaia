@@ -49,17 +49,17 @@ commit_through_hook() {
   grep -qF "roster clean" <<<"$output"
 }
 
+# bats test_tags=protected
 @test "a staged roster edit that breaks an invariant refuses the commit and names the finding" {
   sed -e 's/name: code-audit-github-workflows/name: workflows-reviewer/' "$SANDBOX/.gaia/audit-ci.yml" > "$SANDBOX/roster.tmp"
   mv "$SANDBOX/roster.tmp" "$SANDBOX/.gaia/audit-ci.yml"
   git -C "$SANDBOX" add .gaia/audit-ci.yml
   commit_through_hook
-  [ "$status" -ne 0 ]
-  grep -qF "member-name-prefix" <<<"$output"
-  grep -qF "roster check failed" <<<"$output"
-}
+  [ "$status" -ne 0 ] || { echo "roster edit: commit succeeded"; return 1; }
+  grep -qF "member-name-prefix" <<<"$output" || { echo "roster edit: got '$output'"; return 1; }
+  grep -qF "roster check failed" <<<"$output" || { echo "roster edit: got '$output'"; return 1; }
 
-@test "a staged member definition whose remit drifted refuses the commit with the repair" {
+  git -C "$SANDBOX" reset -q --hard HEAD
   local definition="$SANDBOX/.claude/agents/code-audit-github-workflows.md"
   awk '
     $0 == "<!-- gaia:audit-remit:start -->" { in_region = 1; print; next }
@@ -70,9 +70,9 @@ commit_through_hook() {
   mv "$SANDBOX/definition.tmp" "$definition"
   git -C "$SANDBOX" add .claude/agents/code-audit-github-workflows.md
   commit_through_hook
-  [ "$status" -ne 0 ]
-  grep -qF "remit-glob-missing" <<<"$output"
-  grep -qF "bash .gaia/scripts/write-audit-remits.sh" <<<"$output"
+  [ "$status" -ne 0 ] || { echo "remit drift: commit succeeded"; return 1; }
+  grep -qF "remit-glob-missing" <<<"$output" || { echo "remit drift: got '$output'"; return 1; }
+  grep -qF "bash .gaia/scripts/write-audit-remits.sh" <<<"$output" || { echo "remit drift: got '$output'"; return 1; }
 }
 
 @test "a broken roster left unstaged does not run the check for an unrelated commit" {

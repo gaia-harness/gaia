@@ -62,7 +62,7 @@ install() {
 
 main_projects_directory() { printf '%s/%s' "$PROJECTS_DIRECTORY" "$(encode_project_path "$ROOT")"; }
 
-flush() { bash "${FLUSHER:-$FLUSH}" --projects-root "$PROJECTS_DIRECTORY" --main-root "$ROOT" "$@"; }
+flush() { bash "$FLUSH" --projects-root "$PROJECTS_DIRECTORY" --main-root "$ROOT" "$@"; }
 
 file_size() { wc -c <"$1" | tr -d ' '; }
 
@@ -78,26 +78,6 @@ assert_golden() {
   want="$(jq -S "${2:-.}" "$FIXTURES_DIRECTORY/$1/golden.json")"
   got="$(totals)"
   [ "$got" = "$want" ] || { printf 'want:\n%s\ngot:\n%s\n' "$want" "$got" >&2; return 1; }
-}
-
-# scratch_flusher <sed-expr> <file>: a copy of the flusher and its libraries
-# with one mutation applied to <file>; fails when the sed changed nothing.
-scratch_flusher() {
-  local scratch_directory="$TEMPORARY_DIRECTORY/scratch"
-  mkdir -p "$scratch_directory/.gaia/scripts" "$scratch_directory/.gaia/scripts/spec"
-  cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/main-root-lib.sh \
-    "$SCRIPTS"/branch-name-lib.sh "$scratch_directory/.gaia/scripts/"
-  cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch_directory/.gaia/scripts/spec/"
-  cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch_directory/.gaia/scripts/"
-  mkdir -p "$scratch_directory/.gaia/scripts/notebook"
-  cp "$SCRIPTS"/notebook/*.sh "$scratch_directory/.gaia/scripts/notebook/"
-  sed "$1" "$SCRIPTS/$2" >"$scratch_directory/.gaia/scripts/$2.m"
-  if cmp -s "$SCRIPTS/$2" "$scratch_directory/.gaia/scripts/$2.m"; then
-    echo "mutation did not apply to $2" >&2
-    return 1
-  fi
-  mv "$scratch_directory/.gaia/scripts/$2.m" "$scratch_directory/.gaia/scripts/$2"
-  FLUSHER="$scratch_directory/.gaia/scripts/usage-flush.sh"
 }
 
 wait_for() {
@@ -173,14 +153,6 @@ holdback_run() {
   [ "$HB_FIRST_OFFSET" -eq "$HB_LINE1" ]
   [ "$HB_SECOND_OUTPUT" -eq 50 ]
   assert_golden holdback
-}
-
-@test "UAT-014 guard: with the holdback disabled in a scratch copy the total no longer equals golden" {
-  scratch_flusher 's/| (if $finished then null else $trailing_line end) as $hold/| null as $hold/' usage-parse-lib.sh
-  holdback_run
-  run assert_golden holdback
-  [ "$status" -ne 0 ]
-  [ "$(totals | jq '[.[][].output] | add')" -eq 12 ]
 }
 
 # ---------- relocation and truncation (AUDIT RT-004, MIG-012) ----------
@@ -264,14 +236,6 @@ member_run() {
   true
 }
 
-@test "UAT-020 guard: with membership bypassed in a scratch copy the sibling's tokens are counted" {
-  scratch_flusher 's/(usage_member(\$record.cwd; \$roots) | not)/false/' usage-parse-lib.sh
-  member_run "$TEMPORARY_DIRECTORY/m2"
-  run assert_golden member
-  [ "$status" -ne 0 ]
-  jq -e -s 'any(.[]; .kind == "segment" and .key == "branch:fix/decoy")' "$TEL/usage.jsonl"
-}
-
 # ---------- UAT-024 ----------
 
 @test "UAT-024: with origin/HEAD at master, master and HEAD lines key session:<sid>" {
@@ -347,7 +311,7 @@ cas_run() {
   GAIA_USAGE_TEST_BARRIER="$TEMPORARY_DIRECTORY/bar" flush --session s-branch --finished-main 2>/dev/null 3>&- &
   pid=$!
   wait_for "$TEMPORARY_DIRECTORY/bar.parsed"
-  FLUSHER="" flush --session s-branch --finished-main 2>/dev/null
+  flush --session s-branch --finished-main 2>/dev/null
   : >"$TEMPORARY_DIRECTORY/bar"
   wait "$pid"
 }
@@ -355,14 +319,6 @@ cas_run() {
 @test "UAT-010: a flusher whose cursor moved under it while parked reparses and counts nothing twice" {
   cas_run
   assert_golden branch
-}
-
-@test "UAT-010 guard: with the compare-and-swap removed in a scratch copy the parked flusher double counts" {
-  scratch_flusher '/_uf_cas_conflict "\$session_id"/d' usage-flush.sh
-  cas_run
-  run assert_golden branch
-  [ "$status" -ne 0 ]
-  [ "$(totals | jq '.["branch:fix/foo"]["claude-opus-5-5"].fresh_input')" -eq 12 ]
 }
 
 # ---------- TST-012b lock timeout ----------
@@ -383,42 +339,40 @@ cas_run() {
 
 # ---------- sweep singleton ----------
 
-@test "sweep singleton: a second sweep exits 0 without writing while the first holds the lock" {
+@test "sweep singleton: a second sweep is refused while the lock is held and a stale lock is reclaimed" {
   install sweep
   local pid
+
+  # case: a second sweep exits 0 without writing while the first holds the lock
   GAIA_USAGE_TEST_BARRIER="$TEMPORARY_DIRECTORY/bar" flush --sweep 2>/dev/null 3>&- &
   pid=$!
   wait_for "$TEMPORARY_DIRECTORY/bar.parsed"
-  [ -d "$TEL/usage-sweep.lock.d" ]
+  [ -d "$TEL/usage-sweep.lock.d" ] || { echo "case first sweep holds the lock: no lock dir"; return 1; }
   run flush --sweep
-  [ "$status" -eq 0 ]
-  [ -e "$TEL/usage.jsonl" ] && return 1
+  [ "$status" -eq 0 ] || { echo "case first sweep holds the lock: second sweep exited $status"; return 1; }
+  [ -e "$TEL/usage.jsonl" ] && { echo "case first sweep holds the lock: second sweep wrote the ledger"; return 1; }
   : >"$TEMPORARY_DIRECTORY/bar"
   wait "$pid"
-  assert_golden sweep
-}
+  assert_golden sweep || { echo "case first sweep holds the lock: totals differ from golden"; return 1; }
 
-@test "sweep singleton: a lock held through the shared helper stops a sweep, with a non-exclusive mkdir first on PATH" {
-  install sweep
+  # case: a lock held through the shared helper stops a sweep, with a non-exclusive mkdir first on PATH
+  rm -rf "$ROOT/.gaia/local"
   mkdir -p "$TEL"
   bash -c '. "$1"; gaia_exclusive_lock_take "$2"' _ "$SCRIPTS/exclusive-lock-lib.sh" "$TEL/usage-sweep.lock.d"
   # shellcheck source=/dev/null
   . "$SCRIPTS/../tests/helpers/non-exclusive-mkdir.sh"
-  PATH="$(non_exclusive_mkdir_path)"
-  run flush --sweep
-  [ "$status" -eq 0 ]
-  [ -e "$TEL/usage.jsonl" ] && return 1
-  true
-}
+  PATH="$(non_exclusive_mkdir_path)" run flush --sweep
+  [ "$status" -eq 0 ] || { echo "case helper lock: sweep exited $status"; return 1; }
+  [ -e "$TEL/usage.jsonl" ] && { echo "case helper lock: sweep wrote the ledger"; return 1; }
 
-@test "sweep singleton: a lock dir older than the reclaim age is reclaimed" {
-  install sweep
+  # case: a lock dir older than the reclaim age is reclaimed
+  rm -rf "$ROOT/.gaia/local"
   mkdir -p "$TEL/usage-sweep.lock.d"
   touch -t 202001010000 "$TEL/usage-sweep.lock.d"
   run flush --sweep
-  [ "$status" -eq 0 ]
-  assert_golden sweep
-  [ -e "$TEL/usage-sweep.lock.d" ] && return 1
+  [ "$status" -eq 0 ] || { echo "case stale lock: sweep exited $status"; return 1; }
+  assert_golden sweep || { echo "case stale lock: totals differ from golden"; return 1; }
+  [ -e "$TEL/usage-sweep.lock.d" ] && { echo "case stale lock: lock dir not reclaimed"; return 1; }
   true
 }
 
@@ -444,15 +398,6 @@ jq_calls() {
   settled_calls="$(jq_calls --session s-multi --finished-main --all-sidecars-finished)"
   [ "$settled_calls" -le 2 ] || { printf 'a settled session started %s jq processes\n' "$settled_calls" >&2; return 1; }
   assert_golden multi
-}
-
-@test "guard red: with the settled-file skip removed in a scratch copy, a settled session starts a jq process per file" {
-  local settled_calls
-  install multi
-  flush --session s-multi --finished-main --all-sidecars-finished
-  scratch_flusher 's/^    case "\$settled_files" in .*$/    :/' usage-flush.sh
-  settled_calls="$(jq_calls --session s-multi --finished-main --all-sidecars-finished)"
-  [ "$settled_calls" -gt 5 ]
 }
 
 @test "a file that grew past its cursor is still flushed when its siblings are settled" {

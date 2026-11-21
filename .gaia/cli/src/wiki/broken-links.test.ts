@@ -134,55 +134,102 @@ describe('wiki broken-links', () => {
   });
 
   describe('resolution by link form', () => {
-    test('slug match is case-insensitive', () => {
-      expect(brokenTargets('wiki/a.md', '[[EXISTING]]\n')).toEqual([]);
-    });
+    test.each(
+      Array.of<{
+        cases: [body: string, expected: string[]][];
+        extraFiles: Record<string, string>;
+        name: string;
+      }>(
+        {
+          cases: [['[[EXISTING]]\n', []]],
+          extraFiles: {},
+          name: 'slug match is case-insensitive',
+        },
+        {
+          cases: [['[[existing title]]\n', []]],
+          extraFiles: {},
+          name: 'H1 title match is case-insensitive',
+        },
+        {
+          cases: [
+            ['[[Existing Title|shown]]\n', []],
+            ['[[Gone|Existing Title]]\n', ['Gone']],
+          ],
+          extraFiles: {},
+          name: 'an alias is dropped before matching',
+        },
+        {
+          cases: [
+            ['[[Existing Title#Nope]]\n', []],
+            ['[[Gone#Heading]]\n', ['Gone']],
+          ],
+          extraFiles: {},
+          name: 'an anchor is dropped before matching',
+        },
+        {
+          cases: [
+            ['| x | [[Existing Title\\|shown]] |\n', []],
+            ['| x | [[Gone\\|shown]] |\n', ['Gone']],
+          ],
+          extraFiles: {},
+          name: 'an escaped table pipe separates the alias',
+        },
+        {
+          cases: [
+            ['[[concepts/Existing]]\n', []],
+            ['[[concepts/Gone]]\n', ['concepts/Gone']],
+          ],
+          extraFiles: {},
+          name: 'a folder prefix resolves by its final segment and reports the full target',
+        },
+        {
+          cases: [['[[overview]] [[Meta Note]]\n', []]],
+          extraFiles: {
+            'wiki/meta/Meta Note.md': '# Meta Note\n',
+            'wiki/overview.md': 'no title here\n',
+          },
+          name: 'a wiki-root page and a wiki/meta page are valid targets',
+        },
+        {
+          cases: [
+            ['`[[Gone]]` and ``[[Gone Too]]`` [[Real Gone]]\n', ['Real Gone']],
+          ],
+          extraFiles: {},
+          name: 'an inline code span is ignored, and a link after it still counts',
+        },
+        {
+          cases: [
+            [
+              [
+                '```',
+                '[[Gone In Backticks]]',
+                '```',
+                '~~~',
+                '[[Gone In Tildes]]',
+                '~~~',
+                '[[Gone After]]',
+                '',
+              ].join('\n'),
+              ['Gone After'],
+            ],
+          ],
+          extraFiles: {},
+          name: 'a backtick fence and a tilde fence each hide their lines',
+        },
+        {
+          cases: [['[[Old]]\n', ['Old']]],
+          extraFiles: {'wiki/_archived/Old.md': '# Old\n'},
+          name: 'a link into wiki/_archived is broken',
+        }
+      ).map((row) => [row.name, row] as const)
+    )('%s', (_name, {cases, extraFiles}) => {
+      for (const [relativePath, contents] of Object.entries(extraFiles)) {
+        sandbox.writeFile(relativePath, contents);
+      }
 
-    test('H1 title match is case-insensitive', () => {
-      expect(brokenTargets('wiki/a.md', '[[existing title]]\n')).toEqual([]);
-    });
-
-    test('an alias is dropped before matching', () => {
-      expect(brokenTargets('wiki/a.md', '[[Existing Title|shown]]\n')).toEqual(
-        []
-      );
-      expect(brokenTargets('wiki/a.md', '[[Gone|Existing Title]]\n')).toEqual([
-        'Gone',
-      ]);
-    });
-
-    test('an anchor is dropped before matching', () => {
-      expect(brokenTargets('wiki/a.md', '[[Existing Title#Nope]]\n')).toEqual(
-        []
-      );
-      expect(brokenTargets('wiki/a.md', '[[Gone#Heading]]\n')).toEqual([
-        'Gone',
-      ]);
-    });
-
-    test('an escaped table pipe separates the alias', () => {
-      expect(
-        brokenTargets('wiki/a.md', '| x | [[Existing Title\\|shown]] |\n')
-      ).toEqual([]);
-      expect(brokenTargets('wiki/a.md', '| x | [[Gone\\|shown]] |\n')).toEqual([
-        'Gone',
-      ]);
-    });
-
-    test('a folder prefix resolves by its final segment and reports the full target', () => {
-      expect(brokenTargets('wiki/a.md', '[[concepts/Existing]]\n')).toEqual([]);
-      expect(brokenTargets('wiki/a.md', '[[concepts/Gone]]\n')).toEqual([
-        'concepts/Gone',
-      ]);
-    });
-
-    test('a wiki-root page and a wiki/meta page are valid targets', () => {
-      sandbox.writeFile('wiki/overview.md', 'no title here\n');
-      sandbox.writeFile('wiki/meta/Meta Note.md', '# Meta Note\n');
-
-      expect(
-        brokenTargets('wiki/a.md', '[[overview]] [[Meta Note]]\n')
-      ).toEqual([]);
+      for (const [body, expected] of cases) {
+        expect(brokenTargets('wiki/a.md', body)).toEqual(expected);
+      }
     });
 
     test('a same-page anchor is neither reported nor counted', () => {
@@ -192,33 +239,6 @@ describe('wiki broken-links', () => {
         broken: [],
         scannedLinkCount: 0,
       });
-    });
-
-    test('an inline code span is ignored, and a link after it still counts', () => {
-      expect(
-        brokenTargets(
-          'wiki/a.md',
-          '`[[Gone]]` and ``[[Gone Too]]`` [[Real Gone]]\n'
-        )
-      ).toEqual(['Real Gone']);
-    });
-
-    test('a backtick fence and a tilde fence each hide their lines', () => {
-      expect(
-        brokenTargets(
-          'wiki/a.md',
-          [
-            '```',
-            '[[Gone In Backticks]]',
-            '```',
-            '~~~',
-            '[[Gone In Tildes]]',
-            '~~~',
-            '[[Gone After]]',
-            '',
-          ].join('\n')
-        )
-      ).toEqual(['Gone After']);
     });
 
     test('a frontmatter link is reported with its file line', () => {
@@ -231,12 +251,6 @@ describe('wiki broken-links', () => {
       expect(findBrokenLinks(sandbox.root).broken).toEqual([
         {line: 3, path: 'wiki/a.md', target: 'Gone'},
       ]);
-    });
-
-    test('a link into wiki/_archived is broken', () => {
-      sandbox.writeFile('wiki/_archived/Old.md', '# Old\n');
-
-      expect(brokenTargets('wiki/a.md', '[[Old]]\n')).toEqual(['Old']);
     });
 
     test('links inside exempt files are not reported', () => {
@@ -267,23 +281,35 @@ describe('wiki broken-links', () => {
     ]);
   });
 
-  test('human mode prints one path:line  target line per entry', () => {
-    sandbox.writeFile('wiki/a.md', '[[One]]\n\n[[Two]]\n');
+  test.each(
+    Array.of<{
+      expectedOutput: string;
+      files: Record<string, string>;
+      name: string;
+    }>(
+      {
+        expectedOutput: 'wiki/a.md:1  One\nwiki/a.md:3  Two\n',
+        files: {'wiki/a.md': '[[One]]\n\n[[Two]]\n'},
+        name: 'human mode prints one path:line  target line per entry',
+      },
+      {
+        expectedOutput: '',
+        files: {
+          'wiki/a.md': '[[Existing Title]]\n',
+          'wiki/concepts/Existing.md': EXISTING_PAGE,
+        },
+        name: 'human mode prints nothing when clean',
+      }
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {expectedOutput, files}) => {
+    for (const [relativePath, contents] of Object.entries(files)) {
+      sandbox.writeFile(relativePath, contents);
+    }
 
     const exit = run([], {cwd: sandbox.root});
 
     expect(exit).toBe(EXIT_CODES.OK);
-    expect(stdio.outputs.join('')).toBe('wiki/a.md:1  One\nwiki/a.md:3  Two\n');
-  });
-
-  test('human mode prints nothing when clean', () => {
-    sandbox.writeFile('wiki/concepts/Existing.md', EXISTING_PAGE);
-    sandbox.writeFile('wiki/a.md', '[[Existing Title]]\n');
-
-    const exit = run([], {cwd: sandbox.root});
-
-    expect(exit).toBe(EXIT_CODES.OK);
-    expect(stdio.outputs.join('')).toBe('');
+    expect(stdio.outputs.join('')).toBe(expectedOutput);
   });
 
   test('counts every non-skipped link', () => {

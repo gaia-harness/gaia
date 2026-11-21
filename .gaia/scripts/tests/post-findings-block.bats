@@ -184,10 +184,9 @@ STUB
 
 # minimal_path <omit>: builds a curated bin dir carrying only the named
 # coreutils (never the host's real PATH), so a tool named in <omit> is
-# genuinely absent, not merely shadowed. Mirrors the no-gh forensics fixture
-# (.gaia/tests/forensics/07-gh-not-installed.bats), extended with the extra
-# tools this script's own body needs (jq, git, mktemp, sort, dirname -- the
-# last for sourcing audit-key-lib.sh, .gaia/scripts/audit-key-lib.sh).
+# genuinely absent, not merely shadowed. It carries the tools this script's
+# own body needs (jq, git, mktemp, sort, dirname -- the last for sourcing
+# .gaia/scripts/audit-key-lib.sh).
 minimal_path() {
   local omit="$1"
   local command_name
@@ -201,6 +200,12 @@ minimal_path() {
 
 run_script() {
   ( cd "$SANDBOX" && PATH="$SANDBOX/bin:$PATH" "$SCRIPT" "$@" )
+}
+
+# reset_run: clear one case's sidecars, gh log and posted body so a case table
+# can run several cases in one sandbox.
+reset_run() {
+  rm -f "$AUDIT_DIRECTORY"/* "$GH_LOG" "$SANDBOX/posted_body.txt" "$SANDBOX/last_method.txt"
 }
 
 # extract_payload: the rendered block is always five lines (see the script's
@@ -224,20 +229,19 @@ extract_payload() {
   [ "$output" = "findings: declined: no sidecars" ]
 }
 
-@test "usage: --base is gone, and a caller still passing it fails loudly rather than silently narrowing" {
-  # The flag selected ONE key base, which is exactly the defect (#1573): the
-  # base half of the key advances one stamp per cleared round. A stale caller
-  # must not be quietly accepted-and-ignored, because the value it passes is
-  # the one this script now deliberately refuses to honour.
-  run bash "$SCRIPT" --base "$BASE"
-  [ "$status" -eq 2 ]
-  grep -qF "unrecognized argument: --base" <<<"$output"
+@test "usage: a removed or unrecognized flag exits 2 with the usage error" {
+  # --base is refused, never ignored: one key base misses earlier rounds, since
+  # the base half of the key advances one stamp per cleared round.
+  local row flags flag_name arguments
+  for row in "--base $BASE|--base" "--bogus|--bogus"; do
+    flags=${row%%|*}; flag_name=${row#*|}
+    read -r -a arguments <<<"$flags"
+    run bash "$SCRIPT" "${arguments[@]}"
+    [ "$status" -eq 2 ] || { echo "row $row: status $status"; return 1; }
+    grep -qF "unrecognized argument: $flag_name" <<<"$output" || { echo "row $row: got '$output'"; return 1; }
+  done
 }
 
-@test "usage: an unrecognized flag exits 2" {
-  run bash "$SCRIPT" --bogus
-  [ "$status" -eq 2 ]
-}
 
 # UAT-034: one block, every dispatched member's findings
 
@@ -278,7 +282,8 @@ extract_payload() {
   [ "$(jq 'has("area_tags")' <<<"$entry")" = "true" ]
 }
 
-@test "a finding's actionable detail stays in the sidecar and is projected OUT of the posted block" {
+@test "the posted block never carries sidecar-only detail, review_bases keys beyond member, sha, reason and anchor_tree, entry_id or resolutions" {
+  local payload entry sidecar
   # The sidecar is the report of record and carries file / line / defect /
   # verification / repair. The PR comment is a published surface whose
   # visibility follows the repo's, and a finding's text can quote the very hole
@@ -302,6 +307,34 @@ extract_payload() {
   sidecar="$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-maintainer-shell.findings.json"
   [ "$(jq -r '.findings[0].line' "$sidecar")" = "113" ]
   [ "$(jq -r '.findings[0].suggested_fix' "$sidecar")" = "bound each path segment" ]
+
+  # review_bases carries only member / sha / reason / anchor_tree.
+  reset_run
+  write_sidecar_with_review_base code-audit-frontend '[]' '{"sha":"aaa111","reason":"member-clearance","anchor_tree":"treeA"}'
+  stub_gh '[]'
+  run run_script
+  [ "$status" -eq 0 ]
+  payload="$(extract_payload)"
+  entry="$(jq -c '.review_bases[0]' <<<"$payload")"
+  [ "$(jq -r '[keys[]] | sort | join(",")' <<<"$entry")" = "anchor_tree,member,reason,sha" ]
+
+  # entry_id and resolutions are accounting fields for the clearance writer;
+  # the projection keeps only finding_class, severity, and area_tags.
+  reset_run
+  jq -cn '{schema:1, member:"code-audit-frontend",
+    findings:[{finding_class:"holistic/swallowed-error", severity:"major", security:false, area_tags:["app/services"], entry_id:"r1-1"}],
+    resolutions:[{entry_id:"r1-2", rationale:"fixed at HEAD"}]}' \
+    > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.findings.json"
+  stub_gh '[]'
+  run run_script
+  [ "$status" -eq 0 ]
+  payload="$(extract_payload)"
+  [ "$(jq '.findings | length' <<<"$payload")" = "1" ]
+  [ "$(jq -r '.findings[0] | has("entry_id")' <<<"$payload")" = "false" ]
+  [ "$(jq -r '[.. | objects | select(has("resolutions"))] | length' <<<"$payload")" = "0" ]
+  grep -qF "r1-2" <<<"$payload" && return 1
+  grep -qF "r1-1" <<<"$payload" && return 1
+  true
 }
 
 # AC3: a second run with the same base updates, never duplicates
@@ -344,13 +377,43 @@ extract_payload() {
 
 # AC4: zero sidecars declines cleanly, before any gh call
 
-@test "zero sidecars: declines cleanly, exit 0, nothing posted" {
-  stub_gh '[]'
-  run run_script
-  [ "$status" -eq 0 ]
-  [ "$output" = "findings: declined: no sidecars" ]
-  # Declined before gh was ever invoked (the glob check runs first).
-  [ ! -e "$GH_LOG" ]
+@test "declines cleanly with exit 0 and nothing posted when sidecars, gh, auth or the PR are missing" {
+  local row expected path_no_gh
+  for row in zero-sidecars gh-absent gh-unauthenticated pr-unresolved; do
+    reset_run
+    case "$row" in
+      zero-sidecars)
+        expected="findings: declined: no sidecars"
+        stub_gh '[]'
+        run run_script
+        ;;
+      gh-absent)
+        expected="findings: declined: gh absent"
+        write_sidecar code-audit-frontend '[]'
+        path_no_gh="$(minimal_path gh)"
+        run bash -c "cd '$SANDBOX' && PATH='$path_no_gh' bash '$SCRIPT'"
+        ;;
+      gh-unauthenticated)
+        expected="findings: declined: gh unauthenticated"
+        write_sidecar code-audit-frontend '[]'
+        stub_gh_no_auth
+        run run_script
+        ;;
+      pr-unresolved)
+        expected="findings: declined: pr unresolved"
+        write_sidecar code-audit-frontend '[]'
+        stub_gh_no_pr
+        run run_script
+        ;;
+    esac
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    [ "$output" = "$expected" ] || { echo "row $row: got '$output'"; return 1; }
+    # Zero sidecars declines before any gh call: the glob check runs first.
+    if [ "$row" = "zero-sidecars" ] && [ -e "$GH_LOG" ]; then
+      echo "row $row: gh was invoked"
+      return 1
+    fi
+  done
 }
 
 # AC5: every sidecar carries findings: [] -> still one meaningful post
@@ -368,37 +431,43 @@ extract_payload() {
 
 # AC6: a malformed sidecar is skipped, named, and never silently vanishes
 
-@test "a malformed sidecar (invalid JSON) is skipped, named on stderr, and the rest still posts" {
-  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
-  echo 'not json at all' > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-maintainer-shell.findings.json"
-  stub_gh '[]'
-  run run_script
-  [ "$status" -eq 0 ]
-  grep -qF "malformed sidecar" <<<"$output"
-  grep -qF "code-audit-maintainer-shell.findings.json" <<<"$output"
-  [ "$(tail -n 1 <<<"$output")" = "findings: posted 1 finding(s) from 1 member(s) to PR #42" ]
+@test "a malformed sidecar is skipped and named on stderr; the rest still posts, and with none left the run declines no sidecars" {
+  local row expected_last
+  for row in invalid-json non-array-findings every-sidecar-malformed; do
+    reset_run
+    stub_gh '[]'
+    case "$row" in
+      invalid-json)
+        expected_last="findings: posted 1 finding(s) from 1 member(s) to PR #42"
+        write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
+        echo 'not json at all' > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-maintainer-shell.findings.json"
+        ;;
+      non-array-findings)
+        expected_last="findings: posted 0 finding(s) from 1 member(s) to PR #42"
+        printf '{"schema":1,"member":"code-audit-maintainer-node","findings":"oops"}\n' \
+          > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-maintainer-node.findings.json"
+        write_sidecar code-audit-frontend '[]'
+        ;;
+      every-sidecar-malformed)
+        expected_last="findings: declined: no sidecars"
+        echo 'not json' > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.findings.json"
+        ;;
+    esac
+    run run_script
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    grep -qF "malformed sidecar" <<<"$output" || { echo "row $row: malformed not named: $output"; return 1; }
+    [ "$(tail -n 1 <<<"$output")" = "$expected_last" ] || { echo "row $row: got '$output'"; return 1; }
+    if [ "$row" = "invalid-json" ]; then
+      grep -qF "code-audit-maintainer-shell.findings.json" <<<"$output" || { echo "row $row: file not named"; return 1; }
+    fi
+    if [ "$row" = "every-sidecar-malformed" ] && [ -e "$GH_LOG" ]; then
+      echo "row $row: gh was invoked"
+      return 1
+    fi
+  done
 }
 
-@test "a sidecar with a non-array findings field is malformed and skipped" {
-  printf '{"schema":1,"member":"code-audit-maintainer-node","findings":"oops"}\n' \
-    > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-maintainer-node.findings.json"
-  write_sidecar code-audit-frontend '[]'
-  stub_gh '[]'
-  run run_script
-  [ "$status" -eq 0 ]
-  grep -qF "malformed sidecar" <<<"$output"
-  [ "$(tail -n 1 <<<"$output")" = "findings: posted 0 finding(s) from 1 member(s) to PR #42" ]
-}
 
-@test "when every matched sidecar is malformed, declines no sidecars (each still named on stderr)" {
-  echo 'not json' > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.findings.json"
-  stub_gh '[]'
-  run run_script
-  [ "$status" -eq 0 ]
-  grep -qF "malformed sidecar" <<<"$output"
-  [ "$(tail -n 1 <<<"$output")" = "findings: declined: no sidecars" ]
-  [ ! -e "$GH_LOG" ]
-}
 
 @test "a merge that fails declines, and never publishes an empty findings block" {
   # Every sidecar reaching the merge already parsed with an array `.findings`,
@@ -421,29 +490,8 @@ extract_payload() {
 
 # AC7: gh absent / unauthenticated, fail-safe asymmetry
 
-@test "gh absent: declines, exit 0, nothing touched" {
-  write_sidecar code-audit-frontend '[]'
-  path_no_gh="$(minimal_path gh)"
-  run bash -c "cd '$SANDBOX' && PATH='$path_no_gh' bash '$SCRIPT'"
-  [ "$status" -eq 0 ]
-  [ "$output" = "findings: declined: gh absent" ]
-}
 
-@test "gh unauthenticated: declines, exit 0, nothing touched" {
-  write_sidecar code-audit-frontend '[]'
-  stub_gh_no_auth
-  run run_script
-  [ "$status" -eq 0 ]
-  [ "$output" = "findings: declined: gh unauthenticated" ]
-}
 
-@test "pr unresolved (no --pr, gh pr view empty): declines, exit 0" {
-  write_sidecar code-audit-frontend '[]'
-  stub_gh_no_pr
-  run run_script
-  [ "$status" -eq 0 ]
-  [ "$output" = "findings: declined: pr unresolved" ]
-}
 
 @test "--pr overrides the default gh pr view resolution" {
   write_sidecar code-audit-frontend '[]'
@@ -518,10 +566,9 @@ extract_payload() {
   [ "$(jq '.review_bases | length' <<<"$payload")" = "0" ]
 }
 
-@test "one member across several rounds reports one member, not one per sidecar" {
-  # The direction the multi-base widening makes reachable and the single-base
-  # glob never could: file count and member count agreed only while a member
-  # could write at most one matching sidecar.
+@test "members bucket by name across rounds, and unnamed sidecars collapse into one bucket" {
+  # One member across several rounds counts once: the member count is distinct
+  # names, not sidecar files.
   write_sidecar_at "$AUDIT_KEY" code-audit-maintainer-shell \
     '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["a"]}]'
   write_sidecar_at "${BASE_ROUND2}.main" code-audit-maintainer-shell \
@@ -531,13 +578,12 @@ extract_payload() {
   run run_script
   [ "$status" -eq 0 ]
   [ "$output" = "findings: posted 2 finding(s) from 1 member(s) to PR #42" ]
-}
 
-@test "sidecars naming no member collapse into one bucket, never one apiece" {
   # `.member // ""` puts absent and empty in ONE bucket on purpose: an unnamed
   # sidecar cannot be shown to be a different member from another unnamed one,
   # and over-stating the count is the defect being repaired. Two nameless plus
   # one named reads as 2, where counting files would read 3.
+  reset_run
   printf '{"schema":1,"findings":[{"finding_class":"holistic/swallowed-error","severity":"major","security":false,"area_tags":["a"]}]}\n' \
     > "$AUDIT_DIRECTORY/${AUDIT_KEY}.nameless-one.findings.json"
   printf '{"schema":1,"member":"","findings":[]}\n' \
@@ -549,11 +595,13 @@ extract_payload() {
   [ "$output" = "findings: posted 1 finding(s) from 2 member(s) to PR #42" ]
 }
 
-@test "a sidecar under a DIFFERENT branch slug is never merged, whatever its base" {
-  # Non-vacuity for the test above: the glob widened across the base half, and
-  # only the base half. `.gaia/local/audit/` is shared (symlinked to main from
-  # every worktree), so a sibling tree's sidecars sit in the same directory and
-  # the branch slug is the whole discriminator between them.
+
+@test "a sidecar of another branch, or of a branch whose slug has this one as a suffix, is never merged" {
+  # Non-vacuity for the multi-base test above: the glob spans any base half but
+  # only this branch's slug. `.gaia/local/audit/` is shared (symlinked to
+  # main from every worktree), so a sibling tree's sidecars sit in the same
+  # directory and the branch slug is the whole discriminator between them.
+  local payload
   write_sidecar_at "$AUDIT_KEY" code-audit-frontend \
     '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   write_sidecar_at "${BASE}.other-branch" code-audit-frontend \
@@ -567,14 +615,13 @@ extract_payload() {
   payload="$(extract_payload)"
   grep -qF "holistic/foreign-tree" <<<"$payload" && return 1
   grep -qF "holistic/foreign-worktree" <<<"$payload" && return 1
-  grep -qF "holistic/swallowed-error" <<<"$payload"
-}
+  grep -qF "holistic/swallowed-error" <<<"$payload" || return 1
 
-@test "a branch whose slug is a suffix of another branch's does not borrow its sidecars" {
   # The glob is anchored on the literal `.<slug>.` pair. `gaia_key_slug`
   # percent-encodes every byte outside [A-Za-z0-9_-], the dot included, so no
   # slug can carry a dot of its own and the anchor is unambiguous. Without the
   # leading dot, `main` would match `release-main` here.
+  reset_run
   write_sidecar_at "${BASE}.release-main" code-audit-frontend \
     '[{"finding_class":"holistic/suffix-collision","severity":"major","area_tags":["elsewhere"]}]'
   stub_gh '[]'
@@ -582,6 +629,7 @@ extract_payload() {
   [ "$status" -eq 0 ]
   [ "$output" = "findings: declined: no sidecars" ]
 }
+
 
 # AC10/11: structural hygiene
 
@@ -619,7 +667,9 @@ write_sidecar_with_review_base() {
   fi
 }
 
-@test "review_bases is [] when no sidecar carries the key" {
+@test "review_bases is empty with no review_base key, sorted per sidecar carrying one, and skips a sidecar without one" {
+  local payload first second
+  # No sidecar carries the key.
   write_sidecar code-audit-frontend '[]'
   stub_gh '[]'
   run run_script
@@ -627,9 +677,9 @@ write_sidecar_with_review_base() {
   payload="$(extract_payload)"
   [ "$(jq -e 'has("review_bases")' <<<"$payload")" = "true" ]
   [ "$(jq -c '.review_bases' <<<"$payload")" = "[]" ]
-}
 
-@test "review_bases carries one entry per sidecar carrying review_base, in sorted sidecar order" {
+  # One entry per sidecar carrying review_base, in sorted sidecar order.
+  reset_run
   write_sidecar_with_review_base code-audit-frontend '[]' '{"sha":"aaa111","reason":"member-clearance","anchor_tree":"treeA"}'
   write_sidecar_with_review_base code-audit-maintainer-shell '[]' '{"sha":"bbb222","reason":"team-signal","anchor_tree":""}'
   stub_gh '[]'
@@ -646,9 +696,9 @@ write_sidecar_with_review_base() {
   [ "$(jq -r '.anchor_tree' <<<"$first")" = "treeA" ]
   [ "$(jq -r '.member' <<<"$second")" = "code-audit-maintainer-shell" ]
   [ "$(jq -r '.anchor_tree' <<<"$second")" = "" ]
-}
 
-@test "a sidecar with no review_base key contributes no review_bases entry" {
+  # A sidecar with no review_base key contributes no entry.
+  reset_run
   write_sidecar_with_review_base code-audit-frontend '[]' '{"sha":"aaa111","reason":"member-clearance","anchor_tree":""}'
   write_sidecar code-audit-maintainer-shell '[]'
   stub_gh '[]'
@@ -659,51 +709,46 @@ write_sidecar_with_review_base() {
   [ "$(jq -r '.review_bases[0].member' <<<"$payload")" = "code-audit-frontend" ]
 }
 
-@test "a malformed review_base (string instead of object) is skipped, named on stderr, findings still merge" {
-  member="code-audit-frontend"
-  findings='[{"finding_class":"holistic/swallowed-error","severity":"major","security":false,"area_tags":["app/services"]}]'
-  jq -cn --arg member "$member" --argjson findings "$findings" \
-    '{schema:1, member:$member, findings:$findings, review_base:"not-an-object"}' \
-    > "$AUDIT_DIRECTORY/${AUDIT_KEY}.${member}.findings.json"
-  stub_gh '[]'
-  run run_script
-  [ "$status" -eq 0 ]
-  grep -qF "malformed review_base" <<<"$output"
-  payload="$(extract_payload)"
-  [ "$(jq '.findings | length' <<<"$payload")" = "1" ]
-  [ "$(jq -c '.review_bases' <<<"$payload")" = "[]" ]
+
+
+@test "a malformed review_base is skipped and named on stderr, findings still merge" {
+  local row findings payload
+  findings='[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
+  for row in string-instead-of-object object-missing-sha; do
+    reset_run
+    case "$row" in
+      string-instead-of-object)
+        jq -cn --argjson findings "$findings" \
+          '{schema:1, member:"code-audit-frontend", findings:($findings | map(. + {security: false})), review_base:"not-an-object"}' \
+          > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.findings.json"
+        ;;
+      object-missing-sha)
+        write_sidecar_with_review_base code-audit-frontend "$findings" '{"reason":"member-clearance"}'
+        ;;
+    esac
+    stub_gh '[]'
+    run run_script
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    grep -qF "malformed review_base" <<<"$output" || { echo "row $row: not named: $output"; return 1; }
+    payload="$(extract_payload)"
+    [ "$(jq '.findings | length' <<<"$payload")" = "1" ] || { echo "row $row: findings dropped"; return 1; }
+    [ "$(jq -c '.review_bases' <<<"$payload")" = "[]" ] || { echo "row $row: review_bases not empty"; return 1; }
+  done
 }
 
-@test "a malformed review_base (object missing sha) is skipped, named on stderr, findings still merge" {
-  write_sidecar_with_review_base code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]' '{"reason":"member-clearance"}'
-  stub_gh '[]'
-  run run_script
-  [ "$status" -eq 0 ]
-  grep -qF "malformed review_base" <<<"$output"
-  payload="$(extract_payload)"
-  [ "$(jq '.findings | length' <<<"$payload")" = "1" ]
-  [ "$(jq -c '.review_bases' <<<"$payload")" = "[]" ]
-}
 
-@test "review_bases never leaks finding text (only member/sha/reason/anchor_tree)" {
-  write_sidecar_with_review_base code-audit-frontend '[]' '{"sha":"aaa111","reason":"member-clearance","anchor_tree":"treeA"}'
-  stub_gh '[]'
-  run run_script
-  [ "$status" -eq 0 ]
-  payload="$(extract_payload)"
-  entry="$(jq -c '.review_bases[0]' <<<"$payload")"
-  [ "$(jq -r '[keys[]] | sort | join(",")' <<<"$entry")" = "anchor_tree,member,reason,sha" ]
-}
 
 # A light review's sidecar matches the branch-wide glob but is not a member's
 # findings, so it never renders in the block.
 
-@test "a light review sidecar is skipped and only the full sidecar renders" {
+@test "a light review sidecar is skipped for rendering and for the no-sidecars decline" {
+  local light_file payload
+  light_file="$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.light.findings.json"
   write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   printf '{"schema":1,"member":"code-audit-frontend","review":"light","findings":%s}\n' \
     '[{"finding_class":"holistic/light-only-marker","severity":"major","area_tags":["app/light"]}]' \
-    > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.light.findings.json"
-  [ -f "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.light.findings.json" ]
+    > "$light_file"
+  [ -f "$light_file" ]
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
@@ -712,36 +757,20 @@ write_sidecar_with_review_base() {
   [ "$(jq '.findings | length' <<<"$payload")" = "1" ]
   grep -qF "light-only-marker" "$SANDBOX/posted_body.txt" && return 1
   grep -qF "swallowed-error" "$SANDBOX/posted_body.txt" || return 1
-}
 
-@test "a branch holding only a light review sidecar declines as having no sidecars" {
-  printf '{"schema":1,"member":"code-audit-frontend","review":"light","findings":[]}\n' \
-    > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.light.findings.json"
+  # A branch holding only a light sidecar declines as having no sidecars.
+  reset_run
+  printf '{"schema":1,"member":"code-audit-frontend","review":"light","findings":[]}\n' > "$light_file"
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
   [ "$output" = "findings: declined: no sidecars" ]
 }
 
+
 # entry_id and resolutions are accounting fields for the clearance writer; the
 # projection keeps only finding_class, severity, and area_tags.
 
-@test "entry_id and resolutions never reach the rendered block" {
-  jq -cn '{schema:1, member:"code-audit-frontend",
-    findings:[{finding_class:"holistic/swallowed-error", severity:"major", security:false, area_tags:["app/services"], entry_id:"r1-1"}],
-    resolutions:[{entry_id:"r1-2", rationale:"fixed at HEAD"}]}' \
-    > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.findings.json"
-  stub_gh '[]'
-  run run_script
-  [ "$status" -eq 0 ]
-  payload="$(extract_payload)"
-  [ "$(jq '.findings | length' <<<"$payload")" = "1" ]
-  [ "$(jq -r '.findings[0] | has("entry_id")' <<<"$payload")" = "false" ]
-  [ "$(jq -r '[.. | objects | select(has("resolutions"))] | length' <<<"$payload")" = "0" ]
-  grep -qF "r1-2" <<<"$payload" && return 1
-  grep -qF "r1-1" <<<"$payload" && return 1
-  true
-}
 
 @test "a member-refusal review_base reason renders as review_bases[].reason" {
   write_sidecar_with_review_base code-audit-frontend '[]' '{"sha":"aaa111","reason":"member-refusal","anchor_tree":"treeA"}'
@@ -756,7 +785,9 @@ write_sidecar_with_review_base() {
 # where an unfixed hole sits, so a security-class or Critical entry reaches the
 # comment only as a bare count.
 
+# bats test_tags=protected
 @test "a security-class entry and a Critical entry are withheld from the comment, counted only" {
+  local payload
   # Written straight to disk: write_sidecar would record the unflagged entry as
   # security:false, which is exactly the case under test.
   printf '%s\n' '{"schema":1,"member":"code-audit-frontend","findings":[
@@ -780,10 +811,9 @@ write_sidecar_with_review_base() {
   grep -qF "unflagged-directory" "$SANDBOX/posted_body.txt" && return 1
   grep -qF "critical-directory" "$SANDBOX/posted_body.txt" && return 1
   grep -qF '"critical"' "$SANDBOX/posted_body.txt" && return 1
-  return 0
-}
 
-@test "a run whose every entry is withheld posts an empty findings array and the count" {
+  # Every entry withheld: an empty findings array and the count.
+  reset_run
   write_sidecar code-audit-frontend '[{"finding_class":"holistic/secret-exposure","severity":"critical","security":true,"area_tags":["vault-directory"]}]'
   stub_gh '[]'
   run run_script
@@ -793,10 +823,9 @@ write_sidecar_with_review_base() {
   [ "$(jq -c '.findings' <<<"$payload")" = "[]" ]
   grep -qF "1 finding(s) withheld (security-class or Critical)" "$SANDBOX/posted_body.txt" || return 1
   grep -qF "secret-exposure" "$SANDBOX/posted_body.txt" && return 1
-  return 0
-}
 
-@test "a block with nothing withheld carries no count line" {
+  # Nothing withheld: no count line.
+  reset_run
   write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","security":false,"area_tags":["app/services"]}]'
   stub_gh '[]'
   run run_script
@@ -804,6 +833,8 @@ write_sidecar_with_review_base() {
   grep -qF "withheld" "$SANDBOX/posted_body.txt" && return 1
   return 0
 }
+
+
 
 # write_review_record: a ran record whose findings and denial detail carry text
 # that must never reach the posted block, in the run folder the script derives.
@@ -819,7 +850,8 @@ write_review_record() {
     > "$SANDBOX/.gaia/local/runs/main/code-review.json"
 }
 
-@test "code_review: the block carries the review outcome and counts, and nothing from its findings or denial detail" {
+@test "code_review: the block carries outcome and counts only, and the key is absent with no review record" {
+  local payload
   write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   write_review_record
   stub_gh '[]'
@@ -829,13 +861,14 @@ write_review_record() {
   [ "$(jq -c '.code_review' <<<"$payload")" = '{"outcome":"ran","added":1,"kept":1,"dropped":0,"unaccounted":0,"merged":0,"fixed":1}' ]
   grep -qF "leaky" "$SANDBOX/posted_body.txt" && return 1
   grep -qF "secret/path-in-denial" "$SANDBOX/posted_body.txt" && return 1
-  true
-}
 
-@test "code_review: the key is absent when the branch has no review record" {
+  # No review record: the key is absent.
+  rm -f "$SANDBOX/.gaia/local/runs/main/code-review.json"
+  reset_run
   write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
   [ "$(jq 'has("code_review")' <<<"$(extract_payload)")" = "false" ]
 }
+

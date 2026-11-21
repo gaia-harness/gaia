@@ -76,37 +76,33 @@ describe('a path GAIA tooling creates on first use', () => {
     ).toEqual([]);
   });
 
-  test('does not cover a sibling path that only shares its prefix', () => {
-    expect(
-      findingsOf(
-        rule('See `wiki/metadata/` and `.gaia/init-state.json.bak`.\n'),
-        'rules.dead-path'
-      )
-    ).toHaveLength(2);
-  });
-
-  test('does not cover a misspelling of it', () => {
-    expect(
-      findingsOf(
-        rule('Resume reads `.gaia/init_state.json`.\n'),
-        'rules.dead-path'
-      )
-    ).toHaveLength(1);
-    expect(
-      findingsOf(
-        command('Resume reads `.gaia/init_state.json`.\n'),
-        'authoring.reference.link.resolves'
-      )
-    ).toHaveLength(1);
-  });
-
-  test('does not cover a named file under the folder it creates', () => {
-    expect(
-      findingsOf(
-        rule('The last report is `wiki/meta/lint-report.md`.\n'),
-        'rules.dead-path'
-      )
-    ).toHaveLength(1);
+  test.each([
+    [
+      'does not cover a sibling path that only shares its prefix',
+      rule('See `wiki/metadata/` and `.gaia/init-state.json.bak`.\n'),
+      'rules.dead-path',
+      2,
+    ],
+    [
+      'does not cover a misspelling of it in a rule',
+      rule('Resume reads `.gaia/init_state.json`.\n'),
+      'rules.dead-path',
+      1,
+    ],
+    [
+      'does not cover a misspelling of it in a command',
+      command('Resume reads `.gaia/init_state.json`.\n'),
+      'authoring.reference.link.resolves',
+      1,
+    ],
+    [
+      'does not cover a named file under the folder it creates',
+      rule('The last report is `wiki/meta/lint-report.md`.\n'),
+      'rules.dead-path',
+      1,
+    ],
+  ])('%s', (_name, project, ruleId, expectedCount) => {
+    expect(findingsOf(project, ruleId)).toHaveLength(expectedCount);
   });
 });
 
@@ -148,49 +144,31 @@ describe('a concrete instance of a placeholder template the file declares', () =
     ).toEqual([]);
   });
 
-  test('is dead when the file declares no template it fits', () => {
-    expect(
-      findingsOf(
-        rule(
-          'Pages live at `pages/<route path>/index.tsx`; see `pages/about/page.tsx`.\n',
-          pages
-        ),
-        'rules.dead-path'
-      )
-    ).toHaveLength(1);
-  });
-
-  test('is dead when it only resembles the template', () => {
-    expect(
-      findingsOf(
-        rule(
-          'Pages live at `pages/<route path>/page.tsx`; see `pages/page.tsx` and `pages/about/page.ts`.\n',
-          pages
-        ),
-        'rules.dead-path'
-      )
-    ).toHaveLength(2);
-  });
-
-  test('is dead when the template ends in a placeholder, which fits every path in its folder', () => {
-    expect(
-      findingsOf(
-        rule(
-          'Shared components are `pages/<name>/`, and reports are `pages/<name>.md`; see `pages/about/page.tsx` and `pages/gone.md`.\n',
-          pages
-        ),
-        'rules.dead-path'
-      )
-    ).toHaveLength(2);
-  });
-
-  test('is dead when the template starts with a placeholder, which fits any folder', () => {
-    expect(
-      findingsOf(
-        rule('Write `<folder>/page.tsx`; see `pages/about/page.tsx`.\n', pages),
-        'rules.dead-path'
-      )
-    ).toHaveLength(1);
+  test.each([
+    [
+      'is dead when the file declares no template it fits',
+      'Pages live at `pages/<route path>/index.tsx`; see `pages/about/page.tsx`.\n',
+      1,
+    ],
+    [
+      'is dead when it only resembles the template',
+      'Pages live at `pages/<route path>/page.tsx`; see `pages/page.tsx` and `pages/about/page.ts`.\n',
+      2,
+    ],
+    [
+      'is dead when the template ends in a placeholder, which fits every path in its folder',
+      'Shared components are `pages/<name>/`, and reports are `pages/<name>.md`; see `pages/about/page.tsx` and `pages/gone.md`.\n',
+      2,
+    ],
+    [
+      'is dead when the template starts with a placeholder, which fits any folder',
+      'Write `<folder>/page.tsx`; see `pages/about/page.tsx`.\n',
+      1,
+    ],
+  ])('%s', (_name, body, expectedCount) => {
+    expect(findingsOf(rule(body, pages), 'rules.dead-path')).toHaveLength(
+      expectedCount
+    );
   });
 
   test('is still dead as a markdown link', () => {

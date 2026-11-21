@@ -143,14 +143,6 @@ describe('gaia init router target guard', () => {
     expect(codes).toStrictEqual(steps.map(() => ['not_a_gaia_project']));
   });
 
-  test('leaves the router help path unguarded', async () => {
-    const exitCode = await run([], {cwd: sandbox.root});
-
-    expect(exitCode).toBe(EXIT_CODES.OK);
-    expect(stdio.outputs.join('')).toContain('Usage: gaia init <subcommand>');
-    expect(stdio.errors).toStrictEqual([]);
-  });
-
   test('lists configure-data-layer in the router help and dispatches it', async () => {
     await run([], {cwd: sandbox.root});
     expect(stdio.outputs.join('')).toContain('configure-data-layer');
@@ -162,11 +154,18 @@ describe('gaia init router target guard', () => {
     expect(stdio.errors.join('')).toContain('at least one of --casing');
   });
 
-  test('leaves a per-step help request unguarded', async () => {
-    const exitCode = await run(['rename', '--help'], {cwd: sandbox.root});
+  test.each([
+    ['the router help path', [], 'Usage: gaia init <subcommand>'],
+    [
+      'a per-step help request',
+      ['rename', '--help'],
+      'Usage: gaia init rename',
+    ],
+  ])('leaves %s unguarded', async (_name, args, usage) => {
+    const exitCode = await run(args, {cwd: sandbox.root});
 
     expect(exitCode).toBe(EXIT_CODES.OK);
-    expect(stdio.outputs.join('')).toContain('Usage: gaia init rename');
+    expect(stdio.outputs.join('')).toContain(usage);
     expect(stdio.errors).toStrictEqual([]);
   });
 

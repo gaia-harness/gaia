@@ -44,9 +44,7 @@ export const convertCase = (
       (accumulated: Record<string, unknown>, [key, value]) => {
         if (Array.isArray(value)) {
           accumulated[transformKey(key)] = value.map<unknown>((arrayElement) =>
-            isObject(arrayElement) ?
-              convertCase(transformKey, arrayElement)
-            : arrayElement
+            convertCase(transformKey, arrayElement)
           );
         } else if (isObject(value)) {
           accumulated[transformKey(key)] = convertCase(transformKey, value);

@@ -272,55 +272,62 @@ describe('runMove is idempotent per step', () => {
   });
 });
 
+const removeOldRoot = (root: string): void => {
+  git(root, ['rm', '-r', '-q', '-f', OLD_ROOT]);
+  rmSync(path.join(root, OLD_ROOT), {force: true, recursive: true});
+};
+
 describe('runMove refusals change nothing', () => {
-  test('a symlink at the apps directory', () => {
-    const root = fresh();
+  const REFUSAL_ROWS: {
+    arrange: (root: string) => void;
+    name: string;
+    stop: string;
+  }[] = [
+    {
+      arrange: (root) => {
+        mkdirSync(path.join(root, 'elsewhere'));
+        symlinkSync('elsewhere', path.join(root, 'apps'));
+      },
+      name: 'a symlink at the apps directory',
+      stop: 'CROSSING_STOP symlink',
+    },
+    {
+      arrange: (root) => {
+        removeOldRoot(root);
+        mkdirSync(path.join(root, 'elsewhere'));
+        symlinkSync('elsewhere', path.join(root, OLD_ROOT));
+      },
+      name: 'a symlink at the old root',
+      stop: 'CROSSING_STOP symlink',
+    },
+    {
+      arrange: (root) => {
+        write(root, 'apps/web/package.json', '{}\n');
+      },
+      name: 'both trees present',
+      stop: 'CROSSING_STOP both-trees-present',
+    },
+    {
+      arrange: removeOldRoot,
+      name: 'neither tree present',
+      stop: 'CROSSING_STOP app-missing',
+    },
+  ];
 
-    mkdirSync(path.join(root, 'elsewhere'));
-    symlinkSync('elsewhere', path.join(root, 'apps'));
-    const before = treeState(root);
-    const outcome = runMove(root);
+  test.each(REFUSAL_ROWS.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {arrange, stop}) => {
+      const root = fresh();
 
-    expect(outcome.exit).toBe(3);
-    expect(outcome.lines[0]).toBe('CROSSING_STOP symlink');
-    expect(treeState(root)).toEqual(before);
-  });
+      arrange(root);
+      const before = treeState(root);
+      const outcome = runMove(root);
 
-  test('a symlink at the old root', () => {
-    const root = fresh();
-
-    git(root, ['rm', '-r', '-q', '-f', OLD_ROOT]);
-    rmSync(path.join(root, OLD_ROOT), {force: true, recursive: true});
-    mkdirSync(path.join(root, 'elsewhere'));
-    symlinkSync('elsewhere', path.join(root, OLD_ROOT));
-    const outcome = runMove(root);
-
-    expect(outcome.exit).toBe(3);
-    expect(outcome.lines[0]).toBe('CROSSING_STOP symlink');
-  });
-
-  test('both trees present', () => {
-    const root = fresh();
-
-    write(root, 'apps/web/package.json', '{}\n');
-    const before = treeState(root);
-    const outcome = runMove(root);
-
-    expect(outcome.exit).toBe(3);
-    expect(outcome.lines[0]).toBe('CROSSING_STOP both-trees-present');
-    expect(treeState(root)).toEqual(before);
-  });
-
-  test('neither tree present', () => {
-    const root = fresh();
-
-    git(root, ['rm', '-r', '-q', '-f', OLD_ROOT]);
-    rmSync(path.join(root, OLD_ROOT), {force: true, recursive: true});
-    const outcome = runMove(root);
-
-    expect(outcome.exit).toBe(3);
-    expect(outcome.lines[0]).toBe('CROSSING_STOP app-missing');
-  });
+      expect(outcome.exit).toBe(3);
+      expect(outcome.lines[0]).toBe(stop);
+      expect(treeState(root)).toEqual(before);
+    }
+  );
 });
 
 test('the move leaves the manifest and decision log to rekey', () => {

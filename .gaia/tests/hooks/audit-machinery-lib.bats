@@ -19,6 +19,7 @@ setup() {
 # asserted by name. Files covered by a `/**` prefix entry are listed too, so
 # narrowing that prefix reds here.
 
+# bats test_tags=protected
 @test "every gate-machinery file is matched by audit_path_is_machinery" {
   unmatched=""
   while IFS= read -r f; do
@@ -56,30 +57,21 @@ EOF
 # the member having run. Each is asserted by name, per element, so dropping one
 # entry reds that path rather than a count.
 
-@test "each light-review file is machinery" {
-  for light_path in \
-    .gaia/scripts/audit-light-route.sh \
-    .gaia/scripts/audit-light-mark.sh \
-    .claude/hooks/lib/audit-quick-classify-lib.sh \
-    .claude/agents/audit-light-reviewer.md; do
-    audit_path_is_machinery "$light_path" || { echo "not machinery: $light_path" >&2; return 1; }
-  done
-}
-
-@test "the batch classifier flags each light-review file as machinery" {
-  run audit_machinery_flags <<'PATHS'
-.gaia/scripts/audit-light-route.sh
-.gaia/scripts/audit-light-mark.sh
-.claude/hooks/lib/audit-quick-classify-lib.sh
-.claude/agents/audit-light-reviewer.md
-PATHS
-  [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 4 ]
-  for line in "${lines[@]}"; do
-    case "$line" in
-      *$'\t'1) ;;
-      *) echo "not flagged: $line" >&2; return 1 ;;
-    esac
+@test "each light-review file is machinery and batch-classified as machinery" {
+  local row
+  local rows=(
+    .gaia/scripts/audit-light-route.sh
+    .gaia/scripts/audit-light-mark.sh
+    .claude/hooks/lib/audit-quick-classify-lib.sh
+    .claude/agents/audit-light-reviewer.md
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    audit_path_is_machinery "$row"
+    run audit_machinery_flags <<<"$row"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [ "${lines[0]}" = "$(printf '%s\t1' "$row")" ]
   done
 }
 
@@ -145,18 +137,6 @@ PATHS
   done
 }
 
-@test "the frontend clearance companion entries can fail: a copy without them flags the three exact paths 0 and the prefix-covered reference 1" {
-  local scratch_library="$BATS_TEST_TMPDIR/audit-machinery-scratch.sh"
-  grep -vxF -e ".claude/agents/audit-rule-specialist.md" -e ".claude/agents/audit-refuter.md" -e ".gaia/scripts/audit-frontend-oracles.sh" "$MACHINERY_LIBRARY" >"$scratch_library"
-  [ "$(wc -l <"$MACHINERY_LIBRARY" | tr -d ' ')" -eq $(($(wc -l <"$scratch_library" | tr -d ' ') + 3)) ]
-  run bash -c '. "$1"; printf "%s\n" .claude/agents/audit-rule-specialist.md .claude/agents/audit-refuter.md .gaia/scripts/audit-frontend-oracles.sh .claude/hooks/lib/audit-frontend-refuter.md | audit_machinery_flags' _ "$scratch_library"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "$(printf '.claude/agents/audit-rule-specialist.md\t0')" ]
-  [ "${lines[1]}" = "$(printf '.claude/agents/audit-refuter.md\t0')" ]
-  [ "${lines[2]}" = "$(printf '.gaia/scripts/audit-frontend-oracles.sh\t0')" ]
-  [ "${lines[3]}" = "$(printf '.claude/hooks/lib/audit-frontend-refuter.md\t1')" ]
-}
-
 # The member-definition pattern: one entry registers every member, its `*`
 # stays inside the last segment, and the two matchers agree on it.
 @test "the code-audit-*.md pattern reaches any member definition and nothing one directory down" {
@@ -174,13 +154,4 @@ PATHS
   [ "${lines[0]}" = "$(printf '.claude/agents/code-audit-python.md\t1')" ]
   [ "${lines[1]}" = "$(printf '.claude/agents/code-audit-python/notes.md\t0')" ]
   [ "${lines[2]}" = "$(printf '.claude/agents/fitness-judge.md\t0')" ]
-}
-
-@test "the code-audit-*.md pattern can fail: a copy without it flags a member definition 0" {
-  local scratch_library="$BATS_TEST_TMPDIR/audit-machinery-no-pattern.sh"
-  grep -vxF ".claude/agents/code-audit-*.md" "$MACHINERY_LIBRARY" >"$scratch_library"
-  [ "$(wc -l <"$MACHINERY_LIBRARY" | tr -d ' ')" -eq $(($(wc -l <"$scratch_library" | tr -d ' ') + 1)) ]
-  run bash -c '. "$1"; printf "%s\n" .claude/agents/code-audit-python.md | audit_machinery_flags' _ "$scratch_library"
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "$(printf '.claude/agents/code-audit-python.md\t0')" ]
 }

@@ -3,9 +3,10 @@ name: 'GAIA: CLI Tests'
 # `workflow_dispatch:` is the manual re-run lane, not a convenience. A push made
 # with a GITHUB_TOKEN fires no `pull_request` event for the new HEAD, so that
 # HEAD carries no `Vitest (.gaia/cli)` run. `Vitest (.gaia/cli)` below is a
-# declared-required context, so without this trigger -- and without the jobs
-# admitting it in their `if:` -- such a HEAD leaves the check absent and branch
-# protection blocks the merge with no bypass short of an admin override.
+# declared-required context, so without this trigger -- and without the job
+# admitting it in its `if:` -- such a HEAD leaves the check absent and branch
+# protection blocks the merge with no bypass short of an admin override. Also
+# dispatch `shipped-surface-leak-check.yml` (same --ref), or its advisory check is absent.
 #
 # GitHub honors `workflow_dispatch` only for the copy of a workflow on the
 # DEFAULT branch, so a dispatch of this file fails with 422 until it lands on
@@ -280,7 +281,7 @@ jobs:
       #
       # Scope, stated because it bounds the payoff further: GitHub scopes a
       # cache to the branch that wrote it plus that branch's descendants, and
-      # the jobs in this workflow do not run on `push` to main (see each `if:`
+      # the job in this workflow does not run on `push` to main (see its `if:`
       # above), so main never writes one.
       - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
         name: Restore the CLI eslint cache
@@ -396,117 +397,3 @@ jobs:
       - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
         name: Verify vendored skills are byte-identical to their markers
         run: bash .gaia/scripts/verify-vendored-skills.sh
-
-  # The cheap half of distribution-harness.yml's harness, split out so it can run over the whole
-  # shipped surface: build-staging.sh, and the marker-strip scenario that reads
-  # the same tree. build-staging.sh stages every tracked file that
-  # .gaia/release-exclude does not withhold, resets the wiki sentinels, and runs
-  # the scrub and runtime-dependency leak checks over the result, so its honest
-  # input is the entire tree minus that exclude list, not the handful of paths
-  # the harness filter names. Every scenario builds that same tree, which
-  # is what made the mismatch live rather than theoretical: a comment added to a
-  # SHIPPED workflow naming a maintainer-only path failed the leak check in all
-  # of them, and was caught only because that pull request happened to also touch
-  # this file. An edit confined to that shipped workflow would have resolved the
-  # harness filter false, skipped the job, greened it having validated nothing,
-  # and surfaced the leak at tag push in release.yml, where the fix is far more
-  # expensive.
-  #
-  # No paths-filter here, and the absence is the decision rather than an
-  # oversight. An allowlist that honestly described this job's inputs is `'**'`,
-  # which gates nothing while still costing a paths-filter step, a
-  # `pull-requests: read` API round trip, and a failure mode of its own: the 403
-  # that scope earns the day this repo goes private would redden the job for a
-  # reason unrelated to any leak. The complement -- everything except the
-  # maintainer-only paths -- is a denylist, and
-  # .gaia/scripts/tests/workflow-filter-coverage.bats rejects that shape
-  # repo-wide: it fails CLOSED on a leading `!` because a negation is the
-  # false-bless direction. .gaia/release-scrub.yml's `workflow-denylist` leak
-  # check rejects the same shape, but it scans the STAGING tree and this file is
-  # release-excluded, so it never sees this workflow; it backstops the shipped
-  # ones only. So the real choice is between a filter that lies about being
-  # narrowable and no filter at all.
-  #
-  # The cost, stated where the filter would have been: a checkout, a Node setup,
-  # and two build-staging.sh runs on every pull request, about 15 seconds all
-  # told. What that buys is a leak check, and a marker-strip check, that no pull
-  # request can skip by changing only a shipped file the harness filter
-  # does not name.
-  shipped-surface-leak-check:
-    name: Shipped-surface leak check (advisory)
-    # Advisory, not a declared-required context, and it must not become one. It
-    # admits `workflow_dispatch` for the same reason the required job above does: one
-    # dispatch runs every job in this workflow and each job reports its own
-    # check run, so a job left gated to `pull_request` alone reports a bare
-    # `skipped` on the dispatched HEAD, which reads as a regression rather than
-    # the "not evaluated" it actually is.
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # `contents: read` and nothing more: checkout needs it to clone, and
-    # setup-node defaults its `token` input to `github.token` for the
-    # node-versions download. The `pull-requests: read` the job above holds
-    # is paths-filter's alone, and no paths-filter runs here, so granting it
-    # would be scope this job never spends.
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # build-staging.sh shells out to the committed .gaia/cli/gaia-maintainer,
-      # a bundled binary with a `#!/usr/bin/env node` shebang, so the runtime has
-      # to be the pinned `.node-version` one rather than whatever ubuntu-latest
-      # happens to preinstall. That is the whole of this job's Node requirement.
-      #
-      # actions/setup-node directly rather than ./.github/actions/gaia-setup-node,
-      # the same exception forensics-triage.yml already takes and the composite's
-      # own docblock records. The composite passes `cache: 'pnpm'`
-      # unconditionally, and setup-node's post step saves that cache with no
-      # on-disk check: it reads the store path from `pnpm store path`, which
-      # prints a path without creating it, so on a cache MISS the save resolves
-      # zero paths and fails the job on a caching error unrelated to any leak.
-      # A hit returns early and a job that runs `pnpm install` creates the store
-      # first, which is why a job that installs never sees it; this job runs no
-      # pnpm at all, and setup-node passes no pnpm restore keys, so every pull
-      # request that moves the root lockfile is a guaranteed miss. Dropping the
-      # cache also drops the pnpm bootstrap this job never uses. The pin stays
-      # unchanged from every other workflow's copy of this action.
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: '.node-version'
-      # No binary-presence step, unlike the distribution harness job. That job checks
-      # both committed binaries because its scenarios drive `gaia` as well;
-      # here build-staging.sh is the only consumer, and its first act is to test
-      # .gaia/cli/gaia-maintainer for the executable bit and exit 1 naming both
-      # the path and the `pnpm -C .gaia/cli bundle` that fixes it. A step
-      # asserting what the script already asserts adds a second place to drift,
-      # not a second signal.
-      - name: Stage the release tree and prove no shipped file leaks
-        # build-staging.sh requires an output dir that exists and is EMPTY, and
-        # $RUNNER_TEMP is neither guaranteed empty nor exclusively this step's,
-        # hence mktemp beneath it rather than the directory itself. $RUNNER_TEMP
-        # rather than a hardcoded /tmp path so the runner cleans it up.
-        run: |
-          staging="$(mktemp -d "$RUNNER_TEMP/release-staging.XXXXXX")"
-          bash .gaia/tests/distribution/lib/build-staging.sh "$staging"
-      # The marker-strip scenario runs here as well as inside the distribution harness
-      # job, and this is the copy that gates. Its four assertions read
-      # `.claude/hooks/lib/*.sh`, `.gaia/scripts/*.sh`,
-      # `.gaia/statusline/gaia-statusline-right.sh`, `.gaia/audit-ci.yml`, and
-      # `.prettierignore`; every one of those sits OUTSIDE the harness job's
-      # `code:` filter, so a pull request adding a `# gaia:maintainer-only:`
-      # block to one of them resolved that filter false, skipped the harness,
-      # and first met the doubled-separator assertion at release.yml's
-      # pre-publish gate, several pull requests later. Its honest input is the
-      # whole shipped surface, which is this job's input and not the harness
-      # job's, so this is where it belongs (#1129).
-      #
-      # It builds its own staging tree rather than reusing the step above,
-      # which is what keeps it runnable standalone and inside run-all.sh for
-      # release.yml. That second build is the entire cost:
-      # 3.3s measured end-to-end against a job that is otherwise 12s, versus
-      # ~170s for the alternative of widening the harness filter to reach the
-      # same files -- longer than the whole pull-request critical path, on
-      # every shell-touching pull request.
-      - name: Prove the marker strip left no fragment or doubled separator
-        run: bash .gaia/tests/distribution/02-marker-strip.sh

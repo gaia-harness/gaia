@@ -53,6 +53,38 @@ commit_fixture_repo() {
   git -C "$repo" commit -q -m fixture
 }
 
+# fixture_verdict <label> <agent file> <content> <want status> [fragment...]:
+# one case of a table. Builds a fixture tree holding the one agent file, runs
+# the check, and fails naming the label when the status or any fragment of the
+# report differs.
+fixture_verdict() {
+  local label="$1" agent="$2" content="$3" repo
+  shift 3
+  repo="$(make_fixture_repo "$label")"
+  write_agent_file "$repo" "$agent" "$content"
+  repo_verdict "$label" "$repo" "$@"
+}
+
+# repo_verdict <label> <repo> <want status> [fragment...]: the check half of
+# fixture_verdict, for a row whose fixture holds a two-dot diff with no -z. The
+# path-quoting lint reads such a literal as data only when the row hands it to
+# write_agent_file directly, so that row writes its own fixture first.
+repo_verdict() {
+  local label="$1" repo="$2" want_status="$3" fragment
+  shift 3
+  commit_fixture_repo "$repo"
+  run gaia_check_audit_base_derivation "$repo"
+  [ "$status" -eq "$want_status" ] || { echo "$label: status $status, want $want_status"; return 1; }
+  for fragment in "$@"; do
+    grep -qF -- "$fragment" <<<"$output" || { echo "$label: report lacks '$fragment'"; return 1; }
+  done
+  return 0
+}
+
+BARE_COUNT="review bases derived by a bare merge-base against the default branch: "
+UNNAMED_COUNT="agent files naming BASE_SHA without naming resolve-audit-base.sh: "
+DIFF_COUNT="review diffs consuming a base that never reached the fork point: "
+
 # ---------- fixture content ----------
 
 CONVERTED_OK='Agent prose.
@@ -161,101 +193,26 @@ The retired form was BASE_SHA=$(git merge-base HEAD main), now BASE_REF.
   grep -qF "agent files naming BASE_SHA without naming resolve-audit-base.sh: 0" <<<"$output" || return 1
 }
 
+# bats test_tags=protected
 @test "fixture: a BASE_SHA derived by a bare merge-base fails assertion 1" {
-  local repo
-  repo="$(make_fixture_repo drifted-bare)"
-  write_agent_file "$repo" code-audit-maintainer-node.md "$DRIFTED_BARE_MERGE_BASE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "code-audit-maintainer-node.md" <<<"$output" || return 1
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-  # Assertion 2 is satisfied here (the file does name the resolver), so this
-  # red is assertion 1's alone -- the two are independently reportable.
-  grep -qF "agent files naming BASE_SHA without naming resolve-audit-base.sh: 0" <<<"$output" || return 1
+  # Assertion 2 is satisfied in the first row (the file does name the resolver),
+  # so that red is assertion 1's alone: the two are independently reportable.
+  fixture_verdict drifted-bare code-audit-maintainer-node.md "$DRIFTED_BARE_MERGE_BASE" 1 \
+    code-audit-maintainer-node.md "${BARE_COUNT}1" "${UNNAMED_COUNT}0" || return 1
+  fixture_verdict drifted-alias code-audit-maintainer-shell.md "$DRIFTED_LOWERCASE_ALIAS" 1 "${BARE_COUNT}1" || return 1
+  fixture_verdict drifted-bare-no-origin code-audit-maintainer-node.md "$DRIFTED_BARE_MERGE_BASE_NO_ORIGIN" 1 \
+    code-audit-maintainer-node.md "${BARE_COUNT}1" || return 1
+  fixture_verdict two-calls-one-line code-audit-maintainer-shell.md "$TWO_CALLS_ONE_LINE" 1 "${BARE_COUNT}1" || return 1
+  fixture_verdict drifted-bare-literal code-audit-maintainer-shell.md "$DRIFTED_BARE_LITERAL_BRANCH" 1 "${BARE_COUNT}1" || return 1
+  fixture_verdict drift-beside-base-ref code-audit-maintainer-node.md "$DRIFT_BESIDE_BASE_REF" 1 "${BARE_COUNT}1" || return 1
+  fixture_verdict drift-base-ref-comment code-audit-maintainer-shell.md "$DRIFT_WITH_BASE_REF_COMMENT" 1 "${BARE_COUNT}1" || return 1
+  fixture_verdict drift-base-ref-after-close code-audit-github-workflows.md "$DRIFT_BASE_REF_AFTER_CLOSE" 1 "${BARE_COUNT}1"
 }
-
-@test "fixture: a lowercase alias for the same bare derivation fails assertion 1" {
-  local repo
-  repo="$(make_fixture_repo drifted-alias)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$DRIFTED_LOWERCASE_ALIAS"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
+@test "assertion 1: an exempt derivation is never counted (FULL_BASE self-skip, KEY_BASE through KEY_REF, ELIG_BASE eligibility)" {
+  fixture_verdict full-base-only code-audit-github-workflows.md "$FULL_BASE_ONLY" 0 "${BARE_COUNT}0" || return 1
+  fixture_verdict key-base-derived-ok code-audit-frontend.md "$KEY_BASE_DERIVED_OK" 0 "${BARE_COUNT}0" || return 1
+  fixture_verdict elig-base-derived-ok code-audit-frontend.md "$ELIG_BASE_DERIVED_OK" 0 "${BARE_COUNT}0" "${DIFF_COUNT}0"
 }
-
-@test "fixture: the non-origin bare merge-base form fails assertion 1 too" {
-  local repo
-  repo="$(make_fixture_repo drifted-bare-no-origin)"
-  write_agent_file "$repo" code-audit-maintainer-node.md "$DRIFTED_BARE_MERGE_BASE_NO_ORIGIN"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "code-audit-maintainer-node.md" <<<"$output" || return 1
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a drifted BASE_SHA sharing a line with FULL_BASE is still counted" {
-  local repo
-  repo="$(make_fixture_repo two-calls-one-line)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$TWO_CALLS_ONE_LINE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a bare literal branch name in the merge-base fails assertion 1" {
-  local repo
-  repo="$(make_fixture_repo drifted-bare-literal)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$DRIFTED_BARE_LITERAL_BRANCH"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a drifted call sharing a line with BASE_REF is still counted" {
-  local repo
-  repo="$(make_fixture_repo drift-beside-base-ref)"
-  write_agent_file "$repo" code-audit-maintainer-node.md "$DRIFT_BESIDE_BASE_REF"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a trailing BASE_REF comment does not vouch for a drifted call" {
-  local repo
-  repo="$(make_fixture_repo drift-base-ref-comment)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$DRIFT_WITH_BASE_REF_COMMENT"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a BASE_REF named after the call closes does not exempt it" {
-  local repo
-  repo="$(make_fixture_repo drift-base-ref-after-close)"
-  write_agent_file "$repo" code-audit-github-workflows.md "$DRIFT_BASE_REF_AFTER_CLOSE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-}
-
-@test "fixture: the FULL_BASE self-skip derivation is exempt and never counted" {
-  local repo
-  repo="$(make_fixture_repo full-base-only)"
-  write_agent_file "$repo" code-audit-github-workflows.md "$FULL_BASE_ONLY"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 0" <<<"$output" || return 1
-}
-
 # KEY_BASE joins FULL_BASE in the by-name exemption (contract F). Its call
 # passes KEY_REF rather than BASE_REF, so the positive BASE_REF rule cannot
 # exempt it on its own; only the by-name check can, and only for the exact
@@ -279,26 +236,10 @@ SOME_OTHER=$(git merge-base HEAD main)
 Derived per .github/audit/resolve-audit-base.sh.
 '
 
-@test "fixture: KEY_BASE derived through KEY_REF is exempt by name, same as FULL_BASE" {
-  local repo
-  repo="$(make_fixture_repo key-base-derived-ok)"
-  write_agent_file "$repo" code-audit-frontend.md "$KEY_BASE_DERIVED_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 0" <<<"$output" || return 1
+@test "assertion 1: a lookalike name is not exempt (a variable resembling KEY_BASE, a name ending in ELIG_BASE)" {
+  fixture_verdict some-other-bare code-audit-maintainer-node.md "$SOME_OTHER_BARE_MERGE_BASE" 1 "${BARE_COUNT}1" || return 1
+  fixture_verdict not-elig-base code-audit-frontend.md "$NOT_ELIG_BASE_BARE" 1 "${BARE_COUNT}1"
 }
-
-@test "fixture: a variable merely resembling KEY_BASE is not exempt by name" {
-  local repo
-  repo="$(make_fixture_repo some-other-bare)"
-  write_agent_file "$repo" code-audit-maintainer-node.md "$SOME_OTHER_BARE_MERGE_BASE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-}
-
 # ELIG_BASE joins FULL_BASE and KEY_BASE in the by-name exemption. It is the
 # default member's waive-eligibility fork point, merge-based against the branch
 # the pull request merges into, and it is never a review base; its call passes
@@ -322,64 +263,34 @@ MY_ELIG_BASE="$(git -C "$root" merge-base HEAD main)"
 ```
 '
 
-@test "fixture: ELIG_BASE's eligibility derivation is exempt by name, same as FULL_BASE" {
-  local repo
-  repo="$(make_fixture_repo elig-base-derived-ok)"
-  write_agent_file "$repo" code-audit-frontend.md "$ELIG_BASE_DERIVED_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 0" <<<"$output" || return 1
-  grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
-}
-
-@test "fixture: a name merely ending in ELIG_BASE is not exempt by name" {
-  local repo
-  repo="$(make_fixture_repo not-elig-base)"
-  write_agent_file "$repo" code-audit-frontend.md "$NOT_ELIG_BASE_BARE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a two-dot, unquoted diff on ELIG_BASE fails assertion 3" {
+@test "assertion 3: an unanchored or two-dot diff fails (ELIG_BASE, the resolver piped in, BASE_REF direct, two-dot on BASE_SHA, in a code span, before a later three-dot call, before a semicolon and a later range, FULL_BASE self-skip)" {
   local repo
   repo="$(make_fixture_repo diff-elig-base-two-dot)"
   write_agent_file "$repo" code-audit-frontend.md "$DIFF_ELIG_BASE_TWO_DOT_NO_Z"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 1" <<<"$output" || return 1
+  repo_verdict diff-elig-base-two-dot "$repo" 1 "${DIFF_COUNT}1" || return 1
+  # Assertions 1 and 2 are both satisfied here, so this red is assertion 3's alone.
+  fixture_verdict diff-resolver-direct code-audit-frontend.md "$DIFF_RESOLVER_DIRECT" 1 \
+    code-audit-frontend.md "${DIFF_COUNT}1" "${BARE_COUNT}0" "${UNNAMED_COUNT}0" || return 1
+  fixture_verdict diff-base-ref-direct code-audit-maintainer-node.md "$DIFF_BASE_REF_DIRECT" 1 "${DIFF_COUNT}1" || return 1
+  fixture_verdict diff-base-sha-two-dot code-audit-frontend.md "$DIFF_BASE_SHA_TWO_DOT" 1 "${DIFF_COUNT}1" || return 1
+  fixture_verdict diff-base-sha-two-dot-span code-audit-frontend.md "$DIFF_BASE_SHA_TWO_DOT_SPAN" 1 "${DIFF_COUNT}1" || return 1
+  fixture_verdict diff-two-calls-one-line code-audit-maintainer-shell.md "$TWO_DIFFS_ONE_LINE" 1 "${DIFF_COUNT}1" || return 1
+  fixture_verdict diff-semicolon-later-range code-audit-maintainer-shell.md "$DIFF_SEMICOLON_LATER_RANGE" 1 \
+    code-audit-maintainer-shell.md "${DIFF_COUNT}1" || return 1
+  # Assertion 1 still exempts the FULL_BASE derivation itself; the two
+  # assertions decide independently about the same variable.
+  fixture_verdict diff-full-base-two-dot code-audit-maintainer-shell.md "$DIFF_FULL_BASE_TWO_DOT" 1 "${DIFF_COUNT}1" "${BARE_COUNT}0"
 }
-
 # ---------- assertion 2: every BASE_SHA namer names the resolver ----------
 
-@test "fixture: a file naming BASE_SHA without ever naming the resolver fails assertion 2" {
-  local repo
-  repo="$(make_fixture_repo names-base-no-resolver)"
-  write_agent_file "$repo" some-agent.md "$NAMES_BASE_SHA_NO_RESOLVER"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "names BASE_SHA but never names resolve-audit-base.sh: .claude/agents/some-agent.md" <<<"$output" || return 1
-  grep -qF "agent files naming BASE_SHA without naming resolve-audit-base.sh: 1" <<<"$output" || return 1
-  # ...and assertion 1 stays clean, because dropping the reference removes a
-  # line rather than adding a bad one. This is the case assertion 1 cannot
+@test "assertion 2: a file naming BASE_SHA without the resolver fails; one never naming BASE_SHA passes" {
+  # Assertion 1 stays clean in the first row, because dropping the reference
+  # removes a line rather than adding a bad one: the case assertion 1 cannot
   # see, which is why both run.
-  grep -qF "review bases derived by a bare merge-base against the default branch: 0" <<<"$output" || return 1
+  fixture_verdict names-base-no-resolver some-agent.md "$NAMES_BASE_SHA_NO_RESOLVER" 1 \
+    "names BASE_SHA but never names resolve-audit-base.sh: .claude/agents/some-agent.md" "${UNNAMED_COUNT}1" "${BARE_COUNT}0" || return 1
+  fixture_verdict unrelated unrelated.md "$UNRELATED_FILE" 0 "${UNNAMED_COUNT}0"
 }
-
-@test "fixture: a file that never names BASE_SHA is never required to name the resolver" {
-  local repo
-  repo="$(make_fixture_repo unrelated)"
-  write_agent_file "$repo" unrelated.md "$UNRELATED_FILE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "agent files naming BASE_SHA without naming resolve-audit-base.sh: 0" <<<"$output" || return 1
-}
-
 @test "fixture: multiple violations across files are all named, and the check still fails once" {
   local repo
   repo="$(make_fixture_repo multi)"
@@ -527,169 +438,22 @@ full_changed=$(git -C "$AUDIT_ROOT" diff --name-only -z "${FULL_BASE}" 2>/dev/nu
 ```
 '
 
-@test "fixture: a diff anchored on the resolver-derived BASE_SHA passes assertion 3" {
-  local repo
-  repo="$(make_fixture_repo diff-anchored-ok)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$DIFF_ANCHORED_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
-}
-
-@test "fixture: the resolver piped straight into a diff fails assertion 3" {
-  local repo
-  repo="$(make_fixture_repo diff-resolver-direct)"
-  write_agent_file "$repo" code-audit-frontend.md "$DIFF_RESOLVER_DIRECT"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "code-audit-frontend.md" <<<"$output" || return 1
-  grep -qF "review diffs consuming a base that never reached the fork point: 1" <<<"$output" || return 1
-  # Assertions 1 and 2 are both satisfied here (no bare merge-base, and the
-  # file never names BASE_SHA), so this red is assertion 3's alone.
-  grep -qF "review bases derived by a bare merge-base against the default branch: 0" <<<"$output" || return 1
-  grep -qF "agent files naming BASE_SHA without naming resolve-audit-base.sh: 0" <<<"$output" || return 1
-}
-
-@test "fixture: BASE_REF consumed directly by a diff fails assertion 3" {
-  local repo
-  repo="$(make_fixture_repo diff-base-ref-direct)"
-  write_agent_file "$repo" code-audit-maintainer-node.md "$DIFF_BASE_REF_DIRECT"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a two-dot diff on the CORRECT variable still fails assertion 3" {
-  local repo
-  repo="$(make_fixture_repo diff-base-sha-two-dot)"
-  write_agent_file "$repo" code-audit-frontend.md "$DIFF_BASE_SHA_TWO_DOT"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a two-dot diff restated in a code span fails assertion 3 too" {
-  local repo
-  repo="$(make_fixture_repo diff-base-sha-two-dot-span)"
-  write_agent_file "$repo" code-audit-frontend.md "$DIFF_BASE_SHA_TWO_DOT_SPAN"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a three-dot range anchored on BASE_REF narrows correctly and passes" {
-  local repo
-  repo="$(make_fixture_repo diff-base-ref-three-dot)"
-  write_agent_file "$repo" code-audit-maintainer-node.md "$DIFF_BASE_REF_THREE_DOT_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
-}
-
-@test "fixture: a trailing comment naming BASE_REF does not condemn a correct diff" {
-  local repo
-  repo="$(make_fixture_repo diff-trailing-comment)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$DIFF_TRAILING_COMMENT_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
-}
-
-@test "fixture: prose naming the command and a base in one sentence is not a call" {
-  local repo
-  repo="$(make_fixture_repo diff-prose-mention)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$DIFF_PROSE_MENTION_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
-}
-
-@test "fixture: a target named after the code span closes does not condemn the line" {
-  local repo
-  repo="$(make_fixture_repo diff-span-closes)"
-  write_agent_file "$repo" code-audit-maintainer-node.md "$DIFF_SPAN_CLOSES_BEFORE_TARGET_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
-}
-
-@test "fixture: a target named in a trailing comment does not condemn a rangeless call" {
+@test "assertion 3: a correctly anchored diff passes (resolver-derived BASE_SHA, three-dot on BASE_REF, comment or prose naming a base, a non-roster agent, FULL_BASE self-skip)" {
+  fixture_verdict diff-anchored-ok code-audit-maintainer-shell.md "$DIFF_ANCHORED_OK" 0 "${DIFF_COUNT}0" || return 1
+  fixture_verdict diff-base-ref-three-dot code-audit-maintainer-node.md "$DIFF_BASE_REF_THREE_DOT_OK" 0 "${DIFF_COUNT}0" || return 1
+  fixture_verdict diff-trailing-comment code-audit-maintainer-shell.md "$DIFF_TRAILING_COMMENT_OK" 0 "${DIFF_COUNT}0" || return 1
+  fixture_verdict diff-prose-mention code-audit-maintainer-shell.md "$DIFF_PROSE_MENTION_OK" 0 "${DIFF_COUNT}0" || return 1
+  fixture_verdict diff-span-closes code-audit-maintainer-node.md "$DIFF_SPAN_CLOSES_BEFORE_TARGET_OK" 0 "${DIFF_COUNT}0" || return 1
   local repo
   repo="$(make_fixture_repo diff-comment-no-range)"
   write_agent_file "$repo" code-audit-maintainer-shell.md "$DIFF_TRAILING_COMMENT_NO_RANGE_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
-}
-
-@test "fixture: a two-dot call is not vouched for by a later call's range" {
-  local repo
-  repo="$(make_fixture_repo diff-two-calls-one-line)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$TWO_DIFFS_ONE_LINE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 1" <<<"$output" || return 1
-}
-
-@test "fixture: a later command on a ;-joined line does not vouch for a two-dot call" {
-  local repo
-  repo="$(make_fixture_repo diff-semicolon-later-range)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$DIFF_SEMICOLON_LATER_RANGE"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "code-audit-maintainer-shell.md" <<<"$output" || return 1
-  grep -qF "review diffs consuming a base that never reached the fork point: 1" <<<"$output" || return 1
-}
-
-@test "fixture: assertion 3 scans only the code-audit-* roster" {
+  repo_verdict diff-comment-no-range "$repo" 0 "${DIFF_COUNT}0" || return 1
   # An agent that takes its file list from the orchestrator has no review base,
-  # so it is outside this assertion's claim. Pinned because the scan pathspec
-  # is narrower than assertions 1 and 2's, which is easy to widen back by
-  # accident when adding a fourth.
-  local repo
-  repo="$(make_fixture_repo diff-non-roster-agent)"
-  write_agent_file "$repo" worthiness-evaluator.md "$DIFF_BASE_SHA_TWO_DOT"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
+  # so it is outside this assertion's claim. The scan pathspec is narrower than
+  # assertions 1 and 2's, which is easy to widen back by accident.
+  fixture_verdict diff-non-roster-agent worthiness-evaluator.md "$DIFF_BASE_SHA_TWO_DOT" 0 "${DIFF_COUNT}0" || return 1
+  fixture_verdict diff-full-base code-audit-maintainer-shell.md "$DIFF_FULL_BASE_OK" 0 "${DIFF_COUNT}0"
 }
-
-@test "fixture: the correctly-ranged FULL_BASE self-skip diff passes assertion 3" {
-  local repo
-  repo="$(make_fixture_repo diff-full-base)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$DIFF_FULL_BASE_OK"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
-}
-
-@test "fixture: a two-dot FULL_BASE self-skip diff fails assertion 3" {
-  local repo
-  repo="$(make_fixture_repo diff-full-base-two-dot)"
-  write_agent_file "$repo" code-audit-maintainer-shell.md "$DIFF_FULL_BASE_TWO_DOT"
-  commit_fixture_repo "$repo"
-  run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 1" <<<"$output" || return 1
-  # Assertion 1 still exempts the FULL_BASE derivation itself; the two
-  # assertions decide independently about the same variable.
-  grep -qF "review bases derived by a bare merge-base against the default branch: 0" <<<"$output" || return 1
-}
-
 # ---------- the resolver script is part of the scan surface ----------
 #
 # Each fixture copies the REAL resolver into the fixture tree and breaks one
@@ -726,42 +490,35 @@ mutate_resolver() {
   [ "$status" -eq 0 ]
 }
 
-@test "resolver: a BASE_SHA derived by a bare merge-base in the script fails assertion 1" {
+@test "resolver: a script deviating on assertion 1, 2 or 3 fails" {
   local repo
   repo="$(make_fixture_repo resolver-bare)"
   copy_resolver "$repo"
   mutate_resolver "$repo" 's/merge-base "\$BASE_REF" HEAD/merge-base HEAD "origin\/main"/' 'BASE_SHA="$(git -C "$root" merge-base HEAD "origin/main"'
   commit_fixture_repo "$repo"
   run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review bases derived by a bare merge-base against the default branch: 1" <<<"$output" || return 1
-  grep -qF ".gaia/scripts/audit-resolve-scope.sh:" <<<"$output" || return 1
-}
+  [ "$status" -eq 1 ] || { echo "assertion 1: status $status"; return 1; }
+  grep -qF "${BARE_COUNT}1" <<<"$output" || { echo "assertion 1: $output"; return 1; }
+  grep -qF ".gaia/scripts/audit-resolve-scope.sh:" <<<"$output" || { echo "assertion 1: $output"; return 1; }
 
-@test "resolver: a script naming BASE_SHA but never the base resolver fails assertion 2" {
-  local repo
   repo="$(make_fixture_repo resolver-unnamed)"
   copy_resolver "$repo"
   mutate_resolver "$repo" 's/resolve-audit-base\.sh/resolve-base-elsewhere.sh/g' 'resolve-base-elsewhere.sh'
   grep -qF 'resolve-audit-base.sh' "$repo/.gaia/scripts/audit-resolve-scope.sh" && return 1
   commit_fixture_repo "$repo"
   run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "names BASE_SHA but never names resolve-audit-base.sh: .gaia/scripts/audit-resolve-scope.sh" <<<"$output" || return 1
-}
+  [ "$status" -eq 1 ] || { echo "assertion 2: status $status"; return 1; }
+  grep -qF "names BASE_SHA but never names resolve-audit-base.sh: .gaia/scripts/audit-resolve-scope.sh" <<<"$output" || { echo "assertion 2: $output"; return 1; }
 
-@test "resolver: a two-dot review diff in the script fails assertion 3" {
-  local repo
   repo="$(make_fixture_repo resolver-two-dot)"
   copy_resolver "$repo"
   mutate_resolver "$repo" 's/"\$\{SIDE_BASE\}\.\.\.\$\{side_commit\}"/"\${SIDE_BASE}"/' 'diff --name-only -z --no-renames "${SIDE_BASE}" --'
   commit_fixture_repo "$repo"
   run gaia_check_audit_base_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "review diffs consuming a base that never reached the fork point: 1" <<<"$output" || return 1
-  grep -qF ".gaia/scripts/audit-resolve-scope.sh:" <<<"$output" || return 1
+  [ "$status" -eq 1 ] || { echo "assertion 3: status $status"; return 1; }
+  grep -qF "${DIFF_COUNT}1" <<<"$output" || { echo "assertion 3: $output"; return 1; }
+  grep -qF ".gaia/scripts/audit-resolve-scope.sh:" <<<"$output" || { echo "assertion 3: $output"; return 1; }
 }
-
 # ---------- real repo: the standing guarantee ----------
 
 # bats test_tags=whole-tree
@@ -844,48 +601,37 @@ mutate_resolver() {
 
 # ---------- structural ----------
 
-@test "a repo_root that is not a git repository reports 2, never a clean 0" {
-  local outside="$BATS_TEST_TMPDIR/not-a-repo"
+@test "a bad repo_root reports 2, never a clean 0 (not a repository, a subdirectory, a bare repository, a .git directory)" {
+  local outside="$BATS_TEST_TMPDIR/not-a-repo" bare="$BATS_TEST_TMPDIR/bare.git" live
   mkdir -p "$outside"
   run gaia_check_audit_base_derivation "$outside"
   # 2, not 1: "the check could not run" is a different answer from "the check
   # says no", and neither is the 0 an unscanned tree used to report.
-  [ "$status" -eq 2 ]
-  grep -qF "is not a git repository root; nothing was scanned" <<<"$output" || return 1
-  grep -qF "review bases derived by a bare merge-base against the default branch: 0" <<<"$output" && {
+  [ "$status" -eq 2 ] || { echo "not a repository: status $status"; return 1; }
+  grep -qF "is not a git repository root; nothing was scanned" <<<"$output" || { echo "not a repository: $output"; return 1; }
+  grep -qF "${BARE_COUNT}0" <<<"$output" && {
     echo "printed a clean verdict for a tree it never scanned" >&2
     return 1
   }
-  return 0
-}
 
-@test "a repo_root that is a subdirectory of a repo reports 2, never a clean 0" {
   # --git-dir alone succeeds from anywhere inside a repo, so this is the case
-  # that separates "is in a repo" from "is a repo root". The scan would find
-  # no .claude/agents/ beneath a subdirectory and report the same clean 0/0.
+  # that separates "is in a repo" from "is a repo root".
   run gaia_check_audit_base_derivation "$REPO_ROOT/.gaia/scripts"
-  [ "$status" -eq 2 ]
-  grep -qF "is not a git repository root; nothing was scanned" <<<"$output" || return 1
-}
+  [ "$status" -eq 2 ] || { echo "subdirectory: status $status"; return 1; }
+  grep -qF "is not a git repository root; nothing was scanned" <<<"$output" || { echo "subdirectory: $output"; return 1; }
 
-@test "a bare repository and a .git directory both report 2, never a clean 0" {
-  # --show-prefix alone clears both (exit 0, empty output). The work-tree
-  # check is what separates "has a prefix of empty" from "has a work tree",
-  # and without it `git grep` fails below with its diagnostic swallowed.
-  local bare="$BATS_TEST_TMPDIR/bare.git"
+  # --show-prefix alone clears both a bare repository and a .git directory
+  # (exit 0, empty output); the work-tree check is what separates them.
   git init -q --bare "$bare"
   run gaia_check_audit_base_derivation "$bare"
-  [ "$status" -eq 2 ]
-
-  local live
+  [ "$status" -eq 2 ] || { echo "bare repository: status $status"; return 1; }
   live="$(make_fixture_repo gitdir-probe)"
   write_agent_file "$live" some-agent.md "$UNRELATED_FILE"
   commit_fixture_repo "$live"
   run gaia_check_audit_base_derivation "$live/.git"
-  [ "$status" -eq 2 ]
-  grep -qF "is not a git repository root; nothing was scanned" <<<"$output" || return 1
+  [ "$status" -eq 2 ] || { echo ".git directory: status $status"; return 1; }
+  grep -qF "is not a git repository root; nothing was scanned" <<<"$output" || { echo ".git directory: $output"; return 1; }
 }
-
 @test "structural: check-audit-base-derivation.sh is executable" {
   [ -x "$CHECK" ]
 }
@@ -912,7 +658,3 @@ mutate_resolver() {
   return 0
 }
 
-@test "structural: shellcheck is clean" {
-  command -v shellcheck >/dev/null 2>&1 || skip "shellcheck not available"
-  shellcheck "$CHECK"
-}

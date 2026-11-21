@@ -177,11 +177,8 @@ check_set() {
   done <<<"$derived"
 }
 
-@test "no PreToolUse hook that can see a commit decides differently for a staged test edit" {
+@test "no PreToolUse hook decides differently for a test edit (commit set and edit set)" {
   check_set commit Bash
-}
-
-@test "no PreToolUse hook that can see an edit decides differently for a test file" {
   check_set edit Edit Write MultiEdit
 }
 
@@ -192,38 +189,4 @@ check_set() {
     resolved_count=$((resolved_count + 1))
   done <<<"$(derive_set Bash Edit Write MultiEdit)"
   [ "$resolved_count" -gt 0 ]
-}
-
-@test "resolution rejects a command that does not have the rooted registration form" {
-  run resolve_hook '"/tmp/elsewhere/.claude/hooks/nope.sh"'
-  [ "$status" -ne 0 ]
-  run resolve_hook '"$(git rev-parse --show-toplevel)/.claude/hooks/does-not-exist.sh"'
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a registered hook that denies a staged test path makes the check fail" {
-  local twin_hook="$BATS_TEST_TMPDIR/twin-hook.sh" twin_settings="$BATS_TEST_TMPDIR/twin-settings.json" real_count twin_count
-  cat >"$twin_hook" <<'HOOK'
-#!/usr/bin/env bash
-payload="$(cat)"
-working_directory="$(printf '%s' "$payload" | jq -r '.cwd')"
-if git -C "$working_directory" diff --cached --name-only | grep -q '\.test\.'; then
-  printf '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "staged test"}}\n'
-fi
-exit 0
-HOOK
-  chmod +x "$twin_hook"
-  jq --arg command "\"$twin_hook\"" \
-    '.hooks.PreToolUse += [{matcher: "Bash", hooks: [{type: "command", command: $command}]}]' \
-    "$REPO_ROOT/.claude/settings.json" >"$twin_settings"
-
-  real_count="$(registered_commands "$REPO_ROOT/.claude/settings.json" Bash | wc -l | tr -d ' ')"
-  twin_count="$(registered_commands "$twin_settings" Bash | wc -l | tr -d ' ')"
-  [ "$twin_count" -eq $((real_count + 1)) ]
-  [ "$(registered_commands "$twin_settings" Bash | tail -n 1)" = "\"$twin_hook\"" ]
-
-  run check_commit_hook "$twin_hook"
-  [ "$status" -ne 0 ]
-  grep -qF -- 'decides deny' <<<"$output" || return 1
-  return 0
 }

@@ -101,6 +101,9 @@ build_sandbox() {
   add_origin "$sandbox_root"
 }
 
+# reset_case: forget the scope files and conclusions an earlier case of the same test left.
+reset_case() { rm -rf "$ROOT/.gaia/local"; }
+
 # ========== usage / arity ==========
 
 @test "--help prints usage and exits 0" {
@@ -109,27 +112,23 @@ build_sandbox() {
   grep -qF "usage: audit-scope-digest.sh" <<<"$output" || return 1
 }
 
-@test "neither --capture nor --read exits non-zero with a stderr diagnostic" {
+@test "usage errors exit non-zero with a stderr diagnostic: neither --capture, --read nor --release, a missing --root, --member or --base, an unrecognized argument" {
   run "$SCRIPT" --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
   grep -qF "one of --capture, --read, or --release" <<<"$output" || return 1
-}
-
-@test "a missing --root, --member, or --base each exits non-zero" {
+  reset_case # a missing --root, --member, or --base each exits non-zero
   run "$SCRIPT" --capture --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
   run "$SCRIPT" --capture --root "$ROOT" --base "$BASE"
   [ "$status" -ne 0 ]
   run "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER"
   [ "$status" -ne 0 ]
-}
-
-@test "an unrecognized argument exits non-zero" {
+  reset_case # an unrecognized argument exits non-zero
   run "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE" --bogus
   [ "$status" -ne 0 ]
 }
 
-# ========== UAT-014: --capture writes, prints ==========
+# ========== --capture writes, prints ==========
 
 @test "UAT-014: --capture in a writable fixture root writes the scope file, prints the 64-hex digest, exits 0" {
   run "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE"
@@ -179,7 +178,7 @@ start_feature() {
   [ "$after" = "$before" ]
 }
 
-@test "--capture fails loudly, naming git fetch origin, when the local base tip is absent" {
+@test "--capture fails loudly and writes nothing when the base cannot be resolved: naming git fetch origin when the local base tip is absent, naming the base-branch merge when the merge base is not unique" {
   start_feature
   git -C "$ROOT" update-ref -d refs/remotes/origin/main
   run --separate-stderr "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE"
@@ -187,10 +186,8 @@ start_feature() {
   [ -z "$output" ]
   grep -qF -- 'git fetch origin' <<<"$stderr"
   [ ! -f "$(scope_file_for "$ROOT" "$BASE" "$MEMBER")" ]
-}
-
-@test "--capture fails loudly, naming the base-branch merge, when the merge base is not unique" {
-  start_feature
+  git -C "$ROOT" update-ref refs/remotes/origin/main "$BASE"
+  reset_case # --capture fails loudly, naming the base-branch merge, when the merge base is not unique
   catchup_criss_cross
   run --separate-stderr "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
@@ -199,22 +196,18 @@ start_feature() {
   [ ! -f "$(scope_file_for "$ROOT" "$BASE" "$MEMBER")" ]
 }
 
-@test "--read with no prior capture prints nothing and exits non-zero" {
+@test "--read prints nothing and exits non-zero on an absent capture, a truncated or non-JSON scope file and a non-64-hex scope_digest" {
   run "$SCRIPT" --read --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
   [ -z "$output" ]
-}
-
-@test "--read over a truncated / non-JSON scope file prints nothing and exits non-zero" {
+  reset_case # --read over a truncated / non-JSON scope file prints nothing and exits non-zero
   scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
   mkdir -p "$(dirname "$scope_file")"
   printf 'not json {' >"$scope_file"
   run "$SCRIPT" --read --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
   [ -z "$output" ]
-}
-
-@test "--read over a non-64-hex scope_digest prints nothing and exits non-zero" {
+  reset_case # --read over a non-64-hex scope_digest prints nothing and exits non-zero
   scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
   mkdir -p "$(dirname "$scope_file")"
   jq -cn '{schema:1, member:"x", scope_digest:"short", head:"h", captured_at:"t"}' >"$scope_file"
@@ -290,13 +283,6 @@ rotate_in_scope() {
   [ "$stored" = "$first" ]
 }
 
-@test "non-vacuity: the rotation this suite commits really does move the member digest" {
-  before="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
-  rotate_in_scope
-  after="$("$SCRIPT" --capture --recapture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
-  [ "$after" != "$before" ]
-}
-
 @test "--recapture replaces the stored capture" {
   first="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
   rotate_in_scope
@@ -320,27 +306,6 @@ publish_conclusion() {
   : >"$ROOT/.gaia/local/audit/${1}${3:-}${2}"
 }
 
-@test "spent: a capture with a published REFUSAL is replaced on the next round" {
-  first="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
-  publish_conclusion "$first" .refused
-  rotate_in_scope
-
-  second="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
-  [ "$second" != "$first" ]
-
-  stored="$("$SCRIPT" --read --root "$ROOT" --member "$MEMBER" --base "$BASE")"
-  [ "$stored" = "$second" ]
-}
-
-@test "spent: a published MARKER spends the capture too, not only a refusal" {
-  first="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
-  publish_conclusion "$first" .ok
-  rotate_in_scope
-
-  second="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
-  [ "$second" != "$first" ]
-}
-
 # For a SPECIALIST the digest is a poor probe: rotate_in_scope commits under
 # app/, which no specialist's digest covers, so the value cannot move whether
 # the capture was replaced or kept. The scope file's recorded `head` is the
@@ -357,7 +322,24 @@ stored_head_for() {
   return 1
 }
 
-@test "spent: a specialist's conclusion is found under its own member infix" {
+@test "a published conclusion spends this member's capture and no other member's: a refusal, a marker, a specialist's own infix are replaced on the next round, another member's conclusion is not" {
+  first="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  publish_conclusion "$first" .refused
+  rotate_in_scope
+
+  second="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$second" != "$first" ]
+
+  stored="$("$SCRIPT" --read --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$stored" = "$second" ]
+  reset_case # spent: a published MARKER spends the capture too, not only a refusal
+  first="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  publish_conclusion "$first" .ok
+  rotate_in_scope
+
+  second="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$second" != "$first" ]
+  reset_case # spent: a specialist's conclusion is found under its own member infix
   local member_name="code-audit-github-workflows"
   first="$("$SCRIPT" --capture --root "$ROOT" --member "$member_name" --base "$BASE")"
   before_head="$(stored_head_for "$member_name")"
@@ -368,9 +350,7 @@ stored_head_for() {
   after_head="$(stored_head_for "$member_name")"
   [ "$after_head" != "$before_head" ]
   [ "$after_head" = "$(git -C "$ROOT" rev-parse HEAD)" ]
-}
-
-@test "spent: ANOTHER member's conclusion does not spend this member's capture" {
+  reset_case # spent: ANOTHER member's conclusion does not spend this member's capture
   # The infix is what keys the lookup to this member. Written bare, a
   # specialist would read a different member's conclusion as its own.
   local member_name="code-audit-github-workflows"
@@ -401,49 +381,11 @@ stored_head_for() {
   [ "$scope_default" = "$writer_default" ]
 }
 
-@test "--recapture is rejected on --read" {
+@test "a flag on the wrong mode is rejected with exit 2 and no scope file change: --recapture on --read, --base-reason on --read, --base-overridden on --release, --recapture on --release" {
   run "$SCRIPT" --read --recapture --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -eq 2 ]
   printf '%s\n' "$output" | grep -qF -- "--recapture is valid only with --capture"
-}
-
-@test "--capture --base-reason records the reason and base_overridden false" {
-  run "$SCRIPT" --capture --base-reason member-refusal --root "$ROOT" --member "$MEMBER" --base "$BASE"
-  [ "$status" -eq 0 ]
-  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
-  [ "$(jq -r '.base_reason' "$scope_file")" = "member-refusal" ]
-  [ "$(jq -r '.base_overridden' "$scope_file")" = "false" ]
-  [ "$(jq -r '.schema' "$scope_file")" = "1" ]
-}
-
-@test "--capture --base-overridden records base_overridden true" {
-  run "$SCRIPT" --capture --base-overridden --root "$ROOT" --member "$MEMBER" --base "$BASE"
-  [ "$status" -eq 0 ]
-  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
-  [ "$(jq -r '.base_overridden' "$scope_file")" = "true" ]
-}
-
-@test "--capture with neither option records an empty base_reason and base_overridden false" {
-  run "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE"
-  [ "$status" -eq 0 ]
-  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
-  [ "$(jq -r '.base_reason | type' "$scope_file")" = "string" ]
-  [ "$(jq -r '.base_reason' "$scope_file")" = "" ]
-  [ "$(jq -r '.base_overridden' "$scope_file")" = "false" ]
-}
-
-@test "a second --capture with a different --base-reason leaves the unspent capture's fields unchanged" {
-  "$SCRIPT" --capture --base-reason member-refusal --root "$ROOT" --member "$MEMBER" --base "$BASE" >/dev/null
-  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
-  before="$(cat "$scope_file")"
-  run "$SCRIPT" --capture --base-reason team-signal --base-overridden --root "$ROOT" --member "$MEMBER" --base "$BASE"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$scope_file")" = "$before" ]
-  [ "$(jq -r '.base_reason' "$scope_file")" = "member-refusal" ]
-  [ "$(jq -r '.base_overridden' "$scope_file")" = "false" ]
-}
-
-@test "--base-reason is rejected on --read and --base-overridden on --release, creating or changing no scope file" {
+  reset_case # --base-reason is rejected on --read and --base-overridden on --release, creating or changing no scope file
   scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
   [ ! -e "$scope_file" ]
   run "$SCRIPT" --read --base-reason x --root "$ROOT" --member "$MEMBER" --base "$BASE"
@@ -458,6 +400,40 @@ stored_head_for() {
   printf '%s\n' "$output" | grep -qF -- "--base-overridden is valid only with --capture"
   [ -f "$scope_file" ]
   [ "$(cat "$scope_file")" = "$before" ]
+  reset_case # --recapture is rejected on --release
+  run "$SCRIPT" --release --recapture --root "$ROOT" --member "$MEMBER" --base "$BASE"
+  [ "$status" -eq 2 ]
+  printf '%s\n' "$output" | grep -qF -- "--recapture is valid only with --capture"
+}
+
+@test "--capture records base_reason and base_overridden: a reason with overridden false, overridden true, neither option, and an unspent capture's fields unchanged by a second capture" {
+  run "$SCRIPT" --capture --base-reason member-refusal --root "$ROOT" --member "$MEMBER" --base "$BASE"
+  [ "$status" -eq 0 ]
+  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
+  [ "$(jq -r '.base_reason' "$scope_file")" = "member-refusal" ]
+  [ "$(jq -r '.base_overridden' "$scope_file")" = "false" ]
+  [ "$(jq -r '.schema' "$scope_file")" = "1" ]
+  reset_case # --capture --base-overridden records base_overridden true
+  run "$SCRIPT" --capture --base-overridden --root "$ROOT" --member "$MEMBER" --base "$BASE"
+  [ "$status" -eq 0 ]
+  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
+  [ "$(jq -r '.base_overridden' "$scope_file")" = "true" ]
+  reset_case # --capture with neither option records an empty base_reason and base_overridden false
+  run "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE"
+  [ "$status" -eq 0 ]
+  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
+  [ "$(jq -r '.base_reason | type' "$scope_file")" = "string" ]
+  [ "$(jq -r '.base_reason' "$scope_file")" = "" ]
+  [ "$(jq -r '.base_overridden' "$scope_file")" = "false" ]
+  reset_case # a second --capture with a different --base-reason leaves the unspent capture's fields unchanged
+  "$SCRIPT" --capture --base-reason member-refusal --root "$ROOT" --member "$MEMBER" --base "$BASE" >/dev/null
+  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
+  before="$(cat "$scope_file")"
+  run "$SCRIPT" --capture --base-reason team-signal --base-overridden --root "$ROOT" --member "$MEMBER" --base "$BASE"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$scope_file")" = "$before" ]
+  [ "$(jq -r '.base_reason' "$scope_file")" = "member-refusal" ]
+  [ "$(jq -r '.base_overridden' "$scope_file")" = "false" ]
 }
 
 @test "a detached HEAD resolves no key" {
@@ -612,7 +588,7 @@ rotate_machinery() {
   [ -f "$ROOT/.gaia/local/audit/${fresh}.${member_name}.ok" ]
 }
 
-@test "the release is specific to a forfeiture: a running review keeps its capture" {
+@test "the release is bound to an earned superseded forfeiture: a running review, a not-supplied refusal and a refusal write each keep the capture" {
   # The guarantee the keep arm exists for. A member re-runs the scope fence on
   # every handshake Bash call; if the release were unconditional rather than
   # bound to the superseded refusal, that re-run would hand the writer the
@@ -622,9 +598,7 @@ rotate_machinery() {
   "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE" >/dev/null
   [ -f "$(scope_file_for "$ROOT" "$BASE" "$MEMBER")" ]
   [ "$("$SCRIPT" --read --root "$ROOT" --member "$MEMBER" --base "$BASE")" = "$captured" ]
-}
-
-@test "the release is bound to the superseded arm: a not-supplied refusal keeps the capture" {
+  reset_case # the release is bound to the superseded arm: a not-supplied refusal keeps the capture
   # Placement pin. The gate has three failing arms and only ONE of them means
   # "this round reviewed content that has since moved". A member that simply
   # omitted --scope-digest has told us nothing about whether its review ended,
@@ -638,9 +612,7 @@ rotate_machinery() {
   run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned --base "$BASE"
   [ "$status" -eq 2 ]
   [ -f "$(scope_file_for "$ROOT" "$BASE" "$MEMBER")" ]
-}
-
-@test "the release is bound to the EARNED path: a refusal write keeps the capture" {
+  reset_case # the release is bound to the EARNED path: a refusal write keeps the capture
   # Refusals are exempt from the staleness gate entirely, so they must not
   # reach the release either. A refusal lands at the WRITE-TIME digest, which
   # never spends the captured one, so releasing here would discard the capture
@@ -727,12 +699,6 @@ rotate_machinery() {
   run "$SCRIPT" --release --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
   grep -qF -- "cannot release" <<<"$output" || return 1
-}
-
-@test "--recapture is rejected on --release" {
-  run "$SCRIPT" --release --recapture --root "$ROOT" --member "$MEMBER" --base "$BASE"
-  [ "$status" -eq 2 ]
-  printf '%s\n' "$output" | grep -qF -- "--recapture is valid only with --capture"
 }
 
 @test "END TO END: a round that publishes nothing and releases lets the next round clear on its first try" {

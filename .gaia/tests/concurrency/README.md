@@ -2,8 +2,7 @@
 
 Cross-tree isolation scenarios: two worktrees off the same base running full
 audit -> PR -> merge cycles at the same time, and related tree-identity /
-`.gaia/local` state-model checks. One `@test` per scenario in
-`concurrency.bats`.
+`.gaia/local` state-model checks, in `concurrency.bats`.
 
 ## Running
 

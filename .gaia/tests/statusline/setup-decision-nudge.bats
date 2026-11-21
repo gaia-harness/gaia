@@ -107,7 +107,15 @@ render() {
   run env HOME="$TEMPORARY_HOME" COLUMNS="${2:-400}" bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh' | sed \$'s/\\x1b\\\\[[0-9;]*m//g'"
 }
 
-@test "two pending machine choices nudge, and recording them clears the nudge one by one" {
+# Back to a completed setup with no recorded machine decision, no cached admin
+# answer and no project decision: what a fresh fixture holds.
+reset_setup_choices() {
+  write_setup_state '"2026-01-01T00:00:00Z"'
+  rm -f "$MAIN/.gaia/project.json"
+}
+
+@test "recorded decisions of every kind clear the pending-choices nudge one by one" {
+  echo "case: two pending machine choices nudge, and recording them clears the nudge one by one"
   render "$MAIN"
   [ "$status" -eq 0 ]
   grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
@@ -121,10 +129,8 @@ render() {
   render "$MAIN"
   [ "$status" -eq 0 ]
   grep -qF -- "/setup-gaia" <<<"$output" && return 1
-  return 0
-}
-
-@test "declined and not-applicable clear the nudge exactly as applied does" {
+  reset_setup_choices
+  echo "case: declined and not-applicable clear the nudge exactly as applied does"
   render "$MAIN"
   grep -qF -- "(2 choices pending)" <<<"$output"
 
@@ -139,7 +145,8 @@ render() {
   return 0
 }
 
-@test "an admin-gated project id never arms the nudge without a cached admin answer" {
+@test "an undecided project id arms the nudge by admin answer and project config state" {
+  echo "case: an admin-gated project id never arms the nudge without a cached admin answer"
   # Positive control: with a machine id pending the slot renders.
   render "$MAIN"
   grep -qF -- "⚙️ /setup-gaia" <<<"$output"
@@ -148,25 +155,18 @@ render() {
   render "$MAIN"
   [ "$status" -eq 0 ]
   grep -qF -- "/setup-gaia" <<<"$output" && return 1
-  return 0
-}
-
-@test "an undecided github-repository arms the nudge with no cached admin answer" {
+  echo "case: an undecided github-repository arms the nudge with no cached admin answer"
   write_features github-repository gamma
   render "$MAIN"
   [ "$status" -eq 0 ]
   grep -qF -- "⚙️ /setup-gaia (1 choice pending)" <<<"$output"
-}
-
-@test "a cached admin counts every undecided project id with the machine ones" {
+  echo "case: a cached admin counts every undecided project id with the machine ones"
   write_features alpha github-repository gamma
   cache_admin true
   render "$MAIN"
   [ "$status" -eq 0 ]
   grep -qF -- "⚙️ /setup-gaia (3 choices pending)" <<<"$output"
-}
-
-@test "a cached non-admin is never nagged about project ids, github-repository included" {
+  echo "case: a cached non-admin is never nagged about project ids, github-repository included"
   write_features github-repository gamma
   cache_admin false
   render "$MAIN"
@@ -177,9 +177,7 @@ render() {
   cache_admin true
   render "$MAIN"
   grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
-}
-
-@test "project ids decided in the committed project config stay quiet for an admin" {
+  echo "case: project ids decided in the committed project config stay quiet for an admin"
   write_features github-repository gamma
   cache_admin true
   printf '{"setup_decisions":{"github-repository":"applied","gamma":"declined"}}\n' > "$MAIN/.gaia/project.json"
@@ -190,9 +188,8 @@ render() {
   printf '{"setup_decisions":{"github-repository":"applied"}}\n' > "$MAIN/.gaia/project.json"
   render "$MAIN"
   grep -qF -- "⚙️ /setup-gaia (1 choice pending)" <<<"$output"
-}
-
-@test "a malformed project config counts no project id decided and exits 0" {
+  reset_setup_choices
+  echo "case: a malformed project config counts no project id decided and exits 0"
   write_features github-repository
   printf '{' > "$MAIN/.gaia/project.json"
   render "$MAIN"
@@ -200,7 +197,8 @@ render() {
   grep -qF -- "⚙️ /setup-gaia (1 choice pending)" <<<"$output"
 }
 
-@test "the closing-line helper names the same owed ids the nudge counts" {
+@test "the setup-owed helpers name the owed ids by cached admin answer and config state" {
+  echo "case: the closing-line helper names the same owed ids the nudge counts"
   write_features alpha github-repository gamma
   run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_owed_ids '$MAIN'"
   [ "$status" -eq 0 ]
@@ -214,9 +212,8 @@ render() {
   run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_owed_ids '$MAIN'"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "the admin-owed helper names a cached non-admin's undecided admin-gated project ids" {
+  reset_setup_choices
+  echo "case: the admin-owed helper names a cached non-admin's undecided admin-gated project ids"
   write_features alpha github-repository gamma
   cache_admin false
   run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
@@ -227,9 +224,8 @@ render() {
   run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "the admin-owed helper names nothing for an admin or a machine with no cached answer" {
+  reset_setup_choices
+  echo "case: the admin-owed helper names nothing for an admin or a machine with no cached answer"
   write_features alpha github-repository gamma
   run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
   [ "$status" -eq 0 ]
@@ -239,9 +235,8 @@ render() {
   run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "the admin-owed helper exits 0 with nothing on a malformed list or project config" {
+  reset_setup_choices
+  echo "case: the admin-owed helper exits 0 with nothing on a malformed list or project config"
   write_features gamma
   cache_admin false
   printf '{' > "$MAIN/.gaia/project.json"
@@ -253,9 +248,8 @@ render() {
   run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "the admin-gated helper names undecided admin-gated project ids whatever the cached answer" {
+  reset_setup_choices
+  echo "case: the admin-gated helper names undecided admin-gated project ids whatever the cached answer"
   local cached
   write_features alpha github-repository gamma
   run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_gated_ids '$MAIN'"
@@ -307,7 +301,8 @@ render() {
   return 0
 }
 
-@test "no list renders no setup slot and leaves the rest of the render unchanged" {
+@test "a missing, malformed or non-array setup list renders no setup slot and exits 0" {
+  echo "case: no list renders no setup slot and leaves the rest of the render unchanged"
   arm_other_nudges
   render "$MAIN"
   grep -qF -- "⚙️ /setup-gaia" <<<"$output"
@@ -321,9 +316,7 @@ render() {
   grep -qF -- "📦 /update-deps (3 outdated)" <<<"$output"
   grep -qF -- "🐛 /gaia-debt (5 issues)" <<<"$output"
   [ "${output//[[:space:]]/}" = "$(sed -E 's/⚙️ \/setup-gaia \(2 choices pending\) │ //' <<<"$with_list" | tr -d '[:space:]')" ]
-}
-
-@test "a malformed list renders no setup slot, no Required segment, and exits 0" {
+  echo "case: a malformed list renders no setup slot, no Required segment, and exits 0"
   arm_other_nudges
   printf '{' > "$MAIN/.gaia/setup-features.json"
   render "$MAIN"
@@ -331,9 +324,7 @@ render() {
   grep -qF -- "/setup-gaia" <<<"$output" && return 1
   # The shared read still reported completion, so the other nudges render.
   grep -qF -- "📦 /update-deps" <<<"$output"
-}
-
-@test "a list with a non-array features value renders no setup slot and exits 0" {
+  echo "case: a list with a non-array features value renders no setup slot and exits 0"
   printf '{"version":1,"description":"x","features":"nope"}\n' > "$MAIN/.gaia/setup-features.json"
   render "$MAIN"
   [ "$status" -eq 0 ]
@@ -373,17 +364,15 @@ render() {
   grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
 }
 
-@test "a linked worktree shows no setup choice nudge, the main checkout does" {
+@test "a linked worktree shows no pending-choices nudge but keeps the Required segment" {
+  echo "case: a linked worktree shows no setup choice nudge, the main checkout does"
   render "$MAIN"
   grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
 
   render "$WORKTREE"
   [ "$status" -eq 0 ]
   grep -qF -- "/setup-gaia" <<<"$output" && return 1
-  return 0
-}
-
-@test "the incomplete-setup segment still renders from a linked worktree" {
+  echo "case: the incomplete-setup segment still renders from a linked worktree"
   write_setup_state null
   render "$WORKTREE"
   [ "$status" -eq 0 ]
@@ -454,7 +443,8 @@ render_stripped() {
   run env HOME="$TEMPORARY_HOME" COLUMNS=400 bash -c "printf '%s' '$json' | bash '$script' | sed \$'s/\\x1b\\\\[[0-9;]*m//g'"
 }
 
-@test "the source repo shows no pending-choices nudge" {
+@test "the source repo shows neither setup segment" {
+  echo "case: the source repo shows no pending-choices nudge"
   # Positive control: the adopter-shaped fixture nudges.
   render "$MAIN"
   [ "$status" -eq 0 ]
@@ -464,10 +454,7 @@ render_stripped() {
   render "$MAIN"
   [ "$status" -eq 0 ]
   grep -qF -- "/setup-gaia" <<<"$output" && return 1
-  return 0
-}
-
-@test "the source repo shows no Required segment and keeps its other nudges" {
+  echo "case: the source repo shows no Required segment and keeps its other nudges"
   arm_other_nudges
   write_setup_state null
   mkdir -p "$MAIN/.gaia/cli/src"

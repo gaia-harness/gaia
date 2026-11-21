@@ -8,39 +8,43 @@
 # Shape: project | branch | model (effort) | context bar | 5-hour usage | 7-day
 # usage. The project is the MAIN checkout's folder name, so a linked worktree
 # shows the main project; the branch carries a tree marker inside a linked
-# worktree. A usage window renders only when Claude Code sends it, so no plan
-# logic lives here.
+# worktree. A usage window renders from the merged shared reading
+# the render produced (see rate-limits-reading.sh), so no plan logic lives here;
+# a window absent from every source is not drawn.
 #
 # The bar is colored from the shared threshold lib's bands (green below yellow,
 # yellow from yellow, red from red, fire and skull markers above), the same
 # bands the audit-loop checkpoint reads, so the bar and the checkpoint cannot
 # disagree. Those bands are token counts for a context window, so they do not
-# apply to the usage windows, which carry their own percentage bands. Hot path:
-# bash arithmetic and builtins only, plus the one git call for the branch, one
-# date call per usage window at or past its countdown band, and, when a checkpoint
+# apply to the usage windows, whose percentage bands come from the rate-limit
+# library (scripts/rate-limits-lib.sh). Hot path:
+# bash arithmetic and builtins only, plus the one git call for the branch, and, when a checkpoint
 # override file exists, one jq call.
 
-# The countdown shows once the reset time decides what happens next: from yellow
-# for the 5-hour window, whose reset is near enough to plan around, and from red
-# for the 7-day window, whose reset at yellow can still be days off.
-GAIA_USAGE_YELLOW_PERCENTAGE=75
-GAIA_USAGE_RED_PERCENTAGE=90
-
-# gaia_statusline_usage_segment <icon> <rounded_percentage> <resets_at_epoch_seconds> <countdown_from_percentage>
+# gaia_statusline_usage_segment <icon> <percentage|reset> <resets_at_epoch_seconds> <countdown_from_percentage> <now>
 # Sets _GAIA_STATUSLINE_USAGE_SEGMENT rather than printing, so the hot path forks
-# no subshell for it.
+# no subshell for it. The bands come from the rate-limit library; with them
+# unset nothing renders. The countdown shows once the reset time decides what
+# happens next: from the warning band for the 5-hour window, whose reset is near
+# enough to plan around, and from the critical band for the 7-day window, whose
+# reset at the warning band can still be days off. `reset` means the window's
+# reset time has passed: no percentage and no countdown.
 gaia_statusline_usage_segment() {
-  local icon="${1:-}" percentage="${2:-}" resets_at="${3:-}" countdown_from="${4:-$GAIA_USAGE_RED_PERCENTAGE}"
-  local color=$'\033[01;32m' reset=$'\033[00m' countdown="" now seconds_left minutes_left days hours minutes
+  local icon="${1:-}" percentage="${2:-}" resets_at="${3:-}" countdown_from="${4:-}" now="${5:-}"
+  local color=$'\033[01;32m' reset=$'\033[00m' countdown="" seconds_left minutes_left days hours minutes
   _GAIA_STATUSLINE_USAGE_SEGMENT=""
   [ -n "$percentage" ] || return 0
-  if [ "$percentage" -ge "$GAIA_USAGE_RED_PERCENTAGE" ]; then
+  [ -n "${GAIA_RATE_LIMIT_WARNING_PERCENTAGE:-}" ] && [ -n "${GAIA_RATE_LIMIT_CRITICAL_PERCENTAGE:-}" ] || return 0
+  if [ "$percentage" = "reset" ]; then
+    _GAIA_STATUSLINE_USAGE_SEGMENT="${icon} ${color}reset${reset}"
+    return 0
+  fi
+  if [ "$percentage" -ge "$GAIA_RATE_LIMIT_CRITICAL_PERCENTAGE" ]; then
     color=$'\033[01;31m'
-  elif [ "$percentage" -ge "$GAIA_USAGE_YELLOW_PERCENTAGE" ]; then
+  elif [ "$percentage" -ge "$GAIA_RATE_LIMIT_WARNING_PERCENTAGE" ]; then
     color=$'\033[01;33m'
   fi
   if [ "$percentage" -ge "$countdown_from" ]; then
-    now=$(date +%s 2>/dev/null) || now=""
     if [ -n "$resets_at" ] && [ -n "$now" ]; then
       seconds_left=$((resets_at - now))
       if [ "$seconds_left" -gt 0 ]; then
@@ -62,16 +66,16 @@ gaia_statusline_usage_segment() {
   _GAIA_STATUSLINE_USAGE_SEGMENT="${icon} ${color}${percentage}%${reset}${countdown}"
 }
 
-# gaia_statusline_left <state-root> <session-directory> <is-worktree> <model> <effort> <used_percentage> <window_size> <used_tokens> <five_hour_percentage> <five_hour_resets_at> <seven_day_percentage> <seven_day_resets_at>
+# gaia_statusline_left <state-root> <session-directory> <is-worktree> <model> <effort> <used_percentage> <window_size> <used_tokens> <five_hour_percentage> <five_hour_resets_at> <seven_day_percentage> <seven_day_resets_at> <now>
 # Sets _GAIA_STATUSLINE_LEFT to the rendered string (ANSI escapes included); returns 1
 # and leaves it empty when there is nothing to show. The usage percentages arrive
-# as whole numbers, already validated by the entrypoint's jq call.
+# as whole numbers or `reset`, from the merged shared reading.
 gaia_statusline_left() {
   local root="${1:-}" session_directory="${2:-}" is_worktree="${3:-}" model="${4:-}" effort="${5:-}"
   local used_percentage="${6:-}" window="${7:-}" tokens="${8:-}"
-  local five_hour_percentage="${9:-}" five_hour_resets_at="${10:-}" seven_day_percentage="${11:-}" seven_day_resets_at="${12:-}"
+  local five_hour_percentage="${9:-}" five_hour_resets_at="${10:-}" seven_day_percentage="${11:-}" seven_day_resets_at="${12:-}" now="${13:-}"
   local escape_character=$'\033' reset=$'\033[00m' rendered="" separator=" │ " project branch effort_capitalized
-  local integer_part fraction_part used_percentage_rounded filled i bar="" color marker="" checkpoint_override ask_tokens ask_window_percent line bands
+  local integer_part fraction_part used_percentage_rounded filled i bar="" color marker="" override_marker="" override_status ask_tokens line bands
   local yellow red fire skull
   _GAIA_STATUSLINE_LEFT=""
 
@@ -117,8 +121,17 @@ gaia_statusline_left() {
       i=$((i + 1))
     done
     color="${escape_character}[01;32m"
-    if checkpoint_override=$(gaia_context_override "$root") && read -r ask_tokens ask_window_percent <<<"$checkpoint_override" &&
-      line=$(gaia_context_line "$window" "$ask_tokens" "$ask_window_percent") &&
+    # One parse serves both the line and the marker; a zero line (checkpoint
+    # off) has no bands, so the bar stays green.
+    override_status="" ask_tokens=""
+    if command -v gaia_context_override_state >/dev/null 2>&1; then
+      read -r override_status ask_tokens _ <<<"$(gaia_context_override_state "$root")"
+    fi
+    case "$override_status" in
+      clamped-low | clamped-high | invalid) override_marker=" ${escape_character}[01;33m⚠ override${reset}" ;;
+    esac
+    if [ -n "$ask_tokens" ] &&
+      line=$(gaia_context_line "$window" "$ask_tokens" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT") &&
       bands=$(gaia_context_bands "$window" "$line") && read -r yellow red fire skull <<<"$bands"; then
       if [ "$tokens" -ge "$skull" ]; then
         color="${escape_character}[01;31m"
@@ -132,12 +145,12 @@ gaia_statusline_left() {
         color="${escape_character}[01;33m"
       fi
     fi
-    rendered="${rendered:+$rendered$separator}${color}${bar}${reset} ${used_percentage_rounded}%${marker}"
+    rendered="${rendered:+$rendered$separator}${color}${bar}${reset} ${used_percentage_rounded}%${marker}${override_marker}"
   fi
 
-  gaia_statusline_usage_segment "🕔" "$five_hour_percentage" "$five_hour_resets_at" "$GAIA_USAGE_YELLOW_PERCENTAGE"
+  gaia_statusline_usage_segment "🕔" "$five_hour_percentage" "$five_hour_resets_at" "${GAIA_RATE_LIMIT_WARNING_PERCENTAGE:-}" "$now"
   [ -n "$_GAIA_STATUSLINE_USAGE_SEGMENT" ] && rendered="${rendered:+$rendered$separator}${_GAIA_STATUSLINE_USAGE_SEGMENT}"
-  gaia_statusline_usage_segment "📅" "$seven_day_percentage" "$seven_day_resets_at" "$GAIA_USAGE_RED_PERCENTAGE"
+  gaia_statusline_usage_segment "📅" "$seven_day_percentage" "$seven_day_resets_at" "${GAIA_RATE_LIMIT_CRITICAL_PERCENTAGE:-}" "$now"
   [ -n "$_GAIA_STATUSLINE_USAGE_SEGMENT" ] && rendered="${rendered:+$rendered$separator}${_GAIA_STATUSLINE_USAGE_SEGMENT}"
 
   [ -n "$rendered" ] || return 1

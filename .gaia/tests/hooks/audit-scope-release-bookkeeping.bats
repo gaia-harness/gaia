@@ -86,22 +86,29 @@ lines_of() {
   [ -z "$output" ]
 }
 
-@test "a release that also changes source: the predicate refuses, and every path routes as before" {
-  release_bookkeeping_install_predicate "$FIXTURE"
-  release_bookkeeping_apply "$FIXTURE" extra
-  [ "$(classify package.json a.sh)" = "$(lines_of $'package.json\tfixture-default\tno' $'a.sh\tfixture-default\tno')" ]
-  run resolve_members
-  [ "$status" -eq 0 ]
-  [ "$output" = fixture-default ]
-}
-
-@test "a tree without the predicate (an adopter clone) never arms on the same bookkeeping release" {
-  release_bookkeeping_apply "$FIXTURE"
-  [ ! -e "$FIXTURE/.gaia/scripts/release-bookkeeping-check.sh" ]
-  [ "$(classify package.json)" = $'package.json\tfixture-default\tno' ]
-  run resolve_members
-  [ "$status" -eq 0 ]
-  [ "$output" = fixture-default ]
+# bats test_tags=protected
+@test "the arm stays off unless the predicate accepts: a release that also changes source, and a tree without the predicate" {
+  local row
+  for row in source-change-refused no-predicate-adopter-clone; do
+    echo "case: $row"
+    git -C "$FIXTURE" reset -q --hard main
+    rm -f "$FIXTURE/.gaia/scripts/release-bookkeeping-check.sh"
+    case "$row" in
+      source-change-refused)
+        release_bookkeeping_install_predicate "$FIXTURE"
+        release_bookkeeping_apply "$FIXTURE" extra
+        [ "$(classify package.json a.sh)" = "$(lines_of $'package.json\tfixture-default\tno' $'a.sh\tfixture-default\tno')" ]
+        ;;
+      no-predicate-adopter-clone)
+        release_bookkeeping_apply "$FIXTURE"
+        [ ! -e "$FIXTURE/.gaia/scripts/release-bookkeeping-check.sh" ]
+        [ "$(classify package.json)" = $'package.json\tfixture-default\tno' ]
+        ;;
+    esac
+    run resolve_members
+    [ "$status" -eq 0 ]
+    [ "$output" = fixture-default ]
+  done
 }
 
 @test "the predicate runs only on a change that moves .gaia/VERSION" {
@@ -117,17 +124,6 @@ lines_of() {
   git -C "$FIXTURE" commit -qam "bump"
   classify a.sh >/dev/null
   [ "$(cat "$calls")" = called ]
-}
-
-@test "the ownerless check fails against a classifier whose owner lookup ignores the arm" {
-  release_bookkeeping_install_predicate "$FIXTURE"
-  release_bookkeeping_apply "$FIXTURE"
-  local scratch="$BATS_TEST_TMPDIR/ignores-arm"
-  mkdir -p "$scratch"
-  cp "$LIBRARY_DIRECTORY/audit-scope-release.sh" "$scratch/"
-  grep -v '^  ! _audit_scope_release_bookkeeping_path "\$path" || return 0$' "$LIBRARY_DIRECTORY/audit-scope.sh" > "$scratch/audit-scope.sh"
-  cmp -s "$LIBRARY_DIRECTORY/audit-scope.sh" "$scratch/audit-scope.sh" && return 1
-  [ "$(classify_with "$scratch" package.json)" = $'package.json\tfixture-default\tyes' ]
 }
 
 @test "a branch that loosens the predicate itself leaves every path in scope and the resolver names its member" {

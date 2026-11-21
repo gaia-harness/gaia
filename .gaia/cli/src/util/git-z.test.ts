@@ -6,59 +6,78 @@
  * no terminator to strip.
  *
  * The end-to-end property, that a real git invocation built this way returns a
- * non-ASCII path unquoted, is pinned by the canary suites beside each call
- * site rather than here, since it needs a git fixture.
+ * non-ASCII path unquoted, is pinned by the non-ASCII path tests in the
+ * call-site suites that have one, rather than here, since it needs a git
+ * fixture.
  */
 import {describe, expect, test} from 'vitest';
 import {gitZArgs, splitZStream} from './git-z.js';
 
+const QUOTEPATH = ['-c', 'core.quotepath=false'];
+
 describe('gitZArgs', () => {
-  test('puts -z immediately after the verb, ahead of the caller arguments', () => {
-    expect(gitZArgs('ls-tree', ['-r', '-l', 'HEAD', '--', 'wiki/'])).toEqual([
-      '-c',
-      'core.quotepath=false',
-      'ls-tree',
-      '-z',
-      '-r',
-      '-l',
-      'HEAD',
-      '--',
-      'wiki/',
-    ]);
-  });
-
-  test('carries both flags for a verb that takes no further arguments', () => {
-    expect(gitZArgs('ls-files')).toEqual([
-      '-c',
-      'core.quotepath=false',
-      'ls-files',
-      '-z',
-    ]);
-  });
-
-  test('never lets a caller argument precede the flags it is given for', () => {
-    const args = gitZArgs('diff-tree', ['--name-only', '-r', 'HEAD']);
-
-    expect(args.indexOf('-z')).toBeLessThan(args.indexOf('--name-only'));
-    expect(args.indexOf('core.quotepath=false')).toBeLessThan(
-      args.indexOf('diff-tree')
-    );
+  test.each(
+    [
+      {
+        args: ['-r', '-l', 'HEAD', '--', 'wiki/'],
+        expected: [
+          ...QUOTEPATH,
+          'ls-tree',
+          '-z',
+          '-r',
+          '-l',
+          'HEAD',
+          '--',
+          'wiki/',
+        ],
+        name: 'puts -z immediately after the verb, ahead of the caller arguments',
+        verb: 'ls-tree',
+      },
+      {
+        args: undefined,
+        expected: [...QUOTEPATH, 'ls-files', '-z'],
+        name: 'carries both flags for a verb that takes no further arguments',
+        verb: 'ls-files',
+      },
+      {
+        args: ['--name-only', '-r', 'HEAD'],
+        expected: [
+          ...QUOTEPATH,
+          'diff-tree',
+          '-z',
+          '--name-only',
+          '-r',
+          'HEAD',
+        ],
+        name: 'never lets a caller argument precede the flags it is given for',
+        verb: 'diff-tree',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {args, expected, verb}) => {
+    expect(gitZArgs(verb, args)).toEqual(expected);
   });
 });
 
 describe('splitZStream', () => {
-  test('drops the empty record a NUL-terminated stream ends with', () => {
-    expect(splitZStream('wiki/a.md\0wiki/b.md\0')).toEqual([
-      'wiki/a.md',
-      'wiki/b.md',
-    ]);
-  });
-
-  test('returns nothing for the empty stream a listing with no match emits', () => {
-    expect(splitZStream('')).toEqual([]);
-  });
-
-  test('never unquotes, since -z emits raw bytes a name may legally contain', () => {
-    expect(splitZStream('wiki/"quoted".md\0')).toEqual(['wiki/"quoted".md']);
+  test.each(
+    [
+      {
+        expected: ['wiki/a.md', 'wiki/b.md'],
+        name: 'drops the empty record a NUL-terminated stream ends with',
+        stream: 'wiki/a.md\0wiki/b.md\0',
+      },
+      {
+        expected: [],
+        name: 'returns nothing for the empty stream a listing with no match emits',
+        stream: '',
+      },
+      {
+        expected: ['wiki/"quoted".md'],
+        name: 'never unquotes, since -z emits raw bytes a name may legally contain',
+        stream: 'wiki/"quoted".md\0',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, stream}) => {
+    expect(splitZStream(stream)).toEqual(expected);
   });
 });

@@ -79,28 +79,24 @@ scrub_page() {
   SCRUBBED_PAGE="$staging/wiki/concepts/example-concept.md"
 }
 
-@test "S1: the rendered page carries no id, source path or PR URL" {
+# One rendered page serves every case; the scrub works on its own staging copy.
+@test "a page and log line rendered from the promotion templates carry no id or source path and pass the scrub and the detector, keeping pr_number" {
   page="$BATS_TEST_TMPDIR/page.md"
   render_promoted_page "$page"
+
+  echo "case: S1: the rendered page carries no id, source path or PR URL"
   grep -qF -- "$SPEC_ID" "$page" && return 1
   grep -qF -- "$PR_URL" "$page" && return 1
   grep -qF -- '.notebook/' "$page" && return 1
-  true
-}
 
-@test "S2: a promoted page passes the release scrub with no leak and keeps its pr_number" {
-  page="$BATS_TEST_TMPDIR/page.md"
-  render_promoted_page "$page"
+  echo "case: S2: a promoted page passes the release scrub with no leak and keeps its pr_number"
   scrub_page "$page"
   [ "$status" -eq 0 ]
   printf '%s\n' "$output" | grep -qF 'leaks: none'
   grep -qx -- "pr_number: $PR_NUMBER" "$SCRUBBED_PAGE"
-}
 
-@test "S3: the rendered page and the log line pass the machine-local reference detector" {
-  page="$BATS_TEST_TMPDIR/page.md"
+  echo "case: S3: the rendered page and the log line pass the machine-local reference detector"
   log_line="$BATS_TEST_TMPDIR/log-line.md"
-  render_promoted_page "$page"
   render_log_line "$log_line"
   grep -qF -- "PR #$PR_NUMBER" "$log_line"
   run bash "$DETECTOR" text "$page"
@@ -138,16 +134,16 @@ build_wiki() {
   printf -- '---\ntype: index\n---\n\n# Index\n\n## Concepts\n\n%s\n' "$link" > "$root/wiki/index.md"
 }
 
-@test "L1: the index link template resolves for a page whose H1 carries a '/'" {
+@test "the index and Related link templates resolve for a title containing a slash" {
+  echo "case: L1: the index link template resolves for a page whose H1 carries a '/'"
   template="$(grep -F 'Compute the wikilink:' "$PROMOTE_DOC" | sed -e 's|^[^`]*`||; s|`.*$||')"
   [ -n "$template" ]
   build_wiki "$BATS_TEST_TMPDIR/index-wiki" "$template"
   run bash -c 'cd "$1" && "$2" wiki broken-links' _ "$BATS_TEST_TMPDIR/index-wiki" "$ADOPTER_CLI"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
 
-@test "L2: the Related link template resolves for a page whose H1 carries a '/'" {
+  echo "case: L2: the Related link template resolves for a page whose H1 carries a '/'"
   template="$(fenced_block_after markdown '- **Has siblings**: emit:' | grep -F '[[' | head -n 1 | sed -e 's|^ *||')"
   [ -n "$template" ]
   build_wiki "$BATS_TEST_TMPDIR/related-wiki" "$template"

@@ -4,7 +4,7 @@ status: active
 package: react-doctor
 role: react-quality-scanner
 created: 2026-06-23
-updated: 2026-11-04
+updated: 2026-11-21
 tags: [dependency, quality, ci]
 ---
 
@@ -24,9 +24,9 @@ Deterministic scanner for React security, performance, correctness, and accessib
 
 ## Moving the pin
 
-`/update-deps` does not see the pin, because it is not in `package.json`. Move it by hand:
+The pin is not in `package.json`, so pnpm discovery never sees it; `gaia update-deps global-tools` reports it against the newest release past the release-age cooldown, and `/update-deps` offers the bump, which runs these steps:
 
-1. Read the new release's changes and the skill it bundles (`dist/skills/react-doctor/` in `npm pack react-doctor@<version>`).
+1. Read the new release's changes and the skill it bundles (`dist/skills/react-doctor/` in `npm pack react-doctor@<version> --pack-destination <a mktemp -d directory>`, so no tarball lands in the worktree).
 2. Port any new command or flag worth having into `.gaia/templates/react-doctor/`. Never port a `/doctor` trigger, a remote fetch or an unpinned version.
 3. Write the version to `.gaia/react-doctor-version`, run `bash .gaia/scripts/install-react-doctor.sh --refresh`, then a full scan to confirm `apps/web/doctor.config.ts` still loads and its suppressions still match the ruleset.
 

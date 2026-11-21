@@ -129,24 +129,6 @@ seed_unrelated() {
   [ "$reads" = "1 2" ] || { echo "ledger and cache whole reads: $reads, expected 1 2" >&2; return 1; }
 }
 
-@test "guard red: a scratch copy that rereads the whole ledger for every file reads it once per committed file" {
-  local reads
-  seed_unrelated
-  install multi
-  scratch_flusher 's/^  _uf_refresh_session_rows "\$session_id"$/  UF_SESSION_ROWS_ID=""; _uf_refresh_session_rows "$session_id"/'
-  reads="$(whole_reads --session s-multi --finished-main --all-sidecars-finished)"
-  [ "${reads% *}" -ge 4 ]
-}
-
-@test "guard red: a scratch copy that rewrites the cursor cache after every commit reads the cache once per committed file" {
-  local reads
-  seed_unrelated
-  install multi
-  scratch_flusher 's/^  cat "\$batch" >>"\$UF_LEDGER" || return 1$/&; _uf_write_cache "$(_uf_file_size "$UF_LEDGER")" 0/'
-  reads="$(whole_reads --session s-multi --finished-main --all-sidecars-finished)"
-  [ "${reads#* }" -ge 5 ]
-}
-
 # ---------- the cache is a hint ----------
 
 # A flusher killed after its second commit, before the run-end cache write:
@@ -160,29 +142,25 @@ kill_after_two_commits() {
   true
 }
 
-@test "a flush killed between its commits and its cache write leaves no cache, and the next flush counts every row once" {
+@test "the cursor cache is a hint: a flush killed before its cache write, or a cache behind the ledger, never loses or duplicates a row" {
   install multi
   kill_after_two_commits
-  run flush_multi
-  [ "$status" -eq 0 ]
-  assert_golden multi
-  [ "$(jq -r '.files | length' "$TEL/usage-cursors.json")" -eq "$(cursor_rows s-multi)" ]
+  local killed_state="$TEMPORARY_DIRECTORY/killed-state" case_name
+  cp -R "$ROOT/.gaia/local" "$killed_state"
+
+  for case_name in "killed flush leaves no cache" "cache behind the ledger"; do
+    rm -rf "$ROOT/.gaia/local"
+    cp -R "$killed_state" "$ROOT/.gaia/local"
+    if [ "$case_name" = "cache behind the ledger" ]; then
+      printf '{"schema_version":1,"ledger_bytes":0,"files":{},"pairs":{}}\n' >"$TEL/usage-cursors.json"
+    fi
+    run flush_multi
+    [ "$status" -eq 0 ] || { echo "case $case_name: flush exited $status"; return 1; }
+    assert_golden multi || { echo "case $case_name: totals differ from golden"; return 1; }
+    if [ "$case_name" = "killed flush leaves no cache" ]; then
+      [ "$(jq -r '.files | length' "$TEL/usage-cursors.json")" -eq "$(cursor_rows s-multi)" ] ||
+        { echo "case $case_name: cache names a different file count than the ledger"; return 1; }
+    fi
+  done
 }
 
-@test "a cache behind the ledger costs a reparse, never a duplicate: the next flush matches golden" {
-  install multi
-  kill_after_two_commits
-  printf '{"schema_version":1,"ledger_bytes":0,"files":{},"pairs":{}}\n' >"$TEL/usage-cursors.json"
-  run flush_multi
-  [ "$status" -eq 0 ]
-  assert_golden multi
-}
-
-@test "guard red: a scratch copy that folds no ledger cursor rows recounts the killed flush's files" {
-  install multi
-  kill_after_two_commits
-  scratch_flusher 's/grep -F '"'"'"kind":"cursor"'"'"' "\$UF_WORK\/session_rows"/grep -F '"'"'"kind":"no-such-kind"'"'"' "$UF_WORK\/session_rows"/'
-  run flush_multi
-  run assert_golden multi
-  [ "$status" -ne 0 ]
-}

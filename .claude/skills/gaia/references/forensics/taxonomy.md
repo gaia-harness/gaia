@@ -54,7 +54,7 @@ After classification, the agent decides whether the failure is a user-config iss
 
 | signal                                                                               | branch       | rationale                          |
 | ------------------------------------------------------------------------------------ | ------------ | ---------------------------------- |
-| wrong Node version (captured `node` field outside `.nvmrc` / `engines.node` range)   | user-config  | local environment, fixable by user |
+| wrong Node version (captured `node` field outside the `engines.node` range)          | user-config  | local environment, fixable by user |
 | missing required env var (named in the surface's docs and absent from `process.env`) | user-config  | local environment                  |
 | dirty working tree blocks the workflow (e.g. `/gaia-wiki` refused to commit over non-wiki changes)      | user-config  | git state, fixable by user         |
 | any other failure pattern                                                            | probable bug | offer GH issue                     |

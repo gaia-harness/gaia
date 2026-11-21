@@ -74,21 +74,26 @@ entry() {
   jq -c --arg n "$full_name" 'select(.fullName == $n)' <<<"$ndjson"
 }
 
-@test "a test file keeps fullName, signal and kind byte-identical" {
-  output=$(extract apps/web/app/sample.test.ts "$TEST_SOURCE")
-  expected_projection='{"fullName":"first multi-line","signal":"sha256:ffe25daf2b7ed23143321b331da08db81bab1afa5f4a5238fd196d1d31049f5f","kind":"runtime"}
+@test "a test file and a story file keep fullName, signal and kind byte-identical" {
+  local label relative_path source_file expected_projection actual_projection
+  for label in test-file story-file; do
+    case "$label" in
+      test-file)
+        relative_path=apps/web/app/sample.test.ts source_file=$TEST_SOURCE
+        expected_projection='{"fullName":"first multi-line","signal":"sha256:ffe25daf2b7ed23143321b331da08db81bab1afa5f4a5238fd196d1d31049f5f","kind":"runtime"}
 {"fullName":"adjacent","signal":"sha256:7b686d8fbbd292925f21b8f16bffbdc28f2c1ce399776eacfd71b51bb23f72af","kind":"runtime"}'
-  actual_projection=$(jq -c '{fullName, signal, kind}' <<<"$output")
-  [ "$actual_projection" = "$expected_projection" ]
-}
-
-@test "a story file keeps fullName, signal and kind byte-identical" {
-  output=$(extract apps/web/app/sample.stories.tsx "$STORY_SOURCE")
-  expected_projection='{"fullName":"With Test   base story","signal":"sha256:8755127f9efebc2c50764ca14697e521b24247ba623729551ae0f315b5e0ab04","kind":"runtime"}
+        ;;
+      story-file)
+        relative_path=apps/web/app/sample.stories.tsx source_file=$STORY_SOURCE
+        expected_projection='{"fullName":"With Test   base story","signal":"sha256:8755127f9efebc2c50764ca14697e521b24247ba623729551ae0f315b5e0ab04","kind":"runtime"}
 {"fullName":"With Test   does a thing","signal":"sha256:4dc862fb51bf95b4320bd00d5d2c859347c281c5523d029160900fa29857584e","kind":"runtime"}
 {"fullName":"Play Only","signal":"sha256:5762568c55fde342f7cbc42967c359f04dde7809379e81cfc93a538881bca52f","kind":"runtime"}'
-  actual_projection=$(jq -c '{fullName, signal, kind}' <<<"$output")
-  [ "$actual_projection" = "$expected_projection" ]
+        ;;
+    esac
+    output=$(extract "$relative_path" "$source_file")
+    actual_projection=$(jq -c '{fullName, signal, kind}' <<<"$output")
+    [ "$actual_projection" = "$expected_projection" ] || { echo "case $label: got $actual_projection"; return 1; }
+  done
 }
 
 @test "the extent fields follow kind in key order" {

@@ -298,6 +298,7 @@ commit_mixed_diff() {
 # 1. Marker-gated POST: posts on marker present, skips on marker absent
 # -----------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "local producer: posts GAIA-Audit success only after marker exists" {
   install_gh_mock ok
   head_sha=$(git -C "$SANDBOX" rev-parse HEAD)
@@ -330,6 +331,7 @@ commit_mixed_diff() {
   [ ! -f "$POST_LOG" ]
 }
 
+# bats test_tags=protected
 @test "local producer: gh unauthenticated → marker stays, no status post (fail-safe asymmetry)" {
   install_gh_mock fail
   head_sha=$(git -C "$SANDBOX" rev-parse HEAD)
@@ -352,48 +354,11 @@ commit_mixed_diff() {
 #    diff requires every dispatched member's marker, not just the caller's own.
 # -----------------------------------------------------------------------------
 
-@test "member-aware POST: declines while a co-dispatched maintainer-shell member withholds" {
-  install_gh_mock ok
-  install_resolver
-  commit_mixed_diff
-
-  digest=$(digest_of "$SANDBOX" code-audit-frontend)
+# Clear the member markers and the POST log between cases of one fixture.
+reset_case() {
+  rm -rf "$SANDBOX/.gaia/local/audit" "$BATS_TEST_TMPDIR/pr-title" "$BATS_TEST_TMPDIR/pr-files"
+  rm -f "$POST_LOG"
   mkdir -p "$SANDBOX/.gaia/local/audit"
-  marker=".gaia/local/audit/${digest}.ok"
-  write_body "$SANDBOX/$marker" code-audit-frontend
-
-  run run_helper "$marker"
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: members pending code-audit-maintainer-shell" ]
-
-  # The button stays blocked: a decline never posts, and the caller's own
-  # marker (already validated present) is untouched.
-  [ ! -f "$POST_LOG" ]
-  [ -f "$SANDBOX/$marker" ]
-}
-
-@test "member-aware POST: posts success once every dispatched member has cleared" {
-  install_gh_mock ok
-  install_resolver
-  commit_mixed_diff
-
-  head_sha=$(git -C "$SANDBOX" rev-parse HEAD)
-  tree=$(current_tree)
-  frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
-  shell_digest=$(digest_of "$SANDBOX" code-audit-maintainer-shell)
-  mkdir -p "$SANDBOX/.gaia/local/audit"
-  marker=".gaia/local/audit/${frontend_digest}.ok"
-  write_body "$SANDBOX/$marker" code-audit-frontend
-  write_body "$SANDBOX/.gaia/local/audit/${shell_digest}.code-audit-maintainer-shell.ok" code-audit-maintainer-shell
-
-  run run_helper "$marker"
-  [ "$status" -eq 0 ]
-  [[ "$output" == "status: posted GAIA-Audit success "* ]]
-
-  [ -f "$POST_LOG" ]
-  grep -q "statuses/${head_sha}" "$POST_LOG"
-  grep -q "state=success" "$POST_LOG"
-  grep -q "description=1.2.3 ${frontend_digest} ${tree}" "$POST_LOG"
 }
 
 # A refused member inside the gate. The writer publishes a refusal beside the
@@ -403,27 +368,54 @@ commit_mixed_diff() {
 # handshake posts success on the same head and latest-status-wins retracts the
 # failure the refusal writer just posted, while the merge hook goes on denying.
 # The gate has to read the refusal family first, exactly as the merge hook does.
-@test "member-aware POST: declines while a dispatched member holds a refusal beside its earned marker" {
+# bats test_tags=protected
+@test "member-aware POST gate: declines while a member withholds or holds a refusal, posts three-field success with no carried suffix once all clear" {
   install_gh_mock ok
   install_resolver
   commit_mixed_diff
 
+  head_sha=$(git -C "$SANDBOX" rev-parse HEAD)
+  tree=$(current_tree)
   frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
   shell_digest=$(digest_of "$SANDBOX" code-audit-maintainer-shell)
-  mkdir -p "$SANDBOX/.gaia/local/audit"
   marker=".gaia/local/audit/${frontend_digest}.ok"
+  shell_marker=".gaia/local/audit/${shell_digest}.code-audit-maintainer-shell.ok"
+
+  echo "case: declines while a co-dispatched maintainer-shell member withholds"
+  reset_case
   write_body "$SANDBOX/$marker" code-audit-frontend
-  # The shell member cleared this digest in an earlier wave, then refused it.
-  write_body "$SANDBOX/.gaia/local/audit/${shell_digest}.code-audit-maintainer-shell.ok" code-audit-maintainer-shell
-  write_refusal_body "$SANDBOX/.gaia/local/audit/${shell_digest}.code-audit-maintainer-shell.refused" code-audit-maintainer-shell
-
   run run_helper "$marker"
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: members pending code-audit-maintainer-shell" ]
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "status: declined: members pending code-audit-maintainer-shell" ] || return 1
+  # A decline never posts, and the caller's own marker is untouched.
+  [ ! -f "$POST_LOG" ] || return 1
+  [ -f "$SANDBOX/$marker" ] || return 1
 
-  # Nothing is posted, so a failure status already standing for this head is
-  # never overwritten by a success this member never earned.
-  [ ! -f "$POST_LOG" ]
+  echo "case: declines while a dispatched member holds a refusal beside its earned marker"
+  reset_case
+  write_body "$SANDBOX/$marker" code-audit-frontend
+  write_body "$SANDBOX/$shell_marker" code-audit-maintainer-shell
+  write_refusal_body "$SANDBOX/.gaia/local/audit/${shell_digest}.code-audit-maintainer-shell.refused" code-audit-maintainer-shell
+  run run_helper "$marker"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "status: declined: members pending code-audit-maintainer-shell" ] || return 1
+  # Nothing is posted, so a standing failure is never overwritten.
+  [ ! -f "$POST_LOG" ] || return 1
+
+  echo "case: posts success once every dispatched member has cleared, three-field description, no carried suffix"
+  reset_case
+  write_body "$SANDBOX/$marker" code-audit-frontend
+  write_body "$SANDBOX/$shell_marker" code-audit-maintainer-shell
+  run run_helper "$marker"
+  [ "$status" -eq 0 ] || return 1
+  [[ "$output" == "status: posted GAIA-Audit success "* ]] || return 1
+  [ -f "$POST_LOG" ] || return 1
+  grep -q "statuses/${head_sha}" "$POST_LOG" || return 1
+  grep -q "state=success" "$POST_LOG" || return 1
+  grep -q "description=1.2.3 ${frontend_digest} ${tree}" "$POST_LOG" || return 1
+  # No carried token appended, and never can be (there is no carried family).
+  grep -qF -- "carried" "$POST_LOG" && return 1
+  true
 }
 
 # The chore(deps) waiver. A dep-bump pull request waives code-audit-frontend
@@ -455,134 +447,59 @@ run_shell_member_handshake() {
   run run_helper "$marker"
 }
 
-@test "chore(deps) waiver: a dep-bump title with a manifest-only file list waives frontend, so the co-dispatched member's marker posts success" {
+# Each case: label, PR title ("" for an unreadable title), the PR's changed
+# paths ("" for none), the member whose handshake runs (shell, or frontend for
+# the shell-unmarked case), whether a frontend refusal stands, and the expected
+# output ("posted" for a success).
+CHORE_DEPS_CASES='a dep-bump title with a manifest-only file list waives frontend, so the co-dispatched member'"'"'s marker posts success|chore(deps): bump vite to 8.3.0|package.json pnpm-lock.yaml|shell|no|posted
+a non-dep-bump title leaves frontend pending|fix(cli): raise shared pins|package.json|shell|no|status: declined: members pending code-audit-frontend
+a dep-bump title whose PR changes apps/web/app/x.ts leaves frontend pending|chore(deps): bump vite to 8.3.0|package.json apps/web/app/x.ts|shell|no|status: declined: members pending code-audit-frontend
+an empty file list leaves frontend pending|chore(deps): bump vite to 8.3.0||shell|no|status: declined: members pending code-audit-frontend
+waives frontend only, so an unmarked co-dispatched member stays pending|chore(deps): bump vite to 8.3.0|package.json pnpm-lock.yaml|frontend|no|status: declined: members pending code-audit-maintainer-shell
+an unreadable PR title fails closed and leaves frontend pending|||shell|no|status: declined: members pending code-audit-frontend
+a files line does not fold into the title (pr_title is line 2 only)|fix(cli): raise shared pins|package.json pnpm-lock.yaml|shell|no|status: declined: members pending code-audit-frontend
+a frontend refusal keeps frontend pending under a dep-bump title|chore(deps): bump vite to 8.3.0|package.json pnpm-lock.yaml|shell|yes|status: declined: members pending code-audit-frontend'
+
+# bats test_tags=protected
+@test "chore(deps) waiver: case table of dep-bump title and file-list outcomes (waived, non-dep-bump, non-manifest path, empty files, unreadable title, files-line fold, other member unmarked, frontend refusal)" {
   install_gh_mock ok
   install_resolver
   install_chore_deps_predicate
   commit_mixed_diff
-  printf '%s' "chore(deps): bump vite to 8.3.0" > "$BATS_TEST_TMPDIR/pr-title"
-  install_pr_files "package.json" "pnpm-lock.yaml"
   head_sha=$(git -C "$SANDBOX" rev-parse HEAD)
   tree=$(current_tree)
   frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
+  cases=0
 
-  run_shell_member_handshake
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: posted GAIA-Audit success $(git -C "$SANDBOX" rev-parse --short HEAD)" ]
-  grep -qF -- "statuses/${head_sha}" "$POST_LOG"
-  grep -qF -- "state=success" "$POST_LOG"
-  grep -qF -- "description=1.2.3 ${frontend_digest} ${tree}" "$POST_LOG"
-}
-
-@test "chore(deps) waiver: a non-dep-bump title leaves frontend pending" {
-  install_gh_mock ok
-  install_resolver
-  install_chore_deps_predicate
-  commit_mixed_diff
-  printf '%s' "fix(cli): raise shared pins" > "$BATS_TEST_TMPDIR/pr-title"
-  install_pr_files "package.json"
-
-  run_shell_member_handshake
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: members pending code-audit-frontend" ]
-  [ ! -f "$POST_LOG" ]
-}
-
-@test "chore(deps) waiver: a dep-bump title whose PR changes apps/web/app/x.ts leaves frontend pending" {
-  install_gh_mock ok
-  install_resolver
-  install_chore_deps_predicate
-  commit_mixed_diff
-  printf '%s' "chore(deps): bump vite to 8.3.0" > "$BATS_TEST_TMPDIR/pr-title"
-  install_pr_files "package.json" "apps/web/app/x.ts"
-
-  run_shell_member_handshake
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: members pending code-audit-frontend" ]
-  [ ! -f "$POST_LOG" ]
-}
-
-@test "chore(deps) waiver: an empty file list leaves frontend pending" {
-  install_gh_mock ok
-  install_resolver
-  install_chore_deps_predicate
-  commit_mixed_diff
-  printf '%s' "chore(deps): bump vite to 8.3.0" > "$BATS_TEST_TMPDIR/pr-title"
-
-  run_shell_member_handshake
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: members pending code-audit-frontend" ]
-  [ ! -f "$POST_LOG" ]
-}
-
-@test "chore(deps) waiver: waives frontend only, so an unmarked co-dispatched member stays pending" {
-  install_gh_mock ok
-  install_resolver
-  install_chore_deps_predicate
-  commit_mixed_diff
-  printf '%s' "chore(deps): bump vite to 8.3.0" > "$BATS_TEST_TMPDIR/pr-title"
-  install_pr_files "package.json" "pnpm-lock.yaml"
-  # Frontend holds its own marker and shell holds none. Only a waiver widened
-  # past frontend would clear shell here, so this is what pins it to frontend.
-  frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
-  mkdir -p "$SANDBOX/.gaia/local/audit"
-  caller=".gaia/local/audit/${frontend_digest}.ok"
-  write_body "$SANDBOX/$caller" code-audit-frontend
-
-  run run_helper "$caller"
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: members pending code-audit-maintainer-shell" ]
-  [ ! -f "$POST_LOG" ]
-}
-
-@test "chore(deps) waiver: an unreadable PR title fails closed and leaves frontend pending" {
-  install_gh_mock ok
-  install_resolver
-  install_chore_deps_predicate
-  commit_mixed_diff
-
-  run_shell_member_handshake
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: members pending code-audit-frontend" ]
-  [ ! -f "$POST_LOG" ]
-}
-
-@test "chore(deps) waiver: a files line does not fold into the title (pr_title is line 2 only)" {
-  install_gh_mock ok
-  install_resolver
-  install_chore_deps_predicate
-  commit_mixed_diff
-  printf '%s' "fix(cli): raise shared pins" > "$BATS_TEST_TMPDIR/pr-title"
-  install_pr_files "package.json" "pnpm-lock.yaml"
-
-  run_shell_member_handshake
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: members pending code-audit-frontend" ]
-  [ ! -f "$POST_LOG" ]
-}
-
-@test "chore(deps) waiver: a frontend refusal keeps frontend pending under a dep-bump title" {
-  install_gh_mock ok
-  install_resolver
-  install_chore_deps_predicate
-  commit_mixed_diff
-  printf '%s' "chore(deps): bump vite to 8.3.0" > "$BATS_TEST_TMPDIR/pr-title"
-  install_pr_files "package.json" "pnpm-lock.yaml"
-  frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
-  write_refusal_body "$SANDBOX/.gaia/local/audit/${frontend_digest}.refused" code-audit-frontend
-
-  run_shell_member_handshake
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: members pending code-audit-frontend" ]
-  [ ! -f "$POST_LOG" ]
+  while IFS='|' read -r label title files member refused expected; do
+    echo "case: $label"
+    cases=$((cases + 1))
+    reset_case
+    [ -z "$title" ] || printf '%s' "$title" > "$BATS_TEST_TMPDIR/pr-title"
+    # shellcheck disable=SC2086 # the paths column is a space-separated list
+    [ -z "$files" ] || install_pr_files $files
+    [ "$refused" = no ] || write_refusal_body "$SANDBOX/.gaia/local/audit/${frontend_digest}.refused" code-audit-frontend
+    if [ "$member" = shell ]; then
+      run_shell_member_handshake
+    else
+      # Frontend holds its own marker and shell holds none. Only a waiver
+      # widened past frontend would clear shell here.
+      caller=".gaia/local/audit/${frontend_digest}.ok"
+      write_body "$SANDBOX/$caller" code-audit-frontend
+      run run_helper "$caller"
+    fi
+    [ "$status" -eq 0 ] || return 1
+    if [ "$expected" = posted ]; then
+      [ "$output" = "status: posted GAIA-Audit success $(git -C "$SANDBOX" rev-parse --short HEAD)" ] || return 1
+      grep -qF -- "statuses/${head_sha}" "$POST_LOG" || return 1
+      grep -qF -- "state=success" "$POST_LOG" || return 1
+      grep -qF -- "description=1.2.3 ${frontend_digest} ${tree}" "$POST_LOG" || return 1
+    else
+      [ "$output" = "$expected" ] || return 1
+      [ ! -f "$POST_LOG" ] || return 1
+    fi
+  done <<<"$CHORE_DEPS_CASES"
+  [ "$cases" -eq 8 ]
 }
 
 # The order-independence the helper's header promises, and that a commit key
@@ -661,6 +578,7 @@ run_shell_member_handshake() {
 #    head.
 # -----------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "local producer: declines when the audited tree is not on the pushed head (unpushed tree-changing work)" {
   install_gh_mock ok
 
@@ -688,6 +606,7 @@ run_shell_member_handshake() {
 # worth pinning: the gh mock accepts a `statuses/<sha>` target only when the sha
 # is a fetchable commit on the bare remote, the same 422 boundary the real API
 # draws and the gap that let #726 hide.
+# bats test_tags=protected
 @test "#726: an un-pushed empty commit produces no POST; the pushed commit gets the status" {
   install_gh_mock ok
   install_resolver
@@ -776,35 +695,7 @@ run_shell_member_handshake() {
   [ "$(git -C "$SANDBOX" rev-parse "$surfaced")" = "$posted_sha" ]
 }
 
-# -----------------------------------------------------------------------------
-# Description shape: three-field "<version> <frontend-digest> <tree>", never a
-# trailing "carried" suffix. There is no carried provenance under digest
-# keying (every dispatched member's clearance is earned), so the shape is
-# fixed with no branch.
-# -----------------------------------------------------------------------------
-
-@test "an all-earned mixed diff posts the three-field description with no carried suffix" {
-  install_gh_mock ok
-  install_resolver
-  commit_mixed_diff
-
-  tree=$(current_tree)
-  frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
-  shell_digest=$(digest_of "$SANDBOX" code-audit-maintainer-shell)
-  mkdir -p "$SANDBOX/.gaia/local/audit"
-  marker=".gaia/local/audit/${frontend_digest}.ok"
-  write_body "$SANDBOX/$marker" code-audit-frontend
-  write_body "$SANDBOX/.gaia/local/audit/${shell_digest}.code-audit-maintainer-shell.ok" code-audit-maintainer-shell
-
-  run run_helper "$marker"
-  [ "$status" -eq 0 ]
-  [ -f "$POST_LOG" ]
-  grep -q "description=1.2.3 ${frontend_digest} ${tree}" "$POST_LOG"
-  # No carried token appended, and never can be (there is no carried family).
-  grep -qF -- "carried" "$POST_LOG" && return 1
-  return 0
-}
-
+# bats test_tags=protected
 @test "frontend digest unavailable (sha256 tool masked): declines fail-closed, no POST" {
   install_gh_mock ok
   digest=$(digest_of "$SANDBOX" code-audit-frontend)
@@ -891,28 +782,41 @@ build_audited_branch() {
   write_both_markers
 }
 
-@test "trusted base: a base tip that is not present locally declines naming git fetch origin, and posts no success" {
+# bats test_tags=protected
+@test "trusted base: success arm declines per unverifiable-base kind (absent tip, gh failure, multiple merge bases) naming one next step, posting no success" {
   build_audited_branch
+
+  echo "case: a base tip that is not present locally declines naming git fetch origin, and posts no success"
   refresh_stub "$ABSENT_TIP"
-
   run run_helper "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: trusted base unverified, the base tip is not present locally; next step: git fetch origin" ]
-  [ "$(logged_calls 'state=success')" = 0 ]
-}
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "status: declined: trusted base unverified, the base tip is not present locally; next step: git fetch origin" ] || return 1
+  [ "$(logged_calls 'state=success')" = 0 ] || return 1
 
-@test "trusted base: gh failing for the base lookup declines naming gh auth status, and posts no success" {
-  build_audited_branch
+  echo "case: gh failing for the base lookup declines naming gh auth status, and posts no success"
+  refresh_stub
+  : > "$GH_STUB_LOG"
   export GH_STUB_FAIL_BRANCHES=1
-
   run run_helper "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
+  unset GH_STUB_FAIL_BRANCHES
+  [ "$status" -eq 0 ] || return 1
   grep -qF -- "status: declined: trusted base unverified, " <<<"$output" || return 1
   grep -qF -- "gh failed reading the base branch tip" <<<"$output" || return 1
   grep -qF -- "next step: gh auth status" <<<"$output" || return 1
+  [ "$(logged_calls 'state=success')" = 0 ] || return 1
+
+  # Last, because the criss-cross merge changes the branch for good.
+  echo "case: more than one merge base declines naming the merge, and posts no success"
+  : > "$GH_STUB_LOG"
+  catchup_criss_cross
+  refresh_stub
+  run run_helper "$FRONTEND_MARKER"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "status: declined: trusted base unverified, more than one merge base with the base branch; next step: git merge --no-edit refs/remotes/origin/main" ] || return 1
   [ "$(logged_calls 'state=success')" = 0 ]
 }
 
+# bats test_tags=protected
 @test "trusted base: gh hanging for the base lookup declines at the deadline, leaves no process behind, and posts no success" {
   build_audited_branch
   export GH_STUB_HANG_BRANCHES=1
@@ -934,53 +838,37 @@ build_audited_branch() {
   true
 }
 
-@test "trusted base: more than one merge base declines naming the merge, and posts no success" {
-  build_audited_branch
-  catchup_criss_cross
-  refresh_stub
-
-  run run_helper "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: declined: trusted base unverified, more than one merge base with the base branch; next step: git merge --no-edit refs/remotes/origin/main" ]
-  [ "$(logged_calls 'state=success')" = 0 ]
-}
-
 # A refusal retracts an earlier success whatever the state of the base: the
 # retraction is the one post that must always be able to land.
-@test "trusted base: a refusal posts failure on HEAD after an earlier success, with the base tip absent locally" {
+# bats test_tags=protected
+@test "trusted base: a refusal still posts failure on HEAD after an earlier success, per unverifiable-base kind" {
   build_audited_branch
   frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
+  refused=".gaia/local/audit/${frontend_digest}.refused"
 
-  # The earlier success lands while the base is healthy, before the refusal.
-  run run_helper "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
-  [ "$(logged_calls 'state=success')" = 1 ]
-  write_refusal_body "$SANDBOX/.gaia/local/audit/${frontend_digest}.refused" code-audit-frontend
+  for kind in absent-tip criss-cross; do
+    echo "case: a refusal posts failure on HEAD after an earlier success, with base state $kind"
+    rm -f "$SANDBOX/$refused"
+    refresh_stub
+    : > "$GH_STUB_LOG"
+    # The earlier success lands while the base is healthy, before the refusal.
+    run run_helper "$FRONTEND_MARKER"
+    [ "$status" -eq 0 ] || return 1
+    [ "$(logged_calls 'state=success')" = 1 ] || return 1
+    write_refusal_body "$SANDBOX/$refused" code-audit-frontend
 
-  refresh_stub "$ABSENT_TIP"
-  head_sha=$(git -C "$SANDBOX" rev-parse HEAD)
-  run run_helper ".gaia/local/audit/${frontend_digest}.refused"
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: posted GAIA-Audit failure $(git -C "$SANDBOX" rev-parse --short HEAD)" ]
-  grep -F -- "statuses/${head_sha}" "$GH_STUB_LOG" | grep -qF -- "state=failure" || return 1
-}
-
-@test "trusted base: a refusal posts failure on HEAD after an earlier success, with more than one merge base" {
-  build_audited_branch
-  frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
-
-  run run_helper "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
-  [ "$(logged_calls 'state=success')" = 1 ]
-  write_refusal_body "$SANDBOX/.gaia/local/audit/${frontend_digest}.refused" code-audit-frontend
-
-  catchup_criss_cross
-  refresh_stub
-  head_sha=$(git -C "$SANDBOX" rev-parse HEAD)
-  run run_helper ".gaia/local/audit/${frontend_digest}.refused"
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: posted GAIA-Audit failure $(git -C "$SANDBOX" rev-parse --short HEAD)" ]
-  grep -F -- "statuses/${head_sha}" "$GH_STUB_LOG" | grep -qF -- "state=failure" || return 1
+    if [ "$kind" = absent-tip ]; then
+      refresh_stub "$ABSENT_TIP"
+    else
+      catchup_criss_cross
+      refresh_stub
+    fi
+    head_sha=$(git -C "$SANDBOX" rev-parse HEAD)
+    run run_helper "$refused"
+    [ "$status" -eq 0 ] || return 1
+    [ "$output" = "status: posted GAIA-Audit failure $(git -C "$SANDBOX" rev-parse --short HEAD)" ] || return 1
+    grep -F -- "statuses/${head_sha}" "$GH_STUB_LOG" | grep -qF -- "state=failure" || return 1
+  done
 }
 
 # After a remedy and with every member holding a marker for its current digest,
@@ -994,38 +882,38 @@ assert_one_success_after_remedy() {
   frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
 
   run run_helper "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || return 1
   grep -qF -- "status: posted GAIA-Audit success " <<<"$output" || return 1
-  [ "$(logged_calls 'state=success')" = 1 ]
+  [ "$(logged_calls 'state=success')" = 1 ] || return 1
   grep -qF -- "description=1.2.3 ${frontend_digest} $(current_tree)" "$GH_STUB_LOG" || return 1
 }
 
-@test "trusted base: after the base tip is fetched, one success posts with the branch-own frontend digest" {
+# bats test_tags=protected
+@test "trusted base: after each remedy (fetch, gh recovery, unique merge base) one success posts with the branch-own frontend digest" {
   build_audited_branch
+
+  echo "case: after the base tip is fetched, one success posts with the branch-own frontend digest"
+  : > "$GH_STUB_LOG"
   refresh_stub "$ABSENT_TIP"
   run run_helper "$FRONTEND_MARKER"
-  [ "$(logged_calls 'state=success')" = 0 ]
+  [ "$(logged_calls 'state=success')" = 0 ] || return 1
+  assert_one_success_after_remedy || return 1
 
-  assert_one_success_after_remedy
-}
-
-@test "trusted base: after gh recovers, one success posts with the branch-own frontend digest" {
-  build_audited_branch
+  echo "case: after gh recovers, one success posts with the branch-own frontend digest"
+  : > "$GH_STUB_LOG"
   export GH_STUB_FAIL_BRANCHES=1
   run run_helper "$FRONTEND_MARKER"
-  [ "$(logged_calls 'state=success')" = 0 ]
-
+  [ "$(logged_calls 'state=success')" = 0 ] || return 1
   unset GH_STUB_FAIL_BRANCHES
-  assert_one_success_after_remedy
-}
+  assert_one_success_after_remedy || return 1
 
-@test "trusted base: after the base is merged to make the merge base unique, one success posts with the branch-own frontend digest" {
-  build_audited_branch
+  # Last, because the criss-cross merge changes the branch for good.
+  echo "case: after the base is merged to make the merge base unique, one success posts with the branch-own frontend digest"
   catchup_criss_cross
   refresh_stub
+  : > "$GH_STUB_LOG"
   run run_helper "$FRONTEND_MARKER"
-  [ "$(logged_calls 'state=success')" = 0 ]
-
+  [ "$(logged_calls 'state=success')" = 0 ] || return 1
   catchup_merge_base
   assert_one_success_after_remedy
 }

@@ -123,37 +123,27 @@ describe('line-limit rules', () => {
     ]);
   });
 
-  test('an unusable ceilings file is an error and grandfathers nothing', () => {
+  test.each([
+    ['an unusable ceilings file', '{ not json', 'is not JSON'],
+    [
+      'a ceilings file with no ceilings object',
+      '[]\n',
+      'has no "ceilings" object',
+    ],
+    [
+      'a ceiling that is not a positive whole number',
+      ceilingsText({[SCRIPT_PATH]: '401'}),
+      'is not a positive whole number',
+    ],
+  ])('%s is an error and grandfathers nothing', (_name, ceilings, message) => {
     const project = maintainerProject({[SCRIPT_PATH]: filler(401)});
-    const files = {...project.files, [CEILINGS_PATH]: '{ not json'};
+    const files = {...project.files, [CEILINGS_PATH]: ceilings};
 
     expect(summaryOf({files})).toEqual([
       `error ${MAX} ${CEILINGS_PATH}`,
       `error ${MAX} ${SCRIPT_PATH}`,
     ]);
-    expect(findingsOf({files})[0]?.message).toContain('is not JSON');
-  });
-
-  test('a ceilings file with no ceilings object is an error', () => {
-    const project = maintainerProject({[SCRIPT_PATH]: filler(401)});
-    const files = {...project.files, [CEILINGS_PATH]: '[]\n'};
-
-    expect(findingsOf({files})[0]?.message).toContain(
-      'has no "ceilings" object'
-    );
-  });
-
-  test('a ceiling that is not a positive whole number is an error', () => {
-    const project = maintainerProject({[SCRIPT_PATH]: filler(401)});
-    const files = {
-      ...project.files,
-      [CEILINGS_PATH]: ceilingsText({[SCRIPT_PATH]: '401'}),
-    };
-
-    expect(summaryOf({files})).toEqual([
-      `error ${MAX} ${CEILINGS_PATH}`,
-      `error ${MAX} ${SCRIPT_PATH}`,
-    ]);
+    expect(findingsOf({files})[0]?.message).toContain(message);
   });
 
   test.each([

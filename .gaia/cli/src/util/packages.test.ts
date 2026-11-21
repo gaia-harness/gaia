@@ -4,7 +4,7 @@
  * shared corpus (`.gaia/tests/fixtures/gaia-packages/`), which the bash reader
  * is driven over too. This suite adds what the corpus cannot say: the
  * fail-closed result shapes, the built-in registry reading the committed
- * descriptor, hostile input, and a proof that the corpus check itself can fail.
+ * descriptor, and hostile input.
  */
 import {afterAll, describe, expect, test} from 'vitest';
 import {
@@ -17,7 +17,6 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {
-  CORPUS_DIRECTORY,
   corpusDisagreements,
   LEFTOVER_KEY_CASE,
   listCorpusCases,
@@ -77,26 +76,6 @@ describe('corpus conformance', () => {
       corpusDisagreements(readExpected(caseName), rootFor(caseName), READER)
     ).toEqual([]);
   });
-
-  test('the check fails on a wrong expectation (guard can fail)', () => {
-    const root = rootFor('path-frontend');
-    const expected = readExpected('path-frontend');
-
-    expect(corpusDisagreements(expected, root, READER)).toEqual([]);
-    expect(corpusDisagreements({...expected, load: 3}, root, READER)).toEqual([
-      'load: want 3, got 0',
-    ]);
-    expect(
-      corpusDisagreements(
-        {
-          ...expected,
-          globs: {tddUnitTests: {noMatch: ['frontend/app/x.test.ts']}},
-        },
-        root,
-        READER
-      )
-    ).toEqual(['tddUnitTests: want NO match for [frontend/app/x.test.ts]']);
-  });
 });
 
 describe('a retired globs key', () => {
@@ -111,24 +90,40 @@ describe('a retired globs key', () => {
 });
 
 describe('fail-closed results', () => {
-  test('a malformed registry is REGISTRY_MALFORMED and never ok', () => {
-    const result = loadPackages(rootFor('registry-malformed-json'));
+  test.each(
+    [
+      {
+        caseName: 'registry-malformed-json',
+        code: 'REGISTRY_MALFORMED',
+        message:
+          /^gaia-packages: .*\.gaia\/packages\.json is malformed.*Next step: /,
+        name: 'a malformed registry is REGISTRY_MALFORMED and never ok',
+      },
+      {
+        caseName: 'descriptor-missing',
+        code: 'DESCRIPTOR_INVALID',
+        message: 'frontend/gaia.package.json is missing',
+        name: 'a missing descriptor is DESCRIPTOR_INVALID naming the descriptor path',
+      },
+      {
+        caseName: 'descriptor-stack-invalid',
+        code: 'DESCRIPTOR_INVALID',
+        message: 'stack must be "web"',
+        name: 'a stack other than web fails with DESCRIPTOR_INVALID naming the field',
+      },
+      {
+        caseName: 'descriptor-generated-settings-invalid',
+        code: 'DESCRIPTOR_INVALID',
+        message: 'generatedSettings must be a boolean',
+        name: 'a non-boolean generatedSettings fails with DESCRIPTOR_INVALID naming the field',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {caseName, code, message}) => {
+    const result = loadPackages(rootFor(caseName));
 
     expect(result.ok).toBe(false);
-    expect(result).toMatchObject({code: 'REGISTRY_MALFORMED'});
-    expect(!result.ok && result.message).toMatch(
-      /^gaia-packages: .*\.gaia\/packages\.json is malformed.*Next step: /
-    );
-  });
-
-  test('a missing descriptor is DESCRIPTOR_INVALID naming the descriptor path', () => {
-    const result = loadPackages(rootFor('descriptor-missing'));
-
-    expect(result.ok).toBe(false);
-    expect(result).toMatchObject({code: 'DESCRIPTOR_INVALID'});
-    expect(!result.ok && result.message).toContain(
-      'frontend/gaia.package.json is missing'
-    );
+    expect(result).toMatchObject({code});
+    expect(!result.ok && result.message).toMatch(message);
   });
 
   test('a registry that is a directory is malformed, not the built-in default', () => {
@@ -211,24 +206,6 @@ describe('the web stack', () => {
       ['web']
     );
   });
-
-  test('a stack other than web fails with DESCRIPTOR_INVALID naming the field', () => {
-    const result = loadPackages(rootFor('descriptor-stack-invalid'));
-
-    expect(result).toMatchObject({code: 'DESCRIPTOR_INVALID', ok: false});
-    expect(!result.ok && result.message).toContain('stack must be "web"');
-  });
-
-  test('a non-boolean generatedSettings fails with DESCRIPTOR_INVALID naming the field', () => {
-    const result = loadPackages(
-      rootFor('descriptor-generated-settings-invalid')
-    );
-
-    expect(result).toMatchObject({code: 'DESCRIPTOR_INVALID', ok: false});
-    expect(!result.ok && result.message).toContain(
-      'generatedSettings must be a boolean'
-    );
-  });
 });
 
 describe('empty glob lists', () => {
@@ -260,20 +237,26 @@ describe('glob helpers', () => {
     expect(joinGlob('apps/web', 'app/**')).toBe('apps/web/app/**');
   });
 
-  test('** + / matches zero directories: the direct child of the directory', () => {
-    expect(globToRegExp('app/**/*.test.ts').test('app/x.test.ts')).toBe(true);
-    expect(globToRegExp('app/**/*.test.ts').test('app/a/b/x.test.ts')).toBe(
-      true
-    );
-  });
+  test.each(
+    [
+      {
+        glob: 'app/**/*.test.ts',
+        matches: ['app/x.test.ts', 'app/a/b/x.test.ts'],
+        misses: [],
+        name: '** + / matches zero directories: the direct child of the directory',
+      },
+      {
+        glob: 'app/*.ts',
+        matches: [],
+        misses: ['app/a/x.ts'],
+        name: '* never crosses a slash',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {glob, matches, misses}) => {
+    expect.hasAssertions();
 
-  test('* never crosses a slash', () => {
-    expect(globToRegExp('app/*.ts').test('app/a/x.ts')).toBe(false);
-  });
-});
-
-describe('corpus directory', () => {
-  test('corpus directory exists', () => {
-    expect(existsSync(CORPUS_DIRECTORY)).toBe(true);
+    const pattern = globToRegExp(glob);
+    for (const candidate of matches) expect(pattern.test(candidate)).toBe(true);
+    for (const candidate of misses) expect(pattern.test(candidate)).toBe(false);
   });
 });

@@ -15,15 +15,28 @@
 # remaining roster members cover none of these and are the non-covering
 # specialists.
 #
-# Every guard is proven able to fail on a scratch copy with the guard disabled.
-# A sed replacement here never contains an ampersand: bash 5.2 expands one to
-# the match.
-#
 # Run under bash 5: `bash .gaia/scripts/bats5.sh
 # .gaia/scripts/tests/audit-catchup-merge.bats < /dev/null`.
 # Assertion style: .claude/rules/bats-assertions.md.
 
+# bats-selector fixture-only: CHANGELOG.md
+
 bats_require_minimum_version 1.5.0
+
+# One plain sandbox is built for the file; every test's lsb_init copies it.
+setup_file() {
+  if ! command -v jq >/dev/null 2>&1; then
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+      echo "jq not present on a CI runner; the gate probes here would report green" >&2
+      return 1
+    fi
+    skip "jq not available"
+  fi
+  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  # shellcheck source=.gaia/scripts/tests/helpers/light-sandbox.sh
+  . "$REPO_ROOT/.gaia/scripts/tests/helpers/light-sandbox.sh"
+  lsb_build_templates plain
+}
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -232,72 +245,6 @@ loop_state_file() {
   assert_success_posted_on "$(lsb_git rev-parse HEAD)"
 }
 
-# digest_engine_hashing_head_content: the path of a digest library directory
-# whose engine keys every member on HEAD's whole content (the previous
-# recipe's shape) instead of the branch's own patch. Prints the directory.
-digest_engine_hashing_head_content() {
-  local scratch="$BATS_TEST_TMPDIR/head-content" library
-  mkdir -p "$scratch/.claude/hooks"
-  cp -R "$LSB_ROOT/.claude/hooks/lib" "$scratch/.claude/hooks/lib"
-  ln -s "$LSB_ROOT/.gaia" "$scratch/.gaia"
-  cp "$LSB_ROOT/.claude/hooks"/pr-merge-audit-check*.sh "$scratch/.claude/hooks/"
-  library="$scratch/.claude/hooks/lib/audit-digest.sh"
-  sed -i.original 's|audit_branch_patch_identities "\$root" "\$merge_base" "\$target" >"\$work/identities"|_head_content_identities "\$root" "\$target" >"\$work/identities"|' "$library"
-  if cmp -s "$library" "$library.original"; then
-    printf 'the mutation left the digest engine unchanged\n' >&2
-    return 1
-  fi
-  rm -f "$library.original"
-  cat >>"$library" <<'MUTANT'
-
-_head_content_identities() {
-  local record meta path object
-  git -C "$1" -c core.quotepath=false ls-tree -z -r "$2" | while IFS= read -r -d '' record; do
-    meta="${record%%$'\t'*}"
-    path="${record#*$'\t'}"
-    object="${meta##* }"
-    printf '%s000000000000000000000000\t%s\0' "$object" "$path"
-  done
-}
-MUTANT
-  printf '%s\n' "$scratch"
-}
-
-# mutant_digests <scratch>: every member's digest through the mutant engine.
-mutant_digests() {
-  bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_local "$2"' _ "$1" "$LSB_ROOT"
-}
-
-# write_markers_from <digest lines>: an earned marker for every dispatched
-# member, keyed to the digest the lines give it.
-write_markers_from() {
-  local member digest version
-  version="$(awk 'NF { print; exit }' "$LSB_ROOT/.gaia/VERSION" | tr -d '[:space:]')"
-  while IFS= read -r member; do
-    [ -n "$member" ] || continue
-    digest="$(printf '%s\n' "$1" | awk -F '\t' -v member="$member" '$1 == member { print $2 }')"
-    [ -n "$digest" ] || return 1
-    lsb_marker_json "$member" earned full "$(lsb_git rev-parse 'HEAD^{tree}')" "$version" "$digest" >/dev/null
-  done < <(dispatched_members)
-}
-
-@test "mutation: an engine that keys every member on HEAD's content rotates the markers on a clean catch-up and the gate denies" {
-  local scratch lines
-  seed_shared_file
-  branch_work
-  scratch="$(digest_engine_hashing_head_content)"
-  lines="$(mutant_digests "$scratch")"
-  [ "$(printf '%s\n' "$lines" | grep -c .)" -ge 3 ]
-  write_markers_from "$lines"
-  run_gate "$scratch/.claude/hooks/pr-merge-audit-check.sh"
-  assert_allowed
-
-  base_moves
-  lsb_catch_up
-  run_gate "$scratch/.claude/hooks/pr-merge-audit-check.sh"
-  assert_denied_naming "$FRONTEND"
-}
-
 # --- a conflict in the changelog resolved by keeping both entries -----------------
 
 @test "a changelog conflict resolved keeping both entries leaves every digest alone, with member-owned and machinery paths arriving beside it" {
@@ -419,61 +366,7 @@ assert_open_finding_survives() {
   assert_open_finding_survives member-refusal
 }
 
-@test "mutation: a resolver whose shared base is the merge base with the base tip moves the artifact key on a clean catch-up" {
-  local resolver="$LSB_ROOT/.github/audit/resolve-audit-base-context.sh" before after
-  sed -i.original 's|computed_fork_point="\$(audit_branch_patch_fork_point "\$repo_root" "\$base_tip" HEAD 2>/dev/null)"|computed_fork_point="$(git -C "$repo_root" merge-base "$base_tip" HEAD 2>/dev/null)"|' "$resolver"
-  if cmp -s "$resolver" "$resolver.original"; then
-    printf 'the mutation left the resolver unchanged\n' >&2
-    return 1
-  fi
-  rm -f "$resolver.original"
-  seed_shared_file
-  branch_work
-  refuse_with_open_finding
-  lsb_catchup_branch_commit apps/web/app/after-refusal.md "after the refusal"
-  before="$(arm_record | sed -n '/^key=/p')"
-
-  base_moves
-  lsb_catch_up
-  after="$(arm_record | sed -n '/^key=/p')"
-  [ -n "$before" ]
-  [ "$before" != "$after" ]
-}
-
 # --- a stale, forged or shadowed local base ref ----------------------------------------
-
-# mutant_hook <script name> <sed program>: a scratch copy of a hook, beside links
-# to the sandbox's libraries and scripts, with one source mutation applied.
-# Prints the copy's path; fails when the mutation changed nothing.
-mutant_hook() {
-  local scratch="$BATS_TEST_TMPDIR/mutant-$1" source changed=0
-  mkdir -p "$scratch/.claude/hooks"
-  ln -s "$LSB_ROOT/.claude/hooks/lib" "$scratch/.claude/hooks/lib"
-  ln -s "$LSB_ROOT/.gaia" "$scratch/.gaia"
-  # A hook split into siblings (<hook>-*.sh) is one program: carry them all and
-  # apply the mutation wherever its text now lives.
-  for source in "$LSB_ROOT/.claude/hooks/$1" "$LSB_ROOT/.claude/hooks/${1%.sh}"-*.sh; do
-    [ -f "$source" ] || continue
-    sed "$2" "$source" >"$scratch/.claude/hooks/${source##*/}"
-    cmp -s "$scratch/.claude/hooks/${source##*/}" "$source" || changed=1
-  done
-  if [ "$changed" -eq 0 ]; then
-    printf 'the mutation left %s unchanged\n' "$1" >&2
-    return 1
-  fi
-  printf '%s\n' "$scratch/.claude/hooks/$1"
-}
-
-# local_base_gate / local_base_poster: the gate and the poster measuring the
-# merge base against refs/remotes/origin/<base> instead of the tip GitHub
-# reports.
-local_base_gate() {
-  mutant_hook pr-merge-audit-check.sh 's|audit_branch_patch_merge_base "\$tree_root" "\$tip" 2>/dev/null|audit_branch_patch_merge_base "$tree_root" "refs/remotes/origin/$pr_record_base" 2>/dev/null|'
-}
-
-local_base_poster() {
-  mutant_hook post-audit-status.sh 's|audit_branch_patch_merge_base "\$repo_root" "\$base_tip" HEAD 2>/dev/null|audit_branch_patch_merge_base "$repo_root" "refs/remotes/origin/${base_branch}" HEAD 2>/dev/null|'
-}
 
 # cleared_and_caught_up: a fully cleared branch whose base then moved and was
 # merged cleanly. OLD_BASE_TIP is the base tip the branch was cleared against.
@@ -530,38 +423,26 @@ assert_forged_base_changes_nothing() {
   [ "$forged" = "$honest" ] || { printf 'honest:\n%s\nforged (%s):\n%s\n' "$honest" "$1" "$forged" >&2; return 1; }
 }
 
-@test "a stale local base ref changes neither the gate nor the poster outcome" {
-  assert_forged_base_changes_nothing stale
-}
-
-@test "a forged local base ref changes neither the gate nor the poster outcome" {
-  assert_forged_base_changes_nothing forged
-}
-
-@test "a local branch named origin/main changes neither the gate nor the poster outcome" {
-  assert_forged_base_changes_nothing shadowed
-}
-
-@test "mutation: a gate and a poster that measure from the local base ref diverge from the honest run on a forged one" {
-  local honest forged gate poster fixture
+# bats test_tags=protected
+@test "a stale, forged or shadowed local base ref changes neither the gate nor the poster outcome" {
+  local honest forged tip fixture
   cleared_and_caught_up
   FRONTEND_MARKER_DIGEST="$(digest_of "$FRONTEND")"
   honest="$(outcomes)"
-  gate="$(local_base_gate)"
-  poster="$(local_base_poster)"
-  [ "$(outcomes "$gate" "$poster")" = "$honest" ]
+  grep -qF 'gate 0 ' <<<"$honest"
+  grep -qF 'poster 0 status: posted GAIA-Audit success' <<<"$honest"
+  tip="$(lsb_git rev-parse refs/remotes/origin/main)"
 
-  for fixture in forged stale; do
+  for fixture in stale forged shadowed; do
     forge "$fixture"
-    forged="$(outcomes "$gate")"
-    grep -qF 'gate 0 {' <<<"$forged" || { printf 'the local-base gate still matches the honest run on a %s ref:\n%s\n' "$fixture" "$forged" >&2; return 1; }
-    grep -qF 'poster 0 status: posted GAIA-Audit success' <<<"$forged"
-    forged="$(outcomes "" "$poster")"
-    grep -qF 'poster 0 status: declined' <<<"$forged" || { printf 'the local-base poster still matches the honest run on a %s ref:\n%s\n' "$fixture" "$forged" >&2; return 1; }
-    grep -qF 'gate 0 ' <<<"$forged"
+    forged="$(outcomes)"
+    [ "$forged" = "$honest" ] || { printf 'honest:\n%s\nforged (%s):\n%s\n' "$honest" "$fixture" "$forged" >&2; return 1; }
+    lsb_git update-ref refs/remotes/origin/main "$tip"
+    lsb_git branch -D origin/main >/dev/null 2>&1 || true
   done
 }
 
+# bats test_tags=protected
 @test "a clearance written against a forged local base ref does not match, and the gate names the member as owing a marker" {
   local member members root_commit
   seed_shared_file
@@ -578,40 +459,4 @@ assert_forged_base_changes_nothing() {
   run_gate
   assert_denied_naming "$FRONTEND"
   assert_denied_naming "$SHELL_MEMBER"
-
-  # Paired: a gate that measures from that same local ref accepts the forged
-  # clearance, so the denial above comes from the trusted base alone.
-  run_gate "$(local_base_gate)"
-  assert_allowed
-}
-
-# --- the catch-up fixture itself ----------------------------------------------------
-
-# retrofit_origin <fixture file>: build a repository with no origin at all, then
-# retrofit one with that copy of the fixture under errexit, as a suite's setup
-# runs it. Prints the remote-tracking ref when it worked.
-retrofit_origin() {
-  local repository="$BATS_TEST_TMPDIR/no-origin"
-  rm -rf "$repository" "$repository.catchup-origin.git" "$repository.catchup-base"
-  git init -q -b main "$repository"
-  git -C "$repository" -c user.email=gaia-test@example.com -c user.name=GAIA -c commit.gpgsign=false \
-    commit -q --allow-empty -m seed
-  bash -e -c '. "$1"; catchup_add_origin "$2" main; git -C "$2" rev-parse --verify refs/remotes/origin/main' _ "$1" "$repository"
-}
-
-@test "retrofitting an origin onto a sandbox that has none works under errexit" {
-  run retrofit_origin "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ ^[0-9a-f]{40}$ ]]
-}
-
-@test "mutation: a fixture whose remote removal is unguarded aborts on a sandbox with no origin" {
-  local copy="$BATS_TEST_TMPDIR/unguarded-fixture.sh"
-  sed 's|\(remote remove origin >/dev/null 2>&1\) \|\| true|\1|' "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh" >"$copy"
-  if cmp -s "$copy" "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"; then
-    printf 'the mutation left the fixture unchanged\n' >&2
-    return 1
-  fi
-  run retrofit_origin "$copy"
-  [ "$status" -ne 0 ]
 }

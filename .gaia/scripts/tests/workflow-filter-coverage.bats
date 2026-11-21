@@ -73,8 +73,8 @@
 #
 # Under-reaching is the deliberate bias: a path this suite cannot see is a path it
 # says nothing about, never a path it silently blesses. The extraction-intact
-# tests in section 1 are what keep "says nothing about" from quietly becoming
-# "says nothing at all".
+# assertions inside the coverage test in section 2 are what keep "says nothing
+# about" from quietly becoming "says nothing at all".
 #
 # Hand-rolled gates (a `run:` block emitting `code=true` from its own diff scan,
 # as tests.yml does) are a different shape with no glob list to read, so they are
@@ -96,10 +96,9 @@
 # that runs this suite checks the repo out whole, so an absent path there means
 # the directory was renamed and this guard silently stopped guarding. So the CI
 # branch FAILS instead of skipping. A skip reports `ok ... # skip` and greens the
-# job, which would retire every test in this file including the section-0 gate
-# that exists to stop exactly that. Off CI the skip stands: a checkout that
-# legitimately lacks these paths is not the environment the guard is making a
-# claim about. Section 0 proves the CI branch fires.
+# job, which would retire every test in this file. Off CI the skip stands: a
+# checkout that legitimately lacks these paths is not the environment the guard
+# is making a claim about.
 require_repo_path() {
   local flag="$1" path="$2" label="$3"
   # `test` rather than `[ ]`: shellcheck parses a bracket test's operator
@@ -622,76 +621,18 @@ workflow_files() {
   done
 }
 
-# 0. This suite's own two gates. Each is a single point where a whole population
-#    of tests below can be turned off at once, and on a CI runner each has to
-#    FAIL rather than skip. Nothing else in this file would notice if either
-#    stopped: weakening one back to a bare `skip` would red nothing, and the
-#    affected tests would report `ok ... # skip` and green the job. These two
-#    tests are what make that weakening red. Neither is parser-gated itself.
-
-@test "the parser gate fails on a CI runner and still skips off CI" {
-  local shim="$BATS_TEST_TMPDIR/no-parser" exit_status
-  mkdir -p "$shim"
-  # python3 present, but its `import yaml` fails: the shape a runner takes when
-  # python3-yaml is dropped from the apt line, not one where python3 is missing
-  # outright. The shebang is absolute so the stripped PATH below cannot affect it.
-  printf '#!/bin/sh\nexit 1\n' > "$shim/python3"
-  chmod +x "$shim/python3"
-
-  # Calling the gate in a subshell is what keeps its `skip` arm from marking this
-  # test skipped -- bats' `skip` exits 0, so the subshell's status is exactly the
-  # discriminator wanted here: non-zero is the CI failure, 0 is the off-CI skip.
-  exit_status=0
-  ( PATH="$shim" GITHUB_ACTIONS=true; require_yaml_parser ) >/dev/null 2>&1 || exit_status=$?
-  [ "$exit_status" -ne 0 ] || {
-    echo "the gate skipped on a CI runner with no YAML parser; every parsing test would report green" >&2
-    return 1
-  }
-
-  exit_status=0
-  ( PATH="$shim"; unset GITHUB_ACTIONS; require_yaml_parser ) >/dev/null 2>&1 || exit_status=$?
-  [ "$exit_status" -eq 0 ] || {
-    echo "the gate failed off CI, where a missing parser must still skip" >&2
-    return 1
-  }
-}
-
-@test "the path precondition gate fails on a CI runner and still skips off CI" {
-  local exit_status
-  mkdir -p "$BATS_TEST_TMPDIR/a-dir"
-
-  # Absent by construction: $BATS_TEST_TMPDIR is created empty for this test and
-  # nothing puts `renamed-away` in it.
-  exit_status=0
-  ( GITHUB_ACTIONS=true; require_repo_path -d "$BATS_TEST_TMPDIR/renamed-away" "a renamed path" ) >/dev/null 2>&1 || exit_status=$?
-  [ "$exit_status" -ne 0 ] || {
-    echo "the gate skipped on a CI runner for an absent path; every test here would report green" >&2
-    return 1
-  }
-
-  exit_status=0
-  ( unset GITHUB_ACTIONS; require_repo_path -d "$BATS_TEST_TMPDIR/renamed-away" "a renamed path" ) >/dev/null 2>&1 || exit_status=$?
-  [ "$exit_status" -eq 0 ] || {
-    echo "the gate failed off CI, where an unsatisfied precondition must still skip" >&2
-    return 1
-  }
-
-  # Present but the wrong type. This pins the runtime flag: a gate that ignored
-  # it and asked only whether the path exists would pass this and prove nothing
-  # about the -d/-f distinction setup() relies on.
-  exit_status=0
-  ( GITHUB_ACTIONS=true; require_repo_path -f "$BATS_TEST_TMPDIR/a-dir" "a renamed path" ) >/dev/null 2>&1 || exit_status=$?
-  [ "$exit_status" -ne 0 ]
-}
-
-# 1. Extraction-intact. Every assertion below loops over what the extractor
-#    emits, so an extraction that silently goes empty turns the whole suite green
-#    having asserted nothing -- the hollow-guard failure this file exists to
-#    catch, turned on the file itself. Pin both ends: the live tree does gate
-#    steps on paths-filter outputs, and those steps do resolve literal inputs.
+# 2. The invariant itself, over the live tree. Every assertion loops over what
+#    the extractor emits, so an extraction that silently goes empty turns the
+#    whole suite green having asserted nothing -- the hollow-guard failure this
+#    file exists to catch, turned on the file itself. The test pins both ends:
+#    the live tree does gate steps on paths-filter outputs, and those steps do
+#    resolve literal inputs. Self-coverage is called out as its own case because
+#    it is the half with a distinct failure story: a gate that cannot re-run on
+#    a change to its own definition lets a weakening of the gate merge unchecked
+#    by the gate.
 
 # bats test_tags=whole-tree
-@test "the live tree still has paths-filter-gated steps to check" {
+@test "every gated step's literal inputs, its own workflow file included, are reachable by the filter gating it" {
   require_yaml_parser
   local tracked="$BATS_TEST_TMPDIR/tracked" count
   tracked_list "$tracked"
@@ -701,96 +642,46 @@ workflow_files() {
   [ -n "$files" ] || { echo ".github/workflows holds no workflow files" >&2; return 1; }
 
   # shellcheck disable=SC2086
-  run filter_coverage gated "$tracked" $files
+  run filter_coverage pairs "$tracked" $files
   [ "$status" -eq 0 ] || { echo "extractor failed: $output" >&2; return 1; }
 
   count="$(printf '%s\n' "$output" | grep -c . || true)"
   [ "$count" -gt 0 ] || {
-    echo "no paths-filter-gated steps found; every coverage assertion here would loop zero times" >&2
+    echo "case extraction: no paths-filter-gated steps found; every coverage assertion here would loop zero times" >&2
     return 1
   }
-}
-
-# bats test_tags=whole-tree
-@test "gated steps still resolve literal inputs beyond their own workflow file" {
-  require_yaml_parser
-  local tracked="$BATS_TEST_TMPDIR/tracked" count
-  tracked_list "$tracked"
-
-  local files
-  files="$(workflow_files "$WORKFLOWS_DIRECTORY")"
-
-  # shellcheck disable=SC2086
-  run filter_coverage pairs "$tracked" $files
-  [ "$status" -eq 0 ] || { echo "extractor failed: $output" >&2; return 1; }
 
   # Every gated step contributes its own workflow file, so a self-coverage-only
   # result is exactly what a broken token scan looks like: still non-empty, still
   # green, and blind to every script a step invokes.
   count="$(printf '%s\n' "$output" | awk -F'\t' '$6 !~ /^\.github\/workflows\//' | grep -c . || true)"
   [ "$count" -gt 0 ] || {
-    echo "no gated step resolved a literal input outside .github/workflows/; the token scan reads nothing" >&2
+    echo "case extraction: no gated step resolved a literal input outside .github/workflows/; the token scan reads nothing" >&2
     return 1
   }
-}
-
-# 2. The invariant itself, over the live tree.
-
-# bats test_tags=whole-tree
-@test "every gated step's literal inputs are reachable by the filter gating it" {
-  require_yaml_parser
-  local tracked="$BATS_TEST_TMPDIR/tracked"
-  tracked_list "$tracked"
-
-  local files
-  files="$(workflow_files "$WORKFLOWS_DIRECTORY")"
-
-  # shellcheck disable=SC2086
-  run filter_coverage pairs "$tracked" $files
-  [ "$status" -eq 0 ] || { echo "extractor failed: $output" >&2; return 1; }
-
-  local unreached
-  unreached="$(printf '%s\n' "$output" | grep '^unreached' || true)"
-  if printf '%s' "$unreached" | grep -q .; then
-    {
-      echo "A gated step reads a path its own filter does not list. A pull request"
-      echo "changing only that path resolves the gate false, skips the step, and"
-      echo "reports the check green having run nothing. Add the path to the filter,"
-      echo "or narrow the gate."
-      echo
-      printf '%s\n' "$unreached" | awk -F'\t' '{printf "  %s [%s] step %s\n    gate %s does not reach %s\n", $2, $3, $4, $5, $6}'
-    } >&2
-    return 1
-  fi
-}
-
-# 3. Self-coverage, called out separately from section 2 because it is the half
-#    with a distinct failure story: a gate that cannot re-run on a change to its
-#    own definition lets a weakening of the gate merge unchecked by the gate. It
-#    is the property shell-lint.yml and audit-ci-tests.yml both record by hand
-#    today, in comments, with nothing enforcing it.
-
-# bats test_tags=whole-tree
-@test "every gated step's filter reaches its own workflow file" {
-  require_yaml_parser
-  local tracked="$BATS_TEST_TMPDIR/tracked"
-  tracked_list "$tracked"
-
-  local files
-  files="$(workflow_files "$WORKFLOWS_DIRECTORY")"
-
-  # shellcheck disable=SC2086
-  run filter_coverage pairs "$tracked" $files
-  [ "$status" -eq 0 ] || { echo "extractor failed: $output" >&2; return 1; }
 
   local blind
   blind="$(printf '%s\n' "$output" | awk -F'\t' '$1 == "unreached" && $6 == $2' || true)"
   if printf '%s' "$blind" | grep -q .; then
     {
-      echo "A gate does not re-run on a change to its own workflow file, so a"
+      echo "case self-coverage: A gate does not re-run on a change to its own workflow file, so a"
       echo "weakening of the gate merges unchecked by the gate."
       echo
       printf '%s\n' "$blind" | awk -F'\t' '{printf "  %s [%s] gate %s does not reach %s\n", $2, $3, $5, $6}'
+    } >&2
+    return 1
+  fi
+
+  local unreached
+  unreached="$(printf '%s\n' "$output" | grep '^unreached' || true)"
+  if printf '%s' "$unreached" | grep -q .; then
+    {
+      echo "case input reach: A gated step reads a path its own filter does not list. A pull request"
+      echo "changing only that path resolves the gate false, skips the step, and"
+      echo "reports the check green having run nothing. Add the path to the filter,"
+      echo "or narrow the gate."
+      echo
+      printf '%s\n' "$unreached" | awk -F'\t' '{printf "  %s [%s] step %s\n    gate %s does not reach %s\n", $2, $3, $4, $5, $6}'
     } >&2
     return 1
   fi
@@ -881,9 +772,17 @@ write_fixture() {
   } > "$directory/.github/workflows/fixture.yml"
 }
 
-@test "negative: a gated step reading a path its filter omits is caught" {
+# Each fixture below is the smallest workflow that exhibits one failure shape,
+# graded by the extractor's reach rows.
+# The plan-derived rule: a plan step gated on `code || scoped` arms a step that
+# reads a script only `scoped` lists, because either output alone runs the plan;
+# the same script read by a step gated on `code && scoped` is unreached, because
+# a change to it arms one output and the conjunction needs both.
+@test "filter_coverage pairs grades fixtures: omitted path, blind own file, undeclared filter name, comment not an input, plan-derived OR vs conjunction" {
   require_yaml_parser
-  local directory="$BATS_TEST_TMPDIR/sb"
+  local directory
+  echo "case: an omitted path"
+  directory="$BATS_TEST_TMPDIR/sb1"
   write_fixture "$directory" "'.github/workflows/fixture.yml'" "bash scripts/guard.sh"
   printf '%s\n' ".github/workflows/fixture.yml" "scripts/guard.sh" > "$directory/tracked"
 
@@ -900,11 +799,9 @@ write_fixture() {
     echo "the guard reported a listed path as unreached; it reds on everything" >&2
     return 1
   }
-}
 
-@test "negative: a filter blind to its own workflow file is caught" {
-  require_yaml_parser
-  local directory="$BATS_TEST_TMPDIR/sb"
+  echo "case: a filter blind to its own workflow file"
+  directory="$BATS_TEST_TMPDIR/sb2"
   write_fixture "$directory" "'scripts/guard.sh'" "bash scripts/guard.sh"
   printf '%s\n' ".github/workflows/fixture.yml" "scripts/guard.sh" > "$directory/tracked"
 
@@ -915,11 +812,9 @@ write_fixture() {
     echo "the guard did not report the self-coverage gap" >&2
     return 1
   }
-}
 
-@test "negative: a step gated on a filter name the filter never declares is caught" {
-  require_yaml_parser
-  local directory="$BATS_TEST_TMPDIR/sb"
+  echo "case: an undeclared filter name"
+  directory="$BATS_TEST_TMPDIR/sb3"
   mkdir -p "$directory/.github/workflows"
   # `code:` is declared; the step gates on `shell:`, which is always empty, so the
   # step never runs at all.
@@ -950,11 +845,9 @@ YAML
     echo "a step gated on an undeclared filter name reported clean" >&2
     return 1
   }
-}
 
-@test "negative: a run-body comment naming a path does not count as an input" {
-  require_yaml_parser
-  local directory="$BATS_TEST_TMPDIR/sb"
+  echo "case: a run-body comment is not an input"
+  directory="$BATS_TEST_TMPDIR/sb4"
   mkdir -p "$directory/.github/workflows"
   cat > "$directory/.github/workflows/fixture.yml" <<'YAML'
 name: Fixture
@@ -985,182 +878,9 @@ YAML
     echo "a path named only in a comment was counted as an input; the guard reds on prose" >&2
     return 1
   }
-  # An explicit `true` rather than `return 0`: shellcheck reads the `return` as
-  # ending the file's reachable flow and reports every following `@test` body as
-  # unreachable (SC2317). This is also the spelling .claude/rules/bats-assertions.md
-  # prescribes for closing a test whose last assertion is the `<bad-case> && return 1`
-  # form.
-  true
-}
 
-@test "negative: a hand-rolled id: filter gate is reported, a descriptive id is not" {
-  require_yaml_parser
-  local directory="$BATS_TEST_TMPDIR/sb"
-  mkdir -p "$directory/.github/workflows"
-  : > "$directory/tracked"
-  # `filter` emits its output from a `run:` block, so there is no glob list to
-  # read; `chore-deps` is the shape every workflow here uses for a gate that was
-  # never about changed paths, and must stay out of the report.
-  cat > "$directory/.github/workflows/fixture.yml" <<'YAML'
-name: Fixture
-on:
-  pull_request:
-jobs:
-  fixture:
-    runs-on: ubuntu-latest
-    steps:
-      - id: chore-deps
-        run: echo "skip=false" >> "$GITHUB_OUTPUT"
-      - id: filter
-        run: echo "code=true" >> "$GITHUB_OUTPUT"
-      - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
-        name: Gated step
-        run: bash scripts/guard.sh
-YAML
-
-  run filter_coverage handrolled "$directory/tracked" "$directory/.github/workflows/fixture.yml"
-  [ "$status" -eq 0 ] || { echo "extractor failed: $output" >&2; return 1; }
-
-  [ "$output" = ".github/workflows/fixture.yml" ] || {
-    echo "expected exactly the fixture reported once, got: ${output}" >&2
-    return 1
-  }
-}
-
-@test "negative: an unparseable or job-less workflow fails the extractor" {
-  require_yaml_parser
-  local directory="$BATS_TEST_TMPDIR/sb"
-  mkdir -p "$directory"
-  : > "$directory/tracked"
-
-  printf 'name: Broken\njobs:\n  - this: is not a mapping\n   bad indent\n' > "$directory/unparseable.yml"
-  run filter_coverage pairs "$directory/tracked" "$directory/unparseable.yml"
-  [ "$status" -eq 2 ] || {
-    echo "an unparseable workflow exited ${status}; empty output would read as clean" >&2
-    return 1
-  }
-
-  printf 'name: No jobs\non:\n  pull_request:\n' > "$directory/jobless.yml"
-  run filter_coverage pairs "$directory/tracked" "$directory/jobless.yml"
-  [ "$status" -eq 2 ]
-}
-
-@test "negative: the glob translator honors picomatch separator semantics" {
-  require_yaml_parser
-
-  # `**/` matches zero segments, so a root-level file is reached.
-  run filter_coverage glob '**/*.sh' 'x.sh'
-  [ "$output" = "match" ] || { echo "'**/*.sh' missed a root-level x.sh" >&2; return 1; }
-
-  run filter_coverage glob '**/*.sh' 'a/b/x.sh'
-  [ "$output" = "match" ] || { echo "'**/*.sh' missed a nested x.sh" >&2; return 1; }
-
-  # `*` does not cross a separator, so a prefix glob cannot bless a nested path.
-  run filter_coverage glob 'tsconfig*.json' 'a/tsconfig.json'
-  [ "$output" = "no-match" ] || { echo "'*' crossed a directory separator" >&2; return 1; }
-
-  run filter_coverage glob 'tsconfig*.json' 'tsconfig.node.json'
-  [ "$output" = "match" ] || { echo "'tsconfig*.json' missed tsconfig.node.json" >&2; return 1; }
-
-  # A `dir/**` glob covers what is inside the directory, not the directory entry
-  # itself. Getting this wrong is what would let a bare `.gaia/cli` token read as
-  # covered, which is why the token scan counts files rather than directories.
-  run filter_coverage glob '.gaia/cli/**' '.gaia/cli/src/index.ts'
-  [ "$output" = "match" ] || { echo "'.gaia/cli/**' missed a nested file" >&2; return 1; }
-
-  run filter_coverage glob '.gaia/cli/**' '.gaia/clip/x.ts'
-  [ "$output" = "no-match" ] || { echo "'.gaia/cli/**' matched a sibling directory prefix" >&2; return 1; }
-
-  # A literal entry is exactly itself.
-  run filter_coverage glob 'package.json' '.gaia/cli/package.json'
-  [ "$output" = "no-match" ]
-}
-
-@test "negative: glob syntax the translator cannot decide fails closed, not open" {
-  require_yaml_parser
-
-  # A negation SUBTRACTS from a filter's reach. Flattened to literals it would
-  # match nothing, the positive entries would carry the verdict alone, and a path
-  # the filter does not reach would report `ok` -- the one direction this guard
-  # must never fail in.
-  run filter_coverage glob '!vendor/**' 'vendor/x.sh'
-  [ "$status" -eq 2 ] || {
-    echo "a negation glob exited ${status}; it must fail closed, not silently match nothing" >&2
-    return 1
-  }
-
-  # Brace expansion, an extglob, and a character class each stand for a set the
-  # translator would flatten the same way.
-  run filter_coverage glob 'src/{a,b}/**' 'src/a/x.ts'
-  [ "$status" -eq 2 ] || { echo "brace expansion did not fail closed" >&2; return 1; }
-
-  run filter_coverage glob 'src/@(a|b).ts' 'src/a.ts'
-  [ "$status" -eq 2 ] || { echo "an extglob did not fail closed" >&2; return 1; }
-
-  run filter_coverage glob 'src/[ab].ts' 'src/a.ts'
-  [ "$status" -eq 2 ] || { echo "a character class did not fail closed" >&2; return 1; }
-
-  # A `**` that is not a whole segment degrades to `*` in picomatch and does not
-  # cross `/`. Translating it to `.*` would bless a nested path the filter never
-  # reaches, the same false-bless direction as a negation.
-  run filter_coverage glob 'a**b.ts' 'a/z/b.ts'
-  [ "$status" -eq 2 ] || {
-    echo "a non-segment ** exited ${status}; it must fail closed, not over-reach across /" >&2
-    return 1
-  }
-
-  run filter_coverage glob 'src/**.ts' 'src/a/b.ts'
-  [ "$status" -eq 2 ] || { echo "a trailing non-segment ** did not fail closed" >&2; return 1; }
-
-  # The refusal must be narrow: every shape the live filters actually use still
-  # decides. A guard that failed closed on ordinary globs would red the tree.
-  run filter_coverage glob '.github/actions/**' '.github/actions/gaia-setup-node/action.yml'
-  [ "$status" -eq 0 ] || { echo "a supported glob was refused; the check is too broad" >&2; return 1; }
-  [ "$output" = "match" ]
-}
-
-@test "negative: a step gated on a plan output whose plan step no filter gates is caught" {
-  require_yaml_parser
-  local directory="$BATS_TEST_TMPDIR/sb"
-  mkdir -p "$directory/.github/workflows"
-  : > "$directory/tracked"
-  cat > "$directory/.github/workflows/fixture.yml" <<'YAML'
-name: Fixture
-on:
-  pull_request:
-jobs:
-  fixture:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: dorny/paths-filter@v4
-        id: filter
-        with:
-          filters: |
-            code:
-              - '.github/workflows/fixture.yml'
-      - id: selection
-        run: bash .gaia/tests/bats-shards.sh plan lib --full >> "$GITHUB_OUTPUT"
-      - if: steps.selection.outputs.mode == 'full'
-        name: Gated step
-        run: bash scripts/guard.sh
-YAML
-
-  run filter_coverage handrolled "$directory/tracked" "$directory/.github/workflows/fixture.yml"
-  [ "$status" -eq 0 ] || { echo "extractor failed: $output" >&2; return 1; }
-  [ "$output" = ".github/workflows/fixture.yml" ] || {
-    echo "a plan step gated on no filter output was not reported, got: ${output}" >&2
-    return 1
-  }
-}
-
-# The selection derivation and the OR rule, each against the shape it must
-# refuse. A plan step gated on `code || scoped` arms a step that reads a script
-# only `scoped` lists, because either output alone runs the plan; the same
-# script read by a step gated on `code && scoped` is unreached, because a
-# change to it arms one output and the conjunction needs both.
-@test "negative: a plan-derived OR gate is reached by either output, a conjunction only by both" {
-  require_yaml_parser
-  local directory="$BATS_TEST_TMPDIR/sb"
+  echo "case: a plan-derived OR gate versus a conjunction"
+  directory="$BATS_TEST_TMPDIR/sb5"
   mkdir -p "$directory/.github/workflows"
   printf '%s\n' ".github/workflows/fixture.yml" "scripts/guard.sh" > "$directory/tracked"
   cat > "$directory/.github/workflows/fixture.yml" <<'YAML'
@@ -1203,6 +923,163 @@ YAML
     printf '%s\n' "$output" >&2
     return 1
   }
+}
+
+@test "filter_coverage handrolled reports a hand-rolled id: filter gate and an ungated plan step, not a descriptive id" {
+  require_yaml_parser
+  local directory
+  echo "case: a hand-rolled id: filter gate is reported, a descriptive id is not"
+  directory="$BATS_TEST_TMPDIR/sb7"
+  mkdir -p "$directory/.github/workflows"
+  : > "$directory/tracked"
+  # `filter` emits its output from a `run:` block, so there is no glob list to
+  # read; `chore-deps` is the shape every workflow here uses for a gate that was
+  # never about changed paths, and must stay out of the report.
+  cat > "$directory/.github/workflows/fixture.yml" <<'YAML'
+name: Fixture
+on:
+  pull_request:
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - id: chore-deps
+        run: echo "skip=false" >> "$GITHUB_OUTPUT"
+      - id: filter
+        run: echo "code=true" >> "$GITHUB_OUTPUT"
+      - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
+        name: Gated step
+        run: bash scripts/guard.sh
+YAML
+
+  run filter_coverage handrolled "$directory/tracked" "$directory/.github/workflows/fixture.yml"
+  [ "$status" -eq 0 ] || { echo "extractor failed: $output" >&2; return 1; }
+
+  [ "$output" = ".github/workflows/fixture.yml" ] || {
+    echo "expected exactly the fixture reported once, got: ${output}" >&2
+    return 1
+  }
+
+  echo "case: a plan step no filter gates is reported"
+  directory="$BATS_TEST_TMPDIR/sb8"
+  mkdir -p "$directory/.github/workflows"
+  : > "$directory/tracked"
+  cat > "$directory/.github/workflows/fixture.yml" <<'YAML'
+name: Fixture
+on:
+  pull_request:
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            code:
+              - '.github/workflows/fixture.yml'
+      - id: selection
+        run: bash .gaia/tests/bats-shards.sh plan lib --full >> "$GITHUB_OUTPUT"
+      - if: steps.selection.outputs.mode == 'full'
+        name: Gated step
+        run: bash scripts/guard.sh
+YAML
+
+  run filter_coverage handrolled "$directory/tracked" "$directory/.github/workflows/fixture.yml"
+  [ "$status" -eq 0 ] || { echo "extractor failed: $output" >&2; return 1; }
+  [ "$output" = ".github/workflows/fixture.yml" ] || {
+    echo "a plan step gated on no filter output was not reported, got: ${output}" >&2
+    return 1
+  }
+}
+
+@test "negative: an unparseable or job-less workflow fails the extractor" {
+  require_yaml_parser
+  local directory="$BATS_TEST_TMPDIR/sb"
+  mkdir -p "$directory"
+  : > "$directory/tracked"
+
+  printf 'name: Broken\njobs:\n  - this: is not a mapping\n   bad indent\n' > "$directory/unparseable.yml"
+  run filter_coverage pairs "$directory/tracked" "$directory/unparseable.yml"
+  [ "$status" -eq 2 ] || {
+    echo "an unparseable workflow exited ${status}; empty output would read as clean" >&2
+    return 1
+  }
+
+  printf 'name: No jobs\non:\n  pull_request:\n' > "$directory/jobless.yml"
+  run filter_coverage pairs "$directory/tracked" "$directory/jobless.yml"
+  [ "$status" -eq 2 ]
+}
+
+@test "filter_coverage glob follows picomatch semantics and fails closed on undecidable syntax" {
+  require_yaml_parser
+  echo "case: picomatch separator semantics"
+  # `**/` matches zero segments, so a root-level file is reached.
+  run filter_coverage glob '**/*.sh' 'x.sh'
+  [ "$output" = "match" ] || { echo "'**/*.sh' missed a root-level x.sh" >&2; return 1; }
+
+  run filter_coverage glob '**/*.sh' 'a/b/x.sh'
+  [ "$output" = "match" ] || { echo "'**/*.sh' missed a nested x.sh" >&2; return 1; }
+
+  # `*` does not cross a separator, so a prefix glob cannot bless a nested path.
+  run filter_coverage glob 'tsconfig*.json' 'a/tsconfig.json'
+  [ "$output" = "no-match" ] || { echo "'*' crossed a directory separator" >&2; return 1; }
+
+  run filter_coverage glob 'tsconfig*.json' 'tsconfig.node.json'
+  [ "$output" = "match" ] || { echo "'tsconfig*.json' missed tsconfig.node.json" >&2; return 1; }
+
+  # A `dir/**` glob covers what is inside the directory, not the directory entry
+  # itself. Getting this wrong is what would let a bare `.gaia/cli` token read as
+  # covered, which is why the token scan counts files rather than directories.
+  run filter_coverage glob '.gaia/cli/**' '.gaia/cli/src/index.ts'
+  [ "$output" = "match" ] || { echo "'.gaia/cli/**' missed a nested file" >&2; return 1; }
+
+  run filter_coverage glob '.gaia/cli/**' '.gaia/clip/x.ts'
+  [ "$output" = "no-match" ] || { echo "'.gaia/cli/**' matched a sibling directory prefix" >&2; return 1; }
+
+  # A literal entry is exactly itself.
+  run filter_coverage glob 'package.json' '.gaia/cli/package.json'
+  [ "$output" = "no-match" ]
+
+  echo "case: undecidable syntax fails closed"
+  # A negation SUBTRACTS from a filter's reach. Flattened to literals it would
+  # match nothing, the positive entries would carry the verdict alone, and a path
+  # the filter does not reach would report `ok` -- the one direction this guard
+  # must never fail in.
+  run filter_coverage glob '!vendor/**' 'vendor/x.sh'
+  [ "$status" -eq 2 ] || {
+    echo "a negation glob exited ${status}; it must fail closed, not silently match nothing" >&2
+    return 1
+  }
+
+  # Brace expansion, an extglob, and a character class each stand for a set the
+  # translator would flatten the same way.
+  run filter_coverage glob 'src/{a,b}/**' 'src/a/x.ts'
+  [ "$status" -eq 2 ] || { echo "brace expansion did not fail closed" >&2; return 1; }
+
+  run filter_coverage glob 'src/@(a|b).ts' 'src/a.ts'
+  [ "$status" -eq 2 ] || { echo "an extglob did not fail closed" >&2; return 1; }
+
+  run filter_coverage glob 'src/[ab].ts' 'src/a.ts'
+  [ "$status" -eq 2 ] || { echo "a character class did not fail closed" >&2; return 1; }
+
+  # A `**` that is not a whole segment degrades to `*` in picomatch and does not
+  # cross `/`. Translating it to `.*` would bless a nested path the filter never
+  # reaches, the same false-bless direction as a negation.
+  run filter_coverage glob 'a**b.ts' 'a/z/b.ts'
+  [ "$status" -eq 2 ] || {
+    echo "a non-segment ** exited ${status}; it must fail closed, not over-reach across /" >&2
+    return 1
+  }
+
+  run filter_coverage glob 'src/**.ts' 'src/a/b.ts'
+  [ "$status" -eq 2 ] || { echo "a trailing non-segment ** did not fail closed" >&2; return 1; }
+
+  # The refusal must be narrow: every shape the live filters actually use still
+  # decides. A guard that failed closed on ordinary globs would red the tree.
+  run filter_coverage glob '.github/actions/**' '.github/actions/gaia-setup-node/action.yml'
+  [ "$status" -eq 0 ] || { echo "a supported glob was refused; the check is too broad" >&2; return 1; }
+  [ "$output" = "match" ]
 }
 
 # 6. The audit workflow's filter outputs, through the same translator. A pull
@@ -1296,17 +1173,6 @@ old_code_entries_armed() {
   old_code_entries_armed "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE"
 }
 
-# bats test_tags=whole-tree
-@test "negative: removing a moved entry from scoped leaves its sample unarmed" {
-  require_yaml_parser
-  local doctored="$BATS_TEST_TMPDIR/audit-ci-tests.yml"
-  grep -vxF -- "              - '.githooks/**'" "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" > "$doctored" || true
-  cmp -s "$doctored" "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" && { echo "the doctoring removed nothing" >&2; return 1; }
-  run old_code_entries_armed "$doctored"
-  [ "$status" -ne 0 ] || { echo "a scoped filter without .githooks/** still armed every old entry" >&2; return 1; }
-  printf '%s\n' "$output" | grep -qF -- '.githooks/**' || { echo "the gap was not named: $output" >&2; return 1; }
-}
-
 # One concrete path per glob: each wildcard segment instantiated to `x`.
 instantiate_glob() {
   printf '%s' "$1" | sed -e 's|\*\*/|x/|g' -e 's|\*\*|x|g' -e 's|\*|x|g'
@@ -1330,13 +1196,12 @@ instantiate_glob() {
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
-@test "a frontend-only change arms no leg" {
+@test "audit workflow filter outputs: frontend-only change arms nothing, install inputs arm commitlint, harness docs, hooks, CLI source and wiki pages arm scoped and not code" {
   require_yaml_parser
-  [ "$(filter_coverage filtermatch "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" code,scoped,sandbox,commitlint apps/web/app/root.tsx)" = "no-match" ]
-}
+  echo "case: a frontend-only change arms no leg"
+  [ "$(filter_coverage filtermatch "$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" code,scoped,sandbox,commitlint,protected-tests apps/web/app/root.tsx)" = "no-match" ]
 
-@test "the install inputs arm commitlint, and docs, hooks, CLI source and wiki pages are change-scoped" {
-  require_yaml_parser
+  echo "case: install inputs arm commitlint; skills, commands, agents, hooks, CLI source and wiki pages arm scoped and not code"
   local workflow="$REPO_ROOT/$AUDIT_WORKFLOW_RELATIVE" path gaps=""
   for path in pnpm-lock.yaml apps/web/package.json; do
     [ "$(filter_coverage filtermatch "$workflow" commitlint "$path")" = "match" ] || gaps="${gaps}  ${path} does not match commitlint"$'\n'
