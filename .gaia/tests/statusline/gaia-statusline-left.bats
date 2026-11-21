@@ -274,20 +274,30 @@ expect_usage_color() {
   printf '{"version":1,"context_checkpoint":{"ask_tokens":200000}}' >"$MAIN/.gaia/local/checkpoint-override.json"
   expect_band 1000000 250000 yellow none
   expect_band 1000000 300000 red none
-  echo "case: UAT-019 a lowered ask_tokens moves the red edge and leaves no yellow band"
-  printf '{"version":1,"context_checkpoint":{"ask_tokens":200000}}' >"$MAIN/.gaia/local/protected/checkpoint-override.json"
-  expect_band 1000000 199999 green none
+  local override_file="$MAIN/.gaia/local/protected/checkpoint-override.json"
+  echo "case: UAT-019 an ask_tokens at the minimum moves the red edge and keeps yellow first, with no marker"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":200000}}' >"$override_file"
+  expect_band 1000000 166665 green none
+  expect_band 1000000 166666 yellow none
   expect_band 1000000 200000 red none
-  expect_band 1000000 249999 red none
   expect_band 1000000 250000 red fire
   expect_band 1000000 300000 red skull
-  echo "case: UAT-019 an ask_tokens above the default reads as the default"
-  printf '{"version":1,"context_checkpoint":{"ask_tokens":600000}}' >"$MAIN/.gaia/local/protected/checkpoint-override.json"
+  grep -qF "⚠ override" <<<"$output" && { echo "unexpected override marker"; return 1; }
+  echo "case: UAT-019 an ask_tokens above the maximum clamps to it and shows the marker"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":600000}}' >"$override_file"
+  expect_band 1000000 299999 green none
+  expect_band 1000000 300000 yellow none
+  expect_band 1000000 400000 red none
+  grep -qF "⚠ override" <<<"$output" || { echo "no override marker"; return 1; }
+  echo "case: UAT-019 a non-integer ask_tokens reads as the default and shows the marker"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":"abc"}}' >"$override_file"
   expect_band 1000000 250000 yellow none
   expect_band 1000000 300000 red none
-  echo "case: UAT-019 a non-integer ask_tokens reads as the default"
-  printf '{"version":1,"context_checkpoint":{"ask_tokens":"abc"}}' >"$MAIN/.gaia/local/protected/checkpoint-override.json"
-  expect_band 1000000 250000 yellow none
-  expect_band 1000000 300000 red none
+  grep -qF "⚠ override" <<<"$output" || { echo "no override marker"; return 1; }
+  echo "case: an ask_tokens of 0 (checkpoint off) draws no bands at any reading"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":0}}' >"$override_file"
+  expect_band 1000000 900000 green none
+  grep -qF "⚠ override" <<<"$output" && { echo "unexpected override marker"; return 1; }
+  true
 }
 

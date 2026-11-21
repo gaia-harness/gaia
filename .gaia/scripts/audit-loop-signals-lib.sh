@@ -7,9 +7,7 @@
 #
 # Needs audit-loop-state-lib.sh and context-checkpoint-lib.sh already sourced,
 # and audit-loop-allowance-lib.sh's gaia_loop_allowed defined before this
-# file's functions run. Defines functions and the jq fragments
-# _GAIA_LOOP_STOP_DEFS_JQ and _GAIA_LOOP_SIGNALS_JQ; runs nothing at source
-# time. Bash 3.2 compatible.
+# file's functions run. Runs nothing at source time. Bash 3.2 compatible.
 #
 # The decision functions read no file: the bound hook reads the context
 # reading and computes the effective line config, then passes both in, so the
@@ -244,7 +242,9 @@ _gaia_loop_decide_unit_with_unit_rounds() {
     printf 'deny fallback %s false\n' "$eligible"
     return 0
   fi
-  if [[ $reading =~ $fresh ]]; then
+  # ask_tokens 0 turns the context line off, so a fresh reading takes the
+  # same fallback fold as no reading.
+  if [ "$tokens" -gt 0 ] && [[ $reading =~ $fresh ]]; then
     reading_tokens="${BASH_REMATCH[1]}"
     reading_window="${BASH_REMATCH[2]}"
     line="$(gaia_context_line "$reading_window" "$tokens" "$percent")" || return 2

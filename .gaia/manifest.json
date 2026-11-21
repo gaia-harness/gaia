@@ -47,6 +47,7 @@
     ".claude/hooks/capture-gh-artifact.sh": "owned",
     ".claude/hooks/context-checkpoint-inject.sh": "owned",
     ".claude/hooks/context-checkpoint-subagent.sh": "owned",
+    ".claude/hooks/context-override-session-start.sh": "owned",
     ".claude/hooks/debt-sentinel-touch.sh": "owned",
     ".claude/hooks/debt-session-reconcile.sh": "owned",
     ".claude/hooks/issue-claim-release.sh": "owned",
@@ -891,7 +892,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-21T04:05:59.201Z",
+  "generated": "2026-11-21T06:05:50.599Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

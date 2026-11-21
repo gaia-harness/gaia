@@ -75,7 +75,7 @@ gaia_statusline_left() {
   local used_percentage="${6:-}" window="${7:-}" tokens="${8:-}"
   local five_hour_percentage="${9:-}" five_hour_resets_at="${10:-}" seven_day_percentage="${11:-}" seven_day_resets_at="${12:-}" now="${13:-}"
   local escape_character=$'\033' reset=$'\033[00m' rendered="" separator=" │ " project branch effort_capitalized
-  local integer_part fraction_part used_percentage_rounded filled i bar="" color marker="" checkpoint_override ask_tokens ask_window_percent line bands
+  local integer_part fraction_part used_percentage_rounded filled i bar="" color marker="" override_marker="" override_status ask_tokens line bands
   local yellow red fire skull
   _GAIA_STATUSLINE_LEFT=""
 
@@ -121,8 +121,17 @@ gaia_statusline_left() {
       i=$((i + 1))
     done
     color="${escape_character}[01;32m"
-    if checkpoint_override=$(gaia_context_override "$root") && read -r ask_tokens ask_window_percent <<<"$checkpoint_override" &&
-      line=$(gaia_context_line "$window" "$ask_tokens" "$ask_window_percent") &&
+    # One parse serves both the line and the marker; a zero line (checkpoint
+    # off) has no bands, so the bar stays green.
+    override_status="" ask_tokens=""
+    if command -v gaia_context_override_state >/dev/null 2>&1; then
+      read -r override_status ask_tokens _ <<<"$(gaia_context_override_state "$root")"
+    fi
+    case "$override_status" in
+      clamped-low | clamped-high | invalid) override_marker=" ${escape_character}[01;33m⚠ override${reset}" ;;
+    esac
+    if [ -n "$ask_tokens" ] &&
+      line=$(gaia_context_line "$window" "$ask_tokens" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT") &&
       bands=$(gaia_context_bands "$window" "$line") && read -r yellow red fire skull <<<"$bands"; then
       if [ "$tokens" -ge "$skull" ]; then
         color="${escape_character}[01;31m"
@@ -136,7 +145,7 @@ gaia_statusline_left() {
         color="${escape_character}[01;33m"
       fi
     fi
-    rendered="${rendered:+$rendered$separator}${color}${bar}${reset} ${used_percentage_rounded}%${marker}"
+    rendered="${rendered:+$rendered$separator}${color}${bar}${reset} ${used_percentage_rounded}%${marker}${override_marker}"
   fi
 
   gaia_statusline_usage_segment "🕔" "$five_hour_percentage" "$five_hour_resets_at" "${GAIA_RATE_LIMIT_WARNING_PERCENTAGE:-}" "$now"

@@ -408,6 +408,19 @@ mark_band() {
   done
 }
 
+@test "the checkpoint off: an override ask_tokens of 0 is silent and unmarked past red; removing it emits" {
+  local override_file="$MAIN_ROOT/.gaia/local/protected/checkpoint-override.json"
+  new_session
+  mkdir -p "${override_file%/*}"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":0}}\n' >"$override_file"
+  write_reading "$RED"
+  invoke "$(payload)"
+  silent_unmarked_ok || { echo "off: not silent and unmarked"; return 1; }
+  rm "$override_file"
+  invoke "$(payload)"
+  fires_ok red "$RED" || { echo "override removed: did not emit"; return 1; }
+}
+
 @test "save path: the default branch and a detached HEAD take the session form; a feature branch takes its run folder" {
   write_reading "$RED"
   invoke "$(payload)"
@@ -620,16 +633,19 @@ mark_band() {
 }
 
 # The band values for a 1M and a 200k window at the shipped line, plus the
-# lib's token constants, as a grep -wE alternation.
+# shipped line itself, as a grep -wE alternation.
 band_value_pattern() {
-  local window line values=() pattern
+  local window line values=() pattern value
   for window in 1000000 200000; do
     line="$(gaia_context_line "$window" "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT")"
     # shellcheck disable=SC2207 # four space-separated integers
     values+=($(gaia_context_bands "$window" "$line"))
   done
-  values+=("$GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "$GAIA_CONTEXT_YELLOW_TOKENS")
-  [ "${#values[@]}" -eq 10 ] || return 1
+  values+=("$GAIA_CONTEXT_ASK_TOKENS_DEFAULT")
+  [ "${#values[@]}" -eq 9 ] || return 1
+  for value in "${values[@]}"; do
+    [[ $value =~ ^[0-9]+$ ]] || return 1
+  done
   pattern="$(IFS='|'; printf '%s' "${values[*]}")"
   printf '%s\n' "$pattern"
 }

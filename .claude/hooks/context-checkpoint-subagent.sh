@@ -21,7 +21,7 @@
 #
 # Silent for: a main-session payload (no `agent_id` key), any event other than
 # PostToolUse, a payload whose shape checks fail, an agent that did not opt in,
-# a band already marked, a missing transcript or one with no usage record
+# the checkpoint turned off by the override (no bands), a band already marked, a missing transcript or one with no usage record
 # within the widened read, and a missing or oversize doctrine file. A main
 # payload whose tool input carries an `agent_id` lookalike is silent too: the
 # raw key match can find that lookalike, so a real parse confirms the

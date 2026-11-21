@@ -1175,6 +1175,14 @@ drift_fixture() {
   done
 }
 
+# bats test_tags=protected
+@test "decision: ask_tokens 0 (checkpoint off) takes the round-count fallback, never a context allow" {
+  [ "$(gaia_loop_decide_unit "$(make_state 5)" null "$HIGH" 0 50)" = "allow fallback 6 6" ]
+  [ "$(gaia_loop_decide_unit "$(make_state 6)" null "$HIGH" 0 50)" = "deny fallback false false" ]
+  [ "$(gaia_loop_decide_unit "$(make_state 6)" null "$LOW" 0 50)" = "deny fallback false false" ]
+  [ "$(gaia_loop_decide_member "$(make_state 6)" null false "$LOW" 0 50)" = "deny fallback false false" ]
+}
+
 @test "decision: an answer to the latest checkpoint admits exactly one unit; a spent accept or an answer to an older checkpoint admits nothing" {
   local state unit_rounds checkpoint
   unit_rounds="$(UNIT_ROUNDS)"
@@ -1374,7 +1382,7 @@ grant_window_state() {
   [ "$(read_json "$(evaluate_round 3)" '.A')" = 2 ]
 }
 
-@test "legacy: a frozen checkpoint of 5 keeps 5; no frozen line config reads min(default, override)" {
+@test "legacy: a frozen checkpoint of 5 keeps 5; no frozen line config reads the override, window share at the default" {
   local settings
   settings="$(override_file)"
   [ "$(gaia_loop_allowed "$(make_state 2 '.history.knobs.checkpoint_round = 5')")" = 5 ]
@@ -1382,8 +1390,16 @@ grant_window_state() {
   [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3)")" = "300000 50" ]
   mkdir -p "${settings%/*}"
   printf '{"version":1,"context_checkpoint":{"ask_tokens":250000,"ask_window_pct":40}}\n' >"$settings"
-  [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3)")" = "250000 40" ]
-  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":250000,"ask_window_pct":40}' ]
+  [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3)")" = "250000 50" ]
+  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":250000,"ask_window_pct":50}' ]
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":600000}}\n' >"$settings"
+  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":400000,"ask_window_pct":50}' ]
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":0}}\n' >"$settings"
+  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":0,"ask_window_pct":50}' ]
+  [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3 '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}')")" = "300000 50" ]
+  [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3 '.history.context_config = {ask_tokens: 0, ask_window_pct: 50}')")" = "0 50" ]
+  rm "$settings"
+  [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3 '.history.context_config = {ask_tokens: 0, ask_window_pct: 50}')")" = "300000 50" ]
 }
 
 @test "legacy: a stored snapshot without counted_keys turns off each history signal that reads it and eligibility, and enriching still reads stored keys" {
