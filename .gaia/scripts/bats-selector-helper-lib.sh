@@ -31,7 +31,8 @@
 #
 # A suite also reaches a helper it runs by a path word (`"$HELPERS/make.sh"`)
 # when that word names a tracked shell file under a `tests/` or `helpers/`
-# directory; a word naming no such file adds nothing.
+# directory, a `fixtures/` directory excepted since a fixture is data a suite
+# stages, not a helper it runs; a word naming no such file adds nothing.
 #
 # A helper that copies by glob (`cp`, or a `for ... in` in a helper that also
 # runs `cp`, over `"$root"/dir/*.sh`) reaches every changed file the glob's tail
@@ -109,7 +110,7 @@ bats_selector_helper_suites() {
       base = last_segment(tail)
       for (index_in_base = 1; index_in_base <= by_base_count[base]; index_in_base++) {
         candidate = by_base[base, index_in_base]
-        if (helpers_only && candidate !~ /(^|\/)(tests|helpers)\//) continue
+        if (helpers_only && (candidate !~ /(^|\/)(tests|helpers)\// || candidate ~ /(^|\/)fixtures\//)) continue
         if (candidate == tail || substr(candidate, length(candidate) - length(tail)) == "/" tail) link(from, candidate)
       }
       if (base ~ /\.bash$/) {
