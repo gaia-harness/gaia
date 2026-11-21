@@ -341,6 +341,13 @@ assert_refused() {
   [ -f "$BATS_TEST_TMPDIR/o.json" ]
 }
 
+@test "schema: a frozen ask_tokens of 0 (checkpoint off) is a valid state" {
+  local state_file="$BATS_TEST_TMPDIR/off.json"
+  full_state | jq '.history.context_config.ask_tokens = 0' >"$state_file"
+  run gaia_loop_read_state "$state_file"
+  [ "$status" -eq 0 ]
+}
+
 @test "schema: a legacy state round-trips byte-identically" {
   local state_file="$BATS_TEST_TMPDIR/legacy.json" rewritten_file="$BATS_TEST_TMPDIR/out.json"
   valid_state | jq . >"$state_file"
@@ -352,7 +359,7 @@ assert_refused() {
 
 @test "schema: red states for the new fields are corrupt and refused" {
   assert_refused pct150 "$(full_state | jq -c '.history.context_config.ask_window_pct = 150')"
-  assert_refused tokens0 "$(full_state | jq -c '.history.context_config.ask_tokens = 0')"
+  assert_refused tokens-negative "$(full_state | jq -c '.history.context_config.ask_tokens = -1')"
   assert_refused magic "$(full_state | jq -c '.history.units[0].admitted_on = "magic"')"
   assert_refused inline "$(full_state | jq -c '.history.units[0].admitted_on = "inline"')"
   assert_refused noafter "$(full_state | jq -c 'del(.history.units[0].after_checkpoint)')"

@@ -119,7 +119,7 @@ def unit_ok:
   and (.k | is_integer) and (.through_round | is_integer) and (.after_checkpoint | is_integer)
   and (.admitted_on == "context" or .admitted_on == "grant" or .admitted_on == "accept" or .admitted_on == "fallback");
 def config_ok:
-  type == "object" and (.ask_tokens | is_integer) and .ask_tokens >= 1
+  type == "object" and (.ask_tokens | is_integer) and .ask_tokens >= 0
   and (.ask_window_pct | is_integer) and .ask_window_pct >= 1 and .ask_window_pct <= 100;
 def ok:
   type == "object" and .schema == 1
@@ -413,7 +413,10 @@ gaia_loop_pinned_question() {
       if [ "$((10#$context_window))" -gt 0 ]; then
         option_context=$(gaia_context_summary "$context_tokens" "$context_window")
         question_context=", context ${option_context#Context }"
-        if [ -n "$line" ]; then
+        if [ "$line" = 0 ]; then
+          # Checkpoint off: no line to be over or under, so lead here without claiming room.
+          band=off
+        elif [ -n "$line" ]; then
           case "$(gaia_context_band "$context_tokens" "$context_window" "$line")" in
             green | yellow) band=below ;;
             red | fire | skull) band=above ;;
@@ -435,7 +438,7 @@ gaia_loop_pinned_question() {
     lead=grant_here
   fi
   if [ -z "${lead-}" ]; then
-    if [ "$band" = below ]; then
+    if [ "$band" = below ] || [ "$band" = off ]; then
       lead=grant_here
     else
       lead=grant_new_session
@@ -456,9 +459,11 @@ gaia_loop_pinned_question() {
     | (if $disputed then "First write the rule each listed fix needs in the SPEC, a wiki/decisions page, or the code or docs, or tell Claude the rule to write there, so the fixer can cite it. " else "" end) as $here_first
     | ({below: " is below the checkpoint line, so this session has room: ",
       above: " is at or above the checkpoint line, so this session is short on room: ",
+      off: ", the checkpoint is off: ",
       none: ", so this session may be short on room: "}[$band]) as $here
     | ({below: " is below the checkpoint line: ",
         above: " is at or above the checkpoint line: ",
+        off: ", the checkpoint is off: ",
         none: ", so a new session is the safe choice: "}[$band]) as $fresh
     | [
         {key: "grant_here", label: $here_label, description: ($here_first + $option_context + $here + "records up to " + $unit_rounds + " more rounds and keeps working here." + $typed_grant_note)},

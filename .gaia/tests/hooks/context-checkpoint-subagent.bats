@@ -549,6 +549,15 @@ window_case() {
   cp "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh" "$FIXTURE_LIBRARY"
 }
 
+@test "the checkpoint off: an override ask_tokens of 0 keeps an opted-in sub-agent past skull silent with no band" {
+  local override_file="$MAIN_ROOT/.gaia/local/protected/checkpoint-override.json"
+  mkdir -p "${override_file%/*}"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":0}}\n' >"$override_file"
+  opted_in_agent "$AGENT" "$SKULL"
+  invoke "$(payload)"
+  silent_unbanded_ok "$AGENT"
+}
+
 @test "UAT-008: a missing doctrine and one past its byte budget are silent with no band marked; the real doctrine emits" {
   local budget
   budget="$(sed -n 's/^maximum_doctrine_bytes=\([0-9][0-9]*\)$/\1/p' "$HOOK_SOURCE_PATH")"

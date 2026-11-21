@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 #
 # Suite for .gaia/scripts/context-checkpoint-lib.sh: the checkpoint line, the
-# bands, the lower-only override, the context file writer and reader, and the
-# session id guard.
+# bands, the override (its range, clamps and off switch), the context
+# file writer and reader, and the session id guard.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/scripts/tests/context-checkpoint-lib.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -51,10 +51,10 @@ write_old_override() {
 }
 
 # bats test_tags=protected
-@test "override: lower-only guard, a raised override never becomes the effective value" {
+@test "override: a value past the maximum clamps to the maximum and the window share stays internal" {
   write_settings '{"version":1,"context_checkpoint":{"ask_tokens":900000,"ask_window_pct":90}}'
   run gaia_context_override "$MAIN"
-  [ "$output" = "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT $GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT" ]
+  [ "$output" = "$GAIA_CONTEXT_ASK_TOKENS_MAXIMUM $GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT" ]
 }
 
 @test "write then read: a fresh reading round-trips" {
@@ -70,13 +70,13 @@ write_old_override() {
 
 @test "constants: each numeric value is defined once and no function body inlines one" {
   local library="$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh" value
-  for value in 300000 250000; do
+  for value in 300000 200000 400000; do
     [ "$(grep -c "$value" "$library")" = "1" ]
   done
   [ "$(grep -c '^GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT=50$' "$library")" = "1" ]
   [ "$(grep -c '^GAIA_CONTEXT_YELLOW_WINDOW_PERCENT=30$' "$library")" = "1" ]
   # No numeric literal other than 100 / 0 / 1 / 2 in code lines past the constants block.
-  run bash -c 'sed -n "/^_GAIA_CONTEXT_SKEW_SECONDS/,\$p" "$1" | grep -v "^ *#" | grep -nE "(^|[^0-9a-zA-Z_.-])(300000|250000|50|30)([^0-9]|$)"' _ "$library"
+  run bash -c 'sed -n "/^_GAIA_CONTEXT_SKEW_SECONDS/,\$p" "$1" | grep -v "^ *#" | grep -nE "(^|[^0-9a-zA-Z_.-])(300000|200000|400000|50|30)([^0-9]|$)"' _ "$library"
   [ "$status" -eq 1 ]
 }
 
@@ -118,13 +118,21 @@ band_at() {
   run gaia_context_effective_line "$MAIN" 200000
   [ "$output" = "100000" ]
 
-  echo "case: effective_line: a lowered override wins and a raised one does not"
+  echo "case: effective_line: an in-range override wins, a raised one clamps, and 0 is off"
   write_settings '{"version":1,"context_checkpoint":{"ask_tokens":200000}}'
   run gaia_context_effective_line "$MAIN" 1000000
   [ "$output" = "200000" ]
   write_settings '{"version":1,"context_checkpoint":{"ask_tokens":900000}}'
   run gaia_context_effective_line "$MAIN" 1000000
-  [ "$output" = "300000" ]
+  [ "$output" = "400000" ]
+  write_settings '{"version":1,"context_checkpoint":{"ask_tokens":0}}'
+  run gaia_context_effective_line "$MAIN" 1000000
+  [ "$output" = "0" ]
+
+  echo "case: effective_line: the half-window cap applies after the clamp"
+  write_settings '{"version":1,"context_checkpoint":{"ask_tokens":400000}}'
+  run gaia_context_effective_line "$MAIN" 200000
+  [ "$output" = "100000" ]
 }
 
 @test "rc 2 on a non-integer or empty argument" {
@@ -173,15 +181,29 @@ band_at() {
   run gaia_context_bands 200000 100000
   [ "$output" = "60000 100000 125000 150000" ]
 
-  echo "case: yellow clamps to red"
+  echo "case: the range ends on a 1M window"
   run gaia_context_bands 1000000 200000
-  [ "$output" = "200000 200000 250000 300000" ]
+  [ "$output" = "166666 200000 250000 300000" ]
+  run gaia_context_bands 1000000 400000
+  [ "$output" = "300000 400000 500000 600000" ]
 
-  echo "case: yellow clamps to a line between the yellow cap and the default"
-  run gaia_context_bands 1000000 280000
-  [ "$output" = "250000 280000 350000 420000" ]
-  run gaia_context_bands 1000000 240000
-  [ "$output" = "240000 240000 300000 360000" ]
+  echo "case: yellow sits below red across the range, on a large and a small window"
+  local window line yellow red rest
+  for window in 1000000 200000; do
+    for line in 200000 250000 300000 350000 400000; do
+      line=$(gaia_context_line "$window" "$line" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT")
+      read -r yellow red rest <<<"$(gaia_context_bands "$window" "$line")"
+      [ "$yellow" -lt "$red" ] || return 1
+    done
+  done
+
+  echo "case: a zero line (checkpoint off) has no bands"
+  run gaia_context_bands 1000000 0
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  run gaia_context_band 500000 1000000 0
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
 }
 
 # expect_override <label> <settings json, or - for no file> <expected "tokens pct">:
@@ -194,38 +216,46 @@ expect_override() {
   [ "$output" = "$3" ]
 }
 
-@test "override reads: lower honoured, everything else reads the default" {
+# expect_state <label> <settings json, or - for no file> <expected state line>:
+# one row of the override table, through the state the warnings key off.
+expect_state() {
+  echo "case: $1"
+  rm -f "$MAIN/.gaia/local/protected/checkpoint-override.json" "$(old_override_file)"
+  [ "$2" = "-" ] || write_settings "$2"
+  run gaia_context_override_state "$MAIN"
+  [ "$output" = "$3" ]
+}
+
+@test "override reads: the range, the clamps, off, and invalid" {
   expect_override "no file reads the defaults" - "300000 50"
-  expect_override "a file only at protected/checkpoint-override.json is honoured" \
-    '{"version":1,"context_checkpoint":{"ask_tokens":150000}}' "150000 50"
-  expect_override "a lower ask_tokens is honoured" \
-    '{"version":1,"context_checkpoint":{"ask_tokens":200000}}' "200000 50"
-  expect_override "a raised ask_tokens reads as the default" \
-    '{"version":1,"context_checkpoint":{"ask_tokens":600000}}' "300000 50"
-  expect_override "a string ask_tokens reads as the default" \
-    '{"version":1,"context_checkpoint":{"ask_tokens":"abc"}}' "300000 50"
-  expect_override "zero ask_tokens reads as the default" \
-    '{"version":1,"context_checkpoint":{"ask_tokens":0}}' "300000 50"
-  expect_override "negative ask_tokens reads as the default" \
-    '{"version":1,"context_checkpoint":{"ask_tokens":-1}}' "300000 50"
-  expect_override "fractional ask_tokens reads as the default" \
-    '{"version":1,"context_checkpoint":{"ask_tokens":1.5}}' "300000 50"
-  expect_override "a raised ask_window_pct reads as the default pct" \
-    '{"version":1,"context_checkpoint":{"ask_window_pct":150}}' "300000 50"
-  expect_override "a lowered ask_window_pct is honoured" \
-    '{"version":1,"context_checkpoint":{"ask_window_pct":20}}' "300000 20"
-  expect_override "version 2 reads as the defaults" \
-    '{"version":2,"context_checkpoint":{"ask_tokens":100000}}' "300000 50"
-  expect_override "invalid JSON reads as the defaults" '{not json' "300000 50"
-  expect_override "a non-object context_checkpoint reads as the defaults" \
-    '{"version":1,"context_checkpoint":5}' "300000 50"
+  expect_override "an in-range ask_tokens is honoured" \
+    '{"version":1,"context_checkpoint":{"ask_tokens":250000}}' "250000 50"
+  expect_override "ask_window_pct is not read" \
+    '{"version":1,"context_checkpoint":{"ask_window_pct":20}}' "300000 50"
+
+  expect_state "no file is absent" - "absent 300000 -"
+  expect_state "no context_checkpoint is absent" '{"version":1}' "absent 300000 -"
+  expect_state "no ask_tokens is absent" '{"version":1,"context_checkpoint":{"ask_window_pct":20}}' "absent 300000 -"
+  expect_state "the minimum is accepted" '{"version":1,"context_checkpoint":{"ask_tokens":200000}}' "ok 200000 200000"
+  expect_state "the maximum is accepted" '{"version":1,"context_checkpoint":{"ask_tokens":400000}}' "ok 400000 400000"
+  expect_state "one below the minimum clamps up" '{"version":1,"context_checkpoint":{"ask_tokens":199999}}' "clamped-low 200000 199999"
+  expect_state "1 clamps up" '{"version":1,"context_checkpoint":{"ask_tokens":1}}' "clamped-low 200000 1"
+  expect_state "one above the maximum clamps down" '{"version":1,"context_checkpoint":{"ask_tokens":400001}}' "clamped-high 400000 400001"
+  expect_state "0 is off" '{"version":1,"context_checkpoint":{"ask_tokens":0}}' "off 0 0"
+  expect_state "a string is invalid" '{"version":1,"context_checkpoint":{"ask_tokens":"abc"}}' "invalid 300000 -"
+  expect_state "a negative is invalid" '{"version":1,"context_checkpoint":{"ask_tokens":-1}}' "invalid 300000 -"
+  expect_state "a fraction is invalid" '{"version":1,"context_checkpoint":{"ask_tokens":1.5}}' "invalid 300000 -"
+  expect_state "version 2 is invalid" '{"version":2,"context_checkpoint":{"ask_tokens":250000}}' "invalid 300000 -"
+  expect_state "bad JSON is invalid" '{not json' "invalid 300000 -"
+  expect_state "two JSON values are invalid" '{"version":1}{"version":1}' "invalid 300000 -"
+  expect_state "a non-object context_checkpoint is invalid" '{"version":1,"context_checkpoint":5}' "invalid 300000 -"
 
   echo "case: with files at both locations only the protected one counts"
   rm -f "$MAIN/.gaia/local/protected/checkpoint-override.json"
   write_old_override '{"version":1,"context_checkpoint":{"ask_tokens":100000}}'
-  write_settings '{"version":1,"context_checkpoint":{"ask_tokens":150000}}'
+  write_settings '{"version":1,"context_checkpoint":{"ask_tokens":250000}}'
   run gaia_context_override "$MAIN"
-  [ "$output" = "150000 50" ]
+  [ "$output" = "250000 50" ]
 }
 
 @test "write refuses bad input and a bad session id creates no file" {
@@ -293,7 +323,7 @@ expect_override() {
 
 @test "sourcing is safe: empty PATH and twice" {
   echo "case: succeeds with an empty PATH and defines every function"
-  run env PATH= "$BASH" -c '. "$1"; for function_name in gaia_context_is_session_id gaia_context_file gaia_context_override gaia_context_line gaia_context_bands gaia_context_write gaia_context_read gaia_context_effective_line gaia_context_band gaia_context_summary; do [ "$(type -t "$function_name")" = function ] || exit 1; done' _ "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
+  run env PATH= "$BASH" -c '. "$1"; for function_name in gaia_context_is_session_id gaia_context_file gaia_context_override gaia_context_override_state gaia_context_line gaia_context_bands gaia_context_write gaia_context_read gaia_context_effective_line gaia_context_band gaia_context_summary; do [ "$(type -t "$function_name")" = function ] || exit 1; done' _ "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
   [ "$status" -eq 0 ]
 
   echo "case: double sourcing is harmless"
@@ -302,7 +332,7 @@ expect_override() {
   [ "$output" = "3" ]
 }
 
-@test "band: 200k window edges, and a lowered override drops the yellow band" {
+@test "band: 200k window edges, an override at the minimum, and off" {
   echo "case: 200k window edges with no override"
   run band_at 59999 200000
   [ "$output" = "green" ]
@@ -313,10 +343,14 @@ expect_override() {
   run band_at 100000 200000
   [ "$output" = "red" ]
 
-  echo "case: a lowered override line has no yellow band"
+  echo "case: an override at the minimum keeps yellow below red"
   write_settings '{"version":1,"context_checkpoint":{"ask_tokens":200000}}'
-  run band_at 199999 1000000
+  run band_at 166665 1000000
   [ "$output" = "green" ]
+  run band_at 166666 1000000
+  [ "$output" = "yellow" ]
+  run band_at 199999 1000000
+  [ "$output" = "yellow" ]
   run band_at 200000 1000000
   [ "$output" = "red" ]
   run band_at 249999 1000000
@@ -325,6 +359,12 @@ expect_override() {
   [ "$output" = "fire" ]
   run band_at 300000 1000000
   [ "$output" = "skull" ]
+
+  echo "case: off has no band at any reading"
+  write_settings '{"version":1,"context_checkpoint":{"ask_tokens":0}}'
+  run band_at 900000 1000000
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
 }
 
 @test "summary text and unavailable window" {
