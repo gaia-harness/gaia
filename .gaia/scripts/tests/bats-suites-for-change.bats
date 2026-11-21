@@ -505,6 +505,10 @@ add_copy_pattern_suites() {
   # Runs a helper by path instead of loading it.
   printf 'run "$BATS_TEST_DIRNAME/helpers/copier.sh"\n' > "$FIXTURE/tests/invokes-copier.bats"
   printf 'run "$BATS_TEST_DIRNAME/helpers/not-tracked.sh"\n' > "$FIXTURE/tests/invokes-missing.bats"
+  # Names a fixture file that copies the script; a fixture is data, not a helper.
+  mkdir -p "$FIXTURE/tests/fixtures"
+  printf 'cp "$ROOT/scripts/copied.sh" "$REPO/"\n' > "$FIXTURE/tests/fixtures/staged-copier.sh"
+  printf 'run "$STAGE/staged-copier.sh"\n' > "$FIXTURE/tests/invokes-fixture.bats"
   git -C "$FIXTURE" add -A
   git -C "$FIXTURE" commit -q -m copy-patterns
   BASE="$(git -C "$FIXTURE" rev-parse HEAD)"
@@ -534,12 +538,13 @@ add_copy_pattern_suites() {
   true
 }
 
-@test "a suite that runs a tracked helper by path is selected like one that loads it; a path naming no tracked helper selects nothing" {
+@test "a suite that runs a tracked helper by path is selected like one that loads it; a path naming no tracked helper, or only a fixture file, selects nothing" {
   add_copy_pattern_suites
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
   [ "$status" -eq 0 ]
   printf '%s\n' "$output" | grep -qx 'tests/invokes-copier.bats' || return 1
   printf '%s\n' "$output" | grep -qx 'tests/invokes-missing.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/invokes-fixture.bats' && return 1
   true
 }
