@@ -1628,6 +1628,8 @@ decide() {
   decide 1 fix '{"reason":"move it into the lib"}'
   [ "$status" -eq 0 ] || { echo "the repeat fix was refused: $output"; return 1; }
   [ "$(jq -c '[.keys[] | .direction]' "$RUN_FOLDER/vetoes.json")" = '["move it into the lib"]' ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  [ "$(jq -rs '[.[] | select(.line == 1 and .decision == "fix")] | last | .reason' "$RUN_FOLDER/recorded-residuals.jsonl")" = "move it into the lib" ] ||
+    { cat "$RUN_FOLDER/recorded-residuals.jsonl"; return 1; }
   decide 2 fix '{"failure_mode":"the reader drops the date","reason":"  "}'
   [ "$status" -eq 0 ] || { echo "the reasonless fix was refused: $output"; return 1; }
   [ "$(jq -c '.keys[1] | has("direction")' "$RUN_FOLDER/vetoes.json")" = false ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
