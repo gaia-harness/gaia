@@ -13,7 +13,7 @@
 # stay in audit-loop-eval.sh.
 #
 # Override rule. An optional machine-local file, <main>/.gaia/local/protected/checkpoint-override.json,
-# sets the red line, for example {"version":1,"context_checkpoint":{"ask_tokens":350000}}
+# sets the line's token count, for example {"version":1,"context_checkpoint":{"ask_tokens":350000}}
 # (version 1 is required). ask_tokens is honoured in MINIMUM..MAXIMUM, clamped
 # to the nearer end outside it, and 0 turns the checkpoint off; an absent key
 # or file reads as the default, and an invalid one as the default with a

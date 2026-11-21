@@ -71,12 +71,12 @@
 # the frozen one, and only while no answer is recorded. A branch frozen at the
 # old checkpoint 5 keeps 5. The context line has its own override in
 # context-checkpoint-lib.sh; its config values (never a token count) are
-# frozen into `history.context_config`, ask_tokens as the override sets it
+# frozen into `history.context_config`, ask_tokens as the override's clamped value
 # and the window share at the lib default, and the effective config is the
 # per-field min of that frozen value and the live override, so a lowering
 # applies live and a raise waits for the next branch. ask_tokens 0 is the
-# checkpoint off, and once frozen or live it holds for the branch. A branch
-# with no frozen config reads the initial one.
+# checkpoint off: frozen, it holds for the branch; live, it holds while the
+# file says 0. A branch with no frozen config reads the initial one.
 #
 # ALLOWANCE. base = the frozen checkpoint round (lowered as above). Answers
 # fold in order: a grant of n answering the checkpoint at round g sets

@@ -42,7 +42,7 @@ message() {
   [ -z "$output" ]
 }
 
-@test "each out-of-range or invalid override names the file, the value read, the value used and the fix" {
+@test "each off, out-of-range or invalid override names the file and the fix, and a clamp names the value read and the value used" {
   local text
   echo "case: below the minimum"
   start '{"version":1,"context_checkpoint":{"ask_tokens":100000}}'

@@ -36,8 +36,7 @@ thousands() {
 
 # override_warning <main-root>: print the one-line warning for an override
 # that is off, clamped or invalid and return 0; print nothing and return 1 when
-# it is absent or in range. Each one names the file, the value read, the value
-# used and the fix.
+# it is absent or in range. Each one names the file and the fix.
 override_warning() {
   local file="${1:-}/.gaia/local/protected/checkpoint-override.json" status read_value
   local minimum maximum default_tokens
