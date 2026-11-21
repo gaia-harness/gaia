@@ -37,9 +37,9 @@
 # A helper that copies by glob (a line starting with `cp`, or a `for ... in` in
 # a helper that also runs `cp`, over `"$root"/dir/*.sh`) reaches every changed
 # file the glob's tail ends. A glob with a second expansion after its root
-# (`"$root"/$directory/*.sh`) is matched on its file-name part alone, and one
-# whose file-name part is a bare `*` matches nothing, since a loop over every
-# file is not a copy. A helper that copies a script and also greps it reaches
+# (`"$root"/$directory/*.sh`) is matched on its file-name part alone, and
+# matches nothing when that part is a bare `*` or holds an expansion, since
+# nothing is left to tell the files it copies from any other. A helper that copies a script and also greps it reaches
 # whatever that script sources.
 #
 # Limit: a copy list built any other way (a computed array, a `find`, a name
@@ -164,7 +164,7 @@ bats_selector_helper_suites() {
       return word
     }
     # The file-name part of an unreadable glob word, after its last "/" or
-    # expansion; "" when only a bare "*" or another expansion is left to match on.
+    # expansion; "" when it is a bare "*" or holds an expansion.
     function glob_name_part(word) {
       gsub(/["\047]/, "", word)
       sub(/;+$/, "", word)
