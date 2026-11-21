@@ -104,14 +104,10 @@ jobs:
           staging="$(mktemp -d "$RUNNER_TEMP/release-staging.XXXXXX")"
           bash .gaia/tests/distribution/lib/build-staging.sh "$staging"
       # The marker-strip scenario runs here as well as inside the distribution harness
-      # job, and this is the copy that gates. Its assertions walk every
-      # marker-bearing file in the staged tree, most of which sit OUTSIDE the
-      # harness job's `code:` filter, so a pull request adding a
-      # `# gaia:maintainer-only:` block to one of them would resolve that filter
-      # false, skip the harness, and first fail at release.yml's pre-publish
-      # gate. Its honest input is the
-      # whole shipped surface, which is this job's input and not the harness
-      # job's, so this is where it belongs.
+      # job, and this is the copy that gates; its assertions are in
+      # 02-marker-strip.sh's header. Its honest input is the whole shipped
+      # surface, which is this job's input and not the harness job's, so this
+      # is where it belongs.
       #
       # It builds its own staging tree rather than reusing the step above,
       # which is what keeps it runnable standalone and inside run-all.sh for
