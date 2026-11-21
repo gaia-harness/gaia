@@ -151,11 +151,11 @@ out of the discovery payload and the statusline count.
   worktree's own `.gaia/react-doctor-version`, because the row read the main
   checkout's copy. Move the pin only when `<latest>` is newer than that value
   (follow `## Moving the pin` in `wiki/dependencies/react-doctor.md`); when it
-  is not, leave the pin alone. Record `bumped`, `current` (the worktree pin
-  was already at or past `<latest>`) or `declined` as the action taken. A recorded
-  `bumped` is landed work: every later exit that says "no branch" (the
-  refresh-only Skip, the preview Cancel, an empty apply set with
-  `transitive-refresh` named) goes to Phase 7 and Phase 8 instead, and
+  is not, record `current` and leave the pin alone. Record `bumped` or
+  `declined` as the action taken. A recorded `bumped` is landed work: every
+  later exit that says "no branch" (the refresh-only Skip, the preview Cancel,
+  an empty apply set with `transitive-refresh` named) goes to Phase 7 and
+  Phase 8 instead, and
   Phase 8 publishes the bump per `references/publish.md`.
 
 <!-- gaia:maintainer-only:start -->
