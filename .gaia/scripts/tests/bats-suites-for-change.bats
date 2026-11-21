@@ -496,6 +496,15 @@ add_copy_pattern_suites() {
   # Globs a directory held in a variable, so the change cannot be ruled out.
   printf 'for source_file in "$ROOT"/$directory/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/unreadable-globber.sh"
   printf 'load helpers/unreadable-globber\n' > "$FIXTURE/tests/uses-unreadable-globber.bats"
+  # Loops over a glob without copying the loop variable, in a helper that copies elsewhere.
+  printf 'cp "$ROOT/other/elsewhere.sh" "$REPO/"\nfor entry in "$ROOT"/scripts/*.sh; do\n  echo "$entry"\ndone\n' > "$FIXTURE/tests/helpers/reading-loop.sh"
+  printf 'load helpers/reading-loop\n' > "$FIXTURE/tests/uses-reading-loop.bats"
+  # Copies a bare "*" tail, which names no file.
+  printf 'cp "$ROOT"/* "$REPO/"\n' > "$FIXTURE/tests/helpers/bare-tail.sh"
+  printf 'load helpers/bare-tail\n' > "$FIXTURE/tests/uses-bare-tail.bats"
+  # Copies a glob whose stem is held in an expansion, leaving only "-*.sh".
+  printf 'for hook in "${HOOK%%.sh}"-*.sh; do cp "$hook" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/stemless.sh"
+  printf 'load helpers/stemless\n' > "$FIXTURE/tests/uses-stemless.bats"
   # Copies a script and derives more copies from what it sources.
   printf 'cp "$ROOT/scripts/library.sh" "$REPO/"\ngrep -o "[a-z]*[.]sh" "$ROOT/scripts/library.sh"\n' > "$FIXTURE/tests/helpers/deriver.sh"
   printf 'load helpers/deriver\n' > "$FIXTURE/tests/uses-deriver.bats"
@@ -525,6 +534,9 @@ add_copy_pattern_suites() {
   printf '%s\n' "$output" | grep -qx 'tests/uses-globber.bats' || return 1
   printf '%s\n' "$output" | grep -qx 'tests/uses-unreadable-globber.bats' || return 1
   printf '%s\n' "$output" | grep -qx 'tests/uses-other-globber.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-reading-loop.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-bare-tail.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-stemless.bats' && return 1
   true
 }
 

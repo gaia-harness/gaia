@@ -34,12 +34,14 @@
 # directory, a `fixtures/` directory excepted since a fixture is data a suite
 # stages, not a helper it runs.
 #
-# A helper that copies by glob (a line starting with `cp`, or a `for ... in` in
-# a helper that also runs `cp`, over `"$root"/dir/*.sh`) reaches every changed
-# file the glob's tail ends. A glob with a second expansion after its root
-# (`"$root"/$directory/*.sh`) is matched on its file-name part alone, and
-# matches nothing when that part is a bare `*` or holds an expansion, since
-# nothing is left to tell the files it copies from any other. A helper that copies a script and also greps it reaches
+# A helper that copies by glob (a line starting with `cp`, or a `for ... in`
+# whose loop variable is a `cp` source, over `"$root"/dir/*.sh`) reaches every
+# changed file the glob's tail ends. A glob with a second expansion after its
+# root (`"$root"/$directory/*.sh`) is matched on its file-name part alone. A
+# glob matches nothing when its readable tail is a bare `*`, or its file-name
+# part is a bare `*`, holds an expansion, or starts with only punctuation
+# (`-*.sh`, the remnant of a stem an expansion carried), since nothing is left
+# to tell the files it copies from any other. A helper that copies a script and also greps it reaches
 # whatever that script sources.
 #
 # Limit: a copy list built any other way (a computed array, a `find`, a name
@@ -165,11 +167,15 @@ bats_selector_helper_suites() {
     }
     # The file-name part of an unreadable glob word, after its last "/" or
     # expansion; "" when it is a bare "*" or holds an expansion.
-    function glob_name_part(word) {
+    function glob_name_part(word,   stem) {
       gsub(/["\047]/, "", word)
       sub(/;+$/, "", word)
       sub(/^.*[\/}]/, "", word)
       if (word ~ /^\*+$/ || word ~ /[$`()]/) return ""
+      # Only punctuation before the first wildcard (`-*.sh`) is what is left of
+      # a stem an expansion carried, so it names no file.
+      stem = word; sub(/[*?\[].*$/, "", stem)
+      if (stem != "" && stem !~ /[A-Za-z0-9]/) return ""
       return word
     }
     function glob_regex(glob, anchored,   position, character, regex) {
@@ -204,31 +210,43 @@ bats_selector_helper_suites() {
       }
       return 0
     }
+    # Whether the loop variable of a for-loop row is a cp source: on the row
+    # itself or on a later cp row of the same file.
+    function loop_copies_its_variable(row_index, text,   loop_variable, variable_regex, row, file_name, other_index, other, other_colon, other_remainder, other_text) {
+      if (!match(text, /^[ \t]*for[ \t]+[A-Za-z_][A-Za-z0-9_]*/)) return 0
+      loop_variable = substr(text, RSTART, RLENGTH); sub(/^[ \t]*for[ \t]+/, "", loop_variable)
+      variable_regex = "\\$\\{?" loop_variable "([^A-Za-z0-9_]|$)"
+      row = copy_rows[row_index]
+      file_name = substr(row, 1, index(row, ":") - 1)
+      if (text ~ /(^|[ \t;&|])cp[ \t]/ && text ~ variable_regex) return 1
+      for (other_index = row_index + 1; other_index <= copy_row_count; other_index++) {
+        other = copy_rows[other_index]
+        other_colon = index(other, ":")
+        if (substr(other, 1, other_colon - 1) != file_name) break
+        other_remainder = substr(other, other_colon + 1)
+        other_text = substr(other_remainder, index(other_remainder, ":") + 1)
+        if (other_text ~ /(^|[ \t;&|])cp[ \t]/ && other_text ~ variable_regex) return 1
+      }
+      return 0
+    }
     function mark_copying_helpers(   row_index, row, first_colon, remainder, second_colon, helper, text, kind, word_count, words, word_index, word, tail, base, pair_index, path_index) {
       for (row_index = 1; row_index <= copy_row_count; row_index++) {
         row = copy_rows[row_index]
         first_colon = index(row, ":"); remainder = substr(row, first_colon + 1)
         second_colon = index(remainder, ":")
         helper = substr(row, 1, first_colon - 1); text = substr(remainder, second_colon + 1)
-        if (text ~ /(^|[ \t;&|])cp[ \t]/) has_cp[helper] = 1
-      }
-      for (row_index = 1; row_index <= copy_row_count; row_index++) {
-        row = copy_rows[row_index]
-        first_colon = index(row, ":"); remainder = substr(row, first_colon + 1)
-        second_colon = index(remainder, ":")
-        helper = substr(row, 1, first_colon - 1); text = substr(remainder, second_colon + 1)
         if (text ~ /^[ \t]*cp[ \t]/) kind = "cp"
-        else if (text ~ /^[ \t]*for[ \t]/) { kind = "for"; sub(/^[ \t]*for[ \t].*[ \t]in[ \t]/, "", text) }
+        else if (text ~ /^[ \t]*for[ \t]/) { kind = (loop_copies_its_variable(row_index, text) ? "for" : "loop"); sub(/^[ \t]*for[ \t].*[ \t]in[ \t]/, "", text) }
         else kind = "grep"
         word_count = split(text, words, /[ \t]+/)
         for (word_index = 1; word_index <= word_count; word_index++) {
           word = words[word_index]
-          if (kind != "grep" && (kind == "cp" || helper in has_cp) && index(word, "*") > 0) {
+          if (kind != "grep" && kind != "loop" && index(word, "*") > 0) {
             tail = glob_tail(word)
             if (tail == "?") {
               tail = glob_name_part(word)
               if (tail != "" && glob_names_a_change(tail, 0)) reaching[helper] = 1
-            } else if (glob_names_a_change(tail, 1)) reaching[helper] = 1
+            } else if (tail !~ /^\*+$/ && glob_names_a_change(tail, 1)) reaching[helper] = 1
           }
           gsub(/["\047]/, "", word); sub(/[^A-Za-z0-9_.\/-]+$/, "", word)
           if (word !~ /\.sh$/) continue
