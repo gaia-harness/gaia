@@ -144,7 +144,7 @@ select_on_changelog_edit() {
   [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
 }
 
-@test "a cd substitution fixes its directory only when pwd or pwd -P is the whole command (bare pwd and pwd -P fix it, a pwd path tail joins on, another command leaves it unknown, a helper command substitution leaves it unknown, the dirname form fixes it, with or without spaces inside the substitution)" {
+@test "a command substitution fixes its directory only as a cd whose command is pwd or pwd -P, or as dirname of the suite file (a pwd path tail joins on; another cd command or a helper substitution leaves it unknown; the cd and helper rows hold with or without spaces inside the substitution)" {
   base="$(commit_base_files \
     'scripts/tool.sh=a' \
     $'tests/bare-pwd.bats=ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\nbash "$ROOT/tool.sh"' \

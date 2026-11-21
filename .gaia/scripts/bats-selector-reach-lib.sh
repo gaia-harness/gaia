@@ -110,8 +110,7 @@ bats_selector_reaching_suites() {
       }
       # The repo directory the value fixes, when its shape allows: a bats
       # directory variable or another fixed variable, then literal path
-      # characters, then the end of the word. A `$(cd "<r>" && pwd)` value
-      # counts as <r> only when pwd is the whole command.
+      # characters, then the end of the word.
       # Any command substitution other than the cd and dirname forms decided
       # below runs code this cannot read, so the directory it yields is unknown.
       if (value ~ /^"?\$\(/ && value !~ /^"?\$\([ \t]*(cd|dirname)[ \t]/) { root_unknown[name] = 1; return }
