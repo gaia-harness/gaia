@@ -6,8 +6,9 @@
 # is their implementation and restates none of them.
 #
 # Needs audit-loop-state-lib.sh, context-checkpoint-lib.sh and
-# audit-loop-eval.sh's gaia_loop_allowed already defined. Defines functions
-# and one jq fragment; runs nothing at source time. Bash 3.2 compatible.
+# audit-loop-allowance-lib.sh's gaia_loop_allowed already defined. Defines
+# functions and one jq fragment; runs nothing at source time. Bash 3.2
+# compatible.
 #
 # The decision functions read no file: the bound hook reads the context
 # reading and computes the effective line config, then passes both in, so the
@@ -23,7 +24,7 @@ _GAIA_LOOP_HARD_CAP=10
 _GAIA_LOOP_STOP_DEFS_JQ='def incremental_base: IN("member-clearance", "member-refusal", "team-signal");'
 
 # The signal block of the snapshot program. It runs inside
-# audit-loop-eval.sh's verdict program, after $counted, $authored_count, $previous_authored_count, $second_previous_authored_count, $verdict and
+# audit-loop-round-lib.sh's verdict program, after $counted, $authored_count, $previous_authored_count, $second_previous_authored_count, $verdict and
 # $round are bound, and reads $previous_snapshot and $second_previous_snapshot (the stored snapshots of rounds r-1 and
 # r-2), $history_snapshots ([{round, members, counted_keys}] for rounds 1..r-1, counted_keys null when legacy),
 # $fixed_triples, $stop_inputs (null, or _gaia_loop_stop_inputs' object), $members, $is_maintainer_repo, $waivedkeys

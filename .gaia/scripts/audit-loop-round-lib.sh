@@ -2,9 +2,9 @@
 #
 # Round evaluation for audit-loop-eval.sh: the finding set F(r) and its
 # authorship, the vetoed and waived keys, and the round snapshot with its
-# verdict. Sourced only by audit-loop-eval.sh, after the signals and stop
-# libraries whose jq programs these definitions splice in. That script's
-# header owns the formulas.
+# verdict. Sourced only by audit-loop-eval.sh, after the state library (which
+# loads the branch-authorship library) and the signals library, whose jq
+# programs these definitions splice in. That script's header owns the formulas.
 
 # jq defs shared by the finding set and the snapshot. $names and $hunks are
 # round r's changed paths and new-side hunks against its merge base, null when
