@@ -122,7 +122,7 @@ bats_selector_reaching_suites() {
       tail = substr(head, RSTART + RLENGTH)
       if (!match(tail, /^[A-Za-z0-9_.@+\/-]*/)) { root_unknown[name] = 1; return }
       rest = substr(tail, RLENGTH + 1); tail = substr(tail, 1, RLENGTH)
-      if (value ~ /^"?\$\(cd[ \t]/) {
+      if (value ~ /^"?\$\([ \t]*cd[ \t]/) {
         # A cd substitution fixes the directory only when its command is a
         # bare pwd (or pwd -P); a path tail after the closing paren joins on.
         if (!match(rest, /^"?[ \t]*&&[ \t]*pwd([ \t]+-P)?[ \t]*\)/)) { root_unknown[name] = 1; return }
