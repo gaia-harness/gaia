@@ -40,8 +40,10 @@
 # root (`"$root"/$directory/*.sh`) is matched on its file-name part alone. A
 # glob matches nothing when its readable tail is a bare `*`, or its file-name
 # part is a bare `*`, holds an expansion, or starts with only punctuation
-# (`-*.sh`, the remnant of a stem an expansion carried), since nothing is left
-# to tell the files it copies from any other. A helper that copies a script and also greps it reaches
+# (`-*.sh`, the remnant of a stem an expansion carried), or its readable tail is
+# only a wildcard and an extension with no directory part (`*.sh`, what is left
+# of a directory held in a parameter), since nothing is left to tell the files
+# it copies from any other. A helper that copies a script and also greps it reaches
 # whatever that script sources.
 #
 # Limit: a copy list built any other way (a computed array, a `find`, a name
@@ -178,6 +180,12 @@ bats_selector_helper_suites() {
       if (stem != "" && stem !~ /[A-Za-z0-9]/) return ""
       return word
     }
+    # Whether a readable tail is only a wildcard and an extension (`*.sh`): no
+    # directory part and no literal stem, so it matches every such file in the
+    # repository and tells the files it copies from none of them.
+    function glob_is_extension_only(tail) {
+      return (tail !~ /\// && tail ~ /^[*?\[]/)
+    }
     function glob_regex(glob, anchored,   position, character, regex) {
       regex = (anchored ? "(^|/)" : "")
       for (position = 1; position <= length(glob); position++) {
@@ -246,7 +254,7 @@ bats_selector_helper_suites() {
             if (tail == "?") {
               tail = glob_name_part(word)
               if (tail != "" && glob_names_a_change(tail, 0)) reaching[helper] = 1
-            } else if (tail !~ /^\*+$/ && glob_names_a_change(tail, 1)) reaching[helper] = 1
+            } else if (tail !~ /^\*+$/ && !glob_is_extension_only(tail) && glob_names_a_change(tail, 1)) reaching[helper] = 1
           }
           gsub(/["\047]/, "", word); sub(/[^A-Za-z0-9_.\/-]+$/, "", word)
           if (word !~ /\.sh$/) continue

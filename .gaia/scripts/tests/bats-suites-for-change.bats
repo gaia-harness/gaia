@@ -505,6 +505,10 @@ add_copy_pattern_suites() {
   # Copies a glob whose stem is held in an expansion, leaving only "-*.sh".
   printf 'for hook in "${HOOK%%.sh}"-*.sh; do cp "$hook" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/stemless.sh"
   printf 'load helpers/stemless\n' > "$FIXTURE/tests/uses-stemless.bats"
+  # Copies a directory held in a parameter, leaving only the tail "*.sh".
+  printf 'for source_file in "$source_directory"/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/extension-only.sh"
+  printf 'load helpers/extension-only\n' > "$FIXTURE/tests/uses-extension-only.bats"
+  printf 'echo hooked\n' > "$FIXTURE/scripts/copied-hook.sh"
   # Copies a script and derives more copies from what it sources.
   printf 'cp "$ROOT/scripts/library.sh" "$REPO/"\ngrep -o "[a-z]*[.]sh" "$ROOT/scripts/library.sh"\n' > "$FIXTURE/tests/helpers/deriver.sh"
   printf 'load helpers/deriver\n' > "$FIXTURE/tests/uses-deriver.bats"
@@ -523,6 +527,7 @@ add_copy_pattern_suites() {
   BASE="$(git -C "$FIXTURE" rev-parse HEAD)"
   git -C "$FIXTURE" update-ref refs/remotes/origin/main "$BASE"
   printf 'edited again\n' >> "$FIXTURE/scripts/copied.sh"
+  printf 'edited\n' >> "$FIXTURE/scripts/copied-hook.sh"
   git -C "$FIXTURE" commit -q -am edit-again
 }
 
@@ -537,6 +542,7 @@ add_copy_pattern_suites() {
   printf '%s\n' "$output" | grep -qx 'tests/uses-reading-loop.bats' && return 1
   printf '%s\n' "$output" | grep -qx 'tests/uses-bare-tail.bats' && return 1
   printf '%s\n' "$output" | grep -qx 'tests/uses-stemless.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-extension-only.bats' && return 1
   true
 }
 
