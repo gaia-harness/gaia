@@ -14,8 +14,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats-selector fixture-only: CHANGELOG.md
-
 setup_file() {
   command -v jq >/dev/null 2>&1 || return 0
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"

@@ -19,8 +19,6 @@
 # .gaia/scripts/tests/audit-catchup-merge.bats < /dev/null`.
 # Assertion style: .claude/rules/bats-assertions.md.
 
-# bats-selector fixture-only: CHANGELOG.md
-
 bats_require_minimum_version 1.5.0
 
 # One plain sandbox is built for the file; every test's lsb_init copies it.

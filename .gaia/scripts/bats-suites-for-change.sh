@@ -8,12 +8,13 @@
 # whole-tree-marked suites and runs it in full; round mode runs it alone.
 #
 # A suite is selected when it is itself a changed suite that still exists, or
-# when it contains a changed file's match text as a fixed string and does not
-# declare that file fixture-only (the `fixture-only` block below). The match
-# text is the basename, because a suite names the file it tests through a
-# directory variable and the bare name (`"$SCRIPTS/usage-lib.sh"`), with two
-# exceptions where the bare name is mostly fixture data (a staged path, a hook
-# command) and selecting on it runs suites the change cannot affect:
+# when it contains a changed file's match text as a fixed string at an
+# occurrence that may be the changed file (bats-selector-reach-lib.sh decides
+# which). The match text is the basename, because a suite names the file it
+# tests through a directory variable and the bare name
+# (`"$SCRIPTS/usage-lib.sh"`), with two exceptions where the bare name is
+# mostly fixture data (a staged path, a hook command) and selecting on it runs
+# suites the change cannot affect:
 #
 #   - A root-level file matches as `/<name>`. A suite that reads one reads it
 #     through a root (`"$REPO_ROOT/CHANGELOG.md"`).
@@ -102,9 +103,12 @@ suite_tree_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_l
 directory_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list"; die_input "cannot create a temporary file"; }
 pattern_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list"; die_input "cannot create a temporary file"; }
 name_match_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list"; die_input "cannot create a temporary file"; }
-kept_pattern_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list" "$name_match_list"; die_input "cannot create a temporary file"; }
-suite_body="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list" "$name_match_list" "$kept_pattern_list"; die_input "cannot create a temporary file"; }
-trap 'rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list" "$name_match_list" "$kept_pattern_list" "$suite_body"' EXIT
+pair_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list" "$name_match_list"; die_input "cannot create a temporary file"; }
+top_level_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list" "$name_match_list" "$pair_list"; die_input "cannot create a temporary file"; }
+trap 'rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list" "$name_match_list" "$pair_list" "$top_level_list"' EXIT
+
+# shellcheck source=bats-selector-reach-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/bats-selector-reach-lib.sh"
 
 # -z keeps a non-ASCII path unquoted, so it compares equal to the diff's path.
 git -C "$repository_root" ls-files -z | tr '\0' '\n' > "$tracked_list" \
@@ -210,29 +214,13 @@ if [ -s "$pattern_list" ]; then
   }
 fi
 
-# A suite that writes a tracked file's name only as fixture data declares it:
-#   # bats-selector fixture-only: CHANGELOG.md .claude/settings.json
-# (repo-relative paths). A name-matched suite carrying the line is kept only
-# when a changed path it does not declare still matches it, with its
-# declaration lines left out of the search.
-while IFS= read -r matched_suite; do
-  declared_paths="$(sed -n 's/^# bats-selector fixture-only://p' "$repository_root/$matched_suite")"
-  if [ -z "$declared_paths" ]; then
-    printf '%s\n' "$matched_suite" >> "$suite_list"
-    continue
-  fi
-  tr '\0' '\n' < "$changed_list" \
-    | awk -v declared="$declared_paths" '
-        BEGIN { split(declared, names, /[ \t\n]+/); for (n in names) if (names[n] != "") skip[names[n]] = 1 }
-        NR == FNR { if (!($0 in skip)) keep[FNR] = 1; next }
-        FNR in keep
-      ' - "$pattern_list" > "$kept_pattern_list" \
-    || die_input "filtering the fixture-only names of $matched_suite failed"
-  [ -s "$kept_pattern_list" ] || continue
-  # A file, not a pipe: `grep -q` stops at its first match, the writer then
-  # takes SIGPIPE, and pipefail would read that as no match.
-  grep -v '^# bats-selector fixture-only:' "$repository_root/$matched_suite" > "$suite_body"
-  grep -q -F -f "$kept_pattern_list" "$suite_body" && printf '%s\n' "$matched_suite" >> "$suite_list"
-done < "$name_match_list"
+if [ -s "$name_match_list" ]; then
+  tr '\0' '\n' < "$changed_list" | paste - "$pattern_list" > "$pair_list" \
+    || die_input "pairing the changed paths with their match texts failed"
+  awk -F/ '{ print $1 }' "$tracked_list" | sort -u > "$top_level_list" \
+    || die_input "listing the tracked top-level names failed"
+  bats_selector_reaching_suites "$repository_root" "$pair_list" "$top_level_list" "$name_match_list" >> "$suite_list" \
+    || die_input "reading the occurrences in the name-matched suites failed"
+fi
 
 sort -u "$suite_list"
