@@ -148,7 +148,9 @@ ENFORCEMENT_PATHS=(
   '.claude/hooks/lib/audit-loop-write-scan.sh'   # that hook's path and command scan
   '.claude/hooks/lib/gate-input-paths-guard.sh'  # that hook's protected-folder and context classes
   '.claude/hooks/lib/hook-only-scripts-guard.sh' # that hook's recorder and reaper classes
+  '.claude/hooks/lib/rate-limits-guard.sh'    # that hook's shared rate-limit reading arm
   '.claude/hooks/lib/jq-availability.sh'      # every hook's fail-closed jq check
+  '.claude/hooks/lib/hook-payload.sh'         # the Bash-path hooks' one-jq payload reader
   '.gaia/scripts/audit-loop-state-lib.sh'     # state schema, locking and line parsing
   '.gaia/scripts/audit-loop-eval.sh'          # verdict and allowance formulas
   '.gaia/scripts/audit-fix-verify.sh'         # this verifier
@@ -177,6 +179,7 @@ ENFORCEMENT_PATHS=(
   '.gaia/statusline/setup-owed.sh'            # sourced by the right side, same writer chain
   '.gaia/scripts/audit-fix-verify-state-lib.sh' # this verifier's snapshot, delta and pin helpers
   '.gaia/scripts/audit-fix-verify-check-lib.sh' # this verifier's check subcommand
+  '.claude/hooks/lib/audit-digest.sh'         # branch digests the check subcommand sources from the tree
 )
 
 # Files the baseline pins into the run folder: this script and every library it
