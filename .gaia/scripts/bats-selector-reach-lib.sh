@@ -5,13 +5,13 @@
 # real file, so a suite that names a changed file only as fixture data, or
 # names a different file sharing the basename, is not selected.
 #
-#   bats_selector_reaching_suites <repository root> <pair file> <top-level file> <suite list>
+#   bats_selector_reaching_suites <repository root> <pair file> <top-level file> <suite list> [helper-mode]
 #
 # <pair file> holds `<changed path><TAB><match text>` lines, <top-level file>
-# the tracked top-level names, <suite list> the name-matched suites
-# (repo-relative). Prints the suites that stay selected, in input order.
-# Returns non-zero only when awk itself fails; the caller treats that as
-# "the change could not be read".
+# the tracked top-level names, <suite list> the name-matched suites (repo-relative).
+# A non-empty helper-mode reads <suite list> as helper files: comment lines are not
+# mentions and BATS_TEST_DIRNAME/FILENAME are unknown. Prints the files that stay selected, in input order.
+# Returns non-zero only when awk itself fails; the caller reads that as "the change could not be read".
 #
 # A suite is dropped only when every occurrence of every match text in it,
 # comment lines included and `@test` names excepted, is proven not to be the
@@ -54,7 +54,7 @@
 # match text is not part of.
 
 bats_selector_reaching_suites() {
-  LC_ALL=C awk -v root="$1" -v pair_file="$2" -v top_file="$3" -v suite_list="$4" '
+  LC_ALL=C awk -v root="$1" -v pair_file="$2" -v top_file="$3" -v suite_list="$4" -v helper_mode="${5:-}" '
     function normalize(path,   parts, count, i, out, depth, stack) {
       count = split(path, parts, "/")
       depth = 0
@@ -115,6 +115,7 @@ bats_selector_reaching_suites() {
       # below runs code this cannot read, so the directory it yields is unknown.
       if (value ~ /^"?\$\(/ && value !~ /^"?\$\([ \t]*(cd|dirname)[ \t]/) { root_unknown[name] = 1; return }
       base = ""
+      if (helper_mode != "" && head ~ /BATS_TEST_(DIRNAME|FILENAME)/) { root_unknown[name] = 1; return }
       if (match(head, /^\$\{?BATS_TEST_DIRNAME\}?/)) base = suite_directory
       else if (head ~ /^dirname[ \t]+"?\$\{?BATS_TEST_FILENAME\}?"?\)/) { base = suite_directory; sub(/^dirname[ \t]+"?\$\{?BATS_TEST_FILENAME\}?"?\)/, "", head); RSTART = 1; RLENGTH = 0 }
       else if (match(head, /^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/)) {
@@ -371,7 +372,7 @@ bats_selector_reaching_suites() {
       for (i = 1; i <= line_count; i++) {
         row = lines[i]
         # A test name labels the test; it reads nothing.
-        if (row ~ /^[ \t]*@test[ \t]/) continue
+        if (row ~ /^[ \t]*@test[ \t]/ || (helper_mode != "" && (i in is_comment))) continue
         for (j = 1; j <= pair_count; j++) {
           found = 0
           while ((position = index(substr(row, found + 1), pair_text[j])) > 0) {
