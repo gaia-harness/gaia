@@ -17,7 +17,8 @@
 # comment lines included and `@test` names excepted, is proven not to be the
 # changed file. Anything this cannot decide keeps the suite: that is the safe
 # direction, because a wrong drop hides a red until the push-to-main full run,
-# while a wrong keep only costs run time. An occurrence is proven not the file when:
+# while a wrong keep only costs run time. An occurrence is proven not the file
+# when:
 #
 #   - the text runs on into a longer name (`settings.json.bak`);
 #   - it is a literal absolute path, or a relative literal that is not a
@@ -33,7 +34,7 @@
 #     `mktemp`, a bats temporary directory, or another fixture root, that no
 #     line populates from outside the fixture, and that the suite writes the
 #     path under with a redirection, `touch` or `tee`;
-#   - it is the target of a truncating redirection (`> "$ROOT/CHANGELOG.md"`)
+#   - it is the target of a truncating redirection (`> "$FIXTURE/CHANGELOG.md"`)
 #     through no variable fixed to a repo directory, which overwrites the file
 #     without reading it.
 #
