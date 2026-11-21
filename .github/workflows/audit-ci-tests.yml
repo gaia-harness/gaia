@@ -175,8 +175,10 @@ jobs:
               # The classifier the sharder asks whether a change is harness
               # scope, which is what decides whole shard or change-scoped.
               - '.gaia/tests/bats-change-scope.sh'
-              # The selector that picks the change-scoped suites.
+              # The selector that picks the change-scoped suites, and the
+              # reach classifier it sources.
               - '.gaia/scripts/bats-suites-for-change.sh'
+              - '.gaia/scripts/bats-selector-reach-lib.sh'
               # The installer every leg's bats install step calls (also listed
               # in `sandbox:` and `commitlint:`, whose legs call it too).
               - '.gaia/tests/install-bats.sh'

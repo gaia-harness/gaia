@@ -119,30 +119,57 @@ commit_base_files() {
   }
 }
 
-@test "a suite declaring a file fixture-only is selected only by the changed paths it does not declare" {
-  base="$(commit_base_files \
-    'CHANGELOG.md=# changelog' \
-    'scripts/tool.sh=a' \
-    'tests/reads-changelog.bats=body="$(cat "$REPO_ROOT/CHANGELOG.md")"' \
-    $'tests/scratch-changelog.bats=# bats-selector fixture-only: CHANGELOG.md\necho x > "$ROOT/CHANGELOG.md"; bash "$SCRIPTS/tool.sh"')"
+# Commits the given suites over a fixture holding CHANGELOG.md, edits
+# CHANGELOG.md, and leaves the selector's output in $output.
+select_on_changelog_edit() {
+  local base
+  base="$(commit_base_files 'CHANGELOG.md=# changelog' "$@")"
   printf 'edited\n' >> "$FIXTURE/CHANGELOG.md"
   git -C "$FIXTURE" commit -q -am changelog
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
+}
+
+@test "a suite naming a changed file only as fixture data it writes under a temporary root is not selected; a read through the repo root, an unknown root, a helper's root, an unwritten fixture or a path above the root is" {
+  select_on_changelog_edit \
+    $'tests/fixture-write.bats=ROOT="$BATS_TEST_TMPDIR/fixture"\nprintf x > "$ROOT/CHANGELOG.md"\ncat "$ROOT/CHANGELOG.md"' \
+    $'tests/mktemp-write.bats=TREE="$(cd "$(mktemp -d)" && pwd -P)"\nprintf x >"${TREE}/CHANGELOG.md"\ngrep -q x "$TREE/CHANGELOG.md"' \
+    $'tests/repo-root-read.bats=REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\nROOT="$BATS_TEST_TMPDIR/fixture"\nprintf x > "$ROOT/CHANGELOG.md"\ncat "$REPO_ROOT/CHANGELOG.md"' \
+    $'tests/unknown-root-read.bats=printf x > "$ROOT/CHANGELOG.md"\ncat "$ROOT/CHANGELOG.md"' \
+    $'tests/helper-root-read.bats=load helpers/sandbox\nSANDBOX="$BATS_TEST_TMPDIR/sandbox"\nprintf x > "$SANDBOX/CHANGELOG.md"\ncat "$SANDBOX/CHANGELOG.md"' \
+    $'tests/unwritten-fixture-read.bats=ROOT="$BATS_TEST_TMPDIR/fixture"\nrun bash "$SCRIPTS/tool.sh" --root "$ROOT"\ncat "$ROOT/CHANGELOG.md"' \
+    'tests/above-root-read.bats=cat "$PARENT/repo/CHANGELOG.md"'
+  [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$stderr" >&2; return 1; }
+  expected="$(printf '%s\n' tests/above-root-read.bats tests/helper-root-read.bats tests/repo-root-read.bats tests/unknown-root-read.bats tests/unwritten-fixture-read.bats)"
+  [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
+}
+
+@test "a temporary root populated from the real tree keeps its suite selected (a copy from the repo root or a bare repo path, a suite function that copies); a copy from another fixture does not" {
+  select_on_changelog_edit \
+    $'tests/copied-root.bats=REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\nTMP="$(mktemp -d)"\ncp -R "$REPO_ROOT/." "$TMP/"\nprintf x > "$TMP/CHANGELOG.md"\ncat "$TMP/CHANGELOG.md"' \
+    $'tests/bare-copy-root.bats=TMP="$(mktemp -d)"\ncp CHANGELOG.md "$TMP/"\nprintf x > "$TMP/CHANGELOG.md"\ncat "$TMP/CHANGELOG.md"' \
+    $'tests/populating-function.bats=make_tree() {\n  cp -R "$REPO_ROOT/." "$1"\n}\nTMP="$(mktemp -d)"\nmake_tree "$TMP"\nprintf x > "$TMP/CHANGELOG.md"\ncat "$TMP/CHANGELOG.md"' \
+    $'tests/fixture-copy.bats=TMP="$(mktemp -d)"\nprintf x > "$TMP/seed"\ncp "$TMP/seed" "$TMP/CHANGELOG.md"\nprintf x > "$TMP/CHANGELOG.md"\ncat "$TMP/CHANGELOG.md"'
+  [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$stderr" >&2; return 1; }
+  expected="$(printf '%s\n' tests/bare-copy-root.bats tests/copied-root.bats tests/populating-function.bats)"
+  [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
+}
+
+@test "a suite naming a different file that shares the changed basename is not selected" {
+  base="$(commit_base_files \
+    'skills/alpha/SKILL.md=a' \
+    'skills/beta/SKILL.md=b' \
+    $'tests/reads-alpha.bats=REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\ncat "$REPO_ROOT/skills/alpha/SKILL.md"' \
+    $'tests/reads-beta.bats=REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\ncat "$REPO_ROOT/skills/beta/SKILL.md"' \
+    'tests/names-beta.bats=grep -q x skills/beta/SKILL.md' \
+    'tests/longer-name.bats=cat "$RUN/child-SKILL.md"' \
+    'tests/any-skill.bats=for skill in skills/*/SKILL.md; do cat "$skill"; done')"
+  printf 'edited\n' >> "$FIXTURE/skills/alpha/SKILL.md"
+  git -C "$FIXTURE" commit -q -am alpha
 
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "tests/reads-changelog.bats" ] || {
-    printf 'changelog only, got:\n%s\n' "$output" >&2
-    return 1
-  }
-
-  printf 'edited\n' >> "$FIXTURE/scripts/tool.sh"
-  git -C "$FIXTURE" commit -q -am tool
-  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = $'tests/reads-changelog.bats\ntests/scratch-changelog.bats' ] || {
-    printf 'changelog and tool, got:\n%s\n' "$output" >&2
-    return 1
-  }
+  [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$stderr" >&2; return 1; }
+  expected="$(printf '%s\n' tests/any-skill.bats tests/reads-alpha.bats)"
+  [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
 }
 
 @test "a changed file selects suites by its unique trailing path (shared-basename source, deleted, in a tree holding a suite, unique basename, non-source, basename inside a directory path)" {
