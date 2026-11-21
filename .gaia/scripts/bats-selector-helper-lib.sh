@@ -45,7 +45,7 @@ bats_selector_helper_suites() {
   grep -E '(^|/)(tests|helpers)/' "$scratch/matches" > "$scratch/candidates"
   if [ ! -s "$scratch/candidates" ]; then rm -rf "$scratch"; return 0; fi
 
-  bats_selector_reaching_suites "$repository_root" "$pair_list" "$top_level_list" "$scratch/candidates" skip-comments > "$scratch/reaching" \
+  bats_selector_reaching_suites "$repository_root" "$pair_list" "$top_level_list" "$scratch/candidates" helper-mode > "$scratch/reaching" \
     || { rm -rf "$scratch"; return 1; }
   if [ ! -s "$scratch/reaching" ]; then rm -rf "$scratch"; return 0; fi
 
