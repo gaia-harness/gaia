@@ -17,9 +17,12 @@
 # (version 1 is required). ask_tokens is honoured in MINIMUM..MAXIMUM, clamped
 # to the nearer end outside it, and 0 turns the checkpoint off; an absent key
 # or file reads as the default, and an invalid one as the default with a
-# warning, whose text the session-start hook owns. Raising
-# the line is safe because only a human can: Claude's tool writes to the file
-# are denied by the audit loop write guard. The window share stays internal,
+# warning, whose text the session-start hook owns. Claude's tool writes to the
+# file are denied by the audit loop write guard for the spellings it names, not
+# every spelling (block-audit-loop-write.sh lists what it does not cover). What
+# still bounds the loop when a raise or off slips past it is the round-count
+# fallback and the hard round cap, and the branch's frozen line: a mid-branch
+# raise or off waits for the next branch. The window share stays internal,
 # because a lowered share would undercut the minimum on a large window.
 #
 # Low confidence: the shipped defaults are tunable estimates, not measured

@@ -114,5 +114,13 @@ gaia_loop_context_config_effective() {
   [[ $frozen =~ $integer_pattern ]] || return 5
   read -r tokens percent <<<"$frozen"
   read -r live_tokens live_percent <<<"$(gaia_context_override "$1")"
-  printf '%s %s\n' "$(_gaia_loop_minimum "$tokens" "$live_tokens")" "$(_gaia_loop_minimum "$percent" "$live_percent")"
+  # 0 is off, the loosest value: a live 0 never lifts a frozen line (it waits
+  # for the next branch), and a frozen 0 takes the live value, so removing the
+  # key or setting a number re-arms the bound on that branch.
+  if [ "$tokens" -eq 0 ]; then
+    tokens="$live_tokens"
+  elif [ "$live_tokens" -ne 0 ]; then
+    tokens="$(_gaia_loop_minimum "$tokens" "$live_tokens")"
+  fi
+  printf '%s %s\n' "$tokens" "$(_gaia_loop_minimum "$percent" "$live_percent")"
 }

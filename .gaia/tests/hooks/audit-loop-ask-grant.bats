@@ -178,6 +178,15 @@ scratch_hook() {
 
 # --- the record ------------------------------------------------------------------
 
+@test "a fallback checkpoint with the context line 0 (checkpoint off) leads with continuing here and omits the short-on-room text" {
+  local question labels
+  question="$(gaia_loop_pinned_question feat/ask "$NONCE" 5 "$UNIT_ROUNDS" false false fallback "fresh 50000 1000000" grant 0)"
+  labels="$(jq -r '.questions[0].options[].label' <<<"$question")"
+  [ "$(head -n 1 <<<"$labels")" = "Continue audit in this session (Recommended)" ] || return 1
+  jq -r '.questions[0].options[].description' <<<"$question" | grep -qF "short on room" && return 1
+  true
+}
+
 @test "each pinned answer label records its answer shape and tells the main thread what to do next" {
   local row disputed_pin
   local rows=(

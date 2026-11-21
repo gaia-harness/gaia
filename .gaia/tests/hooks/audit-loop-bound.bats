@@ -1658,14 +1658,23 @@ veto_rounds() {
   [ "$(state_field '.history.context_config.ask_tokens')" -eq 0 ]
   [ "$(state_field '.history.units | last | .admitted_on')" = fallback ]
 
-  echo "case: live off on a branch frozen at the default, at the fallback checkpoint, pins fallback"
+  echo "case: live off never lifts a branch frozen at the default, so a reading over it pins context"
   fresh_fixture
-  seed_rounds 6 '{"verdict":"continue","A":1}'
+  seed_rounds 2 '{"verdict":"continue","A":1}'
   alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}'
   settings 0 50
   write_context_reading 900000 1000000
   unit_dispatch
-  assert_pinned fallback
+  assert_pinned context
+
+  echo "case: a branch frozen off takes a live number, so the bound context-denies again"
+  fresh_fixture
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 0, ask_window_pct: 50}'
+  settings 300000 50
+  write_context_reading 900000 1000000
+  unit_dispatch
+  assert_pinned context
 }
 
 @test "the round cap pins a checkpoint, and an answer runs its rounds instead of re-asking" {

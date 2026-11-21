@@ -413,7 +413,10 @@ gaia_loop_pinned_question() {
       if [ "$((10#$context_window))" -gt 0 ]; then
         option_context=$(gaia_context_summary "$context_tokens" "$context_window")
         question_context=", context ${option_context#Context }"
-        if [ -n "$line" ]; then
+        if [ "$line" = 0 ]; then
+          # Checkpoint off: no line to be over, so lead as a green session would.
+          band=below
+        elif [ -n "$line" ]; then
           case "$(gaia_context_band "$context_tokens" "$context_window" "$line")" in
             green | yellow) band=below ;;
             red | fire | skull) band=above ;;

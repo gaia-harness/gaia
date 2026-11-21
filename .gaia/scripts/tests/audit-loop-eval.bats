@@ -1396,9 +1396,10 @@ grant_window_state() {
   [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":400000,"ask_window_pct":50}' ]
   printf '{"version":1,"context_checkpoint":{"ask_tokens":0}}\n' >"$settings"
   [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":0,"ask_window_pct":50}' ]
-  [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3 '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}')")" = "0 50" ]
-  rm "$settings"
+  [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3 '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}')")" = "300000 50" ]
   [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3 '.history.context_config = {ask_tokens: 0, ask_window_pct: 50}')")" = "0 50" ]
+  rm "$settings"
+  [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3 '.history.context_config = {ask_tokens: 0, ask_window_pct: 50}')")" = "300000 50" ]
 }
 
 @test "legacy: a stored snapshot without counted_keys turns off each history signal that reads it and eligibility, and enriching still reads stored keys" {

@@ -75,8 +75,9 @@
 # and the window share at the lib default, and the effective config is the
 # per-field min of that frozen value and the live override, so a lowering
 # applies live and a raise waits for the next branch. ask_tokens 0 is the
-# checkpoint off: frozen, it holds for the branch; live, it holds while the
-# file says 0. A branch with no frozen config reads the initial one.
+# checkpoint off, the loosest value: a live 0 never lifts a frozen line, and a
+# frozen 0 takes the live value (removing the key or setting a number re-arms
+# the bound on that branch). A branch with no frozen config reads the initial one.
 #
 # ALLOWANCE. base = the frozen checkpoint round (lowered as above). Answers
 # fold in order: a grant of n answering the checkpoint at round g sets
