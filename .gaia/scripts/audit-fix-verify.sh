@@ -135,59 +135,6 @@
 # fixer's own declaration would have to name; the Quality Gate and the audit
 # re-run still read the tree.
 
-# Paths a fixer may touch only when the dispositions file lists them in
-# enforcement_paths_allowed (and a fix entry names them): the code that bounds
-# the loop must not be editable by the actor the loop bounds. That holds for
-# this verifier through its pinned copy (see the header): the working-tree file
-# is protected here, and the copy that judges the round is out of the tree.
-# shellcheck disable=SC2034 # read by audit-fix-verify-check-lib.sh, sourced below
-ENFORCEMENT_PATHS=(
-  '.claude/hooks/audit-loop-bound.sh'         # denies a dispatch past the allowance
-  '.claude/hooks/audit-loop-grant.sh'         # records the human's grant or accept line
-  '.claude/hooks/block-audit-loop-write.sh'   # keeps Claude off the branch state files
-  '.claude/hooks/lib/audit-loop-write-scan.sh'   # that hook's path and command scan
-  '.claude/hooks/lib/gate-input-paths-guard.sh'  # that hook's protected-folder and context classes
-  '.claude/hooks/lib/hook-only-scripts-guard.sh' # that hook's recorder and reaper classes
-  '.claude/hooks/lib/rate-limits-guard.sh'    # that hook's shared rate-limit reading arm
-  '.claude/hooks/lib/jq-availability.sh'      # every hook's fail-closed jq check
-  '.claude/hooks/lib/hook-payload.sh'         # the Bash-path hooks' one-jq payload reader
-  '.gaia/scripts/audit-loop-state-lib.sh'     # state schema, locking and line parsing
-  '.gaia/scripts/audit-loop-eval.sh'          # verdict and allowance formulas
-  '.gaia/scripts/audit-fix-verify.sh'         # this verifier
-  '.gaia/scripts/branch-name-lib.sh'          # branch key every state path derives from
-  '.gaia/scripts/main-root-lib.sh'            # main-checkout resolution for every state path
-  '.gaia/scripts/exclusive-lock-lib.sh'       # the state file's lock
-  '.claude/settings.json'                     # hook registrations and env knobs
-  '.claude/settings.local.json'               # machine-local overrides of the same
-  '.claude/hooks/audit-loop-ask-grant.sh'     # records the human's AskUserQuestion answer
-  '.gaia/scripts/context-checkpoint-lib.sh'   # shared context threshold and bands
-  '.gaia/scripts/audit-dispositions-check.sh' # deterministic dispositions check
-  '.gaia/scripts/branch-authorship-lib.sh'    # the authorship predicate the audit and filer share
-  '.gaia/scripts/audit-pr-sections-lib.sh'    # renders the PR-body records and the recorded residuals
-  '.gaia/scripts/audit-recorded-decision-lib.sh' # writes a recorded fix decision's veto
-  '.gaia/scripts/filing-outcomes-lib.sh'      # reads which keys the filer refused as branch-authored
-  '.gaia/scripts/audit-loop-signals-lib.sh'   # rubric signals and unit/member decisions
-  '.gaia/scripts/audit-veto-lib.sh'           # decides veto satisfaction
-  '.gaia/scripts/audit-loop-stop-lib.sh'      # decides the default-stop inputs, the stop override and the reopened round
-  '.gaia/scripts/audit-triage-lib.sh'         # the triage mark the dispositions check honors
-  '.gaia/scripts/audit-gate-owed.sh'          # the owed-gate record the status refusal trusts
-  '.claude/agents/audit-loop-unit.md'         # the unit orchestrator's definition
-  '.gaia/statusline/gaia-statusline.sh'       # writes the context reading the gate trusts
-  '.gaia/statusline/context-reading.sh'       # the context reading writer
-  '.gaia/statusline/gaia-statusline-left.sh'  # statusline left side, same writer chain
-  '.gaia/statusline/gaia-statusline-right.sh' # statusline right side, same writer chain
-  '.gaia/statusline/setup-owed.sh'            # sourced by the right side, same writer chain
-  '.gaia/scripts/audit-fix-verify-state-lib.sh' # this verifier's snapshot, delta and pin helpers
-  '.gaia/scripts/audit-fix-verify-check-lib.sh' # this verifier's check subcommand
-  '.claude/hooks/lib/audit-digest.sh'         # branch digests the check subcommand sources from the tree
-  '.claude/hooks/lib/audit-scope.sh'          # the digest's ownership classifier, loaded from the tree
-  '.claude/hooks/lib/audit-scope-release.sh'  # the ownership classifier's release-change skip, loaded from the tree
-  '.claude/hooks/lib/audit-machinery.sh'      # the digest's machinery path list, loaded from the tree
-  '.claude/hooks/lib/audit-branch-patch.sh'   # the branch's own patch the digest keys, loaded from the tree
-  '.claude/hooks/lib/audit-base-provenance.sh' # the digest's base and provenance resolution, loaded from the tree
-  '.gaia/scripts/audit-key-lib.sh'            # the audit key; pinned, but audit-digest.sh loads the tree copy
-)
-
 # Files the baseline pins into the run folder: this script and every library it
 # sources from its own directory.
 PIN_FILES=(

@@ -67,7 +67,7 @@ cli_copy() {
   local script_file
   CLI="$BATS_TEST_TMPDIR/scripts"
   mkdir -p "$CLI"
-  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh; do
+  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh; do
     cp "$SCRIPTS/$script_file" "$CLI/$script_file"
   done
   cat >"$CLI/usage.sh" <<'EOF'

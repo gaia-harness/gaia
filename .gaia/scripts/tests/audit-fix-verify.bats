@@ -5,7 +5,7 @@
 # copy for the mutation proofs.
 
 SCRIPT="${AUDIT_FIX_VERIFY_SCRIPT:-$BATS_TEST_DIRNAME/../audit-fix-verify.sh}"
-REAL_SCRIPT="$BATS_TEST_DIRNAME/../audit-fix-verify.sh"
+REAL_STATE_LIBRARY="$BATS_TEST_DIRNAME/../audit-fix-verify-state-lib.sh"
 
 sha() { shasum -a 256 <"$1" | cut -d' ' -f1; }
 
@@ -325,7 +325,7 @@ assert_fail_kind() {
 }
 
 enforcement_paths() {
-  sed -n '/^ENFORCEMENT_PATHS=(/,/^)/p' "$REAL_SCRIPT" | sed -n "s/^  '\([^']*\)'.*/\1/p"
+  sed -n '/^ENFORCEMENT_PATHS=(/,/^)/p' "$REAL_STATE_LIBRARY" | sed -n "s/^  '\([^']*\)'.*/\1/p"
 }
 
 # The SPEC-093 additions; each is expected on the list when it exists in the tree.
@@ -461,6 +461,9 @@ moved_library_paths() {
     '.gaia/scripts/filing-outcomes-lib.sh' \
     '.gaia/scripts/audit-veto-lib.sh' \
     '.gaia/scripts/audit-loop-stop-lib.sh' \
+    '.gaia/scripts/audit-loop-allowance-lib.sh' \
+    '.gaia/scripts/audit-loop-round-lib.sh' \
+    '.gaia/scripts/audit-loop-report-lib.sh' \
     '.gaia/scripts/audit-triage-lib.sh' \
     '.gaia/scripts/audit-gate-owed.sh'
 }
