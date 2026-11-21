@@ -2,9 +2,9 @@
 # shellcheck shell=bash
 #
 # The shared rate-limit reading arm of block-audit-loop-write.sh. Sourced by
-# that guard after its own helpers (shell_scan, writes_named,
-# runs_guarded_script, physical_path) are defined; it is not a hook and carries
-# no registration.
+# that guard after audit-loop-write-scan.sh, which defines the shell_scan,
+# writes_named and runs_guarded_script this arm calls; it is not a hook and
+# carries no registration.
 #
 # WHY. Every session trusts the shared rate-limit reading, and the dispatch
 # checkpoint acts on it, so a session must not forge or erase it through its own
@@ -19,6 +19,9 @@
 
 # The shared file's path below the main checkout's local state.
 GAIA_RATE_LIMITS_GUARD_SHARED_SUFFIX='cache/shared/rate-limits.json'
+
+# shellcheck disable=SC2034 # read by the sourcing guard's deny
+DENY_RATE_LIMITS_MESSAGE="BLOCKED: block-audit-loop-write.sh: the shared rate-limit reading (<main>/.gaia/local/cache/shared/rate-limits.json) is written by the statusline on each render, and the dispatch checkpoint trusts it. Claude never writes, edits, moves or deletes it, and never runs rate-limits.sh with the write verb. A human clears a wrong reading by deleting the file in their own shell outside Claude Code. Reading it (rate-limits.sh read, cat, jq) is allowed."
 
 # gaia_rate_limits_guard_path <literal-path> <resolved-path>
 # rc 0 when the path names the shared file: by its literal spelling (survives a

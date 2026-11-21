@@ -25,7 +25,7 @@
 #                      |next-unit|unit-window|pinned-question|round-history
 #                      |veto-state|reopened-round|accepted-keys --root <audited-root> [--round <r>]
 # accepted-keys prints {key, lines} for each identity key a human accepted, [] with
-# no loop state (gaia_loop_accepted_keys in audit-veto-lib.sh).
+# no loop state (gaia_loop_accepted_keys in audit-loop-stop-lib.sh).
 # round-history prints one {round, tree, members, keys, counted_keys, closing, reopened,
 # human_accept, human_accepted_keys} per recorded round (keys and counted_keys as identity
 # keys, null when not stored; human_accept: closing, or an accept answering a checkpoint at
@@ -226,6 +226,8 @@ _GAIA_LOOP_EVAL_DIRECTORY="${BASH_SOURCE[0]%/*}"
 . "$_GAIA_LOOP_EVAL_DIRECTORY/audit-triage-lib.sh" || return 6 2>/dev/null || exit 6
 # shellcheck source=/dev/null
 . "$_GAIA_LOOP_EVAL_DIRECTORY/audit-veto-lib.sh" || return 6 2>/dev/null || exit 6
+# shellcheck source=/dev/null
+. "$_GAIA_LOOP_EVAL_DIRECTORY/audit-loop-stop-lib.sh" || return 6 2>/dev/null || exit 6
 
 _GAIA_LOOP_CHECKPOINT_DEFAULT=6
 _GAIA_LOOP_GRANT_DEFAULT=3
