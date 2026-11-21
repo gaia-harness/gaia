@@ -132,8 +132,8 @@ describe('configureServer refusals', () => {
     );
   });
 
-  // Runs unconditionally: a host without an IPv6 loopback fails loudly, naming
-  // the requirement, rather than skipping the IPv6-only refusal.
+  // Runs unconditionally: a host without an IPv6 loopback fails loudly rather
+  // than skipping the IPv6-only refusal.
   test('a port taken on ::1 only rejects the same way', async () => {
     const heldServer = await listenOn(0, '::1').catch((error: unknown) => {
       throw new Error(
