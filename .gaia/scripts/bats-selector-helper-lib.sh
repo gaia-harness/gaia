@@ -29,9 +29,26 @@
 # files links both, which only over-selects. A target that is only a variable
 # (`. "$1"`) has no tail and is not followed.
 #
-# Limit: a helper that copies a file by glob or by a derived name
-# (`cp "$root"/dir/*.sh`, a loop over a computed list) never names the file, so
-# a change to such a file is not seen here.
+# A suite also reaches a helper it runs by a path word (`"$HELPERS/make.sh"`)
+# when that word names a tracked `.sh` file under a `tests/` or `helpers/`
+# directory, a `fixtures/` directory excepted since a fixture is data a suite
+# stages, not a helper it runs.
+#
+# A helper that copies by glob (a line starting with `cp`, or a `for ... in`
+# whose loop variable is a `cp` source, over `"$root"/dir/*.sh`) reaches every
+# changed file the glob's tail ends. A glob with a second expansion after its
+# root (`"$root"/$directory/*.sh`) is matched on its file-name part alone. A
+# glob matches nothing when its readable tail is a bare `*`, or its file-name
+# part is a bare `*`, holds an expansion, or starts with only punctuation
+# (`-*.sh`, the remnant of a stem an expansion carried), or its readable tail is
+# only a wildcard and an extension with no directory part (`*.sh`, what is left
+# of a directory held in a parameter), since nothing is left to tell the files
+# it copies from any other. A helper that copies a script and also greps it reaches
+# whatever that script sources.
+#
+# Limit: a copy list built any other way (a computed array, a `find`, a name
+# read from a file) names no file, so a change to a file it picks is not seen
+# here.
 
 bats_selector_helper_suites() {
   local repository_root="$1" tracked_list="$2" pair_list="$3" top_level_list="$4" pattern_list="$5"
@@ -43,18 +60,27 @@ bats_selector_helper_suites() {
   status=$?
   if [ "$status" -gt 1 ]; then rm -rf "$scratch"; return 1; fi
   grep -E '(^|/)(tests|helpers)/' "$scratch/matches" > "$scratch/candidates"
-  if [ ! -s "$scratch/candidates" ]; then rm -rf "$scratch"; return 0; fi
-
-  bats_selector_reaching_suites "$repository_root" "$pair_list" "$top_level_list" "$scratch/candidates" helper-mode > "$scratch/reaching" \
-    || { rm -rf "$scratch"; return 1; }
-  if [ ! -s "$scratch/reaching" ]; then rm -rf "$scratch"; return 0; fi
+  : > "$scratch/reaching"
+  if [ -s "$scratch/candidates" ]; then
+    bats_selector_reaching_suites "$repository_root" "$pair_list" "$top_level_list" "$scratch/candidates" helper-mode > "$scratch/reaching" \
+      || { rm -rf "$scratch"; return 1; }
+  fi
 
   git -C "$repository_root" grep -n -I -E '^[[:space:]]*(load|source|\.|bats_load_library)[[:space:]]|[;&|][[:space:]]*(source|\.)[[:space:]]' \
     -- '*.bats' '*.sh' '*.bash' > "$scratch/loads"
   status=$?
   if [ "$status" -gt 1 ]; then rm -rf "$scratch"; return 1; fi
 
-  LC_ALL=C awk -v tracked_file="$tracked_list" -v reaching_file="$scratch/reaching" '
+  git -C "$repository_root" grep -n -I -E '(^|[^A-Za-z0-9_])(cp|grep)[[:space:]]|^[[:space:]]*for[[:space:]]' \
+    -- '*.sh' '*.bash' > "$scratch/copies"
+  status=$?
+  if [ "$status" -gt 1 ]; then rm -rf "$scratch"; return 1; fi
+
+  git -C "$repository_root" grep -n -I -E '\.sh([^A-Za-z0-9_.]|$)' -- '*.bats' '*.sh' '*.bash' > "$scratch/invokes"
+  status=$?
+  if [ "$status" -gt 1 ]; then rm -rf "$scratch"; return 1; fi
+
+  LC_ALL=C awk -v tracked_file="$tracked_list" -v reaching_file="$scratch/reaching" -v pair_file="$pair_list" -v copies_file="$scratch/copies" -v invokes_file="$scratch/invokes" '
     function last_segment(path,   segments, segment_count) {
       segment_count = split(path, segments, "/")
       return segments[segment_count]
@@ -81,16 +107,35 @@ bats_selector_helper_suites() {
       while (run ~ /^(\.\/|\.\.\/|\/)/) sub(/^(\.\/|\.\.\/|\/)/, "", run)
       return run
     }
-    function add_edges(from, tail,   base, index_in_base, candidate, fallback) {
+    function add_edges(from, tail) {
+      add_edges_to(from, tail, 0)
+    }
+    function add_edges_to(from, tail, helpers_only,   base, index_in_base, candidate, fallback) {
       if (tail == "") return
       base = last_segment(tail)
       for (index_in_base = 1; index_in_base <= by_base_count[base]; index_in_base++) {
         candidate = by_base[base, index_in_base]
+        if (helpers_only && (candidate !~ /(^|\/)(tests|helpers)\// || candidate ~ /(^|\/)fixtures\//)) continue
         if (candidate == tail || substr(candidate, length(candidate) - length(tail)) == "/" tail) link(from, candidate)
       }
       if (base ~ /\.bash$/) {
         fallback = tail; sub(/\.bash$/, ".sh", fallback)
-        if (fallback != tail) add_edges(from, fallback)
+        if (fallback != tail) add_edges_to(from, fallback, helpers_only)
+      }
+    }
+    function add_invoked_edges(from, text,   run, before, remaining) {
+      remaining = text
+      while (match(remaining, /[A-Za-z0-9_.@+\/-]+\.sh([^A-Za-z0-9_.@+\/-]|$)/)) {
+        run = substr(remaining, RSTART, RLENGTH)
+        sub(/[^A-Za-z0-9_.@+\/-]$/, "", run)
+        before = (RSTART > 1 ? substr(remaining, RSTART - 1, 1) : "")
+        remaining = substr(remaining, RSTART + RLENGTH - 1)
+        if (before == "$" || before == "{") {
+          if (index(run, "/") == 0) continue
+          sub(/^[^\/]*/, "", run)
+        }
+        while (run ~ /^(\.\/|\.\.\/|\/)/) sub(/^(\.\/|\.\.\/|\/)/, "", run)
+        if (run != "") add_edges_to(from, run, 1)
       }
     }
     function link(from, to) {
@@ -112,6 +157,119 @@ bats_selector_helper_suites() {
       }
       return 0
     }
+    # What a glob word names below its root variable, or "?" when another
+    # expansion makes it unreadable.
+    function glob_tail(word) {
+      gsub(/["\047]/, "", word)
+      sub(/;+$/, "", word)
+      sub(/^\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)/, "", word)
+      if (word ~ /[$`(){}]/) return "?"
+      sub(/^\/+/, "", word)
+      return word
+    }
+    # The file-name part of an unreadable glob word, after its last "/" or
+    # expansion; "" when it is a bare "*" or holds an expansion.
+    function glob_name_part(word,   stem) {
+      gsub(/["\047]/, "", word)
+      sub(/;+$/, "", word)
+      sub(/^.*[\/}]/, "", word)
+      if (word ~ /^\*+$/ || word ~ /[$`()]/) return ""
+      # Only punctuation before the first wildcard (`-*.sh`) is what is left of
+      # a stem an expansion carried, so it names no file.
+      stem = word; sub(/[*?\[].*$/, "", stem)
+      if (stem != "" && stem !~ /[A-Za-z0-9]/) return ""
+      return word
+    }
+    # Whether a readable tail is only a wildcard and an extension (`*.sh`): no
+    # directory part and no literal stem, so it matches every such file in the
+    # repository and tells the files it copies from none of them.
+    function glob_is_extension_only(tail) {
+      return (tail !~ /\// && tail ~ /^[*?\[]/)
+    }
+    function glob_regex(glob, anchored,   position, character, regex) {
+      regex = (anchored ? "(^|/)" : "")
+      for (position = 1; position <= length(glob); position++) {
+        character = substr(glob, position, 1)
+        if (character == "*") regex = regex "[^/]*"
+        else if (character == "?") regex = regex "[^/]"
+        else if (character ~ /[.+^$|\\()\[\]{}]/) regex = regex "\\" character
+        else regex = regex character
+      }
+      return regex "$"
+    }
+    function glob_names_a_change(glob, anchored,   regex, changed_index) {
+      regex = glob_regex(glob, anchored)
+      for (changed_index = 1; changed_index <= changed_count; changed_index++) {
+        if (changed_paths[changed_index] ~ regex) return 1
+      }
+      return 0
+    }
+    function closure_has_change(script,   stack, depth, seen, node, i, target) {
+      if (script in changed) return 1
+      split("", seen); depth = 0
+      stack[++depth] = script; seen[script] = 1
+      while (depth > 0) {
+        node = stack[depth--]
+        for (i = 1; i <= out_count[node]; i++) {
+          target = out[node, i]
+          if (target in changed) return 1
+          if (!(target in seen)) { seen[target] = 1; stack[++depth] = target }
+        }
+      }
+      return 0
+    }
+    # Whether the loop variable of a for-loop row is a cp source: on the row
+    # itself or on a later cp row of the same file.
+    function loop_copies_its_variable(row_index, text,   loop_variable, variable_regex, row, file_name, other_index, other, other_colon, other_remainder, other_text) {
+      if (!match(text, /^[ \t]*for[ \t]+[A-Za-z_][A-Za-z0-9_]*/)) return 0
+      loop_variable = substr(text, RSTART, RLENGTH); sub(/^[ \t]*for[ \t]+/, "", loop_variable)
+      variable_regex = "\\$\\{?" loop_variable "([^A-Za-z0-9_]|$)"
+      row = copy_rows[row_index]
+      file_name = substr(row, 1, index(row, ":") - 1)
+      if (text ~ /(^|[ \t;&|])cp[ \t]/ && text ~ variable_regex) return 1
+      for (other_index = row_index + 1; other_index <= copy_row_count; other_index++) {
+        other = copy_rows[other_index]
+        other_colon = index(other, ":")
+        if (substr(other, 1, other_colon - 1) != file_name) break
+        other_remainder = substr(other, other_colon + 1)
+        other_text = substr(other_remainder, index(other_remainder, ":") + 1)
+        if (other_text ~ /(^|[ \t;&|])cp[ \t]/ && other_text ~ variable_regex) return 1
+      }
+      return 0
+    }
+    function mark_copying_helpers(   row_index, row, first_colon, remainder, second_colon, helper, text, kind, word_count, words, word_index, word, tail, base, pair_index, path_index) {
+      for (row_index = 1; row_index <= copy_row_count; row_index++) {
+        row = copy_rows[row_index]
+        first_colon = index(row, ":"); remainder = substr(row, first_colon + 1)
+        second_colon = index(remainder, ":")
+        helper = substr(row, 1, first_colon - 1); text = substr(remainder, second_colon + 1)
+        if (text ~ /^[ \t]*cp[ \t]/) kind = "cp"
+        else if (text ~ /^[ \t]*for[ \t]/) { kind = (loop_copies_its_variable(row_index, text) ? "for" : "loop"); sub(/^[ \t]*for[ \t].*[ \t]in[ \t]/, "", text) }
+        else kind = "grep"
+        word_count = split(text, words, /[ \t]+/)
+        for (word_index = 1; word_index <= word_count; word_index++) {
+          word = words[word_index]
+          if (kind != "grep" && kind != "loop" && index(word, "*") > 0) {
+            tail = glob_tail(word)
+            if (tail == "?") {
+              tail = glob_name_part(word)
+              if (tail != "" && glob_names_a_change(tail, 0)) reaching[helper] = 1
+            } else if (tail !~ /^\*+$/ && !glob_is_extension_only(tail) && glob_names_a_change(tail, 1)) reaching[helper] = 1
+          }
+          gsub(/["\047]/, "", word); sub(/[^A-Za-z0-9_.\/-]+$/, "", word)
+          if (word !~ /\.sh$/) continue
+          base = last_segment(word)
+          if (kind == "cp") copied[helper, base] = 1
+          else if (kind == "grep" && (base in by_base_count)) { derive_count++; derive_helper[derive_count] = helper; derive_base[derive_count] = base }
+        }
+      }
+      for (pair_index = 1; pair_index <= derive_count; pair_index++) {
+        if (!((derive_helper[pair_index], derive_base[pair_index]) in copied)) continue
+        for (path_index = 1; path_index <= by_base_count[derive_base[pair_index]]; path_index++) {
+          if (closure_has_change(by_base[derive_base[pair_index], path_index])) reaching[derive_helper[pair_index]] = 1
+        }
+      }
+    }
     BEGIN {
       while ((getline row < reaching_file) > 0) reaching[row] = 1
       close(reaching_file)
@@ -119,6 +277,27 @@ bats_selector_helper_suites() {
         if (row ~ /\.(sh|bash)$/) { base_name = last_segment(row); by_base[base_name, ++by_base_count[base_name]] = row }
       }
       close(tracked_file)
+      while ((getline row < pair_file) > 0) {
+        split(row, columns, "\t")
+        if (!(columns[1] in changed)) { changed[columns[1]] = 1; changed_paths[++changed_count] = columns[1] }
+      }
+      close(pair_file)
+      while ((getline row < copies_file) > 0) {
+        first_colon = index(row, ":")
+        if (substr(row, 1, first_colon - 1) !~ /(^|\/)(tests|helpers)\//) continue
+        if (row ~ /^[^:]*:[0-9]+:[ \t]*#/) continue
+        copy_rows[++copy_row_count] = row
+      }
+      close(copies_file)
+      while ((getline row < invokes_file) > 0) {
+        first_colon = index(row, ":"); remainder = substr(row, first_colon + 1)
+        second_colon = index(remainder, ":"); if (!first_colon || !second_colon) continue
+        invoke_text = substr(remainder, second_colon + 1)
+        if (invoke_text ~ /^[ \t]*#/) continue
+        invoke_source = substr(row, 1, first_colon - 1)
+        if (invoke_source ~ /\.(bats|sh)$/) add_invoked_edges(invoke_source, invoke_text)
+      }
+      close(invokes_file)
     }
     {
       first_colon = index($0, ":"); if (!first_colon) next
@@ -130,6 +309,7 @@ bats_selector_helper_suites() {
       add_edges(source_path, load_tail(line_text))
     }
     END {
+      mark_copying_helpers()
       for (node in out_count) if (node ~ /\.bats$/ && reaches_helper(node)) print node
     }
   ' "$scratch/loads"

@@ -35,10 +35,10 @@
 # spelling the match text is not part of is missed here; the push-to-main full
 # run backstops it.
 #
-# A suite is also selected when a test helper it loads, directly or through
-# another helper, names a changed file's match text at an occurrence that may be
-# the changed file. bats-selector-helper-lib.sh owns what counts as a helper and
-# its limit.
+# A suite is also selected when a test helper it loads or runs by path, directly
+# or through another helper, names a changed file's match text at an occurrence
+# that may be the changed file, or copies it by a glob. bats-selector-helper-lib.sh
+# owns what counts as a helper and its limit.
 #
 # Changed paths are read NUL-delimited. The hand-rolled spelling,
 # `for f in $(git diff --name-only ...)`, word-splits a path holding a space
