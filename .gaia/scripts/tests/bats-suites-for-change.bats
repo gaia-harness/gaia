@@ -129,17 +129,18 @@ select_on_changelog_edit() {
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
 }
 
-@test "a suite naming a changed file only as fixture data it writes under a temporary root is not selected; a read through the repo root, an unknown root, a helper's root, an unwritten fixture or a path above the root is" {
+@test "a suite naming a changed file only as fixture data it writes under a temporary root is not selected; a read through the repo root, an unknown root, a root cut by a parameter expansion, a helper's root, an unwritten fixture or a path above the root is" {
   select_on_changelog_edit \
     $'tests/fixture-write.bats=ROOT="$BATS_TEST_TMPDIR/fixture"\nprintf x > "$ROOT/CHANGELOG.md"\ncat "$ROOT/CHANGELOG.md"' \
     $'tests/mktemp-write.bats=TREE="$(cd "$(mktemp -d)" && pwd -P)"\nprintf x >"${TREE}/CHANGELOG.md"\ngrep -q x "$TREE/CHANGELOG.md"' \
     $'tests/repo-root-read.bats=REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\nROOT="$BATS_TEST_TMPDIR/fixture"\nprintf x > "$ROOT/CHANGELOG.md"\ncat "$REPO_ROOT/CHANGELOG.md"' \
     $'tests/unknown-root-read.bats=printf x > "$ROOT/CHANGELOG.md"\ncat "$ROOT/CHANGELOG.md"' \
+    $'tests/stripped-root-read.bats=ROOT="${BATS_TEST_DIRNAME%/tests}"\ncat "$ROOT/CHANGELOG.md"' \
     $'tests/helper-root-read.bats=load helpers/sandbox\nSANDBOX="$BATS_TEST_TMPDIR/sandbox"\nprintf x > "$SANDBOX/CHANGELOG.md"\ncat "$SANDBOX/CHANGELOG.md"' \
     $'tests/unwritten-fixture-read.bats=ROOT="$BATS_TEST_TMPDIR/fixture"\nrun bash "$SCRIPTS/tool.sh" --root "$ROOT"\ncat "$ROOT/CHANGELOG.md"' \
     'tests/above-root-read.bats=cat "$PARENT/repo/CHANGELOG.md"'
   [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$stderr" >&2; return 1; }
-  expected="$(printf '%s\n' tests/above-root-read.bats tests/helper-root-read.bats tests/repo-root-read.bats tests/unknown-root-read.bats tests/unwritten-fixture-read.bats)"
+  expected="$(printf '%s\n' tests/above-root-read.bats tests/helper-root-read.bats tests/repo-root-read.bats tests/stripped-root-read.bats tests/unknown-root-read.bats tests/unwritten-fixture-read.bats)"
   [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
 }
 

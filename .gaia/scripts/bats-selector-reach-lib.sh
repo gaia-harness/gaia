@@ -120,6 +120,7 @@ bats_selector_reaching_suites() {
       } else { root_unknown[name] = 1; return }
       tail = substr(head, RSTART + RLENGTH)
       if (!match(tail, /^[A-Za-z0-9_.@+\/-]*/)) { root_unknown[name] = 1; return }
+      if (substr(tail, RLENGTH + 1) !~ /^["\047)]*([ \t;|&]|$)/) { root_unknown[name] = 1; return }
       tail = substr(tail, 1, RLENGTH)
       root_candidate[name, kind_count[name]] = base SUBSEP tail
     }
