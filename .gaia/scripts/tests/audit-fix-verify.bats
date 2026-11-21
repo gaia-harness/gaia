@@ -460,6 +460,7 @@ moved_library_paths() {
     '.gaia/scripts/audit-recorded-decision-lib.sh' \
     '.gaia/scripts/filing-outcomes-lib.sh' \
     '.gaia/scripts/audit-veto-lib.sh' \
+    '.gaia/scripts/audit-loop-stop-lib.sh' \
     '.gaia/scripts/audit-triage-lib.sh' \
     '.gaia/scripts/audit-gate-owed.sh'
 }
@@ -981,10 +982,11 @@ moved_library_paths() {
 
 @test "baseline pins the verifier and its libraries beside the baseline file and records their digest" {
   prepare
-  for file_name in audit-fix-verify.sh main-root-lib.sh audit-key-lib.sh; do
+  for file_name in audit-fix-verify.sh main-root-lib.sh audit-key-lib.sh \
+    audit-fix-verify-state-lib.sh audit-fix-verify-check-lib.sh; do
     cmp "$RUN_FOLDER/verifier-bin-1/$file_name" "$BATS_TEST_DIRNAME/../$file_name"
   done
-  jq -e '(.verifier_files | sort) == ["audit-fix-verify.sh","audit-key-lib.sh","main-root-lib.sh"]
+  jq -e '(.verifier_files | sort) == ["audit-fix-verify-check-lib.sh","audit-fix-verify-state-lib.sh","audit-fix-verify.sh","audit-key-lib.sh","main-root-lib.sh"]
     and (.verifier_digest | test("^[0-9a-f]{64}$"))' "$BASELINE_FILE" >/dev/null
 }
 

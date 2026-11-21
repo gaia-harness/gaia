@@ -67,7 +67,7 @@
 # allowed unit not admitted on accept (a closing round runs no fixer) records
 # round used + 1 on HEAD's tree, `reopened: true` with no members, in the
 # write that appends its window, when gaia_loop_reopen_due in
-# audit-veto-lib.sh is true. The unit starts at that round; it evaluates quiet.
+# audit-loop-stop-lib.sh is true. The unit starts at that round; it evaluates quiet.
 #
 # THE ORDER OF ONE DECISION. Resolve the audited checkout and the branch; on a
 # dispatch that may change the state (a unit, or a member on a new tree),

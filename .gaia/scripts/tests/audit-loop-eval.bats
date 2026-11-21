@@ -67,7 +67,7 @@ cli_copy() {
   local script_file
   CLI="$BATS_TEST_TMPDIR/scripts"
   mkdir -p "$CLI"
-  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh; do
+  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh; do
     cp "$SCRIPTS/$script_file" "$CLI/$script_file"
   done
   cat >"$CLI/usage.sh" <<'EOF'
@@ -1617,7 +1617,7 @@ stop_base_restore() {
     stop_case "$(minor_entries f.txt 1 3)" "$(minor_entries f.txt 1 2)"
     stop_is 2 false
     mutant_tree audit-loop-signals-lib.sh -e '/^   and \$round >= 3$/d'
-    sed -i.bak '/\[ "\$round" -ge 3 \] ||/d' "$MUTANT_SCRIPTS/audit-veto-lib.sh"
+    sed -i.bak '/\[ "\$round" -ge 3 \] ||/d' "$MUTANT_SCRIPTS/audit-loop-stop-lib.sh"
     . "$MUTANT_SCRIPTS/audit-loop-eval.sh"
     stop_is 2 true
   )
@@ -1632,7 +1632,7 @@ stop_base_restore() {
     stop_is 9 true
     stop_is 10 false
     mutant_tree audit-loop-signals-lib.sh -e '/^   and \$round <= 9$/d'
-    sed -i.bak '/\[ "\$round" -le 9 \] ||/d' "$MUTANT_SCRIPTS/audit-veto-lib.sh"
+    sed -i.bak '/\[ "\$round" -le 9 \] ||/d' "$MUTANT_SCRIPTS/audit-loop-stop-lib.sh"
     . "$MUTANT_SCRIPTS/audit-loop-eval.sh"
     stop_is 10 true
   )
@@ -1650,7 +1650,7 @@ stop_base_restore() {
     [ "$(read_json "$(stop_of 3)" '"\(.verdict) \(.A) \(.review_bases | tojson)"')" = "unknown null {\"$MEMBER\":\"member-clearance\",\"code-audit-shell\":\"member-clearance\"}" ]
     stop_is 3 false
     mutant_tree audit-loop-signals-lib.sh -e '/^   and \$verdict != "unknown"$/d' -e '/^   and \$authored_count != null$/d'
-    sed -i.bak '/^    and (\$findings.missing_members | length) == 0$/d' "$MUTANT_SCRIPTS/audit-veto-lib.sh"
+    sed -i.bak '/^    and (\$findings.missing_members | length) == 0$/d' "$MUTANT_SCRIPTS/audit-loop-stop-lib.sh"
     . "$MUTANT_SCRIPTS/audit-loop-eval.sh"
     stop_is 3 true
   )
@@ -1688,7 +1688,7 @@ stop_base_restore() {
       stop_is 3 false || { echo "extra $extra"; return 1; }
     done
     mutant_tree audit-loop-signals-lib.sh -e '/^   and all(\$findings.entries\[\]; honored_in/d'
-    sed -i.bak '/^    and all(\$findings.entries\[\]; .triage == true or/d' "$MUTANT_SCRIPTS/audit-veto-lib.sh"
+    sed -i.bak '/^    and all(\$findings.entries\[\]; .triage == true or/d' "$MUTANT_SCRIPTS/audit-loop-stop-lib.sh"
     . "$MUTANT_SCRIPTS/audit-loop-eval.sh"
     stop_is 3 true
   )
