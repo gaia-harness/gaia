@@ -121,16 +121,27 @@ describe('configureServer refusals', () => {
     resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
     const plugin = await loadPlugin();
 
-    await expect(plugin.configureServer(makeServer())).rejects.toThrow(
-      `port ${port}`
+    const refusal = plugin.configureServer(makeServer());
+
+    await expect(refusal).rejects.toThrow(`port ${port}`);
+    await expect(refusal).rejects.toThrow(
+      'Never stop a process on a port another live tree owns without asking the user first.'
+    );
+    await expect(refusal).rejects.toThrow(
+      "Run bash .gaia/scripts/ports.sh to see this tree's ports."
     );
   });
 
-  // Runs unconditionally: a host without ::1 fails the listen loudly rather
-  // than skipping the IPv6-only refusal.
+  // Runs unconditionally: a host without an IPv6 loopback fails loudly, naming
+  // the requirement, rather than skipping the IPv6-only refusal.
   test('a port taken on ::1 only rejects the same way', async () => {
-    const port = await findFreePort();
-    heldServers.push(await listenOn(port, '::1'));
+    const heldServer = await listenOn(0, '::1').catch((error: unknown) => {
+      throw new Error(
+        `this test needs an IPv6 loopback (::1) on the host: ${String(error)}`
+      );
+    });
+    heldServers.push(heldServer);
+    const {port} = heldServer.address() as net.AddressInfo;
     resolveDevPortsMock.mockReturnValue(buildResolvedResolution(port));
     const plugin = await loadPlugin();
 
