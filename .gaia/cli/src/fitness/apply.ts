@@ -35,8 +35,6 @@ export type ApplyOptions = {
   env?: Readonly<Record<string, string | undefined>>;
   proposalPath: string;
   root: string;
-  /** Tests only: replaces the symlink check, to prove a test depends on it. */
-  symlinkCheck?: SymlinkCheck;
   target: string;
 };
 
@@ -45,9 +43,6 @@ export type ApplyResult =
   | {kind: 'could-not-run'; reason: string}
   | {kind: 'refused'; reason: string}
   | {kind: 'usage'; reason: string};
-
-/** Returns the reason a target path may not be written, or undefined when it may. */
-type SymlinkCheck = (root: string, target: string) => string | undefined;
 
 /** Repo-relative, forward-slash, normalized; undefined for an absolute, empty or climbing path. */
 const normalizeTarget = (target: string): string | undefined => {
@@ -110,7 +105,10 @@ const vendorTargets = (root: string): string[] => {
  * component that is itself a symlink is refused, because the write replaces
  * the path rather than writing through it.
  */
-const findSymlinkProblem: SymlinkCheck = (root, target) => {
+const findSymlinkProblem = (
+  root: string,
+  target: string
+): string | undefined => {
   const realRoot = realpathSync(root);
   const vendored = vendorTargets(root);
 
@@ -294,12 +292,11 @@ const refuseUnlessFixableAdopter = (
 };
 
 const symlinkRefusal = (
-  options: ApplyOptions,
   root: string,
   target: string
 ): ApplyResult | undefined => {
   try {
-    const problem = (options.symlinkCheck ?? findSymlinkProblem)(root, target);
+    const problem = findSymlinkProblem(root, target);
 
     return problem === undefined ? undefined : refused(problem);
   } catch {
@@ -320,7 +317,7 @@ export const applyProposal = (options: ApplyOptions): ApplyResult => {
   const {root, target} = validated;
   const refusal =
     refuseUnlessFixableAdopter(options, root, target) ??
-    symlinkRefusal(options, root, target);
+    symlinkRefusal(root, target);
 
   if (refusal !== undefined) return refusal;
 

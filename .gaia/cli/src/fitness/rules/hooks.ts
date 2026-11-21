@@ -87,18 +87,7 @@ const hookEntriesOf = (file: SettingsFile): readonly HookEntry[] =>
     });
   });
 
-type HookRuleOptions = {
-  /** Why the script behind a recognized root prefix cannot run, else undefined. */
-  findScriptProblem?: (
-    context: RuleContext,
-    reference: ScriptReference,
-    fromFile: string
-  ) => string | undefined;
-  /** Whether the reference resolves against the shell's current directory. */
-  isUnanchored?: (reference: ScriptReference) => boolean;
-};
-
-const defaultFindScriptProblem = (
+const findScriptProblem = (
   context: RuleContext,
   reference: ScriptReference,
   fromFile: string
@@ -125,7 +114,7 @@ const defaultFindScriptProblem = (
   return undefined;
 };
 
-const defaultIsUnanchored = (reference: ScriptReference): boolean =>
+const isUnanchored = (reference: ScriptReference): boolean =>
   reference.kind === 'relative';
 
 const eventCheck = (context: RuleContext): readonly RawFinding[] =>
@@ -141,83 +130,72 @@ const eventCheck = (context: RuleContext): readonly RawFinding[] =>
       }))
   );
 
-/** Builds the hook rules; the optional predicates let a test prove each rule can fail. */
-const createHookRules = (
-  options: HookRuleOptions = {}
-): readonly RuleDefinition[] => {
-  const findScriptProblem =
-    options.findScriptProblem ?? defaultFindScriptProblem;
-  const isUnanchored = options.isUnanchored ?? defaultIsUnanchored;
+const pathCheck = (context: RuleContext): readonly RawFinding[] =>
+  context.settingsFiles.flatMap((file) =>
+    hookEntriesOf(file).flatMap((entry) => {
+      const problem = findScriptProblem(
+        context,
+        readScriptReference(entry.command),
+        file.path
+      );
 
-  const pathCheck = (context: RuleContext): readonly RawFinding[] =>
-    context.settingsFiles.flatMap((file) =>
-      hookEntriesOf(file).flatMap((entry) => {
-        const problem = findScriptProblem(
-          context,
-          readScriptReference(entry.command),
-          file.path
-        );
+      if (problem === undefined) return [];
 
-        if (problem === undefined) return [];
+      return [
+        {
+          file: file.path,
+          line: entry.line,
+          message: `The ${entry.event} hook script ${problem}. A hook command that cannot run exits 126 or 127, which neither blocks nor warns, so the guard fails open.`,
+          remediation:
+            'Fix the script path, create the script, or run chmod +x on it.',
+        },
+      ];
+    })
+  );
 
-        return [
-          {
-            file: file.path,
-            line: entry.line,
-            message: `The ${entry.event} hook script ${problem}. A hook command that cannot run exits 126 or 127, which neither blocks nor warns, so the guard fails open.`,
-            remediation:
-              'Fix the script path, create the script, or run chmod +x on it.',
-          },
-        ];
-      })
-    );
+const rootedCheck = (context: RuleContext): readonly RawFinding[] =>
+  context.settingsFiles.flatMap((file) =>
+    hookEntriesOf(file).flatMap((entry) => {
+      if (!isUnanchored(readScriptReference(entry.command))) return [];
 
-  const rootedCheck = (context: RuleContext): readonly RawFinding[] =>
-    context.settingsFiles.flatMap((file) =>
-      hookEntriesOf(file).flatMap((entry) => {
-        if (!isUnanchored(readScriptReference(entry.command))) return [];
+      return [
+        {
+          file: file.path,
+          line: entry.line,
+          message: `The ${entry.event} hook names its script by a repo-relative path, which resolves against the shell's current directory and goes missing after one cd.`,
+          remediation:
+            'Prefix the script path with the project root, for example "$(git rev-parse --show-toplevel)/".',
+        },
+      ];
+    })
+  );
 
-        return [
-          {
-            file: file.path,
-            line: entry.line,
-            message: `The ${entry.event} hook names its script by a repo-relative path, which resolves against the shell's current directory and goes missing after one cd.`,
-            remediation:
-              'Prefix the script path with the project root, for example "$(git rev-parse --show-toplevel)/".',
-          },
-        ];
-      })
-    );
-
-  return [
-    {
-      appliesTo: ['settings', 'settings-local'],
-      category: 'hooks',
-      check: eventCheck,
-      detection:
-        'A key under hooks is not an event Claude Code documents (warning, so a newer event never blocks).',
-      ruleId: 'hooks.event-name',
-      severity: 'warning',
-    },
-    {
-      appliesTo: ['settings', 'settings-local'],
-      category: 'hooks',
-      check: pathCheck,
-      detection:
-        'A hook command names a script under a recognized project-root prefix that does not exist or is not executable; the command is read statically and never run.',
-      ruleId: 'hooks.path-exists-executable',
-      severity: 'error',
-    },
-    {
-      appliesTo: ['settings', 'settings-local'],
-      category: 'hooks',
-      check: rootedCheck,
-      detection:
-        'A hook command names its script by a repo-relative path instead of an absolute, $-expanded or substituted root.',
-      ruleId: 'hooks.rooted-command',
-      severity: 'error',
-    },
-  ];
-};
-
-export const HOOKS_RULES: readonly RuleDefinition[] = createHookRules();
+export const HOOKS_RULES: readonly RuleDefinition[] = [
+  {
+    appliesTo: ['settings', 'settings-local'],
+    category: 'hooks',
+    check: eventCheck,
+    detection:
+      'A key under hooks is not an event Claude Code documents (warning, so a newer event never blocks).',
+    ruleId: 'hooks.event-name',
+    severity: 'warning',
+  },
+  {
+    appliesTo: ['settings', 'settings-local'],
+    category: 'hooks',
+    check: pathCheck,
+    detection:
+      'A hook command names a script under a recognized project-root prefix that does not exist or is not executable; the command is read statically and never run.',
+    ruleId: 'hooks.path-exists-executable',
+    severity: 'error',
+  },
+  {
+    appliesTo: ['settings', 'settings-local'],
+    category: 'hooks',
+    check: rootedCheck,
+    detection:
+      'A hook command names its script by a repo-relative path instead of an absolute, $-expanded or substituted root.',
+    ruleId: 'hooks.rooted-command',
+    severity: 'error',
+  },
+];
