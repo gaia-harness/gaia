@@ -35,6 +35,15 @@
 # spelling the match text is not part of is missed here; the push-to-main full
 # run backstops it.
 #
+# A suite is also selected when a test helper it loads, directly or through
+# another helper, names a changed file's match text at an occurrence that may be
+# the changed file (bats-selector-helper-lib.sh decides which). A helper under a
+# `tests/` or `helpers/` directory that copies a script into a fixture
+# repository names it, and the suite loading it never does. Production code a
+# suite sources is not a helper. A helper that copies by glob or by a derived
+# name never names the file, so a change to such a file is still missed here;
+# the open tech-debt issue #3749 tracks it.
+#
 # Changed paths are read NUL-delimited. The hand-rolled spelling,
 # `for f in $(git diff --name-only ...)`, word-splits a path holding a space
 # (`PR Merge Workflow.md` becomes `PR`, `Merge`, `Workflow.md`), and those
@@ -109,6 +118,8 @@ trap 'rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$d
 
 # shellcheck source=bats-selector-reach-lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/bats-selector-reach-lib.sh"
+# shellcheck source=bats-selector-helper-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/bats-selector-helper-lib.sh"
 
 # -z keeps a non-ASCII path unquoted, so it compares equal to the diff's path.
 git -C "$repository_root" ls-files -z | tr '\0' '\n' > "$tracked_list" \
@@ -214,13 +225,17 @@ if [ -s "$pattern_list" ]; then
   }
 fi
 
-if [ -s "$name_match_list" ]; then
+if [ -s "$pattern_list" ]; then
   tr '\0' '\n' < "$changed_list" | paste - "$pattern_list" > "$pair_list" \
     || die_input "pairing the changed paths with their match texts failed"
   awk -F/ '{ print $1 }' "$tracked_list" | sort -u > "$top_level_list" \
     || die_input "listing the tracked top-level names failed"
-  bats_selector_reaching_suites "$repository_root" "$pair_list" "$top_level_list" "$name_match_list" >> "$suite_list" \
-    || die_input "reading the occurrences in the name-matched suites failed"
+  if [ -s "$name_match_list" ]; then
+    bats_selector_reaching_suites "$repository_root" "$pair_list" "$top_level_list" "$name_match_list" >> "$suite_list" \
+      || die_input "reading the occurrences in the name-matched suites failed"
+  fi
+  bats_selector_helper_suites "$repository_root" "$tracked_list" "$pair_list" "$top_level_list" "$pattern_list" >> "$suite_list" \
+    || die_input "reading the files the suites load failed"
 fi
 
 sort -u "$suite_list"
