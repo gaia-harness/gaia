@@ -6,7 +6,7 @@ name: 'GAIA: CLI Tests'
 # declared-required context, so without this trigger -- and without the job
 # admitting it in its `if:` -- such a HEAD leaves the check absent and branch
 # protection blocks the merge with no bypass short of an admin override. Also
-# dispatch `shipped-surface-leak-check.yml` (same --ref), or its check is absent.
+# dispatch `shipped-surface-leak-check.yml` (same --ref), or its advisory check is absent.
 #
 # GitHub honors `workflow_dispatch` only for the copy of a workflow on the
 # DEFAULT branch, so a dispatch of this file fails with 422 until it lands on
