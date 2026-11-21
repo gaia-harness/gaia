@@ -84,8 +84,8 @@ jobs:
       # (a guard in distribution-run-all.bats holds the two together, since a
       # declared path this filter misses could never select its scenario). The
       # release leak check and the marker-strip scenario, whose real input is
-      # every shipped file, run unfiltered in cli-tests.yml's shipped-surface
-      # job, so this list's narrowness cannot green a leak.
+      # every shipped file, run unfiltered in shipped-surface-leak-check.yml,
+      # so this list's narrowness cannot green a leak.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         if: github.event_name == 'pull_request' && steps.release.outputs.fast != 'true'
         id: filter

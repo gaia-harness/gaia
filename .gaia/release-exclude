@@ -339,6 +339,8 @@ apps/web/test/eslint/require-css-escape.test.ts
 .github/workflows/forensics-triage.yml
 .github/workflows/shell-lint.yml
 .github/forensics
+# Maintainer-only PR gate over the shipped surface; an adopter clone never runs it.
+.github/workflows/shipped-surface-leak-check.yml
 
 # --- 10. Maintainer-only distribution-boundary taxonomy ---
 # `.gaia/cli/health/` holds the distribution-boundary taxonomy the release
