@@ -480,3 +480,66 @@ add_helper_suites() {
   [ "$status" -eq 3 ] || { echo "status $status"; return 1; }
   [ -z "$output" ]
 }
+
+# add_copy_pattern_suites: helpers that copy without naming the script, on top of
+# add_helper_suites; scripts/copied.sh is the edited file.
+add_copy_pattern_suites() {
+  add_helper_suites
+  mkdir -p "$FIXTURE/other"
+  printf 'echo other\n' > "$FIXTURE/other/elsewhere.sh"
+  # Copies every script of a directory by glob.
+  printf 'for source_file in "$ROOT"/scripts/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/globber.sh"
+  printf 'load helpers/globber\n' > "$FIXTURE/tests/uses-globber.bats"
+  # Copies every script of a directory the change does not touch.
+  printf 'for source_file in "$ROOT"/other/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/other-globber.sh"
+  printf 'load helpers/other-globber\n' > "$FIXTURE/tests/uses-other-globber.bats"
+  # Globs a directory held in a variable, so the change cannot be ruled out.
+  printf 'for source_file in "$ROOT"/$directory/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/unreadable-globber.sh"
+  printf 'load helpers/unreadable-globber\n' > "$FIXTURE/tests/uses-unreadable-globber.bats"
+  # Copies a script and derives more copies from what it sources.
+  printf 'cp "$ROOT/scripts/library.sh" "$REPO/"\ngrep -o "[a-z]*[.]sh" "$ROOT/scripts/library.sh"\n' > "$FIXTURE/tests/helpers/deriver.sh"
+  printf 'load helpers/deriver\n' > "$FIXTURE/tests/uses-deriver.bats"
+  # Copies the same script without deriving anything from it.
+  printf 'cp "$ROOT/scripts/library.sh" "$REPO/"\n' > "$FIXTURE/tests/helpers/plain-copier.sh"
+  printf 'load helpers/plain-copier\n' > "$FIXTURE/tests/uses-plain-copier.bats"
+  # Runs a helper by path instead of loading it.
+  printf 'run "$BATS_TEST_DIRNAME/helpers/copier.sh"\n' > "$FIXTURE/tests/invokes-copier.bats"
+  printf 'run "$BATS_TEST_DIRNAME/helpers/not-tracked.sh"\n' > "$FIXTURE/tests/invokes-missing.bats"
+  git -C "$FIXTURE" add -A
+  git -C "$FIXTURE" commit -q -m copy-patterns
+  BASE="$(git -C "$FIXTURE" rev-parse HEAD)"
+  git -C "$FIXTURE" update-ref refs/remotes/origin/main "$BASE"
+  printf 'edited again\n' >> "$FIXTURE/scripts/copied.sh"
+  git -C "$FIXTURE" commit -q -am edit-again
+}
+
+@test "a helper copying by a glob that covers the changed script selects its suites; a glob over another directory does not, one that cannot be read does" {
+  add_copy_pattern_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/uses-globber.bats' || return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-unreadable-globber.bats' || return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-other-globber.bats' && return 1
+  true
+}
+
+@test "a helper that copies a script and derives copies from it is selected through that script's sourced files; a plain copy is not" {
+  add_copy_pattern_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/uses-deriver.bats' || return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-plain-copier.bats' && return 1
+  true
+}
+
+@test "a suite that runs a tracked helper by path is selected like one that loads it; a path naming no tracked helper selects nothing" {
+  add_copy_pattern_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/invokes-copier.bats' || return 1
+  printf '%s\n' "$output" | grep -qx 'tests/invokes-missing.bats' && return 1
+  true
+}
