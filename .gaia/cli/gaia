@@ -289,8 +289,8 @@ var require_utils = __commonJS({
       }
       return output2;
     };
-    exports.basename = (path109, { windows } = {}) => {
-      const segs = path109.split(windows ? /[\\/]/ : "/");
+    exports.basename = (path110, { windows } = {}) => {
+      const segs = path110.split(windows ? /[\\/]/ : "/");
       const last = segs[segs.length - 1];
       if (last === "") {
         return segs[segs.length - 2];
@@ -4851,10 +4851,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path109) {
-  if (!path109)
+function getElementAtPath(obj, path110) {
+  if (!path110)
     return obj;
-  return path109.reduce((acc, key) => acc?.[key], obj);
+  return path110.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -5194,11 +5194,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path109, issues) {
+function prefixIssues(path110, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path109);
+    iss.path.unshift(path110);
     return iss;
   });
 }
@@ -5660,16 +5660,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path109 = []) => {
+  const processError = (error63, path110 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path109, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path110, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path109, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path110, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path109, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path110, ...issue2.path]);
       } else {
-        const fullpath = [...path109, ...issue2.path];
+        const fullpath = [...path110, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -5708,17 +5708,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path109 = []) => {
+  const processError = (error63, path110 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path109, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path110, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path109, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path110, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path109, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path110, ...issue2.path]);
       } else {
-        const fullpath = [...path109, ...issue2.path];
+        const fullpath = [...path110, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -5757,8 +5757,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path109 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path109) {
+  const path110 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path110) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -22896,13 +22896,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path109 = ref.slice(1).split("/").filter(Boolean);
-  if (path109.length === 0) {
+  const path110 = ref.slice(1).split("/").filter(Boolean);
+  if (path110.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path109[0] === defsKey) {
-    const key = path109[1] === void 0 ? void 0 : decodeJSONPointerSegment(path109[1]);
+  if (path110[0] === defsKey) {
+    const key = path110[1] === void 0 ? void 0 : decodeJSONPointerSegment(path110[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -24681,9 +24681,9 @@ var parseKey = (innerKey, grammar) => {
     };
   }
   const [, rawClass = "", rawPath = "", rawLine = ""] = fields;
-  const path109 = normalizeRepoRelativePath(rawPath);
-  if (!path109.ok) {
-    return path109;
+  const path110 = normalizeRepoRelativePath(rawPath);
+  if (!path110.ok) {
+    return path110;
   }
   const line = parseKeyLine(rawLine);
   if (!line.ok) {
@@ -24691,7 +24691,7 @@ var parseKey = (innerKey, grammar) => {
   }
   return {
     ok: true,
-    value: { class: rawClass, line: line.value, path: path109.value, version: "v1" }
+    value: { class: rawClass, line: line.value, path: path110.value, version: "v1" }
   };
 };
 var parseWrappedKeys = (text) => {
@@ -24701,10 +24701,10 @@ var parseWrappedKeys = (text) => {
     const rawPath = match[1];
     const digits = /^\d+/.exec(text.slice(match.index + match[0].length));
     if (rawPath !== void 0 && digits !== null) {
-      const path109 = normalizeRepoRelativePath(rawPath);
+      const path110 = normalizeRepoRelativePath(rawPath);
       const line = parseKeyLine(digits[0]);
-      if (path109.ok && line.ok) {
-        found.push({ line: line.value, path: path109.value });
+      if (path110.ok && line.ok) {
+        found.push({ line: line.value, path: path110.value });
       }
     }
   }
@@ -29991,10 +29991,10 @@ var perFile = (kinds, inspect2) => (context) => parsedFilesOf(context, kinds).fi
 var effectiveName = (parsed) => {
   const declared = nonEmptyString(parsed.data.name)?.trim();
   if (declared !== void 0) return declared;
-  const { path: path109 } = parsed.file;
-  const skill = SKILL_DIRECTORY2.exec(path109)?.[1];
+  const { path: path110 } = parsed.file;
+  const skill = SKILL_DIRECTORY2.exec(path110)?.[1];
   if (skill !== void 0) return skill;
-  const stem = (COMMAND_STEM.exec(path109) ?? AGENT_STEM.exec(path109))?.[1];
+  const stem = (COMMAND_STEM.exec(path110) ?? AGENT_STEM.exec(path110))?.[1];
   return stem?.replaceAll("/", ":");
 };
 var collisionCheck = (context) => {
@@ -31737,7 +31737,7 @@ var HELP_TEXT6 = `Usage: gaia wiki orphans [--json]
   title, domain } ] }.
 `;
 var HELP_TOKENS6 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
-var isMaintainerOnly = (path109) => path109.startsWith("wiki/meta/") || path109.startsWith("wiki/entities/");
+var isMaintainerOnly = (path110) => path110.startsWith("wiki/meta/") || path110.startsWith("wiki/entities/");
 var orphansOf = (index) => index.pages.filter((page) => page.inbound_links === 0 && !isMaintainerOnly(page.path)).map((page) => ({
   domain: page.domain,
   path: page.path,
@@ -40165,13 +40165,13 @@ var decodeToken = (token) => {
   if (!Number.isSafeInteger(prNumber)) {
     return { ok: false, reason: "decoded token carries an invalid pr_number" };
   }
-  const path109 = normalizeRepoRelativePath(rawPath);
-  if (!path109.ok) return { ok: false, reason: path109.reason };
+  const path110 = normalizeRepoRelativePath(rawPath);
+  if (!path110.ok) return { ok: false, reason: path110.reason };
   const line = parseKeyLine(rawLine);
   if (!line.ok) return { ok: false, reason: line.reason };
   return {
     ok: true,
-    value: { line: line.value, path: path109.value, pr_number: prNumber }
+    value: { line: line.value, path: path110.value, pr_number: prNumber }
   };
 };
 
@@ -46288,6 +46288,16 @@ var fetchLatestVersion = (name, cwd, pnpmRunner) => {
 };
 
 // src/update-deps/run-compute-adjust.ts
+var buildCooldownContext = (args) => {
+  const minimumReleaseAgeMinutes = readMinimumReleaseAge(args.repoRoot);
+  return {
+    cooldownCutoffMs: args.now.getTime() - minimumReleaseAgeMinutes * 6e4,
+    cwd: args.cwd,
+    minimumReleaseAgeExcludes: readMinimumReleaseAgeExclude(args.repoRoot),
+    minimumReleaseAgeMinutes,
+    pnpmRunner: args.pnpmRunner
+  };
+};
 var applyCooldown = (args) => {
   const { context, current, latest, name } = args;
   if (context.minimumReleaseAgeMinutes <= 0) return { kind: "ok", latest };
@@ -46592,14 +46602,12 @@ var computeUpdates = (options) => {
   ];
   const pkg = packagePath === "." ? packageManifest : mergeManifests(rootPackage, packageManifest);
   const now = (options.now ?? (() => /* @__PURE__ */ new Date()))();
-  const minimumReleaseAgeMinutes = readMinimumReleaseAge(repoRoot);
-  const cooldown = {
-    cooldownCutoffMs: now.getTime() - minimumReleaseAgeMinutes * 6e4,
+  const cooldown = buildCooldownContext({
     cwd: packageDir,
-    minimumReleaseAgeExcludes: readMinimumReleaseAgeExclude(repoRoot),
-    minimumReleaseAgeMinutes,
-    pnpmRunner
-  };
+    now,
+    pnpmRunner,
+    repoRoot
+  });
   const holds = readUpdateDepsHolds(rootPackage);
   const appWaves = buildWorkspaceWaves({
     entries: raw,
@@ -47528,10 +47536,13 @@ var run59 = async (argv, options = {}) => {
 
 // src/update-deps/global-tools.ts
 import { spawnSync as spawnSync5 } from "node:child_process";
+import { readFileSync as readFileSync62 } from "node:fs";
+import path82 from "node:path";
 var HELP_TEXT54 = `Usage: gaia update-deps global-tools
 
-  Print {"rows":[...]} describing globally installed tools /update-deps keeps
-  current (playwright-cli). Always exits 0, even when a probe fails.
+  Print {"rows":[...]} describing the tools /update-deps keeps current outside
+  pnpm (playwright-cli, the react-doctor pin). Always exits 0, even when a
+  probe fails.
 `;
 var HELP_TOKENS52 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var INSTALL_COMMAND = "npm install -g @playwright/cli@latest";
@@ -47581,17 +47592,90 @@ var defaultProbes = {
   probeInstalledVersion: () => probeCommand("playwright-cli", ["--version"]),
   probeLatestVersion: () => probeCommand("npm", ["view", "@playwright/cli", "version"])
 };
+var REACT_DOCTOR_PIN_FILE = ".gaia/react-doctor-version";
+var readReactDoctorPin = (repoRoot) => {
+  try {
+    const pinned = readFileSync62(
+      path82.join(repoRoot, REACT_DOCTOR_PIN_FILE),
+      "utf8"
+    ).replaceAll(/\s/gu, "");
+    return STRICT_SEMVER_PATTERN.test(pinned) ? pinned : null;
+  } catch {
+    return null;
+  }
+};
+var computeReactDoctorRow = (input2) => {
+  const { now, pnpmRunner, repoRoot } = input2;
+  const pinned = readReactDoctorPin(repoRoot);
+  const row = (status, message, latest = null) => ({
+    latest,
+    message,
+    offerBump: status === "outdated",
+    packageName: "react-doctor",
+    pinFile: REACT_DOCTOR_PIN_FILE,
+    pinned,
+    status,
+    tool: "react-doctor"
+  });
+  if (pinned === null) {
+    return row(
+      "unknown",
+      `${REACT_DOCTOR_PIN_FILE} holds no version such as 0.9.22, comparison skipped`
+    );
+  }
+  const lookup2 = pnpmRunner(["view", "react-doctor", "version"], {
+    cwd: repoRoot
+  });
+  const registryLatest = lookup2.status === 0 ? lookup2.stdout.trim() : "";
+  if (!STRICT_SEMVER_PATTERN.test(registryLatest)) {
+    return row("unknown", "registry lookup failed, version comparison skipped");
+  }
+  const decision = applyCooldown({
+    context: buildCooldownContext({ cwd: repoRoot, now, pnpmRunner, repoRoot }),
+    current: pinned,
+    latest: registryLatest,
+    name: "react-doctor"
+  });
+  if (decision.kind === "unresolved") {
+    return row(
+      "unknown",
+      "release times lookup failed, version comparison skipped"
+    );
+  }
+  if (decision.kind === "cooldown") {
+    return row(
+      "current",
+      `pinned ${pinned}; ${registryLatest} is still inside the release-age cooldown`,
+      registryLatest
+    );
+  }
+  if (compareSegments(parseSegments(pinned), parseSegments(decision.latest)) < 0) {
+    return row(
+      "outdated",
+      `pinned ${pinned}, latest ${decision.latest}`,
+      decision.latest
+    );
+  }
+  return row("current", `up to date at ${pinned}`, decision.latest);
+};
 var run60 = (argv, options = {}) => {
   if (argv.some((token) => HELP_TOKENS52.has(token))) {
     process.stdout.write(HELP_TEXT54);
     return EXIT_CODES.OK;
   }
   const probes = options.probes ?? defaultProbes;
-  const row = computePlaywrightCliRow({
-    installedVersion: probes.probeInstalledVersion(),
-    latestVersion: probes.probeLatestVersion()
-  });
-  process.stdout.write(`${JSON.stringify({ rows: [row] })}
+  const rows = [
+    computePlaywrightCliRow({
+      installedVersion: probes.probeInstalledVersion(),
+      latestVersion: probes.probeLatestVersion()
+    }),
+    computeReactDoctorRow({
+      now: options.now?.() ?? /* @__PURE__ */ new Date(),
+      pnpmRunner: options.pnpmRunner ?? defaultPnpmRunner,
+      repoRoot: resolveTreeRoot(process.cwd())
+    })
+  ];
+  process.stdout.write(`${JSON.stringify({ rows })}
 `);
   return EXIT_CODES.OK;
 };
@@ -47600,11 +47684,11 @@ var run60 = (argv, options = {}) => {
 import {
   existsSync as existsSync42,
   mkdirSync as mkdirSync20,
-  readFileSync as readFileSync62,
+  readFileSync as readFileSync63,
   rmSync as rmSync6,
   writeFileSync as writeFileSync11
 } from "node:fs";
-import path82 from "node:path";
+import path83 from "node:path";
 var HELP_TEXT55 = `Usage: gaia update-deps write-security-cache --count <n> --source <dependabot|pnpm-audit> [--reason <tokens>]
 
   Rewrite securityCount, securitySource, securityUnavailableReason, and
@@ -47664,7 +47748,7 @@ var acquireLock = (lockDirectory, budgetMs) => {
   for (; ; ) {
     try {
       mkdirSync20(lockDirectory);
-      writeFileSync11(path82.join(lockDirectory, "owner"), `${process.pid}
+      writeFileSync11(path83.join(lockDirectory, "owner"), `${process.pid}
 `);
       return true;
     } catch {
@@ -47675,7 +47759,7 @@ var acquireLock = (lockDirectory, budgetMs) => {
 };
 var releaseLock = (lockDirectory) => {
   try {
-    const owner = readFileSync62(path82.join(lockDirectory, "owner"), "utf8");
+    const owner = readFileSync63(path83.join(lockDirectory, "owner"), "utf8");
     if (owner.trim() === String(process.pid)) {
       rmSync6(lockDirectory, { force: true, recursive: true });
     }
@@ -47684,7 +47768,7 @@ var releaseLock = (lockDirectory) => {
 };
 var readCache = (cacheFile) => {
   try {
-    const parsed = JSON.parse(readFileSync62(cacheFile, "utf8"));
+    const parsed = JSON.parse(readFileSync63(cacheFile, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return null;
     }
@@ -47715,13 +47799,13 @@ var run61 = (argv, options = {}) => {
   } catch {
     root = cwd;
   }
-  const cacheDirectory2 = path82.join(root, ".gaia/local/cache/shared");
-  const cacheFile = path82.join(cacheDirectory2, "update-check.json");
+  const cacheDirectory2 = path83.join(root, ".gaia/local/cache/shared");
+  const cacheFile = path83.join(cacheDirectory2, "update-check.json");
   if (!existsSync42(cacheFile)) {
     printResult4({ reason: "no-cache", written: false });
     return EXIT_CODES.OK;
   }
-  const lockDirectory = path82.join(cacheDirectory2, ".update-check.lock");
+  const lockDirectory = path83.join(cacheDirectory2, ".update-check.lock");
   if (!acquireLock(lockDirectory, options.lockWaitMs ?? DEFAULT_LOCK_WAIT_MS)) {
     printResult4({ reason: "lock-held", written: false });
     return EXIT_CODES.OK;
@@ -47757,7 +47841,8 @@ var HELP_TEXT56 = `Usage: gaia update-deps <subcommand> [args]
                                               statusline stops counting them
                                               (local only). --clear resets.
   global-tools                                Report globally installed tools
-                                              (playwright-cli) as JSON rows.
+                                              (playwright-cli) and the
+                                              react-doctor pin as JSON rows.
   advisories --emit <path> [--count-only] [--updates <path>]
                                               Fetch, validate, and rank open
                                               security advisories (Dependabot
@@ -47809,11 +47894,11 @@ var run62 = async (argv) => {
 
 // src/update/crossing-move.ts
 import { existsSync as existsSync44, mkdirSync as mkdirSync21, writeFileSync as writeFileSync12 } from "node:fs";
-import path85 from "node:path";
+import path86 from "node:path";
 
 // src/update/crossing-shared.ts
-import { existsSync as existsSync43, lstatSync as lstatSync4, readFileSync as readFileSync63, realpathSync as realpathSync8 } from "node:fs";
-import path83 from "node:path";
+import { existsSync as existsSync43, lstatSync as lstatSync4, readFileSync as readFileSync64, realpathSync as realpathSync8 } from "node:fs";
+import path84 from "node:path";
 var LEGACY_PACKAGE_ROOT = "frontend";
 var LEGACY_PACKAGE_NAME = "frontend";
 var NEW_PACKAGE_NAME = "web";
@@ -47860,9 +47945,9 @@ var isSymlink = (target) => {
     return false;
   }
 };
-var readTextIfPresent = (file2) => existsSync43(file2) ? readFileSync63(file2, "utf8") : void 0;
+var readTextIfPresent = (file2) => existsSync43(file2) ? readFileSync64(file2, "utf8") : void 0;
 var readRegistry2 = (root) => {
-  const text = readTextIfPresent(path83.join(root, REGISTRY_FILE2));
+  const text = readTextIfPresent(path84.join(root, REGISTRY_FILE2));
   if (text === void 0) {
     return [{ name: LEGACY_PACKAGE_NAME, path: LEGACY_PACKAGE_ROOT }];
   }
@@ -47921,8 +48006,8 @@ var isBlankOrComment = (line) => {
 };
 
 // src/update/crossing-workspace.ts
-import { readdirSync as readdirSync10, readFileSync as readFileSync64 } from "node:fs";
-import path84 from "node:path";
+import { readdirSync as readdirSync10, readFileSync as readFileSync65 } from "node:fs";
+import path85 from "node:path";
 var APPS_GLOB = `${APPS_DIRECTORY}/*`;
 var PACKAGES_GLOB = `${PACKAGES_DIRECTORY}/*`;
 var LIFECYCLE_SCRIPTS = [
@@ -48001,7 +48086,7 @@ var subdirectories2 = (directory) => {
 };
 var lifecycleScriptsOf = (packageJsonPath) => {
   try {
-    const parsed = JSON.parse(readFileSync64(packageJsonPath, "utf8"));
+    const parsed = JSON.parse(readFileSync65(packageJsonPath, "utf8"));
     const scripts = Object.keys(parsed.scripts ?? {});
     return LIFECYCLE_SCRIPTS.filter((name) => scripts.includes(name));
   } catch {
@@ -48011,9 +48096,9 @@ var lifecycleScriptsOf = (packageJsonPath) => {
 var matchedFolders = (root) => {
   const found = [];
   for (const parent of [APPS_DIRECTORY, PACKAGES_DIRECTORY]) {
-    for (const name of subdirectories2(path84.join(root, parent))) {
+    for (const name of subdirectories2(path85.join(root, parent))) {
       const folder = `${parent}/${name}`;
-      const lifecycle = folder === NEW_PACKAGE_ROOT ? void 0 : lifecycleScriptsOf(path84.join(root, folder, "package.json"));
+      const lifecycle = folder === NEW_PACKAGE_ROOT ? void 0 : lifecycleScriptsOf(path85.join(root, folder, "package.json"));
       if (lifecycle !== void 0) found.push({ folder, lifecycle });
     }
   }
@@ -48055,8 +48140,8 @@ var parseObject = (text) => {
 var writeIfChanged = (context, { after, before, relative }) => {
   context.staged.add(relative);
   if (before === after) return false;
-  mkdirSync21(path85.dirname(path85.join(context.root, relative)), { recursive: true });
-  writeFileSync12(path85.join(context.root, relative), after);
+  mkdirSync21(path86.dirname(path86.join(context.root, relative)), { recursive: true });
+  writeFileSync12(path86.join(context.root, relative), after);
   return true;
 };
 var recordIgnored = (root) => {
@@ -48076,16 +48161,16 @@ var recordIgnored = (root) => {
       root
     )
   );
-  const directory = path85.join(root, UPDATE_CACHE);
+  const directory = path86.join(root, UPDATE_CACHE);
   mkdirSync21(directory, { recursive: true });
   writeFileSync12(
-    path85.join(directory, IGNORED_RECORD),
+    path86.join(directory, IGNORED_RECORD),
     listing.map((entry) => `${entry}
 `).join("")
   );
 };
 var updateRegistry = (context) => {
-  const file2 = path85.join(context.root, REGISTRY_FILE2);
+  const file2 = path86.join(context.root, REGISTRY_FILE2);
   const before = readTextIfPresent(file2);
   const entries = readRegistry2(context.root);
   const target = entries?.find(
@@ -48111,7 +48196,7 @@ var updateRegistry = (context) => {
 };
 var updateDescriptor = (context, memberName) => {
   const relative = `${NEW_PACKAGE_ROOT}/${DESCRIPTOR_FILE}`;
-  const before = readTextIfPresent(path85.join(context.root, relative));
+  const before = readTextIfPresent(path86.join(context.root, relative));
   const parsed = before === void 0 ? void 0 : parseObject(before);
   if (before === void 0 || parsed === void 0) return;
   let after = before;
@@ -48124,7 +48209,7 @@ var updateDescriptor = (context, memberName) => {
 };
 var updatePackageName = (context) => {
   const relative = `${NEW_PACKAGE_ROOT}/package.json`;
-  const before = readTextIfPresent(path85.join(context.root, relative));
+  const before = readTextIfPresent(path86.join(context.root, relative));
   const parsed = before === void 0 ? void 0 : parseObject(before);
   if (before === void 0 || parsed?.name !== LEGACY_PACKAGE_NAME) return;
   const after = withName(before, NEW_PACKAGE_NAME);
@@ -48133,12 +48218,12 @@ var updatePackageName = (context) => {
   }
 };
 var hasGeneratedSettings = (root, entry) => ["settings.json", "settings.overlay.json"].some(
-  (name) => existsSync44(path85.join(root, entry.path, ".claude", name))
+  (name) => existsSync44(path86.join(root, entry.path, ".claude", name))
 );
 var markGeneratedSettings = (context, appName) => {
   for (const entry of readRegistry2(context.root) ?? []) {
-    const relative = path85.posix.join(entry.path, DESCRIPTOR_FILE);
-    const before = readTextIfPresent(path85.join(context.root, relative));
+    const relative = path86.posix.join(entry.path, DESCRIPTOR_FILE);
+    const before = readTextIfPresent(path86.join(context.root, relative));
     const parsed = before === void 0 ? void 0 : parseObject(before);
     if (entry.name !== appName && entry.path !== NEW_PACKAGE_ROOT && before !== void 0 && parsed !== void 0 && parsed.generatedSettings !== true && hasGeneratedSettings(context.root, entry)) {
       const after = withProperty(before, "generatedSettings", "true");
@@ -48149,7 +48234,7 @@ var markGeneratedSettings = (context, appName) => {
   }
 };
 var updateWorkspace = (context) => {
-  const before = readTextIfPresent(path85.join(context.root, WORKSPACE_FILE2));
+  const before = readTextIfPresent(path86.join(context.root, WORKSPACE_FILE2));
   const edit = before === void 0 ? { changed: true, ok: true, text: NEW_WORKSPACE } : editWorkspacePackages(before);
   if (!edit.ok) return edit.message;
   if (writeIfChanged(context, {
@@ -48172,16 +48257,16 @@ var reportMatchedFolders = (context) => {
   }
 };
 var ensureKeepFile = (context) => {
-  const file2 = path85.join(context.root, KEEP_FILE);
+  const file2 = path86.join(context.root, KEEP_FILE);
   context.staged.add(KEEP_FILE);
   if (existsSync44(file2)) return;
-  mkdirSync21(path85.dirname(file2), { recursive: true });
+  mkdirSync21(path86.dirname(file2), { recursive: true });
   writeFileSync12(file2, "");
   context.lines.push(reportLine("keep-file", KEEP_FILE));
 };
 var stage = (context) => {
   const named = [...context.staged].filter(
-    (relative) => existsSync44(path85.join(context.root, relative))
+    (relative) => existsSync44(path86.join(context.root, relative))
   );
   try {
     execGaiaGit(
@@ -48194,9 +48279,9 @@ var stage = (context) => {
   }
 };
 var preconditionStop = (root) => {
-  const legacy = path85.join(root, LEGACY_PACKAGE_ROOT);
-  const home = path85.join(root, NEW_PACKAGE_ROOT);
-  if (isSymlink(legacy) || isSymlink(path85.join(root, APPS_DIRECTORY))) {
+  const legacy = path86.join(root, LEGACY_PACKAGE_ROOT);
+  const home = path86.join(root, NEW_PACKAGE_ROOT);
+  if (isSymlink(legacy) || isSymlink(path86.join(root, APPS_DIRECTORY))) {
     return stop(
       "symlink",
       "replace the symlink at the old app root or at the apps directory with a real directory, then re-run the note"
@@ -48229,9 +48314,9 @@ var runMove = (workingDirectory) => {
   const refusal = preconditionStop(root);
   if (refusal !== void 0) return refusal;
   const context = { lines: [], root, staged: /* @__PURE__ */ new Set() };
-  if (isDirectory4(path85.join(root, LEGACY_PACKAGE_ROOT))) {
+  if (isDirectory4(path86.join(root, LEGACY_PACKAGE_ROOT))) {
     recordIgnored(root);
-    mkdirSync21(path85.join(root, APPS_DIRECTORY), { recursive: true });
+    mkdirSync21(path86.join(root, APPS_DIRECTORY), { recursive: true });
     execGaiaGit(["mv", LEGACY_PACKAGE_ROOT, NEW_PACKAGE_ROOT], root);
     context.lines.push(
       reportLine("moved", `${LEGACY_PACKAGE_ROOT} to ${NEW_PACKAGE_ROOT}`)
@@ -48267,7 +48352,7 @@ var runMove = (workingDirectory) => {
 
 // src/update/crossing-preflight.ts
 import { existsSync as existsSync45, readdirSync as readdirSync11, realpathSync as realpathSync9 } from "node:fs";
-import path86 from "node:path";
+import path87 from "node:path";
 var NOTEBOOK_DEPTH = 5;
 var NEXT_STEPS = {
   "both-trees-present": "move or remove one of the two app directories so only one holds the app, then re-run the note",
@@ -48286,11 +48371,11 @@ var git = (root, args) => {
     return void 0;
   }
 };
-var holdsApp = (directory) => existsSync45(path86.join(directory, "package.json")) || existsSync45(path86.join(directory, DESCRIPTOR_FILE));
+var holdsApp = (directory) => existsSync45(path87.join(directory, "package.json")) || existsSync45(path87.join(directory, DESCRIPTOR_FILE));
 var isResume = (root) => {
-  if (existsSync45(path86.join(root, LEGACY_PACKAGE_ROOT))) return false;
-  if (!holdsApp(path86.join(root, NEW_PACKAGE_ROOT))) return false;
-  const manifest = readTextIfPresent(path86.join(root, MANIFEST_FILE));
+  if (existsSync45(path87.join(root, LEGACY_PACKAGE_ROOT))) return false;
+  if (!holdsApp(path87.join(root, NEW_PACKAGE_ROOT))) return false;
+  const manifest = readTextIfPresent(path87.join(root, MANIFEST_FILE));
   const keys = manifest === void 0 ? void 0 : manifestKeys(manifest);
   return keys?.some((key) => key.startsWith(LEGACY_PREFIX)) ?? false;
 };
@@ -48311,7 +48396,7 @@ var hasRunningPlan = (directory, depth = 0) => {
   }
   return entries.some((entry) => {
     if (entry.isFile() && entry.name === "RUNNING") return true;
-    return entry.isDirectory() && hasRunningPlan(path86.join(directory, entry.name), depth + 1);
+    return entry.isDirectory() && hasRunningPlan(path87.join(directory, entry.name), depth + 1);
   });
 };
 var defaultBranch = (root) => {
@@ -48342,7 +48427,7 @@ var registryReason = (root, resume) => {
   const accepted = resume ? [LEGACY_PACKAGE_ROOT, NEW_PACKAGE_ROOT] : [LEGACY_PACKAGE_ROOT];
   const appEntry = entries.find((entry) => accepted.includes(entry.path));
   if (appEntry === void 0) return "registry-path";
-  if (existsSync45(path86.join(root, LEGACY_PACKAGE_ROOT)) && existsSync45(path86.join(root, NEW_PACKAGE_ROOT))) {
+  if (existsSync45(path87.join(root, LEGACY_PACKAGE_ROOT)) && existsSync45(path87.join(root, NEW_PACKAGE_ROOT))) {
     return "both-trees-present";
   }
   const renamed = appEntry.name === LEGACY_PACKAGE_NAME;
@@ -48358,7 +48443,7 @@ var failing = (root, workingDirectory) => {
   }
   if (isLinkedWorktree(root)) return "linked-worktree";
   if (realpathSync9(workingDirectory) !== root) return "not-root-launch";
-  if (hasRunningPlan(path86.join(root, ".notebook"))) return "plan-in-execution";
+  if (hasRunningPlan(path87.join(root, ".notebook"))) return "plan-in-execution";
   if (!resume && isBehindDefault(root)) return "default-branch-behind";
   return registryReason(root, resume);
 };
@@ -48383,7 +48468,7 @@ import {
   rmSync as rmSync7,
   writeFileSync as writeFileSync13
 } from "node:fs";
-import path87 from "node:path";
+import path88 from "node:path";
 var TAG_PATTERN = /^[A-Za-z0-9][\w.+-]*$/u;
 var DIGEST_FILE = ".source-digest";
 var CONTROL_CHARACTER3 = /[\u0000-\u001F\u007F]/u;
@@ -48412,7 +48497,7 @@ var occupiesNewHome = (value) => value === NEW_PACKAGE_ROOT || value.startsWith(
 var isPlainKey = (key) => key !== "" && !key.startsWith("/") && !key.includes("\\") && !CONTROL_CHARACTER3.test(key) && key.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 var listFiles = (directory, prefix = "") => {
   const found = [];
-  for (const entry of readdirSync12(path87.join(directory, prefix), {
+  for (const entry of readdirSync12(path88.join(directory, prefix), {
     withFileTypes: true
   })) {
     const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
@@ -48427,9 +48512,9 @@ var listFiles = (directory, prefix = "") => {
   }
   return found;
 };
-var cacheDirectory = (root, tag) => path87.join(root, UPDATE_CACHE, tag);
+var cacheDirectory = (root, tag) => path88.join(root, UPDATE_CACHE, tag);
 var inspect = (root, tag) => {
-  const tree = path87.join(cacheDirectory(root, tag), "tree");
+  const tree = path88.join(cacheDirectory(root, tag), "tree");
   let stats;
   try {
     stats = lstatSync5(tree);
@@ -48449,7 +48534,7 @@ var inspect = (root, tag) => {
       `delete the ${tag} directory from the update cache so it is downloaded again, then re-run the note`
     );
   }
-  const manifest = readTextIfPresent(path87.join(tree, MANIFEST_FILE));
+  const manifest = readTextIfPresent(path88.join(tree, MANIFEST_FILE));
   let keys;
   try {
     const parsed = JSON.parse(manifest ?? "");
@@ -48490,35 +48575,35 @@ var rekeyedManifest = (manifest) => {
 };
 var build = (root, source) => {
   const directory = cacheDirectory(root, source.tag);
-  const destination = path87.join(directory, "tree-rekeyed");
-  const reusable = readTextIfPresent(path87.join(destination, DIGEST_FILE)) === source.digest;
+  const destination = path88.join(directory, "tree-rekeyed");
+  const reusable = readTextIfPresent(path88.join(destination, DIGEST_FILE)) === source.digest;
   for (const name of readdirSync12(directory)) {
     if (name.startsWith("tree-rekeyed.tmp.")) {
-      rmSync7(path87.join(directory, name), { force: true, recursive: true });
+      rmSync7(path88.join(directory, name), { force: true, recursive: true });
     }
   }
   if (reusable) return destination;
   rmSync7(destination, { force: true, recursive: true });
   const scratch = `${destination}.tmp.${randomBytes3(6).toString("hex")}`;
-  const tree = path87.join(directory, "tree");
+  const tree = path88.join(directory, "tree");
   for (const relative of source.files.filter(
     (file2) => file2 !== MANIFEST_FILE
   )) {
-    const target = path87.join(scratch, mapLeadingRoot(relative));
-    mkdirSync22(path87.dirname(target), { recursive: true });
-    copyFileSync2(path87.join(tree, relative), target);
+    const target = path88.join(scratch, mapLeadingRoot(relative));
+    mkdirSync22(path88.dirname(target), { recursive: true });
+    copyFileSync2(path88.join(tree, relative), target);
   }
-  mkdirSync22(path87.join(scratch, ".gaia"), { recursive: true });
+  mkdirSync22(path88.join(scratch, ".gaia"), { recursive: true });
   writeFileSync13(
-    path87.join(scratch, MANIFEST_FILE),
+    path88.join(scratch, MANIFEST_FILE),
     rekeyedManifest(source.manifest)
   );
-  writeFileSync13(path87.join(scratch, DIGEST_FILE), source.digest);
+  writeFileSync13(path88.join(scratch, DIGEST_FILE), source.digest);
   renameSync6(scratch, destination);
   return destination;
 };
 var readDecisions = (root) => {
-  const text = readTextIfPresent(path87.join(root, DECISIONS_FILE));
+  const text = readTextIfPresent(path88.join(root, DECISIONS_FILE));
   if (text === void 0) return null;
   try {
     const document = JSON.parse(text);
@@ -48546,7 +48631,7 @@ var rekeyDecisions = (root) => {
     (left, right) => compareCodeUnits(String(left.path), String(right.path)) || compareCodeUnits(keyOf(left), keyOf(right))
   );
   atomicWriteFileSync(
-    path87.join(root, DECISIONS_FILE),
+    path88.join(root, DECISIONS_FILE),
     `${JSON.stringify(log.document, null, 2)}
 `
   );
@@ -48576,7 +48661,7 @@ var runRekey = (workingDirectory, options) => {
   const directories = new Map(
     sources.map((source) => [source.tag, build(root, source)])
   );
-  const relativeOf = (tag) => path87.relative(root, directories.get(tag) ?? "").split(path87.sep).join("/");
+  const relativeOf = (tag) => path88.relative(root, directories.get(tag) ?? "").split(path88.sep).join("/");
   const lines = [
     `BASELINE_DIR=${relativeOf(options.baselineTag)}`,
     ...options.extraTags.map((tag) => `EXTRA_DIR=${tag}:${relativeOf(tag)}`),
@@ -48586,7 +48671,7 @@ var runRekey = (workingDirectory, options) => {
 };
 
 // src/update/crossing-roster.ts
-import path88 from "node:path";
+import path89 from "node:path";
 var TOP_KEY = /^([A-Za-z_][\w-]*):/u;
 var ENTRY_START = /^ {2}- name:/u;
 var MEMBER_DIRECTORIES = [`${APPS_DIRECTORY}/`, `${PACKAGES_DIRECTORY}/`];
@@ -48669,7 +48754,7 @@ var runRoster = (workingDirectory) => {
       "start the session at the repository root and re-run the note"
     );
   }
-  const text = readTextIfPresent(path88.join(root, AUDIT_ROSTER_FILE));
+  const text = readTextIfPresent(path89.join(root, AUDIT_ROSTER_FILE));
   if (text === void 0) return done();
   const claims = outsideMemberGlobs(root);
   if (claims === void 0) {
@@ -48699,7 +48784,7 @@ var runRoster = (workingDirectory) => {
   }
   const after = edit.lines.join("\n");
   if (after !== text) {
-    atomicWriteFileSync(path88.join(root, AUDIT_ROSTER_FILE), after);
+    atomicWriteFileSync(path89.join(root, AUDIT_ROSTER_FILE), after);
   }
   return done(edit.reports);
 };
@@ -48759,8 +48844,8 @@ var run63 = (argv) => {
 
 // src/update/lockfile-command.ts
 import { execFileSync as execFileSync5 } from "node:child_process";
-import { existsSync as existsSync46, readFileSync as readFileSync65 } from "node:fs";
-import path89 from "node:path";
+import { existsSync as existsSync46, readFileSync as readFileSync66 } from "node:fs";
+import path90 from "node:path";
 
 // src/util/parse-value-flags.ts
 var applyToken3 = ({
@@ -49077,10 +49162,10 @@ var parseText = (text, format, label) => {
   }
 };
 var readWorkingTree = (root, relativePath) => {
-  const absolute = path89.join(root, relativePath);
+  const absolute = path90.join(root, relativePath);
   if (!existsSync46(absolute)) return {};
   return parseText(
-    readFileSync65(absolute, "utf8"),
+    readFileSync66(absolute, "utf8"),
     relativePath.endsWith(".json") ? "json" : "yaml",
     relativePath
   );
@@ -49089,10 +49174,10 @@ var BUILTIN_PATHS = BUILTIN_REGISTRY.map((entry) => entry.path);
 var PLAIN_DIRECTORY = /^(?:\.|[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*)$/;
 var packageDirectories = (root) => {
   let registered = BUILTIN_PATHS;
-  const registryPath = path89.join(root, ".gaia", "packages.json");
+  const registryPath = path90.join(root, ".gaia", "packages.json");
   if (existsSync46(registryPath)) {
     try {
-      const parsed = JSON.parse(readFileSync65(registryPath, "utf8"));
+      const parsed = JSON.parse(readFileSync66(registryPath, "utf8"));
       if (Array.isArray(parsed)) {
         registered = parsed.flatMap((entry) => {
           const entryPath2 = asRecord(entry).path;
@@ -49156,7 +49241,7 @@ var run64 = (argv) => {
   let command;
   try {
     command = lockfileCommand(
-      path89.resolve(parsed.flags.root),
+      path90.resolve(parsed.flags.root),
       parsed.flags.ref
     );
   } catch (error62) {
@@ -49177,8 +49262,8 @@ var run64 = (argv) => {
 };
 
 // src/update/merge-audit-ci.ts
-import { existsSync as existsSync47, readFileSync as readFileSync66 } from "node:fs";
-import path90 from "node:path";
+import { existsSync as existsSync47, readFileSync as readFileSync67 } from "node:fs";
+import path91 from "node:path";
 var HELP_TEXT59 = `Usage: gaia update merge-audit-ci --baseline <file> --latest <file> --current <file> [--deferred-baseline <key>=<file>]... [--json]
 
   Field-aware three-way verdict for .gaia/audit-ci.yml. Reads three YAML files
@@ -49271,7 +49356,7 @@ var loadAuditCi = (absPath, role) => {
   }
   let parsed;
   try {
-    parsed = load(readFileSync66(absPath, "utf8"));
+    parsed = load(readFileSync67(absPath, "utf8"));
   } catch (error62) {
     return {
       code: "audit_ci_parse_failed",
@@ -49281,7 +49366,7 @@ var loadAuditCi = (absPath, role) => {
   }
   return { ok: true, root: asRecord(parsed) };
 };
-var resolvePath = (cwd, value) => path90.isAbsolute(value) ? value : path90.join(cwd, value);
+var resolvePath = (cwd, value) => path91.isAbsolute(value) ? value : path91.join(cwd, value);
 var run65 = (argv, options = {}) => {
   const [firstArgument] = argv;
   if (firstArgument !== void 0 && HELP_TOKENS57.has(firstArgument)) {
@@ -49347,8 +49432,8 @@ var run65 = (argv, options = {}) => {
 };
 
 // src/update/merge-package.ts
-import { existsSync as existsSync48, readFileSync as readFileSync67 } from "node:fs";
-import path91 from "node:path";
+import { existsSync as existsSync48, readFileSync as readFileSync68 } from "node:fs";
+import path92 from "node:path";
 var HELP_TEXT60 = `Usage: gaia update merge-package --baseline <file> --latest <file> --current <file> [--deferred-baseline <key>=<file>]... [--json]
 
   Field-aware three-way verdict for a package.json. Reads three JSON files
@@ -49463,7 +49548,7 @@ var loadPackage = (absPath, role) => {
   try {
     return {
       ok: true,
-      root: asRecord(JSON.parse(readFileSync67(absPath, "utf8")))
+      root: asRecord(JSON.parse(readFileSync68(absPath, "utf8")))
     };
   } catch (error62) {
     return {
@@ -49473,7 +49558,7 @@ var loadPackage = (absPath, role) => {
     };
   }
 };
-var resolvePath2 = (cwd, value) => path91.isAbsolute(value) ? value : path91.join(cwd, value);
+var resolvePath2 = (cwd, value) => path92.isAbsolute(value) ? value : path92.join(cwd, value);
 var run66 = (argv, options = {}) => {
   const [firstArgument] = argv;
   if (firstArgument !== void 0 && HELP_TOKENS58.has(firstArgument)) {
@@ -49542,8 +49627,8 @@ var run66 = (argv, options = {}) => {
 };
 
 // src/update/merge-region.ts
-import { existsSync as existsSync49, readFileSync as readFileSync68 } from "node:fs";
-import path92 from "node:path";
+import { existsSync as existsSync49, readFileSync as readFileSync69 } from "node:fs";
+import path93 from "node:path";
 
 // src/update/region-markers.ts
 var REGION_PLACEHOLDER = "<<<gaia:region>>>";
@@ -49704,7 +49789,7 @@ var loadRegionFile = (absPath, role) => {
     };
   }
   try {
-    return { content: readFileSync68(absPath, "utf8"), ok: true };
+    return { content: readFileSync69(absPath, "utf8"), ok: true };
   } catch (error62) {
     return {
       code: "region_read_failed",
@@ -49713,7 +49798,7 @@ var loadRegionFile = (absPath, role) => {
     };
   }
 };
-var resolvePath3 = (cwd, value) => path92.isAbsolute(value) ? value : path92.join(cwd, value);
+var resolvePath3 = (cwd, value) => path93.isAbsolute(value) ? value : path93.join(cwd, value);
 var run67 = (argv, options = {}) => {
   const [firstArgument] = argv;
   if (firstArgument !== void 0 && HELP_TOKENS59.has(firstArgument)) {
@@ -49766,8 +49851,8 @@ var run67 = (argv, options = {}) => {
 };
 
 // src/update/merge-workspace.ts
-import { existsSync as existsSync50, readFileSync as readFileSync69 } from "node:fs";
-import path93 from "node:path";
+import { existsSync as existsSync50, readFileSync as readFileSync70 } from "node:fs";
+import path94 from "node:path";
 var HELP_TEXT62 = `Usage: gaia update merge-workspace --baseline <file> --latest <file> --current <file> [--deferred-baseline <key>=<file>]... [--json]
 
   Field-aware three-way verdict for pnpm-workspace.yaml. Reads three YAML
@@ -49870,7 +49955,7 @@ var loadWorkspace = (absPath, role) => {
   }
   let parsed;
   try {
-    parsed = load(readFileSync69(absPath, "utf8"));
+    parsed = load(readFileSync70(absPath, "utf8"));
   } catch (error62) {
     return {
       code: "workspace_parse_failed",
@@ -49880,7 +49965,7 @@ var loadWorkspace = (absPath, role) => {
   }
   return { ok: true, root: asRecord(parsed) };
 };
-var resolvePath4 = (cwd, value) => path93.isAbsolute(value) ? value : path93.join(cwd, value);
+var resolvePath4 = (cwd, value) => path94.isAbsolute(value) ? value : path94.join(cwd, value);
 var run68 = (argv, options = {}) => {
   const [firstArgument] = argv;
   if (firstArgument !== void 0 && HELP_TOKENS60.has(firstArgument)) {
@@ -49946,11 +50031,11 @@ var run68 = (argv, options = {}) => {
 };
 
 // src/update/regen-regions.ts
-import { existsSync as existsSync52, readFileSync as readFileSync71, realpathSync as realpathSync11 } from "node:fs";
-import path98 from "node:path";
+import { existsSync as existsSync52, readFileSync as readFileSync72, realpathSync as realpathSync11 } from "node:fs";
+import path99 from "node:path";
 
 // src/update/regen-regions-declaration.ts
-import path94 from "node:path";
+import path95 from "node:path";
 var isNonEmptyString = (value) => typeof value === "string" && value.trim() !== "";
 var isStringArray2 = (value) => Array.isArray(value) && value.every((item) => typeof item === "string");
 var isPlainObject6 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -49968,7 +50053,7 @@ var normalizeDeclaredPaths = (paths) => {
     const candidate = normalizeRepoPath(declPath);
     if (candidate.trim() === "")
       return { ok: false, reason: "paths carries an empty entry" };
-    if (path94.isAbsolute(candidate))
+    if (path95.isAbsolute(candidate))
       return {
         ok: false,
         reason: `paths carries an absolute path: ${candidate}`
@@ -49978,7 +50063,7 @@ var normalizeDeclaredPaths = (paths) => {
         ok: false,
         reason: `paths carries a parent-directory segment: ${candidate}`
       };
-    if (path94.posix.dirname(candidate) === ".")
+    if (path95.posix.dirname(candidate) === ".")
       return {
         ok: false,
         reason: `paths carries a path whose parent is the repository root: ${candidate}`
@@ -50142,7 +50227,7 @@ var parseFlags15 = (argv) => {
 
 // src/update/regen-regions-region.ts
 import { realpathSync as realpathSync10 } from "node:fs";
-import path97 from "node:path";
+import path98 from "node:path";
 
 // src/update/regen-regions-scope.ts
 import { createHash as createHash4 } from "node:crypto";
@@ -50153,24 +50238,24 @@ import {
   lstatSync as lstatSync6,
   mkdirSync as mkdirSync23,
   readdirSync as readdirSync13,
-  readFileSync as readFileSync70,
+  readFileSync as readFileSync71,
   readlinkSync,
   rmSync as rmSync8,
   symlinkSync as symlinkSync2,
   writeFileSync as writeFileSync14
 } from "node:fs";
-import path95 from "node:path";
+import path96 from "node:path";
 var performBackup = (inputs) => {
   const { backupDir, paths, regionId, root } = inputs;
   if (backupDir === void 0) return [];
   const backedUp = [];
   paths.forEach((declPath) => {
-    const srcAbs = path95.resolve(root, declPath);
+    const srcAbs = path96.resolve(root, declPath);
     if (!existsSync51(srcAbs)) return;
-    const destinationAbs = path95.resolve(backupDir, declPath);
+    const destinationAbs = path96.resolve(backupDir, declPath);
     if (existsSync51(destinationAbs)) return;
     try {
-      mkdirSync23(path95.dirname(destinationAbs), { recursive: true });
+      mkdirSync23(path96.dirname(destinationAbs), { recursive: true });
       copyFileSync3(srcAbs, destinationAbs);
       backedUp.push(declPath);
     } catch (error62) {
@@ -50184,7 +50269,7 @@ var performBackup = (inputs) => {
   });
   return backedUp;
 };
-var scopeDirsFor = (paths) => new Set(paths.map((declPath) => path95.posix.dirname(declPath)));
+var scopeDirsFor = (paths) => new Set(paths.map((declPath) => path96.posix.dirname(declPath)));
 var isUntouched = (before, after) => {
   if (after === void 0) return false;
   if (before.kind === "symlink")
@@ -50195,7 +50280,7 @@ var permissionsOf = (mode) => mode % 4096;
 var collectScopeDigests = (root, scopeDirs) => {
   const digests = /* @__PURE__ */ new Map();
   scopeDirs.forEach((dir) => {
-    const absDir = path95.resolve(root, dir);
+    const absDir = path96.resolve(root, dir);
     if (!existsSync51(absDir)) return;
     let entries;
     try {
@@ -50204,14 +50289,14 @@ var collectScopeDigests = (root, scopeDirs) => {
       return;
     }
     entries.forEach((rel) => {
-      const abs = path95.join(absDir, rel);
+      const abs = path96.join(absDir, rel);
       let stat;
       try {
         stat = lstatSync6(abs);
       } catch {
         return;
       }
-      const repoRelative = path95.relative(root, abs).split(path95.sep).join("/");
+      const repoRelative = path96.relative(root, abs).split(path96.sep).join("/");
       if (stat.isSymbolicLink()) {
         try {
           digests.set(repoRelative, {
@@ -50225,7 +50310,7 @@ var collectScopeDigests = (root, scopeDirs) => {
       if (!stat.isFile()) return;
       let content;
       try {
-        content = readFileSync70(abs);
+        content = readFileSync71(abs);
       } catch {
         return;
       }
@@ -50249,7 +50334,7 @@ var sweepScope = (inputs) => {
     if (afterEntry === void 0) return;
     if (isUntouched(beforeEntry, afterEntry)) return;
     try {
-      const abs = path95.resolve(root, relPath);
+      const abs = path96.resolve(root, relPath);
       rmSync8(abs, { force: true });
       if (beforeEntry.kind === "symlink") {
         symlinkSync2(beforeEntry.target, abs);
@@ -50266,7 +50351,7 @@ var sweepScope = (inputs) => {
   [...after.keys()].forEach((relPath) => {
     if (declaredSet.has(relPath) || before.has(relPath)) return;
     try {
-      rmSync8(path95.resolve(root, relPath), { force: true });
+      rmSync8(path96.resolve(root, relPath), { force: true });
       confined.push({ action: "removed", path: relPath, regionId });
     } catch {
       confined.push({ action: "reported", path: relPath, regionId });
@@ -50280,7 +50365,7 @@ var isInsideScope = (relPath, scopeDirs) => [...scopeDirs].some(
 
 // src/update/regen-regions-spawn.ts
 import { execFileSync as execFileSync6 } from "node:child_process";
-import path96 from "node:path";
+import path97 from "node:path";
 var resolveRepoPrefix = (root) => {
   try {
     return execGaiaGitRaw(["rev-parse", "--show-prefix"], root).replace(
@@ -50324,7 +50409,7 @@ var trySpawn = (decl, root) => {
   try {
     execFileSync6(
       decl.interpreter,
-      [path96.resolve(root, decl.operand), ...decl.args],
+      [path97.resolve(root, decl.operand), ...decl.args],
       {
         cwd: root,
         encoding: "utf8",
@@ -50406,23 +50491,23 @@ var computeSkipReason = (decl, inputs) => {
 var checkOperand = (decl, context) => {
   const { realRoot, root, shippedKeys } = context;
   const { interpreter, operand } = decl;
-  if (path97.isAbsolute(operand)) return "operand is an absolute path";
+  if (path98.isAbsolute(operand)) return "operand is an absolute path";
   if (operand.split("/").includes(".."))
     return "operand carries a parent-directory segment";
   if (!shippedKeys.has(normalizeRepoPath(operand)))
     return "operand is not a path this manifest ships";
   let resolvedReal;
   try {
-    resolvedReal = realpathSync10(path97.resolve(root, operand));
+    resolvedReal = realpathSync10(path98.resolve(root, operand));
   } catch {
     resolvedReal = void 0;
   }
   if (resolvedReal !== void 0) {
-    const insideRoot = resolvedReal === realRoot || resolvedReal.startsWith(`${realRoot}${path97.sep}`);
+    const insideRoot = resolvedReal === realRoot || resolvedReal.startsWith(`${realRoot}${path98.sep}`);
     if (!insideRoot)
       return "operand resolves through a symlink out of the repository";
   }
-  if (interpreter.trim() === "" || path97.isAbsolute(interpreter) || interpreter.includes("/") || interpreter.includes("\\"))
+  if (interpreter.trim() === "" || path98.isAbsolute(interpreter) || interpreter.includes("/") || interpreter.includes("\\"))
     return "interpreter is not a bare program name";
   return void 0;
 };
@@ -50553,7 +50638,7 @@ var HELP_TEXT63 = `Usage: gaia update regen-regions --manifest <path> --root <di
        --manifest / missing --root)
 `;
 var HELP_TOKENS61 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
-var resolvePath5 = (cwd, value) => path98.isAbsolute(value) ? value : path98.join(cwd, value);
+var resolvePath5 = (cwd, value) => path99.isAbsolute(value) ? value : path99.join(cwd, value);
 var loadRunInputs = (cwd, flags) => {
   const manifestPath = resolvePath5(cwd, flags.manifest);
   const root = resolvePath5(cwd, flags.root);
@@ -50568,7 +50653,7 @@ var loadRunInputs = (cwd, flags) => {
   }
   let manifestRaw;
   try {
-    manifestRaw = readFileSync71(manifestPath, "utf8");
+    manifestRaw = readFileSync72(manifestPath, "utf8");
   } catch (error62) {
     structuredError({
       code: "manifest_read_failed",
@@ -50797,8 +50882,8 @@ var runWhenInvokedDirectly = async (importMetaUrl, run83) => {
 };
 
 // src/wiki/broken-links.ts
-import { readFileSync as readFileSync72 } from "node:fs";
-import path99 from "node:path";
+import { readFileSync as readFileSync73 } from "node:fs";
+import path100 from "node:path";
 var HELP_TEXT65 = `Usage: gaia wiki broken-links [--json]
 
   Report [[wikilinks]] in wiki/**/*.md whose target page does not exist, with
@@ -50824,9 +50909,9 @@ var buildTargetKeys = (cwd, corpus) => {
   const keys = /* @__PURE__ */ new Set();
   for (const relPath of corpus) {
     if (!isArchived(relPath)) {
-      keys.add(path99.posix.basename(relPath, ".md").toLowerCase());
+      keys.add(path100.posix.basename(relPath, ".md").toLowerCase());
       const { body } = parseFrontmatter(
-        readFileSync72(path99.join(cwd, relPath), "utf8")
+        readFileSync73(path100.join(cwd, relPath), "utf8")
       );
       const title = firstHeading(body);
       if (title !== void 0 && title !== "") keys.add(title.toLowerCase());
@@ -50873,7 +50958,7 @@ var findBrokenLinks = (cwd) => {
   for (const relPath of corpus.filter((entry) => !shouldSkipFile2(entry))) {
     const page = scanPage(
       relPath,
-      readFileSync72(path99.join(cwd, relPath), "utf8"),
+      readFileSync73(path100.join(cwd, relPath), "utf8"),
       keys
     );
     result.broken.push(...page.broken);
@@ -51134,12 +51219,12 @@ var postOutOfScopeStamp = (options) => {
 };
 
 // src/wiki/util/statusline-cache.ts
-import { existsSync as existsSync54, readFileSync as readFileSync74 } from "node:fs";
-import path101 from "node:path";
+import { existsSync as existsSync54, readFileSync as readFileSync75 } from "node:fs";
+import path102 from "node:path";
 
 // src/wiki/state.ts
-import { existsSync as existsSync53, readdirSync as readdirSync14, readFileSync as readFileSync73, statSync as statSync15 } from "node:fs";
-import path100 from "node:path";
+import { existsSync as existsSync53, readdirSync as readdirSync14, readFileSync as readFileSync74, statSync as statSync15 } from "node:fs";
+import path101 from "node:path";
 
 // src/wiki/util/git.ts
 import { execFileSync as execFileSync7 } from "node:child_process";
@@ -51344,7 +51429,7 @@ var DOMAIN_DIRS2 = [
 var countDomainPages = (wikiRoot) => {
   const counts = {};
   for (const domain2 of DOMAIN_DIRS2) {
-    const domainDir = path100.join(wikiRoot, domain2);
+    const domainDir = path101.join(wikiRoot, domain2);
     if (!existsSync53(domainDir) || !statSync15(domainDir).isDirectory()) {
       counts[domain2] = 0;
     } else {
@@ -51362,7 +51447,7 @@ var countDomainPages = (wikiRoot) => {
 };
 var readStateFile2 = (statePath) => {
   if (!existsSync53(statePath)) return null;
-  const raw = readFileSync73(statePath, "utf8");
+  const raw = readFileSync74(statePath, "utf8");
   try {
     return JSON.parse(raw);
   } catch {
@@ -51394,8 +51479,8 @@ var printHuman8 = (state, write) => {
 `);
 };
 var computeWikiState = (repoRoot) => {
-  const wikiRoot = path100.join(repoRoot, "wiki");
-  const statePath = path100.join(wikiRoot, ".state.json");
+  const wikiRoot = path101.join(repoRoot, "wiki");
+  const statePath = path101.join(wikiRoot, ".state.json");
   const stateFile = readStateFile2(statePath);
   const stateSha = stateFile?.last_evaluated_sha ?? "";
   const stateAt = stateFile?.last_evaluated_at ?? "";
@@ -51474,7 +51559,7 @@ var run72 = (argv, options = {}) => {
 };
 
 // src/wiki/util/statusline-cache.ts
-var CACHE_RELATIVE_PATH = path101.join(
+var CACHE_RELATIVE_PATH = path102.join(
   ".gaia",
   "local",
   "cache",
@@ -51483,12 +51568,12 @@ var CACHE_RELATIVE_PATH = path101.join(
 );
 var invalidateStatuslineCache = (repoRoot) => {
   try {
-    const cachePath = path101.join(
+    const cachePath = path102.join(
       resolveMainWorktreeRoot(repoRoot),
       CACHE_RELATIVE_PATH
     );
     if (!existsSync54(cachePath)) return;
-    const parsed = JSON.parse(readFileSync74(cachePath, "utf8"));
+    const parsed = JSON.parse(readFileSync75(cachePath, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
       return;
     atomicWriteFileSync(
@@ -51502,12 +51587,12 @@ var invalidateStatuslineCache = (repoRoot) => {
 var refreshWikiDriftInCache = (repoRoot) => {
   try {
     const mainRoot = resolveMainWorktreeRoot(repoRoot);
-    const cachePath = path101.join(mainRoot, CACHE_RELATIVE_PATH);
-    const parsed = JSON.parse(readFileSync74(cachePath, "utf8"));
+    const cachePath = path102.join(mainRoot, CACHE_RELATIVE_PATH);
+    const parsed = JSON.parse(readFileSync75(cachePath, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
       return null;
     const driftCount = computeWikiState(mainRoot).drift_count;
-    const stateSha = readStateFile2(path101.join(mainRoot, "wiki", ".state.json"))?.last_evaluated_sha ?? "";
+    const stateSha = readStateFile2(path102.join(mainRoot, "wiki", ".state.json"))?.last_evaluated_sha ?? "";
     atomicWriteFileSync(
       cachePath,
       `${JSON.stringify({ ...parsed, wikiDriftCount: driftCount, wikiStateSha: stateSha }, null, 2)}
@@ -51944,8 +52029,8 @@ var parseConventionalCommitHeader = (subject) => {
 var isCommitType = (type) => COMMIT_TYPES.includes(type);
 
 // src/wiki/classify-paths.ts
-import { existsSync as existsSync55, readFileSync as readFileSync75 } from "node:fs";
-import path102 from "node:path";
+import { existsSync as existsSync55, readFileSync as readFileSync76 } from "node:fs";
+import path103 from "node:path";
 var defaultClassifyPaths = (repoRoot) => {
   const loaded = loadPackages(repoRoot);
   if (!loaded.ok) {
@@ -51981,11 +52066,11 @@ var PackageJsonSchema = external_exports.object({
 });
 var readClassifyPaths = (repoRoot) => {
   const defaults = defaultClassifyPaths(repoRoot);
-  const target = path102.join(repoRoot, "package.json");
+  const target = path103.join(repoRoot, "package.json");
   if (!existsSync55(target)) return defaults;
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync75(target, "utf8"));
+    parsed = JSON.parse(readFileSync76(target, "utf8"));
   } catch {
     return defaults;
   }
@@ -52298,8 +52383,8 @@ var run74 = (argv, options = {}) => {
 };
 
 // src/wiki/empty-sections.ts
-import { readFileSync as readFileSync76 } from "node:fs";
-import path103 from "node:path";
+import { readFileSync as readFileSync77 } from "node:fs";
+import path104 from "node:path";
 var HELP_TEXT69 = `Usage: gaia wiki empty-sections [--json]
 
   Scan wiki/**/*.md (excluding wiki/meta/** and wiki/log.md) for
@@ -52355,7 +52440,7 @@ var findInBody = (body, bodyLineOffset, relPath) => {
   });
 };
 var findEmptySections = (cwd) => collectWikiMarkdown(cwd).filter((filePath) => !shouldSkipFile3(filePath)).flatMap((filePath) => {
-  const content = readFileSync76(path103.join(cwd, filePath), "utf8");
+  const content = readFileSync77(path104.join(cwd, filePath), "utf8");
   const { body } = parseFrontmatter(content);
   const offset = content.split("\n").length - body.split("\n").length;
   return findInBody(body, offset, filePath);
@@ -52407,8 +52492,8 @@ var run75 = (argv, options = {}) => {
 };
 
 // src/wiki/frontmatter.ts
-import { readFileSync as readFileSync77 } from "node:fs";
-import path104 from "node:path";
+import { readFileSync as readFileSync78 } from "node:fs";
+import path105 from "node:path";
 var HELP_TEXT70 = `Usage: gaia wiki frontmatter [--json]
 
   Scan wiki/**/*.md (excluding wiki/meta/**) for pages missing required
@@ -52423,7 +52508,7 @@ var findFrontmatterGaps = (cwd) => {
   const gaps = [];
   for (const filePath of collectWikiMarkdown(cwd)) {
     if (!isWikiScanExempt(filePath)) {
-      const content = readFileSync77(path104.join(cwd, filePath), "utf8");
+      const content = readFileSync78(path105.join(cwd, filePath), "utf8");
       const { frontmatter } = parseFrontmatter(content);
       const missing = REQUIRED_FIELDS.filter(
         (field2) => !hasField(frontmatter, field2)
@@ -52482,8 +52567,8 @@ var run76 = (argv, options = {}) => {
 };
 
 // src/wiki/log-prepend.ts
-import { existsSync as existsSync56, readFileSync as readFileSync78, renameSync as renameSync7, writeFileSync as writeFileSync15 } from "node:fs";
-import path105 from "node:path";
+import { existsSync as existsSync56, readFileSync as readFileSync79, renameSync as renameSync7, writeFileSync as writeFileSync15 } from "node:fs";
+import path106 from "node:path";
 var HELP_TEXT71 = `Usage: gaia wiki log-prepend --sha <h> --decision <WORTHY|SKIP|RE_ANCHOR> --reason "..."
 
   Prepends one canonical line to wiki/log.md after the frontmatter.
@@ -52584,7 +52669,7 @@ var run77 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const logPath = path105.join(repoRoot, "wiki", "log.md");
+  const logPath = path106.join(repoRoot, "wiki", "log.md");
   if (!existsSync56(logPath)) {
     structuredError({
       code: "log_missing",
@@ -52593,7 +52678,7 @@ var run77 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const raw = readFileSync78(logPath, "utf8");
+  const raw = readFileSync79(logPath, "utf8");
   const lines = raw.split("\n");
   const scan = scanFrontmatter(lines);
   if (scan.kind === "missing" || scan.kind === "malformed") {
@@ -52620,7 +52705,7 @@ var run77 = (argv, options = {}) => {
 
 // src/wiki/near-collisions.ts
 import { existsSync as existsSync57, readdirSync as readdirSync15, statSync as statSync16 } from "node:fs";
-import path106 from "node:path";
+import path107 from "node:path";
 var HELP_TEXT72 = `Usage: gaia wiki near-collisions [--max-distance 3]
 
   Per-domain Levenshtein over slugs. Emits tab-separated rows:
@@ -52666,7 +52751,7 @@ var levenshtein = (a, b) => {
 };
 var isCollectibleSlugFile = (entry) => entry.isFile() && entry.name.endsWith(".md") && !SKIPPED_FILES2.has(entry.name) && !entry.name.startsWith("_");
 var collectDomainSlugs = (wikiRoot) => DOMAIN_DIRS3.flatMap((domain2) => {
-  const domainDir = path106.join(wikiRoot, domain2);
+  const domainDir = path107.join(wikiRoot, domain2);
   if (!existsSync57(domainDir) || !statSync16(domainDir).isDirectory()) {
     return [];
   }
@@ -52753,7 +52838,7 @@ var run78 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const wikiRoot = path106.join(repoRoot, "wiki");
+  const wikiRoot = path107.join(repoRoot, "wiki");
   const domainGroups = collectDomainSlugs(wikiRoot);
   const collisions = findCollisions(domainGroups, parsed.flags.maxDistance);
   if (collisions.length === 0) return EXIT_CODES.OK;
@@ -52766,8 +52851,8 @@ var run78 = (argv, options = {}) => {
 };
 
 // src/wiki/state-bump.ts
-import { existsSync as existsSync58, readFileSync as readFileSync79 } from "node:fs";
-import path107 from "node:path";
+import { existsSync as existsSync58, readFileSync as readFileSync80 } from "node:fs";
+import path108 from "node:path";
 var HELP_TEXT73 = `Usage: gaia wiki state-bump <field> <value>
 
   Updates a single field in wiki/.state.json. Sibling fields and key order
@@ -52838,7 +52923,7 @@ var run79 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const statePath = path107.join(repoRoot, "wiki", ".state.json");
+  const statePath = path108.join(repoRoot, "wiki", ".state.json");
   if (!existsSync58(statePath)) {
     structuredError({
       code: "state_missing",
@@ -52847,7 +52932,7 @@ var run79 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const raw = readFileSync79(statePath, "utf8");
+  const raw = readFileSync80(statePath, "utf8");
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -52878,7 +52963,7 @@ var run79 = (argv, options = {}) => {
 // src/wiki/state-init.ts
 import { execFileSync as execFileSync8 } from "node:child_process";
 import { existsSync as existsSync59, mkdirSync as mkdirSync24 } from "node:fs";
-import path108 from "node:path";
+import path109 from "node:path";
 var HELP_TEXT74 = `Usage: gaia wiki state-init <sha>
 
   Create wiki/.state.json with {version: 1, last_evaluated_sha,
@@ -52955,8 +53040,8 @@ var run80 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const wikiDir = path108.join(repoRoot, "wiki");
-  const statePath = path108.join(wikiDir, ".state.json");
+  const wikiDir = path109.join(repoRoot, "wiki");
+  const statePath = path109.join(wikiDir, ".state.json");
   if (existsSync59(statePath)) {
     structuredError({
       code: "state_already_exists",

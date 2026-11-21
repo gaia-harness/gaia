@@ -1,6 +1,8 @@
 ## Phase 8: Publish
 
 **If nothing was updated** (all packages were already up to date or all were skipped, the transitive refresh did not report `landed`, and no security resolution landed), skip this phase entirely. Phase 8 runs when the only landed work is security resolutions. An accepted advisory changes no file (its dismissal lives on GitHub), so acceptance alone publishes nothing.
+
+A react-doctor pin bump from the Global tools step counts as an update: publish it even when no package moved, with the subject `chore(deps): bump react-doctor pin to <version>` when the bump is the only landed work; otherwise the normal summary subject below stands and the body names the bump. It touches paths beyond the dependency manifests, so it gets the normal audit handshake, not the dep-bump bypass.
 <!-- gaia:maintainer-only:start -->
 
 A re-vendor diff from the Vendored skill sync step counts as an update: publish it even when no package moved, with the subject `chore(deps): re-vendor playwright-cli skill <version>`. It touches paths beyond the dependency manifests, so it gets the normal audit handshake, not the dep-bump bypass.

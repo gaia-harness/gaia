@@ -4,6 +4,8 @@ import type {OutdatedEntry, PackageJsonShape} from './run-outdated.js';
 import {
   capToAgedVersion,
   fetchVersionTimes,
+  readMinimumReleaseAge,
+  readMinimumReleaseAgeExclude,
   resolveReleaseAgeExemption,
 } from './run-release-age.js';
 import type {Kind, PnpmRunner, SkippedEntry} from './run-types.js';
@@ -39,6 +41,28 @@ export type CooldownContext = {
   minimumReleaseAgeExcludes: readonly string[];
   minimumReleaseAgeMinutes: number;
   pnpmRunner: PnpmRunner;
+};
+
+/**
+ * The cooldown context for one run: `minimumReleaseAge` and its excludes from
+ * the workspace at `repoRoot`, measured back from `now`. A zero setting
+ * disables the cooldown, so `applyCooldown` makes no registry call.
+ */
+export const buildCooldownContext = (args: {
+  cwd: string;
+  now: Date;
+  pnpmRunner: PnpmRunner;
+  repoRoot: string;
+}): CooldownContext => {
+  const minimumReleaseAgeMinutes = readMinimumReleaseAge(args.repoRoot);
+
+  return {
+    cooldownCutoffMs: args.now.getTime() - minimumReleaseAgeMinutes * 60_000,
+    cwd: args.cwd,
+    minimumReleaseAgeExcludes: readMinimumReleaseAgeExclude(args.repoRoot),
+    minimumReleaseAgeMinutes,
+    pnpmRunner: args.pnpmRunner,
+  };
 };
 
 type CooldownDecision =
