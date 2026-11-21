@@ -7,7 +7,8 @@
 #
 # Needs audit-loop-state-lib.sh and context-checkpoint-lib.sh already sourced,
 # and audit-loop-allowance-lib.sh's gaia_loop_allowed defined before this
-# file's functions run. Defines functions and one jq fragment; runs nothing at source
+# file's functions run. Defines functions and the jq fragments
+# _GAIA_LOOP_STOP_DEFS_JQ and _GAIA_LOOP_SIGNALS_JQ; runs nothing at source
 # time. Bash 3.2 compatible.
 #
 # The decision functions read no file: the bound hook reads the context
