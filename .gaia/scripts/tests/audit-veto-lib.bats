@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
-# Suite for .gaia/scripts/audit-veto-lib.sh: when a veto key counts as
-# satisfied, the in-memory stop override the bound hook applies to a
+# Suite for .gaia/scripts/audit-veto-lib.sh and audit-loop-stop-lib.sh: when
+# a veto key counts as satisfied, the in-memory stop override the bound hook applies to a
 # snapshot, and the reopened-round test's fail-loud reads. Pure state and
 # run-folder fixtures, except the inline-fix cases: satisfaction by a commit
 # made outside the fixer reads the diff between two round trees, so those
