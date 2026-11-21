@@ -180,6 +180,11 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/audit-fix-verify-state-lib.sh' # this verifier's snapshot, delta and pin helpers
   '.gaia/scripts/audit-fix-verify-check-lib.sh' # this verifier's check subcommand
   '.claude/hooks/lib/audit-digest.sh'         # branch digests the check subcommand sources from the tree
+  '.claude/hooks/lib/audit-scope.sh'          # the digest's ownership classifier, loaded from the tree
+  '.claude/hooks/lib/audit-machinery.sh'      # the digest's machinery path list, loaded from the tree
+  '.claude/hooks/lib/audit-branch-patch.sh'   # the branch's own patch the digest keys, loaded from the tree
+  '.claude/hooks/lib/audit-base-provenance.sh' # the digest's base and provenance resolution, loaded from the tree
+  '.gaia/scripts/audit-key-lib.sh'            # the audit key; pinned, but audit-digest.sh loads the tree copy
 )
 
 # Files the baseline pins into the run folder: this script and every library it
