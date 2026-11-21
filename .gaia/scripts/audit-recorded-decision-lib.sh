@@ -38,8 +38,8 @@ _veto_lock() {
 # on every entry for the key, whatever its effective_from_round, and a blank
 # reason clears it.
 # Writing the veto before the row lets a retry finish a failed call. rc 3 when
-# next-unit fails, the lock stays held, vetoes.json is unreadable or malformed,
-# or the write fails. A hung live call's lock is cleared by removing vetoes.json.lock.
+# FINDING_FILE is unreadable, next-unit fails, the lock stays held, vetoes.json
+# is unreadable or malformed, or the write fails. A hung live call's lock is cleared by removing vetoes.json.lock.
 _veto_recorded_fix() {
   local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file="$RUN_FOLDER/vetoes.json.$$" direction
   direction="$(jq -r 'if (.reason | type) == "string" and (.reason | test("\\S")) then .reason else "" end' "$FINDING_FILE" 2>/dev/null)" ||
