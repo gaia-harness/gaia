@@ -56,7 +56,7 @@ The lists, one definition each:
 - **Allow list** (subcommands and their fall-through options): `.claude/hooks/lib/git-allow-list.sh`. Chosen from what GAIA's commands, skills, rules, agents and executed wiki pages tell Claude to run, plus a scan of real session transcripts.
 - **Command-running config keys** and the **safe `-c` keys**: `.claude/hooks/lib/git-command-config.sh`, read by this hook, the destructive-git guard and `block-no-verify.sh`.
 
-**Precedence.** A PreToolUse deny from any hook beats another hook's allow, and settings `deny` and `ask` rules still apply after a hook's allow (Claude Code hooks reference). So `block-main-destructive-git.sh`, `block-no-verify.sh`, `block-rm-rf.sh`, `pr-merge-audit-check.sh` and every other deny hook keep working beside it, and the settings file's `deny` rows stay a second layer.
+**Precedence.** A PreToolUse deny from any hook beats another hook's allow, and settings `deny` and `ask` rules still apply after a hook's allow (Claude Code hooks reference). So `block-main-destructive-git.sh`, `block-no-verify.sh`, `block-rm-rf.sh`, `pr-merge-audit-check.sh` and every other deny hook keep working beside it, and the settings file's `deny` rows stay a second layer. A live `claude -p` run in default permission mode bears this out: `block-no-verify.sh` refuses a `--no-verify` commit the classifier allows with the two hooks registered in either order, and a settings `deny` or `ask` row for `git commit` still refuses a commit the classifier allows.
 
 Beyond rules 1 to 3 and the hard-reset rule, the guard denies, on any branch, the operations whose damage reaches past the feature branch the session is working on. `.claude/hooks/lib/main-git-guard-history.sh` holds them, and each deny names its repair:
 
