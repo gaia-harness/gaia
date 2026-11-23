@@ -20581,6 +20581,7 @@ var parseFlags2 = (argv) => {
   }
   return { flags: { draft, version: version2 }, ok: true };
 };
+var SECTION_ORDER = ["Added", "Changed", "Fixed"];
 var TYPE_TO_SECTION = {
   build: null,
   chore: null,
@@ -20617,8 +20618,7 @@ var todayUtc = (now = /* @__PURE__ */ new Date()) => {
 };
 var renderBlock = (sections) => {
   const lines = [];
-  const order = ["Added", "Changed", "Fixed"];
-  for (const section of order) {
+  for (const section of SECTION_ORDER) {
     const items = sections[section];
     if (items.length > 0) {
       lines.push(`### ${section}`, "");
@@ -23957,6 +23957,7 @@ var WIKI_OWNED_PREFIXES = [
   "wiki/sources/"
 ];
 var WIKI_OWNED_EXACT = /* @__PURE__ */ new Set(["wiki/overview.md", "wiki/README.md"]);
+var MANIFEST_CLASSES = ["owned", "shared", "wiki-owned"];
 var parseExcludeLines = (text) => text.split("\n").flatMap((line) => {
   const trimmed = line.trim();
   if (trimmed.length === 0 || trimmed.startsWith("#")) return [];
@@ -23991,11 +23992,7 @@ var classifyPath = (relativePath) => {
     return "wiki-owned";
   return "owned";
 };
-var ManifestClassSchema = external_exports.literal([
-  "owned",
-  "shared",
-  "wiki-owned"
-]);
+var ManifestClassSchema = external_exports.literal(MANIFEST_CLASSES);
 var RegionRegenerateSchema = external_exports.object({
   args: external_exports.array(external_exports.string()),
   interpreter: external_exports.string().min(1),
@@ -24750,6 +24747,35 @@ var run7 = (argv, options = {}) => {
 import { existsSync as existsSync9, readdirSync, readFileSync as readFileSync12, statSync } from "node:fs";
 import path11 from "node:path";
 
+// src/wiki/util/wikilinks.ts
+var WIKILINK_PATTERN = /\[\[([^\][]+)\]\]/gu;
+var extractWikilinks = (body) => {
+  const targets = [];
+  for (const [, captured] of body.matchAll(WIKILINK_PATTERN)) {
+    if (captured !== void 0) {
+      const raw = captured.trim();
+      const aliasIndex = raw.indexOf("|");
+      const withoutAlias = aliasIndex === -1 ? raw : raw.slice(0, aliasIndex);
+      const anchorIndex = withoutAlias.indexOf("#");
+      const target = (anchorIndex === -1 ? withoutAlias : withoutAlias.slice(0, anchorIndex)).trim();
+      if (target.length > 0) targets.push(target);
+    }
+  }
+  return targets;
+};
+
+// src/wiki/page-index.ts
+var DOMAIN_DIRS = [
+  "components",
+  "concepts",
+  "decisions",
+  "dependencies",
+  "entities",
+  "flows",
+  "modules",
+  "meta"
+];
+
 // src/wiki/util/git.ts
 import { execFileSync as execFileSync3 } from "node:child_process";
 var runGit = (args, options = {}) => {
@@ -24847,19 +24873,12 @@ var classifySeverity = (commitCount) => {
   if (commitCount <= 20) return "medium";
   return "high";
 };
-var DOMAIN_DIRS = [
-  "components",
-  "concepts",
-  "decisions",
-  "dependencies",
-  "entities",
-  "flows",
-  "meta",
-  "modules"
-];
+var DOMAIN_DIRS2 = DOMAIN_DIRS.toSorted(
+  (a, b) => a.localeCompare(b)
+);
 var countDomainPages = (wikiRoot) => {
   const counts = {};
-  for (const domain2 of DOMAIN_DIRS) {
+  for (const domain2 of DOMAIN_DIRS2) {
     const domainDir = path11.join(wikiRoot, domain2);
     if (!existsSync9(domainDir) || !statSync(domainDir).isDirectory()) {
       counts[domain2] = 0;
@@ -26433,23 +26452,6 @@ import path20 from "node:path";
 // src/release/scrub-derived-checks.ts
 import { readFileSync as readFileSync17, statSync as statSync3 } from "node:fs";
 import path17 from "node:path";
-
-// src/wiki/util/wikilinks.ts
-var WIKILINK_PATTERN = /\[\[([^\][]+)\]\]/gu;
-var extractWikilinks = (body) => {
-  const targets = [];
-  for (const [, captured] of body.matchAll(WIKILINK_PATTERN)) {
-    if (captured !== void 0) {
-      const raw = captured.trim();
-      const aliasIndex = raw.indexOf("|");
-      const withoutAlias = aliasIndex === -1 ? raw : raw.slice(0, aliasIndex);
-      const anchorIndex = withoutAlias.indexOf("#");
-      const target = (anchorIndex === -1 ? withoutAlias : withoutAlias.slice(0, anchorIndex)).trim();
-      if (target.length > 0) targets.push(target);
-    }
-  }
-  return targets;
-};
 
 // src/release/excluded-refs.ts
 import path15 from "node:path";

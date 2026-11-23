@@ -213,6 +213,7 @@ describe('gaia fitness check on frontmatter and authoring defects', () => {
   });
 });
 
+// subset of .gaia/cli/src/fitness/check-catalog.test.ts#EXPECTED_RULE_IDS
 const REPAIRED_RULE_IDS = [
   'hooks.path-exists-executable',
   'hooks.rooted-command',
@@ -221,6 +222,7 @@ const REPAIRED_RULE_IDS = [
   'claudemd.dead-path',
 ];
 
+// subset of .gaia/cli/src/fitness/check-determinism.test.ts#FINDING_FIELDS
 const SECRET_FIELDS = ['message', 'remediation', 'file'] as const;
 
 const hostileProject = (secret: string): FixtureProject => ({

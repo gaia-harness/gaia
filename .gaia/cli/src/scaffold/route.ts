@@ -42,14 +42,17 @@ import type {
   DataRouteNames,
 } from './route-data.js';
 import {writeLocaleFiles} from './route-locale.js';
-import {deriveRouteCalls, readServiceBinding} from './route-service.js';
+import {
+  DATA_VARIANTS,
+  deriveRouteCalls,
+  readServiceBinding,
+} from './route-service.js';
 import type {DataVariant, RouteShape} from './route-service.js';
 import {renderTemplate, templatePath} from './template.js';
 import type {TemplateVars} from './template.js';
 import type {ScaffoldResult} from './types.js';
 
 const VALID_GROUPS = new Set(['_public', '_session']);
-const DATA_VARIANTS: readonly DataVariant[] = ['server', 'client', 'query'];
 const ROUTE_SHAPES: readonly RouteShape[] = ['list', 'detail'];
 
 /** Folder names the page layout reserves for its own subfolders. */

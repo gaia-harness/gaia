@@ -102,6 +102,7 @@ const RUNTIME_PREFIXES: readonly string[] = [
   '.claude/audit',
 ];
 
+// subset of .gaia/cli/src/fitness/rules/line-limit.ts#HARNESS_ROOTS
 const PATH_PREFIXES = ['.gaia/', '.claude/', '.github/'] as const;
 
 /**

@@ -28734,10 +28734,19 @@ var hasPathScopeIn = ({
   return Array.isArray(paths) && paths.length > 0;
 };
 
-// src/fitness/grade.ts
-var ERROR_GRADES = ["C+", "C", "C-", "D+", "D", "D-"];
-var WARNING_GRADES = ["B+", "B", "B-"];
-var GRADE_ORDER = [
+// src/fitness/types.ts
+var SEVERITIES2 = ["error", "warning", "info"];
+var CATEGORIES = [
+  "authoring",
+  "claudemd",
+  "frontmatter",
+  "hooks",
+  "prompt",
+  "rules",
+  "settings",
+  "wiki"
+];
+var GRADES = [
   "A+",
   "A",
   "A-",
@@ -28750,8 +28759,16 @@ var GRADE_ORDER = [
   "D+",
   "D",
   "D-",
-  "F"
+  "F",
+  "n/a"
 ];
+
+// src/fitness/grade.ts
+var GRADE_ORDER = GRADES.filter(
+  (grade) => grade !== "n/a"
+);
+var ERROR_GRADES = GRADE_ORDER.slice(6, 12);
+var WARNING_GRADES = GRADE_ORDER.slice(3, 6);
 var bandGrade = (bands, count) => bands[Math.min(count, bands.length) - 1] ?? "F";
 var gradeFromCounts = (counts) => {
   if (counts.structural) return "F";
@@ -30902,6 +30919,218 @@ var RULES_RULES = [
   }
 ];
 
+// src/packages/settings-transform.ts
+var PATH_RULE = /^(Edit|MultiEdit|NotebookEdit|Read|Write)\((.*)\)$/s;
+var SAFE_PATH = /^[\w./*{},~@+-]+$/;
+var PERMISSION_LISTS = ["allow", "ask", "deny"];
+var OVERLAY_PERMISSION_KEYS = new Set(PERMISSION_LISTS);
+var OVERLAY_KEYS = /* @__PURE__ */ new Set(["env", "permissions"]);
+var SettingsGenerationError = class extends Error {
+};
+var isObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var stringList = (value, label) => {
+  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
+    throw new SettingsGenerationError(
+      `${label} must be an array of strings. Next step: fix the file and re-run.`
+    );
+  }
+  return value;
+};
+var requireSafePath = (spec, label) => {
+  if (!SAFE_PATH.test(spec)) {
+    throw new SettingsGenerationError(
+      `${label} path "${spec}" has characters outside [A-Za-z0-9._/*{},~@+-]. Next step: rewrite the rule with a plain path.`
+    );
+  }
+};
+var reanchorSpec = (spec, prefix) => {
+  if (/^(?:\*\*\/|\/\/|~\/)/.test(spec)) {
+    return spec;
+  }
+  return `${prefix}${spec.replace(/^(?:\.\/|\/)/, "")}`;
+};
+var reanchorRule = (rule, prefix, label) => {
+  const parts = PATH_RULE.exec(rule);
+  if (parts === null) {
+    return rule;
+  }
+  const [, tool = "", spec = ""] = parts;
+  const anchored = reanchorSpec(spec, prefix);
+  requireSafePath(anchored, label);
+  return `${tool}(${anchored})`;
+};
+var reanchorPermissionList = (list, prefix, label) => stringList(list, label).map((rule) => reanchorRule(rule, prefix, label));
+var unique = (entries) => [...new Set(entries)];
+var reanchorSandbox = (sandbox, prefix) => {
+  if (!isObject2(sandbox) || !isObject2(sandbox.filesystem)) {
+    return sandbox;
+  }
+  const filesystem = {};
+  for (const [key, entries] of Object.entries(sandbox.filesystem)) {
+    const label = `sandbox.filesystem.${key}`;
+    filesystem[key] = stringList(entries, label).map((entry) => {
+      const anchored = reanchorSpec(entry, prefix);
+      requireSafePath(anchored, label);
+      return anchored;
+    });
+  }
+  return { ...sandbox, filesystem };
+};
+var emptyOverlay = () => ({
+  env: {},
+  permissions: { allow: [], ask: [], deny: [] }
+});
+var parseOverlayPermissions = (permissions) => {
+  const parsed = emptyOverlay().permissions;
+  if (!isObject2(permissions)) {
+    throw new SettingsGenerationError(
+      "the overlay permissions must be an object. Next step: fix the overlay file."
+    );
+  }
+  for (const key of Object.keys(permissions)) {
+    if (!OVERLAY_PERMISSION_KEYS.has(key)) {
+      throw new SettingsGenerationError(
+        `the overlay key "permissions.${key}" is not allowed: only allow, deny, and ask may be added. Next step: remove "permissions.${key}" from the overlay.`
+      );
+    }
+  }
+  for (const list of PERMISSION_LISTS) {
+    const label = `the overlay permissions.${list}`;
+    parsed[list] = stringList(permissions[list] ?? [], label);
+    for (const rule of parsed[list]) {
+      const spec = PATH_RULE.exec(rule)?.[2];
+      if (spec !== void 0) {
+        requireSafePath(spec, label);
+      }
+    }
+  }
+  return parsed;
+};
+var parseOverlay = (overlay) => {
+  if (!isObject2(overlay)) {
+    throw new SettingsGenerationError(
+      "the overlay must be a JSON object. Next step: fix the overlay file."
+    );
+  }
+  for (const key of Object.keys(overlay)) {
+    if (!OVERLAY_KEYS.has(key)) {
+      throw new SettingsGenerationError(
+        `the overlay key "${key}" is not allowed: an overlay is union-only and may add only permissions.allow, permissions.deny, permissions.ask, and env keys. Next step: remove "${key}" from the overlay.`
+      );
+    }
+  }
+  const parsed = emptyOverlay();
+  if (overlay.permissions !== void 0) {
+    parsed.permissions = parseOverlayPermissions(overlay.permissions);
+  }
+  if (overlay.env !== void 0) {
+    if (!isObject2(overlay.env) || !Object.values(overlay.env).every((value) => typeof value === "string")) {
+      throw new SettingsGenerationError(
+        "the overlay env must be an object of string values. Next step: fix the overlay file."
+      );
+    }
+    parsed.env = overlay.env;
+  }
+  return parsed;
+};
+var mergeEnvironment = (rootEnvironment, additions) => {
+  const merged = isObject2(rootEnvironment) ? { ...rootEnvironment } : {};
+  for (const [key, value] of Object.entries(additions)) {
+    if (Object.hasOwn(merged, key) && merged[key] !== value) {
+      throw new SettingsGenerationError(
+        `the overlay env key "${key}" would change a value the root settings set. Next step: remove it from the overlay.`
+      );
+    }
+    merged[key] = value;
+  }
+  return merged;
+};
+var buildPermissions = (rootPermissions, overlay, prefix) => {
+  const permissions = {};
+  for (const [key, value] of Object.entries(rootPermissions)) {
+    permissions[key] = PERMISSION_LISTS.includes(key) ? reanchorPermissionList(value, prefix, `permissions.${key}`) : value;
+  }
+  const rootDeny = stringList(rootPermissions.deny ?? [], "permissions.deny");
+  const forbidden = /* @__PURE__ */ new Set([
+    ...rootDeny,
+    ...rootDeny.map((rule) => reanchorRule(rule, prefix, "permissions.deny"))
+  ]);
+  for (const list of PERMISSION_LISTS) {
+    const additions = overlay.permissions[list];
+    const attempt = list === "deny" ? void 0 : additions.find((rule) => forbidden.has(rule));
+    if (attempt !== void 0) {
+      throw new SettingsGenerationError(
+        `the overlay permissions.${list} entry "${attempt}" equals a root permissions.deny entry and would re-open what the root denies. Next step: remove it from the overlay.`
+      );
+    }
+    if (additions.length > 0) {
+      permissions[list] = unique([
+        ...stringList(permissions[list] ?? [], `permissions.${list}`),
+        ...additions
+      ]);
+    }
+  }
+  return permissions;
+};
+var generateSettings = (rootSettings, overlayInput, packagePath) => {
+  const depth = packagePath.split("/").length;
+  const prefix = "../".repeat(depth);
+  const overlay = parseOverlay(overlayInput);
+  const rootPermissions = isObject2(rootSettings.permissions) ? rootSettings.permissions : {};
+  const permissions = buildPermissions(rootPermissions, overlay, prefix);
+  permissions.additionalDirectories = unique([
+    ...reanchorPermissionList(
+      rootPermissions.additionalDirectories ?? [],
+      prefix,
+      "permissions.additionalDirectories"
+    ),
+    `${"../".repeat(depth - 1)}..`
+  ]);
+  const output2 = {};
+  for (const [key, value] of Object.entries(rootSettings)) {
+    if (key === "sandbox") {
+      output2[key] = reanchorSandbox(value, prefix);
+    } else if (key === "env") {
+      output2[key] = mergeEnvironment(value, overlay.env);
+    } else {
+      output2[key] = value;
+    }
+  }
+  output2.permissions = permissions;
+  if (!Object.hasOwn(output2, "env") && Object.keys(overlay.env).length > 0) {
+    output2.env = mergeEnvironment(void 0, overlay.env);
+  }
+  return output2;
+};
+var STUB_MARKER = "# gaia-member-guards-stub";
+var STUB_WARNING = "GAIA guards are off in this session. Launch from the repo root.";
+var generateStubSettings = () => {
+  const payload = JSON.stringify({
+    hookSpecificOutput: {
+      additionalContext: STUB_WARNING,
+      hookEventName: "SessionStart"
+    },
+    systemMessage: STUB_WARNING
+  });
+  return {
+    hooks: {
+      SessionStart: [
+        {
+          hooks: [
+            {
+              command: String.raw`printf '%s\n' '${payload}' ${STUB_MARKER}`,
+              type: "command"
+            }
+          ],
+          matcher: "startup|resume"
+        }
+      ]
+    }
+  };
+};
+var serializeSettings = (settings) => `${JSON.stringify(settings, null, 2)}
+`;
+
 // src/fitness/secrets.ts
 var CREDENTIAL_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
@@ -30937,7 +31166,6 @@ var redactDeep = (value) => {
 
 // src/fitness/rules/settings.ts
 var LOCAL_SETTINGS_SUFFIX = ".claude/settings.local.json";
-var PERMISSION_LISTS = ["allow", "ask", "deny"];
 var BARE_TOOL = /^[\w.]+$/;
 var isLocal = (file2) => file2.path === LOCAL_SETTINGS_SUFFIX || file2.path.endsWith(`/${LOCAL_SETTINGS_SUFFIX}`);
 var validJsonCheck = (context) => context.settingsFiles.filter((file2) => file2.parseError !== void 0).map((file2) => ({
@@ -31949,18 +32177,6 @@ var INVENTORY_ONLY_RULES = [
     ruleId: "memory.dead-path",
     severity: "warning"
   }
-];
-
-// src/fitness/types.ts
-var CATEGORIES = [
-  "authoring",
-  "claudemd",
-  "frontmatter",
-  "hooks",
-  "prompt",
-  "rules",
-  "settings",
-  "wiki"
 ];
 
 // src/fitness/check.ts
@@ -33061,7 +33277,6 @@ var FALLBACK_COLS = 100;
 var OVERALL_LABEL = "OVERALL";
 var TITLE = "GAIA FITNESS";
 var UPSTREAM_NOTE = "GAIA ships these files; /update-gaia takes the upstream fix.";
-var SEVERITY_ORDER = ["error", "warning", "info"];
 var CATEGORY_LABELS = {
   claudemd: "CLAUDE.md"
 };
@@ -33072,7 +33287,7 @@ var FindingSchema = external_exports.object({
   line: external_exports.number(),
   remediation: external_exports.string(),
   rule_id: external_exports.string(),
-  severity: external_exports.literal(["error", "info", "warning"])
+  severity: external_exports.literal(SEVERITIES2)
 });
 var ReportSchema = external_exports.object({
   categories: external_exports.array(external_exports.object({ grade: external_exports.string(), name: external_exports.string() })).min(1),
@@ -33087,7 +33302,7 @@ var severityNote = (findings) => {
     counts.set(finding.severity, (counts.get(finding.severity) ?? 0) + 1);
   }
   const parts = [];
-  for (const severity of SEVERITY_ORDER) {
+  for (const severity of SEVERITIES2) {
     const count = counts.get(severity) ?? 0;
     if (count > 0) {
       const label = severity === "info" || count === 1 ? severity : `${severity}s`;
@@ -38988,220 +39203,6 @@ var run26 = (argv) => {
 // src/packages/sync-settings.ts
 import { existsSync as existsSync31, mkdirSync as mkdirSync10, readFileSync as readFileSync39 } from "node:fs";
 import path54 from "node:path";
-
-// src/packages/settings-transform.ts
-var PATH_RULE = /^(Edit|MultiEdit|NotebookEdit|Read|Write)\((.*)\)$/s;
-var SAFE_PATH = /^[\w./*{},~@+-]+$/;
-var PERMISSION_LISTS2 = ["allow", "ask", "deny"];
-var OVERLAY_PERMISSION_KEYS = new Set(PERMISSION_LISTS2);
-var OVERLAY_KEYS = /* @__PURE__ */ new Set(["env", "permissions"]);
-var SettingsGenerationError = class extends Error {
-};
-var isObject2 = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-var stringList = (value, label) => {
-  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
-    throw new SettingsGenerationError(
-      `${label} must be an array of strings. Next step: fix the file and re-run.`
-    );
-  }
-  return value;
-};
-var requireSafePath = (spec, label) => {
-  if (!SAFE_PATH.test(spec)) {
-    throw new SettingsGenerationError(
-      `${label} path "${spec}" has characters outside [A-Za-z0-9._/*{},~@+-]. Next step: rewrite the rule with a plain path.`
-    );
-  }
-};
-var reanchorSpec = (spec, prefix) => {
-  if (/^(?:\*\*\/|\/\/|~\/)/.test(spec)) {
-    return spec;
-  }
-  return `${prefix}${spec.replace(/^(?:\.\/|\/)/, "")}`;
-};
-var reanchorRule = (rule, prefix, label) => {
-  const parts = PATH_RULE.exec(rule);
-  if (parts === null) {
-    return rule;
-  }
-  const [, tool = "", spec = ""] = parts;
-  const anchored = reanchorSpec(spec, prefix);
-  requireSafePath(anchored, label);
-  return `${tool}(${anchored})`;
-};
-var reanchorPermissionList = (list, prefix, label) => stringList(list, label).map((rule) => reanchorRule(rule, prefix, label));
-var unique = (entries) => [...new Set(entries)];
-var reanchorSandbox = (sandbox, prefix) => {
-  if (!isObject2(sandbox) || !isObject2(sandbox.filesystem)) {
-    return sandbox;
-  }
-  const filesystem = {};
-  for (const [key, entries] of Object.entries(sandbox.filesystem)) {
-    const label = `sandbox.filesystem.${key}`;
-    filesystem[key] = stringList(entries, label).map((entry) => {
-      const anchored = reanchorSpec(entry, prefix);
-      requireSafePath(anchored, label);
-      return anchored;
-    });
-  }
-  return { ...sandbox, filesystem };
-};
-var emptyOverlay = () => ({
-  env: {},
-  permissions: { allow: [], ask: [], deny: [] }
-});
-var parseOverlayPermissions = (permissions) => {
-  const parsed = emptyOverlay().permissions;
-  if (!isObject2(permissions)) {
-    throw new SettingsGenerationError(
-      "the overlay permissions must be an object. Next step: fix the overlay file."
-    );
-  }
-  for (const key of Object.keys(permissions)) {
-    if (!OVERLAY_PERMISSION_KEYS.has(key)) {
-      throw new SettingsGenerationError(
-        `the overlay key "permissions.${key}" is not allowed: only allow, deny, and ask may be added. Next step: remove "permissions.${key}" from the overlay.`
-      );
-    }
-  }
-  for (const list of PERMISSION_LISTS2) {
-    const label = `the overlay permissions.${list}`;
-    parsed[list] = stringList(permissions[list] ?? [], label);
-    for (const rule of parsed[list]) {
-      const spec = PATH_RULE.exec(rule)?.[2];
-      if (spec !== void 0) {
-        requireSafePath(spec, label);
-      }
-    }
-  }
-  return parsed;
-};
-var parseOverlay = (overlay) => {
-  if (!isObject2(overlay)) {
-    throw new SettingsGenerationError(
-      "the overlay must be a JSON object. Next step: fix the overlay file."
-    );
-  }
-  for (const key of Object.keys(overlay)) {
-    if (!OVERLAY_KEYS.has(key)) {
-      throw new SettingsGenerationError(
-        `the overlay key "${key}" is not allowed: an overlay is union-only and may add only permissions.allow, permissions.deny, permissions.ask, and env keys. Next step: remove "${key}" from the overlay.`
-      );
-    }
-  }
-  const parsed = emptyOverlay();
-  if (overlay.permissions !== void 0) {
-    parsed.permissions = parseOverlayPermissions(overlay.permissions);
-  }
-  if (overlay.env !== void 0) {
-    if (!isObject2(overlay.env) || !Object.values(overlay.env).every((value) => typeof value === "string")) {
-      throw new SettingsGenerationError(
-        "the overlay env must be an object of string values. Next step: fix the overlay file."
-      );
-    }
-    parsed.env = overlay.env;
-  }
-  return parsed;
-};
-var mergeEnvironment = (rootEnvironment, additions) => {
-  const merged = isObject2(rootEnvironment) ? { ...rootEnvironment } : {};
-  for (const [key, value] of Object.entries(additions)) {
-    if (Object.hasOwn(merged, key) && merged[key] !== value) {
-      throw new SettingsGenerationError(
-        `the overlay env key "${key}" would change a value the root settings set. Next step: remove it from the overlay.`
-      );
-    }
-    merged[key] = value;
-  }
-  return merged;
-};
-var buildPermissions = (rootPermissions, overlay, prefix) => {
-  const permissions = {};
-  for (const [key, value] of Object.entries(rootPermissions)) {
-    permissions[key] = PERMISSION_LISTS2.includes(key) ? reanchorPermissionList(value, prefix, `permissions.${key}`) : value;
-  }
-  const rootDeny = stringList(rootPermissions.deny ?? [], "permissions.deny");
-  const forbidden = /* @__PURE__ */ new Set([
-    ...rootDeny,
-    ...rootDeny.map((rule) => reanchorRule(rule, prefix, "permissions.deny"))
-  ]);
-  for (const list of PERMISSION_LISTS2) {
-    const additions = overlay.permissions[list];
-    const attempt = list === "deny" ? void 0 : additions.find((rule) => forbidden.has(rule));
-    if (attempt !== void 0) {
-      throw new SettingsGenerationError(
-        `the overlay permissions.${list} entry "${attempt}" equals a root permissions.deny entry and would re-open what the root denies. Next step: remove it from the overlay.`
-      );
-    }
-    if (additions.length > 0) {
-      permissions[list] = unique([
-        ...stringList(permissions[list] ?? [], `permissions.${list}`),
-        ...additions
-      ]);
-    }
-  }
-  return permissions;
-};
-var generateSettings = (rootSettings, overlayInput, packagePath) => {
-  const depth = packagePath.split("/").length;
-  const prefix = "../".repeat(depth);
-  const overlay = parseOverlay(overlayInput);
-  const rootPermissions = isObject2(rootSettings.permissions) ? rootSettings.permissions : {};
-  const permissions = buildPermissions(rootPermissions, overlay, prefix);
-  permissions.additionalDirectories = unique([
-    ...reanchorPermissionList(
-      rootPermissions.additionalDirectories ?? [],
-      prefix,
-      "permissions.additionalDirectories"
-    ),
-    `${"../".repeat(depth - 1)}..`
-  ]);
-  const output2 = {};
-  for (const [key, value] of Object.entries(rootSettings)) {
-    if (key === "sandbox") {
-      output2[key] = reanchorSandbox(value, prefix);
-    } else if (key === "env") {
-      output2[key] = mergeEnvironment(value, overlay.env);
-    } else {
-      output2[key] = value;
-    }
-  }
-  output2.permissions = permissions;
-  if (!Object.hasOwn(output2, "env") && Object.keys(overlay.env).length > 0) {
-    output2.env = mergeEnvironment(void 0, overlay.env);
-  }
-  return output2;
-};
-var STUB_MARKER = "# gaia-member-guards-stub";
-var STUB_WARNING = "GAIA guards are off in this session. Launch from the repo root.";
-var generateStubSettings = () => {
-  const payload = JSON.stringify({
-    hookSpecificOutput: {
-      additionalContext: STUB_WARNING,
-      hookEventName: "SessionStart"
-    },
-    systemMessage: STUB_WARNING
-  });
-  return {
-    hooks: {
-      SessionStart: [
-        {
-          hooks: [
-            {
-              command: String.raw`printf '%s\n' '${payload}' ${STUB_MARKER}`,
-              type: "command"
-            }
-          ],
-          matcher: "startup|resume"
-        }
-      ]
-    }
-  };
-};
-var serializeSettings = (settings) => `${JSON.stringify(settings, null, 2)}
-`;
-
-// src/packages/sync-settings.ts
 var HELP_TEXT22 = `Usage: gaia packages sync-settings [--check] [--repo-root <path>]
 
   Generates <package>/.claude/settings.json for every registered package not
@@ -39453,6 +39454,7 @@ var readOrCreateProjectId = (roots) => {
 };
 
 // src/ping/send.ts
+var PING_EVENTS = ["init", "setup", "update"];
 var PING_URL = "https://telemetry.gaiaharness.com/ping";
 var TIMEOUT_MS = 2e3;
 var MANIFEST_RELATIVE2 = ".gaia/manifest.json";
@@ -39519,7 +39521,6 @@ var HELP_TEXT24 = String.raw`Usage: gaia ping --event <init|setup|update> [--fie
 `;
 var HELP_TOKENS23 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var SUBCOMMAND3 = "ping";
-var PING_EVENTS = ["init", "setup", "update"];
 var isPingEvent = (value) => PING_EVENTS.includes(value);
 var FIELDS_BY_EVENT = {
   init: [
@@ -41274,6 +41275,9 @@ var deepMerge = (target, source) => {
 var mergeSandboxSettings = (existing, fragment) => deepMerge(existing, fragment);
 
 // src/sandbox/capability.ts
+var CAPABILITIES = ["ready", "needs-deps", "unsupported"];
+var PLATFORMS = ["darwin", "linux", "win32"];
+var WSL_KINDS = ["none", "wsl1", "wsl2"];
 var APT_INSTALL_COMMAND = "sudo apt-get install bubblewrap socat";
 var DNF_INSTALL_COMMAND = "sudo dnf install bubblewrap socat";
 var classifyCapability = (input2) => {
@@ -41307,16 +41311,7 @@ var classifyCapability = (input2) => {
 import { existsSync as existsSync35, mkdirSync as mkdirSync14, readFileSync as readFileSync47 } from "node:fs";
 import path61 from "node:path";
 var MARKER_FILENAME = "sandbox.json";
-var CAPABILITIES = [
-  "needs-deps",
-  "ready",
-  "unsupported"
-];
-var OUTCOMES = [
-  "declined",
-  "enabled",
-  "incapable"
-];
+var SANDBOX_OUTCOMES = ["enabled", "declined", "incapable"];
 var resolveMarkerPath = (repoRoot) => path61.join(repoRoot, ".gaia", "local", MARKER_FILENAME);
 var readSandboxMarker = (repoRoot) => {
   const filePath = resolveMarkerPath(repoRoot);
@@ -41331,7 +41326,7 @@ var readSandboxMarker = (repoRoot) => {
   if (typeof parsed.outcome !== "string" || typeof parsed.capability !== "string" || typeof parsed.resolved_at !== "string") {
     throw new TypeError("sandbox.json is missing required fields");
   }
-  if (!OUTCOMES.includes(parsed.outcome) || !CAPABILITIES.includes(parsed.capability)) {
+  if (!SANDBOX_OUTCOMES.includes(parsed.outcome) || !CAPABILITIES.includes(parsed.capability)) {
     throw new TypeError("sandbox.json has an unknown outcome or capability");
   }
   return {
@@ -41439,18 +41434,6 @@ var buildFlags = (provided, specs) => {
   );
   return missing === void 0 ? { ok: true, value } : { message: `${missing.flag} is required`, ok: false };
 };
-var PLATFORMS = ["darwin", "linux", "win32"];
-var WSL_KINDS = ["none", "wsl1", "wsl2"];
-var CAPABILITIES2 = [
-  "ready",
-  "needs-deps",
-  "unsupported"
-];
-var SANDBOX_OUTCOMES = [
-  "enabled",
-  "declined",
-  "incapable"
-];
 var detectRealPlatform = () => {
   if (process.platform === "darwin") return "darwin";
   if (process.platform === "win32") return "win32";
@@ -41545,7 +41528,7 @@ var APPLY_FLAG_SPECS = [
   },
   { flag: "--settings-path", key: "settingsPath", kind: "string" },
   {
-    allowed: CAPABILITIES2,
+    allowed: CAPABILITIES,
     flag: "--capability",
     key: "capability",
     kind: "enum"
@@ -41657,7 +41640,7 @@ var RECORD_FLAG_SPECS = [
     required: true
   },
   {
-    allowed: CAPABILITIES2,
+    allowed: CAPABILITIES,
     flag: "--capability",
     key: "capability",
     kind: "enum",
@@ -42991,6 +42974,7 @@ var writeLocaleFiles = (args) => {
 // src/scaffold/route-service.ts
 import { existsSync as existsSync39, readFileSync as readFileSync50 } from "node:fs";
 import path66 from "node:path";
+var DATA_VARIANTS = ["server", "client", "query"];
 var deriveRouteCalls = (shape, derived2) => {
   const { Plural, plural: plural2, Singular, singular } = derived2;
   return shape === "list" ? {
@@ -43127,7 +43111,6 @@ var readServiceBinding = (args) => {
 
 // src/scaffold/route.ts
 var VALID_GROUPS = /* @__PURE__ */ new Set(["_public", "_session"]);
-var DATA_VARIANTS = ["server", "client", "query"];
 var ROUTE_SHAPES = ["list", "detail"];
 var RESERVED_PAGE_NAME_LIST = ["assets", "hooks", "state", "tests", "utils"];
 var RESERVED_PAGE_NAMES = new Set(RESERVED_PAGE_NAME_LIST);
@@ -45073,6 +45056,7 @@ var import_semver4 = __toESM(require_semver2(), 1);
 
 // src/update-deps/advisory-validate.ts
 var import_semver3 = __toESM(require_semver2(), 1);
+var SEVERITY_ORDER = ["critical", "high", "medium", "low"];
 var GHSA_PATTERN = /^GHSA(?:-[2-9cfghjmpqrvwx]{4}){3}$/u;
 var NPM_NAME_PATTERN = /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[A-Za-z0-9~-][\w.~-]*$/u;
 var NPM_NAME_MAX_LENGTH = 214;
@@ -45253,13 +45237,7 @@ var normalizePnpmAudit = (report2) => {
   }
   return { records, rejectedCount };
 };
-var SEVERITY_ORDER2 = [
-  "critical",
-  "high",
-  "medium",
-  "low"
-];
-var severityRank = (severity) => SEVERITY_ORDER2.indexOf(severity);
+var severityRank = (severity) => SEVERITY_ORDER.indexOf(severity);
 var highestSeverity = (severities) => severities.reduce(
   (best, next) => severityRank(next) < severityRank(best) ? next : best,
   "low"
@@ -48853,6 +48831,13 @@ import { execFileSync as execFileSync5 } from "node:child_process";
 import { existsSync as existsSync47, readFileSync as readFileSync66 } from "node:fs";
 import path90 from "node:path";
 
+// src/release/pnpm-member-strip.ts
+var IMPORTER_DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies"
+];
+
 // src/util/parse-value-flags.ts
 var applyToken3 = ({
   argv,
@@ -49105,9 +49090,7 @@ var RESOLUTION_KEYS = RESOLUTION_SETTINGS.flatMap(
   (name) => [name, toKebabCase2(name)]
 );
 var INSTALL_KEYS = [
-  "dependencies",
-  "devDependencies",
-  "optionalDependencies",
+  ...IMPORTER_DEPENDENCY_FIELDS,
   "peerDependencies",
   "packageManager"
 ];
@@ -52675,16 +52658,9 @@ var classifySeverity = (commitCount) => {
   if (commitCount <= 20) return "medium";
   return "high";
 };
-var DOMAIN_DIRS2 = [
-  "components",
-  "concepts",
-  "decisions",
-  "dependencies",
-  "entities",
-  "flows",
-  "meta",
-  "modules"
-];
+var DOMAIN_DIRS2 = DOMAIN_DIRS.toSorted(
+  (a, b) => a.localeCompare(b)
+);
 var countDomainPages = (wikiRoot) => {
   const counts = {};
   for (const domain2 of DOMAIN_DIRS2) {
@@ -53972,15 +53948,7 @@ var HELP_TEXT73 = `Usage: gaia wiki near-collisions [--max-distance 3]
 `;
 var HELP_TOKENS72 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var DEFAULT_MAX_DISTANCE = 3;
-var DOMAIN_DIRS3 = [
-  "components",
-  "concepts",
-  "decisions",
-  "dependencies",
-  "entities",
-  "flows",
-  "modules"
-];
+var DOMAIN_DIRS3 = DOMAIN_DIRS.filter((name) => name !== "meta");
 var SKIPPED_FILES2 = /* @__PURE__ */ new Set(["_index.md", "README.md"]);
 var normalizeSlug = (raw) => raw.toLowerCase().replaceAll("_", "-");
 var levenshtein = (a, b) => {

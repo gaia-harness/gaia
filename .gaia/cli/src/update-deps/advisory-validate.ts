@@ -11,7 +11,10 @@ export type AdvisoryRelationship =
 
 export type AdvisoryScope = 'development' | 'n/a' | 'runtime';
 
-export type AdvisorySeverity = 'critical' | 'high' | 'low' | 'medium';
+/** Severities from most to least severe; the order ranks them. */
+export const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'] as const;
+
+export type AdvisorySeverity = (typeof SEVERITY_ORDER)[number];
 
 const GHSA_PATTERN = /^GHSA(?:-[2-9cfghjmpqrvwx]{4}){3}$/u;
 

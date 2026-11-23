@@ -6,6 +6,7 @@
 import {z} from 'zod';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
+import {SEVERITIES} from './types.js';
 
 const GRADE_WIDTH = 3; // widest grade glyph: "n/a"
 const GAP = 3; // spaces between the note column and the grade
@@ -18,7 +19,6 @@ const OVERALL_LABEL = 'OVERALL';
 const TITLE = 'GAIA FITNESS';
 const UPSTREAM_NOTE =
   'GAIA ships these files; /update-gaia takes the upstream fix.';
-const SEVERITY_ORDER = ['error', 'warning', 'info'] as const;
 
 // The JSON report and rule ids keep the `claudemd` id, which the cleanse
 // playbooks and statusline read; only the card shows the file's real name.
@@ -34,7 +34,7 @@ const FindingSchema = z.object({
   line: z.number(),
   remediation: z.string(),
   rule_id: z.string(),
-  severity: z.literal(['error', 'info', 'warning']),
+  severity: z.literal(SEVERITIES),
 });
 
 const ReportSchema = z.object({
@@ -61,7 +61,7 @@ const severityNote = (findings: readonly Finding[]): string => {
 
   const parts: string[] = [];
 
-  for (const severity of SEVERITY_ORDER) {
+  for (const severity of SEVERITIES) {
     const count = counts.get(severity) ?? 0;
 
     if (count > 0) {

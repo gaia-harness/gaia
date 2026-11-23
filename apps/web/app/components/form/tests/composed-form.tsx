@@ -28,11 +28,13 @@ const COLORS = ['blue', 'green', 'red'] as const;
 const COUNTRIES = ['fr', 'jp', 'us'] as const;
 const SIZES = ['lg', 'md', 'sm'] as const;
 
+// sanctioned copy of apps/web/app/components/form/tests/composed-form.tsx#COLORS
 const COLORS_DISPLAY_ORDER: (typeof COLORS)[number][] = [
   'red',
   'green',
   'blue',
 ];
+// sanctioned copy of apps/web/app/components/form/tests/composed-form.tsx#SIZES
 const SIZES_DISPLAY_ORDER: (typeof SIZES)[number][] = ['sm', 'md', 'lg'];
 
 const REQUIRED_MESSAGE = 'required';

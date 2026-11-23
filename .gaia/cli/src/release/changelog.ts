@@ -106,7 +106,9 @@ const parseFlags = (argv: readonly string[]): FlagParseResult => {
   return {flags: {draft, version}, ok: true};
 };
 
-type Section = 'Added' | 'Changed' | 'Fixed';
+const SECTION_ORDER = ['Added', 'Changed', 'Fixed'] as const;
+
+type Section = (typeof SECTION_ORDER)[number];
 
 /**
  * Which CHANGELOG section each declared commit type lands in, or `null` for
@@ -168,9 +170,8 @@ const todayUtc = (now: Date = new Date()): string => {
 
 export const renderBlock = (sections: RenderedSections): string => {
   const lines: string[] = [];
-  const order: Section[] = ['Added', 'Changed', 'Fixed'];
 
-  for (const section of order) {
+  for (const section of SECTION_ORDER) {
     const items = sections[section];
 
     if (items.length > 0) {
