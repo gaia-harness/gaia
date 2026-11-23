@@ -206,3 +206,33 @@ no_side_effects() {
   [[ "$output" == *"detached"* ]]
   [ ! -e "$GH_LOG" ]
 }
+
+@test "a plan branch name does not trip the machine-local reference scan on a PR comment" {
+  git -C "$WORK" checkout -q -b feat/spec-123-login
+  park --reason merge-ready --pr 5
+  [ "$status" -eq 0 ]
+  grep -qF 'branch `feat/spec-123-login`' "$GH_BODY"
+}
+
+@test "--root parks the named tree when the working directory is a different repository" {
+  local other="$BATS_TEST_TMPDIR/other"
+  git init -q -b main "$other"
+  run bash -c 'cd "$1" && bash "$2/.gaia/scripts/autonomy-park.sh" --reason merge-ready --pr 6 --root "$2"' park "$other" "$WORK"
+  [ "$status" -eq 0 ]
+  [ "$(remote_head feat/12-park-me)" = "$(git -C "$WORK" rev-parse HEAD)" ]
+  jq -e '.branch == "feat/12-park-me"' "$MARKER"
+}
+
+@test "without --root the tree is the checkout holding the script, not the working directory" {
+  local other="$BATS_TEST_TMPDIR/other"
+  git init -q -b main "$other"
+  run bash -c 'cd "$1" && bash "$2/.gaia/scripts/autonomy-park.sh" --reason merge-ready --pr 6' park "$other" "$WORK"
+  [ "$status" -eq 0 ]
+  jq -e '.branch == "feat/12-park-me"' "$MARKER"
+}
+
+@test "--root that is not a directory is refused before any side effect" {
+  park --reason merge-ready --pr 6 --root "$BATS_TEST_TMPDIR/missing"
+  [ "$status" -eq 2 ]
+  no_side_effects
+}

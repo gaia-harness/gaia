@@ -6,11 +6,13 @@
 # autonomy-park.sh: the park procedure an unattended run uses to stop,
 # resumably, where it needs a human.
 #
-#   autonomy-park.sh --reason <code> [--pr <n>] [--detail <text>]
+#   autonomy-park.sh --reason <code> [--pr <n>] [--detail <text>] [--root <path>]
 #
 # Reason codes, and what each requires, are defined once in
-# .gaia/autonomy-park-reasons.json; a code it does not list is refused. Run it
-# from inside the work's tree, on its branch. In order, it:
+# .gaia/autonomy-park-reasons.json; a code it does not list is refused. It
+# parks the working tree named by --root; without --root, the checkout that
+# holds this script, never the shell's working directory, so an invocation by
+# absolute path parks that tree from any cwd. In order, it:
 #
 #   1. saves resumable state: a `## Parked` section in the run folder's
 #      STATE.md (.gaia/local/runs/<branch key>/), replacing any earlier one
@@ -24,8 +26,8 @@
 #
 # Every input is checked before step 1, and a marker left by an earlier park
 # is removed then, so a park that fails partway never leaves a parked marker.
-# The comment text is scanned with machine-local-ref-lib.sh and refused on a
-# hit.
+# The --detail text, the one caller-supplied part of the comment, is scanned
+# with machine-local-ref-lib.sh and refused on a hit.
 #
 # Exit: 0 parked; 1 a step failed, with one stderr line naming it (push
 # refused, gh unauthenticated); 2 usage error or refused input. A failed park
@@ -46,7 +48,7 @@ park_fail() {
 }
 
 park_usage() {
-  printf 'usage: autonomy-park.sh --reason <code> [--pr <n>] [--detail <text>]\n' >&2
+  printf 'usage: autonomy-park.sh --reason <code> [--pr <n>] [--detail <text>] [--root <path>]\n' >&2
   exit 2
 }
 
@@ -57,12 +59,13 @@ park_usage() {
 # shellcheck source=/dev/null
 . "$PARK_SCRIPT_DIRECTORY/usage-lib.sh" || park_fail "cannot load usage-lib.sh" 2
 
-reason="" pr="" detail="" detail_given=0
+reason="" pr="" detail="" detail_given=0 root_argument=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --reason) [ "$#" -ge 2 ] || park_usage; reason="$2"; shift 2 ;;
     --pr) [ "$#" -ge 2 ] || park_usage; pr="$2"; shift 2 ;;
     --detail) [ "$#" -ge 2 ] || park_usage; detail="$2"; detail_given=1; shift 2 ;;
+    --root) [ "$#" -ge 2 ] || park_usage; root_argument="$2"; shift 2 ;;
     *) park_usage ;;
   esac
 done
@@ -94,7 +97,12 @@ fi
 [ "$detail_given" = 0 ] || [ -n "$detail" ] || park_fail "--detail is empty" 2
 [ "${#detail}" -le "$PARK_DETAIL_MAX_BYTES" ] || park_fail "--detail is longer than $PARK_DETAIL_MAX_BYTES characters" 2
 
-tree_root="$(gaia_resolve_tree_root "$PWD")" || park_fail "not inside a git working tree" 2
+if [ -z "$root_argument" ]; then
+  root_argument="$(cd "$PARK_SCRIPT_DIRECTORY/../.." 2>/dev/null && pwd -P)" ||
+    park_fail "cannot resolve the checkout that holds this script" 2
+fi
+[ -d "$root_argument" ] || park_fail "--root is not a directory: $root_argument" 2
+tree_root="$(gaia_resolve_tree_root "$root_argument")" || park_fail "not inside a git working tree: $root_argument" 2
 main_root="$(gaia_resolve_main_root "$tree_root" 2>/dev/null)" || park_fail "cannot resolve the main checkout" 2
 branch="$(git -C "$tree_root" branch --show-current 2>/dev/null)" || branch=""
 [ -n "$branch" ] || park_fail "HEAD is detached: there is no branch to park" 2
@@ -128,8 +136,11 @@ if [ -n "$pr" ]; then
     printf '\n%s\n' "$resume"
     [ -z "$grant_line" ] || printf '\n```\n%s\n```\n' "$grant_line"
   } > "$comment_file"
-  if ! hits="$(bash "$PARK_SCRIPT_DIRECTORY/machine-local-ref-lib.sh" text "$comment_file" 2>&1)"; then
-    park_fail "the PR comment names a machine-local reference ($(printf '%s' "$hits" | head -n 1)); reword --detail" 2
+  if [ -n "$detail" ]; then
+    printf '%s\n' "$detail" > "$scratch/detail.txt"
+    if ! hits="$(bash "$PARK_SCRIPT_DIRECTORY/machine-local-ref-lib.sh" text "$scratch/detail.txt" 2>&1)"; then
+      park_fail "--detail names a machine-local reference ($(printf '%s' "$hits" | head -n 1)); reword --detail" 2
+    fi
   fi
 fi
 
