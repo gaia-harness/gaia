@@ -97,11 +97,12 @@
 # check_dump_tokens rules on it. Both are the same tokenizer work the spelling
 # above defers.
 #
-# One case needs no tokenizer and is repaired: a heredoc body that is plain data
-# for cat or tee is masked before the split, so the text a command writes to a
-# file is never judged as commands. lib/verb-arming-walk.sh owns which heredocs
-# qualify, and lib/reader-operands.sh states the limit on a script such a
-# heredoc writes.
+# Two cases need no tokenizer and are repaired: a heredoc body that is plain
+# data for cat or tee, and a quoted cat heredoc inside `"$(...)"` that is the
+# message of a git commit or a gh pr or issue create, edit or comment, are masked before the
+# split, so neither text is judged as commands. lib/verb-arming-walk.sh and
+# lib/message-heredoc.sh own which heredocs qualify, and lib/reader-operands.sh
+# states the limit on a script such a heredoc writes.
 #
 # THE PERMISSION RULES SHARED ALL OF THOSE LIMITS AT THE TOOL TIER, and they had
 # one this hook cannot have. A Read() deny merges into the OS sandbox boundary,
@@ -192,7 +193,7 @@ gaia_hook_payload_read "$payload" || exit 0
 tool_name="$GAIA_HOOK_TOOL_NAME"
 
 DENY_DOTENV_TOOL="BLOCKED: reading '.env' / '.env.*' files is denied to protect local secrets. Only '.env.example' is readable. Next step: refer to the variable by its name, never its value; read '.env.example' for the list of keys; and ask the user for any value that is not secret. Never copy, grep or re-encode the file to get around this guard. This guard is heuristic defense-in-depth, not a sandbox."
-DENY_DUMP="BLOCKED: a segment of this command begins with env or printenv and names no command to run, which reads as an environment dump that would print exported secrets into the transcript. Segments are split on | & ; ( ) and newlines without regard for quotes, so the word inside a quoted pattern, or inside any heredoc body other than one cat or tee writes to a literal file name, trips this too. Next step: to write text containing the word, use the Write tool or cat with a quoted heredoc delimiter (cat > notes.md <<'EOF', with no $ on that line); to search for it, give each word as its own -e operand instead of an (a|b) alternation; to set a variable for a command, use 'env NAME=value <cmd>'. Heuristic defense-in-depth, not a sandbox."
+DENY_DUMP="BLOCKED: a segment of this command begins with env or printenv and names no command to run, which reads as an environment dump that would print exported secrets into the transcript. Segments are split on | & ; ( ) and newlines without regard for quotes, so the word inside a quoted pattern, or inside a heredoc body that is neither written by cat or tee to a literal file name nor a quoted cat heredoc commit, PR or issue message free of quotes, parentheses, backticks, backslashes and $, trips this too. Next step: to write text containing the word, use the Write tool or cat with a quoted heredoc delimiter (cat > notes.md <<'EOF', with no $ on that line); for a commit, PR or issue message, write it to a file with the Write tool and pass git commit -F <file> or gh pr create --body-file <file> (the same flag works on gh pr or issue create, edit and comment); to search for it, give each word as its own -e operand instead of an (a|b) alternation; to set a variable for a command, use 'env NAME=value <cmd>'. Heuristic defense-in-depth, not a sandbox."
 DENY_DOTENV_READER="BLOCKED: reading a .env / .env.* file (a reader, sourcing, or redirection) is denied to protect local secrets. '.env.example' is exempt. Next step: refer to the variable by its name, never its value; read '.env.example' for the list of keys; and ask the user for any value that is not secret. Never copy, grep or re-encode the file to get around this guard. Heuristic defense-in-depth, not a sandbox."
 DENY_SECRET_TOOL="BLOCKED: reading key, certificate, and credential files is denied to protect local secrets. This covers '*.key', '*.pem', any name containing 'credential' except a .ts, .tsx, .mts or .cts file, and anything under a 'secrets/' directory. Next step: if this file holds no secret, ask the user to read it or rename it; never copy, move or re-encode it to get around this guard. Heuristic defense-in-depth, not a sandbox."
 DENY_SECRET_READER="BLOCKED: a command here reads a key, certificate, or credential path ('*.key', '*.pem', a name containing 'credential' other than a .ts, .tsx, .mts or .cts file, or anything under a 'secrets/' directory). Denied to protect local secrets. Next step: if this file holds no secret, ask the user to read it or rename it; never copy, move or re-encode it to get around this guard. Heuristic defense-in-depth, not a sandbox."

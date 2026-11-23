@@ -89,6 +89,7 @@
     ".claude/hooks/lib/main-checkout-hop-guard.sh": "owned",
     ".claude/hooks/lib/main-git-guard-history.sh": "owned",
     ".claude/hooks/lib/main-git-guard-parse.sh": "owned",
+    ".claude/hooks/lib/message-heredoc.sh": "owned",
     ".claude/hooks/lib/post-audit-status-gates.sh": "owned",
     ".claude/hooks/lib/pr-body-stamp.sh": "owned",
     ".claude/hooks/lib/rate-limits-guard.sh": "owned",
@@ -899,7 +900,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-23T20:54:57.124Z",
+  "generated": "2026-11-23T21:26:38.415Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
