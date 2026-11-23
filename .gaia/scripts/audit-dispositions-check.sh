@@ -48,6 +48,9 @@
 #                               (audit-accept-finding), when the round has no human accept and either the
 #                               default stop does not hold or the file disposes fix a key in
 #                               default_stop_keys (the stop's formula: audit-loop-eval.sh, DEFAULT STOP)
+#   human-accepted-fix          (version 4) fix on a key a human accepted at or before the round
+#                               (audit-accept-finding) that no binding veto names, unless the
+#                               round's finding is security-class
 #   undisposed                  a finding of any authorship, or an unsatisfied waiver-vetoed
 #                               key for this round, with no entry in the file, unless the
 #                               finding carries an honored triage mark or was disposed file,
@@ -107,7 +110,7 @@
 # Frozen snapshots. A member's sidecar is overwritten every round, so once
 # round r+1's members write, round r's findings are gone and a re-grade of an
 # old dispositions file would read every key as unknown. With --snapshot-dir a
-# passing live `check` writes <S>/dispositions-<r>.checked.json (version 3: the
+# passing live `check` writes <S>/dispositions-<r>.checked.json (version 4: the
 # file's sha256, the per-key lookup it graded, triage mark and failure mode
 # included, and the stop inputs default_stop, default_stop_keys, review_bases,
 # human_accept, accepted_keys and satisfied_vetoes), and `check-all` re-grades from that
@@ -126,7 +129,8 @@
 # mandatory, divert does not exist, no triage mark or carry-forward applies,
 # and no outcome reconciliation runs. Version 2 adds those, but has no
 # accept-residual eligibility, no veto satisfaction and no carry of an
-# accepted key. Live rounds and version-3 snapshots use the current predicate.
+# accepted key. Version 3 has no human-accepted-fix rule. Live rounds and
+# version-4 snapshots use the current predicate.
 #
 # Vetoes apply forward only. vetoes.json entries carry effective_from_round, so
 # a waiver veto recorded after a unit returned binds the rounds it applies to
@@ -248,6 +252,9 @@ def trim: gsub("^\\s+|\\s+$"; "");
            (if $is_vetoed and .disposition != "fix" then "vetoed-not-fix" else empty end),
            (if .disposition == "accept-residual" and $version >= 3 and ($accept_allowed or ($stop.accepted_keys // [] | any(. == $key)) | not)
             then "accept-residual-not-eligible" else empty end),
+           (if .disposition == "fix" and $version >= 4 and ($is_vetoed | not) and $lookup_entry != null
+               and ($stop.accepted_keys // [] | any(. == $key)) and (($lookup_entry | security_class) | not)
+            then "human-accepted-fix" else empty end),
            (if .disposition == "waive-out-of-scope" and ((.basis | IN("triage-threshold", "cross-remit")) | not)
             then "missing-basis" else empty end),
            (if .disposition == "waive-out-of-scope" and .basis == "cross-remit" and ($lookup_entry == null or $lookup_entry.cross_remit != true)
@@ -321,8 +328,9 @@ _live_lookup() {
 
 # _live_stop_inputs <round> <dispositions-file>: the round's stop inputs, in
 # _NO_STOP's shape. The evaluator is asked only what the file can use: the
-# stop and the human accept when it holds an accept-residual entry, the veto
-# state when a veto binds the round. rc 3 when the evaluator fails.
+# stop when it holds an accept-residual entry, the human accept when it holds
+# an accept-residual or fix entry, the veto state when a veto binds the round.
+# rc 3 when the evaluator fails.
 _live_stop_inputs() {
   local round="$1" stop="$_NO_STOP" answer
   if jq -e 'any(.entries[]; .disposition == "accept-residual")' "$2" >/dev/null 2>&1; then
@@ -330,6 +338,8 @@ _live_stop_inputs() {
       | {default_stop: (.default_stop == true), default_stop_keys: (.default_stop_keys // []), review_bases: (.review_bases // {})}')" || return 3
     [ -n "$answer" ] || return 3
     stop="$(jq -n -c --argjson stop "$stop" --argjson answer "$answer" '$stop + $answer')" || return 3
+  fi
+  if jq -e 'any(.entries[]; .disposition == "accept-residual" or .disposition == "fix")' "$2" >/dev/null 2>&1; then
     answer="$(_evaluator round-history | jq -c --argjson round "$round" '[.[] | select(.round == $round)]
       | {human_accept: any(.[]; .human_accept == true), accepted_keys: [.[] | .human_accepted_keys // [] | .[]]}')" || return 3
     [ -n "$answer" ] || return 3
@@ -425,7 +435,7 @@ _write_snapshot() {
   mkdir -p "$SNAPSHOT_DIRECTORY" 2>/dev/null || { _error "cannot create $SNAPSHOT_DIRECTORY"; return 3; }
   temporary_file="$(mktemp "$SNAPSHOT_DIRECTORY/.dispositions-$1.XXXXXX")" || { _error "cannot write in $SNAPSHOT_DIRECTORY"; return 3; }
   if jq -n -c --argjson round "$1" --arg sha "$2" --argjson lookup "$3" --argjson stop "$4" \
-    '{version: 3, round: $round, dispositions_sha256: $sha, lookup: $lookup} + $stop' >"$temporary_file" \
+    '{version: 4, round: $round, dispositions_sha256: $sha, lookup: $lookup} + $stop' >"$temporary_file" \
     && mv -f "$temporary_file" "$(_snapshot_path "$1")"; then
     return 0
   fi
@@ -441,9 +451,9 @@ _check_live() {
   _valid_dispositions "$dispositions_file" || { _error "unreadable dispositions file $dispositions_file"; return 3; }
   lookup="$(_live_lookup "$round")" || { _error "the evaluator could not read round $round"; return 3; }
   stop="$(_live_stop_inputs "$round" "$dispositions_file")" || { _error "the evaluator could not read round $round's stop inputs"; return 3; }
-  CHECKED_VERSION=3
+  CHECKED_VERSION=4
   exit_status=0
-  _grade "$round" "$lookup" 3 "$stop" || exit_status=$?
+  _grade "$round" "$lookup" 4 "$stop" || exit_status=$?
   [ "$exit_status" -eq 3 ] && { _error "could not grade $dispositions_file"; return 3; }
   if [ -n "$SNAPSHOT_DIRECTORY" ]; then
     sha="$(_sha256 "$dispositions_file")" || { _error "no sha256 tool"; return 3; }
@@ -468,7 +478,7 @@ _check_snapshot() {
   snapshot_file="$(_snapshot_path "$round")"
   CHECKED_VERSION=2
   _valid_dispositions "$dispositions_file" || { _error "unreadable dispositions file $dispositions_file"; return 3; }
-  snapshot_fields="$(jq -r --argjson no_stop "$_NO_STOP" 'if (.version | IN(1, 2, 3)) and (.lookup | type) == "array" and (.dispositions_sha256 | type) == "string"
+  snapshot_fields="$(jq -r --argjson no_stop "$_NO_STOP" 'if (.version | IN(1, 2, 3, 4)) and (.lookup | type) == "array" and (.dispositions_sha256 | type) == "string"
       and (.version < 3 or ((.default_stop | type) == "boolean" and (.default_stop_keys | type) == "array"
         and (.human_accept | type) == "boolean" and (.satisfied_vetoes | type) == "array"))
       then .version, .dispositions_sha256, (.lookup | tojson),

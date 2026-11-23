@@ -144,7 +144,31 @@ check_disputes_stay_with_the_fixer() {
     'No question that names a guard or rule a disputed entry would add recommends adding it unless it quotes the line that requires it, from the SPEC or a document its Required reading names, a `wiki/decisions/` page, or the code or docs' || return 1
 }
 
+# Unless the entry's direction asks for it, the fixer never reverts a choice
+# the branch states on purpose: the entry goes to the human disputed. The
+# member still keeps a handed finding whose fix would reverse one, because the statement is usually written by the agent
+# whose work is under review, so it is no drop evidence.
+check_stated_choice_goes_to_the_human() {
+  local region keep_rule
+  region="$(joined "$(range_of "$1/$ROUND_REL" '**Fixer dispatch.**' '**Classify the fixer from its file**')")"
+  need_text 'audit fixer dispatch prompt' "$region" || return 1
+  in_order "$region" \
+    'Unless the entry'"'"'s direction asks for it, a repair never undoes a choice the branch says it made on purpose,' \
+    'in the pull request'"'"'s body (gh pr view --json body), a commit message on the branch, or a comment beside the changed line:' \
+    'return that entry disputed with a reason that starts `conflicts with requirement:` and quotes the statement and names its source.' || return 1
+  keep_rule="$(grep -F -- '- **Keep wins over the proof gate.**' "$1/.claude/hooks/lib/audit-member-protocol.md")"
+  need_text 'member keep rule' "$keep_rule" || return 1
+  in_order "$keep_rule" 'You drop a handed finding only on cited concrete evidence: a guard at `file:line` that prevents the input or state, a test that already asserts the correct behavior, or a demonstration that the failure path is unreachable.' || return 1
+  grep -qiE -- 'pull request|commit message|on purpose|states' <<<"$keep_rule" && { printf 'the keep rule names a stated choice as drop evidence: %s\n' "$keep_rule" >&2; return 1; }
+  in_order "$(joined "$(cat "$1/$ROUND_REL")")" \
+    'is disposed `accept-residual`, never `fix`, unless it is Critical or security-class or a binding veto names it.' || return 1
+}
+
 # ---------- tests ----------
+
+@test "a fix reverting a choice the branch states goes to the human, and the member still keeps the finding" {
+  green check_stated_choice_goes_to_the_human
+}
 
 @test "plan fixers let the requirement sources decide whether code or test is wrong" {
   green check_plan_fixers_keep_requirements
