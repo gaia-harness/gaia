@@ -35,16 +35,15 @@
 # stages, not a helper it runs.
 #
 # A helper that copies by glob (a line starting with `cp`, or a `for ... in`
-# whose loop variable is a `cp` source, over `"$root"/dir/*.sh`) reaches every
-# changed file the glob's tail ends. A glob with a second expansion after its
-# root (`"$root"/$directory/*.sh`) is matched on its file-name part alone. A
-# glob matches nothing when its readable tail is a bare `*`, or its file-name
-# part is a bare `*`, holds an expansion, or starts with only punctuation
-# (`-*.sh`, the remnant of a stem an expansion carried), or its readable tail is
-# only a wildcard and an extension with no directory part (`*.sh`, what is left
-# of a directory held in a parameter), since nothing is left to tell the files
-# it copies from any other. A helper that copies a script and also greps it reaches
-# whatever that script sources.
+# whose loop variable is named on a `cp` line, over `"$root"/dir/*.sh`) reaches
+# every changed file the glob's tail ends. A glob with a second expansion after
+# its root (`"$root"/$directory/*.sh`) is matched on its file-name part alone.
+# A glob whose directory is a parameter of its function (`"$source_directory"/*.sh`)
+# is matched under the argument each call to that function in the same helper
+# passes for that parameter. A glob matches nothing when what is left of it after
+# its expansions names no file (a bare `*`, `-*.sh`, `*.sh`), since nothing is
+# left to tell the files it copies from any other. A helper that copies a script
+# and also greps it reaches whatever that script sources.
 #
 # Limit: a copy list built any other way (a computed array, a `find`, a name
 # read from a file) names no file, so a change to a file it picks is not seen
@@ -80,7 +79,14 @@ bats_selector_helper_suites() {
   status=$?
   if [ "$status" -gt 1 ]; then rm -rf "$scratch"; return 1; fi
 
-  LC_ALL=C awk -v tracked_file="$tracked_list" -v reaching_file="$scratch/reaching" -v pair_file="$pair_list" -v copies_file="$scratch/copies" -v invokes_file="$scratch/invokes" '
+  # Function definitions, the positional parameters they bind to names, and
+  # every command line (a call), in the helper files only.
+  git -C "$repository_root" grep -n -I -E '^[[:space:]]*(function[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)|[A-Za-z_][A-Za-z0-9_]*="\$[1-9]"|^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]+[^=[:space:]]' \
+    -- '*tests/*.sh' '*tests/*.bash' '*helpers/*.sh' '*helpers/*.bash' > "$scratch/functions"
+  status=$?
+  if [ "$status" -gt 1 ]; then rm -rf "$scratch"; return 1; fi
+
+  LC_ALL=C awk -v tracked_file="$tracked_list" -v reaching_file="$scratch/reaching" -v pair_file="$pair_list" -v copies_file="$scratch/copies" -v invokes_file="$scratch/invokes" -v functions_file="$scratch/functions" '
     function last_segment(path,   segments, segment_count) {
       segment_count = split(path, segments, "/")
       return segments[segment_count]
@@ -180,8 +186,8 @@ bats_selector_helper_suites() {
       if (stem != "" && stem !~ /[A-Za-z0-9]/) return ""
       return word
     }
-    # Whether a readable tail is only a wildcard and an extension (`*.sh`): no
-    # directory part and no literal stem, so it matches every such file in the
+    # Whether a readable tail has no directory part and starts with a wildcard
+    # (`*.sh`, `*-hook.sh`): on its own it matches every such file in the
     # repository and tells the files it copies from none of them.
     function glob_is_extension_only(tail) {
       return (tail !~ /\// && tail ~ /^[*?\[]/)
@@ -218,8 +224,8 @@ bats_selector_helper_suites() {
       }
       return 0
     }
-    # Whether the loop variable of a for-loop row is a cp source: on the row
-    # itself or on a later cp row of the same file.
+    # Whether the loop variable of a for-loop row is named on a cp line: on the
+    # row itself or on a later cp row of the same file.
     function loop_copies_its_variable(row_index, text,   loop_variable, variable_regex, row, file_name, other_index, other, other_colon, other_remainder, other_text) {
       if (!match(text, /^[ \t]*for[ \t]+[A-Za-z_][A-Za-z0-9_]*/)) return 0
       loop_variable = substr(text, RSTART, RLENGTH); sub(/^[ \t]*for[ \t]+/, "", loop_variable)
@@ -237,12 +243,51 @@ bats_selector_helper_suites() {
       }
       return 0
     }
-    function mark_copying_helpers(   row_index, row, first_colon, remainder, second_colon, helper, text, kind, word_count, words, word_index, word, tail, base, pair_index, path_index) {
+    # Whether a glob over a function parameter (`"$source_directory"/*.sh`)
+    # names a change under the directory some call in the same helper passes
+    # for that parameter. A parameter no call resolves matches nothing.
+    function parameter_glob_names_a_change(helper, glob_line, word, tail,   variable, function_name, parameter_position, function_row, function_row_text, binding_text, word_count, words, argument_tail) {
+      gsub(/["\047]/, "", word)
+      if (!match(word, /^\$\{?[A-Za-z_][A-Za-z0-9_]*/)) return 0
+      variable = substr(word, RSTART, RLENGTH); sub(/^\$\{?/, "", variable)
+      function_name = ""; parameter_position = 0
+      for (function_row = 1; function_row <= function_row_count; function_row++) {
+        if (function_row_file[function_row] != helper) continue
+        if (function_row_number[function_row] > glob_line) break
+        function_row_text = function_row_texts[function_row]
+        if (function_row_text ~ /^[ \t]*(function[ \t]+)?[A-Za-z_][A-Za-z0-9_]*[ \t]*\(\)/) {
+          function_name = function_row_text
+          sub(/^[ \t]*(function[ \t]+)?/, "", function_name); sub(/[ \t]*\(\).*$/, "", function_name)
+          parameter_position = 0
+        }
+        binding_text = function_row_text
+        while (function_name != "" && match(binding_text, /[A-Za-z_][A-Za-z0-9_]*="\$[1-9]"/)) {
+          if (substr(binding_text, RSTART, index(substr(binding_text, RSTART), "=") - 1) == variable) parameter_position = substr(binding_text, RSTART + RLENGTH - 2, 1)
+          binding_text = substr(binding_text, RSTART + RLENGTH)
+        }
+      }
+      if (function_name == "" || parameter_position == 0) return 0
+      for (function_row = 1; function_row <= function_row_count; function_row++) {
+        if (function_row_file[function_row] != helper) continue
+        function_row_text = function_row_texts[function_row]
+        if (function_row_text ~ /^[ \t]*#/ || function_row_text ~ /\(\)/) continue
+        if (!match(function_row_text, "^[ \t]*" function_name "[ \t]+")) continue
+        word_count = split(substr(function_row_text, RSTART + RLENGTH), words, /[ \t]+/)
+        if (parameter_position > word_count) continue
+        argument_tail = glob_tail(words[parameter_position])
+        sub(/\/+$/, "", argument_tail)
+        if (argument_tail == "" || argument_tail == "?") continue
+        if (glob_names_a_change(argument_tail "/" tail, 1)) return 1
+      }
+      return 0
+    }
+    function mark_copying_helpers(   row_index, row, first_colon, remainder, second_colon, helper, text, kind, word_count, words, word_index, word, tail, base, pair_index, path_index, glob_line) {
       for (row_index = 1; row_index <= copy_row_count; row_index++) {
         row = copy_rows[row_index]
         first_colon = index(row, ":"); remainder = substr(row, first_colon + 1)
         second_colon = index(remainder, ":")
         helper = substr(row, 1, first_colon - 1); text = substr(remainder, second_colon + 1)
+        glob_line = substr(remainder, 1, second_colon - 1) + 0
         if (text ~ /^[ \t]*cp[ \t]/) kind = "cp"
         else if (text ~ /^[ \t]*for[ \t]/) { kind = (loop_copies_its_variable(row_index, text) ? "for" : "loop"); sub(/^[ \t]*for[ \t].*[ \t]in[ \t]/, "", text) }
         else kind = "grep"
@@ -254,7 +299,10 @@ bats_selector_helper_suites() {
             if (tail == "?") {
               tail = glob_name_part(word)
               if (tail != "" && glob_names_a_change(tail, 0)) reaching[helper] = 1
-            } else if (tail !~ /^\*+$/ && !glob_is_extension_only(tail) && glob_names_a_change(tail, 1)) reaching[helper] = 1
+            } else if (tail !~ /^\*+$/) {
+              if (glob_is_extension_only(tail)) { if (parameter_glob_names_a_change(helper, glob_line, word, tail)) reaching[helper] = 1 }
+              else if (glob_names_a_change(tail, 1)) reaching[helper] = 1
+            }
           }
           gsub(/["\047]/, "", word); sub(/[^A-Za-z0-9_.\/-]+$/, "", word)
           if (word !~ /\.sh$/) continue
@@ -289,6 +337,16 @@ bats_selector_helper_suites() {
         copy_rows[++copy_row_count] = row
       }
       close(copies_file)
+      while ((getline row < functions_file) > 0) {
+        first_colon = index(row, ":"); remainder = substr(row, first_colon + 1)
+        second_colon = index(remainder, ":"); if (!first_colon || !second_colon) continue
+        if (substr(row, 1, first_colon - 1) !~ /(^|\/)(tests|helpers)\//) continue
+        function_row_count++
+        function_row_file[function_row_count] = substr(row, 1, first_colon - 1)
+        function_row_number[function_row_count] = substr(remainder, 1, second_colon - 1) + 0
+        function_row_texts[function_row_count] = substr(remainder, second_colon + 1)
+      }
+      close(functions_file)
       while ((getline row < invokes_file) > 0) {
         first_colon = index(row, ":"); remainder = substr(row, first_colon + 1)
         second_colon = index(remainder, ":"); if (!first_colon || !second_colon) continue

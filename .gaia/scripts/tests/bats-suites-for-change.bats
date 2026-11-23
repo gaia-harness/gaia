@@ -508,6 +508,13 @@ add_copy_pattern_suites() {
   # Copies a directory held in a parameter, leaving only the tail "*.sh".
   printf 'for source_file in "$source_directory"/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/extension-only.sh"
   printf 'load helpers/extension-only\n' > "$FIXTURE/tests/uses-extension-only.bats"
+  # Copies through a function parameter; its calls name the directories.
+  printf 'copy_directory() {\n  local source_directory="$1" destination_directory="$2"\n  for source_file in "$source_directory"/*.sh; do cp "$source_file" "$destination_directory/"; done\n}\ncopy_directory "${ROOT}/other" "$REPO/other"\ncopy_directory "${ROOT}/scripts" "$REPO/scripts"\n' > "$FIXTURE/tests/helpers/parameter-called.sh"
+  printf 'load helpers/parameter-called\n' > "$FIXTURE/tests/uses-parameter-called.bats"
+  printf 'copy_directory() {\n  local source_directory="$1" destination_directory="$2"\n  for source_file in "$source_directory"/*.sh; do cp "$source_file" "$destination_directory/"; done\n}\ncopy_directory "${ROOT}/other" "$REPO/other"\n' > "$FIXTURE/tests/helpers/parameter-other.sh"
+  printf 'load helpers/parameter-other\n' > "$FIXTURE/tests/uses-parameter-other.bats"
+  printf 'copy_directory() {\n  local source_directory="$1" destination_directory="$2"\n  for source_file in "$source_directory"/*.sh; do cp "$source_file" "$destination_directory/"; done\n}\n' > "$FIXTURE/tests/helpers/parameter-uncalled.sh"
+  printf 'load helpers/parameter-uncalled\n' > "$FIXTURE/tests/uses-parameter-uncalled.bats"
   printf 'echo hooked\n' > "$FIXTURE/scripts/copied-hook.sh"
   # Copies a script and derives more copies from what it sources.
   printf 'cp "$ROOT/scripts/library.sh" "$REPO/"\ngrep -o "[a-z]*[.]sh" "$ROOT/scripts/library.sh"\n' > "$FIXTURE/tests/helpers/deriver.sh"
@@ -543,6 +550,17 @@ add_copy_pattern_suites() {
   printf '%s\n' "$output" | grep -qx 'tests/uses-bare-tail.bats' && return 1
   printf '%s\n' "$output" | grep -qx 'tests/uses-stemless.bats' && return 1
   printf '%s\n' "$output" | grep -qx 'tests/uses-extension-only.bats' && return 1
+  true
+}
+
+@test "a glob over a function parameter is matched under the directories its calls pass; a call over another directory, or none, selects nothing" {
+  add_copy_pattern_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/uses-parameter-called.bats' || return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-parameter-other.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-parameter-uncalled.bats' && return 1
   true
 }
 
