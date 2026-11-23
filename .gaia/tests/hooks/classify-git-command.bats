@@ -307,9 +307,9 @@ EOF
   done
 }
 
-# The hook skips the destructive-git guard's command-config rule because only a
-# safe key passes its globals check; that holds only while no safe key is one
-# git runs as a command.
+# A `-c` the globals check approves must be safe on its own, not only because
+# the command-config rule would catch it: no safe key is one git runs as a
+# command.
 @test "no safe -c key is a key git runs as a command" {
   run bash -c '. "$1/.claude/hooks/lib/git-command-config.sh"
     for key in "${GAIA_GIT_SAFE_CONFIG_KEYS[@]}"; do
@@ -371,6 +371,8 @@ EOF
     'git config core.hooksPath /tmp'
     'git config --unset core.hooksPath'
     "git config alias.x '!sh'"
+    "git config alias.x '!sh' --get"
+    "git config alias.x '!sh' -l"
     'git config --global core.sshCommand evil'
     'git config --file /tmp/c credential.helper store'
   )

@@ -28,14 +28,11 @@
 #     which nothing here has read;
 #   - the subcommand is on the list in lib/git-allow-list.sh and carries none of
 #     its fall-through options;
-#   - neither the destructive-git guard's history rules nor the branch
-#     questions main_branch_rule_matches reads (a superset of the guard's
-#     main-branch and hard-reset rules) match the segment; the guard's
+#   - neither the destructive-git guard's history and command-config rules nor
+#     the branch questions main_branch_rule_matches reads (a superset of the
+#     guard's main-branch and hard-reset rules) match the segment; the guard's
 #     peer-session checkout rule is left to that hook, whose deny beats this
-#     allow. Its
-#     command-config rule needs no call here: only safe `-c` keys pass the
-#     globals check, `--config-env` never does, and `git config` passes only in
-#     its read forms.
+#     allow.
 #
 # Fail to fall-through, never fail to allow: a missing library, a missing jq, a
 # parse this file cannot finish, and every form not listed above exit 0 with no
@@ -84,7 +81,7 @@ case "$command" in git | git[[:space:]]* | *[[:space:]]git[[:space:]]* | *[\;\&\
 . "$library_directory/git-allow-list.sh" 2>/dev/null || exit 0
 # shellcheck source=lib/git-command-segments.sh
 . "$library_directory/git-command-segments.sh" 2>/dev/null || exit 0
-for required_function in parse_git_globals history_rule_reason \
+for required_function in parse_git_globals history_rule_reason command_config_rule_reason \
     _history_option_is push_refspec_names_main push_refspec_targets_main reset_hard_moves_head \
     gaia_resolve_common_directory split_command_segments; do
   type "$required_function" >/dev/null 2>&1 || exit 0
@@ -367,6 +364,8 @@ for segment_index in "${!segments[@]}"; do
   directory_is_approved || exit 0
   subcommand_is_approved || exit 0
   history_rule_reason
+  [ -z "$history_reason" ] || exit 0
+  command_config_rule_reason
   [ -z "$history_reason" ] || exit 0
   main_branch_rule_matches && exit 0
   case "$git_subcommand" in checkout | switch | symbolic-ref) branch_may_have_changed=1 ;; esac
