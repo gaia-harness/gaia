@@ -741,6 +741,7 @@ assert_position_preserving() {
       [ "$neutralized_character" = " " ] || return 1
       # 3. ...and it only ever writes one over a `;`, `&`, or `|`.
       case "$input_character" in
+        # sanctioned copy of .claude/hooks/lib/verb-arming-live-view.sh#GAIA_VERB_ARM_COMMAND_SEPARATORS
         ';' | '&' | '|') ;;
         *) return 1 ;;
       esac

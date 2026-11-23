@@ -200,13 +200,13 @@ scratch_hook() {
 
 @test "each pinned answer label records its answer shape and tells the main thread what to do next" {
   local row disputed_pin
-  local rows=(
+  # sanctioned copy of .claude/hooks/audit-loop-ask-grant.sh#grant_labels
+  local grant_rows=(
     'Continue audit in this session'
     'Continue audit in a new session'
     'State the rule, then continue'
-    'Accept the remainder'
-    'a grant label against a cap pin'
   )
+  local rows=("${grant_rows[@]}" 'Accept the remainder' 'a grant label against a cap pin')
   seed_pinned
   keep_state
   for row in "${rows[@]}"; do

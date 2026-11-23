@@ -70,6 +70,7 @@ deny() {
 }
 
 case "$tool_name" in
+  # sanctioned copy of .claude/hooks/lib/hook-payload.sh#GAIA_HOOK_EDIT_TOOLS
   Edit | Write | MultiEdit) ;;
   *) exit 0 ;;
 esac

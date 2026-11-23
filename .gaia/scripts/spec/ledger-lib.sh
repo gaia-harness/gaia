@@ -10,6 +10,10 @@
 #                                                 0 only for a parseable timestamp
 #                                                 at least retention_days old
 
+# shellcheck disable=SC2034 # the source arrays the status arms below and the notebook library's copies are marked against; no code reads them
+_GAIA_LEDGER_SPEC_STATUS_KEYS=(spec:draft spec:ready spec:merged spec:abandoned)
+_GAIA_LEDGER_PLAN_STATUS_KEYS=(plan:ready plan:merged plan:abandoned)
+
 gaia_ledger_kind_for_id() {
   case "${1:-}" in
     SPEC-*[!0-9]* | PLAN-*[!0-9]* | SPEC- | PLAN-) return 2 ;;
@@ -21,7 +25,9 @@ gaia_ledger_kind_for_id() {
 
 gaia_ledger_status_allowed() {
   case "${1:-}:${2:-}" in
+    # sanctioned copy of .gaia/scripts/spec/ledger-lib.sh#_GAIA_LEDGER_SPEC_STATUS_KEYS
     spec:draft | spec:ready | spec:merged | spec:abandoned) return 0 ;;
+    # sanctioned copy of .gaia/scripts/spec/ledger-lib.sh#_GAIA_LEDGER_PLAN_STATUS_KEYS
     plan:ready | plan:merged | plan:abandoned) return 0 ;;
     *) return 1 ;;
   esac

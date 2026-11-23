@@ -9,10 +9,14 @@
 #
 # Exit codes: 0 ok, 1 not pending (gaia_notebook_legacy_pending only), 2 usage.
 
+# shellcheck disable=SC2034 # the source array the arms below mark themselves against; no code reads it
+_GAIA_NOTEBOOK_LEGACY_KINDS=(specs plans research)
+
 # gaia_notebook_legacy_root <specs|plans|research> <main_root>
 #   Prints the absolute old root of that kind under <main_root>.
 gaia_notebook_legacy_root() {
   local kind="${1:-}" main_root="${2:-}"
+  # sanctioned copy of .gaia/scripts/notebook/legacy-roots.sh#_GAIA_NOTEBOOK_LEGACY_KINDS
   case "$kind" in specs | plans | research) ;; *) return 2 ;; esac
   [ -n "$main_root" ] || return 2
   printf '%s\n' "$main_root/.gaia/local/$kind"
@@ -23,6 +27,7 @@ gaia_notebook_legacy_root() {
 #   matching (a memory file or a document citing the old location).
 gaia_notebook_legacy_prefix() {
   case "${1:-}" in
+    # sanctioned copy of .gaia/scripts/notebook/legacy-roots.sh#_GAIA_NOTEBOOK_LEGACY_KINDS
     specs | plans | research) printf '%s\n' ".gaia/local/$1/" ;;
     *) return 2 ;;
   esac

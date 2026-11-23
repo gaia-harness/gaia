@@ -1,12 +1,13 @@
 {
   "ceilings": {
+    ".claude/hooks/audit-loop-ask-grant.sh": 403,
     ".claude/hooks/audit-loop-bound.sh": 855,
     ".claude/hooks/block-main-destructive-git.sh": 497,
-    ".claude/hooks/block-rm-rf.sh": 820,
+    ".claude/hooks/block-rm-rf.sh": 821,
     ".claude/hooks/lib/audit-base-provenance.sh": 417,
     ".claude/hooks/lib/audit-branch-patch.sh": 564,
     ".claude/hooks/lib/audit-scope.sh": 528,
-    ".claude/hooks/lib/gaia-packages.sh": 469,
+    ".claude/hooks/lib/gaia-packages.sh": 472,
     ".claude/hooks/local-janitor.sh": 528,
     ".claude/hooks/provision-worktree.sh": 615,
     ".claude/hooks/workflow-doctrine-inject.sh": 586,
@@ -37,7 +38,7 @@
     ".gaia/cli/src/wiki/commit-classify.ts": 639,
     ".gaia/scripts/audit-dispositions-check.sh": 694,
     ".gaia/scripts/audit-light-route.sh": 663,
-    ".gaia/scripts/audit-light-telemetry.sh": 574,
+    ".gaia/scripts/audit-light-telemetry.sh": 576,
     ".gaia/scripts/audit-loop-state-lib.sh": 554,
     ".gaia/scripts/audit-noop-detect.sh": 702,
     ".gaia/scripts/audit-resolve-scope.sh": 656,
@@ -72,7 +73,7 @@
     ".gaia/scripts/usage-render-lib.sh": 619,
     ".gaia/scripts/usage.sh": 489,
     ".gaia/scripts/worktree-ports-lib.sh": 491,
-    ".gaia/statusline/gaia-statusline-right.sh": 637,
+    ".gaia/statusline/gaia-statusline-right.sh": 638,
     ".github/forensics/parse-issue-body.sh": 404,
     ".github/workflows/audit-ci-tests.yml": 1019,
     ".github/workflows/forensics-triage.yml": 891

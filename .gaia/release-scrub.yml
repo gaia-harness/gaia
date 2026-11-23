@@ -320,6 +320,12 @@ transforms:
           # the maintainer marker file existing; on an adopter clone the file
           # is absent, which keeps the arm off. Anchored to the one declaration.
           - "^const MAINTAINER_MARKER_PATH = \"\\.claude/rules/maintainers/harness-triage-threshold\\.md\";$"
+          # The statusline grade case arm marks itself as a subset of the
+          # fitness grade union. The marker has to sit on the line directly
+          # above the arm, outside any maintainer-only block, and on an adopter
+          # the finding it marks has only harness sites, so it goes unreported.
+          # Anchored to the one marker line.
+          - "^\\s*# subset of \\.gaia/cli/src/fitness/types\\.ts#Grade$"
 
       # ---- Code Audit Team maintainer-only member names ----
       # A mis-wrapped roster entry or resolver block would leave a
