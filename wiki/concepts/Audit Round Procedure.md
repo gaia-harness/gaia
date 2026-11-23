@@ -234,7 +234,7 @@ bash <RUN_FOLDER>/verifier-bin-<r>/audit-fix-verify.sh settled --root <RESOLVED_
   --security-paths <RUN_FOLDER>/security-<r>.paths
 ```
 
-`--security-paths` is required: `<RUN_FOLDER>/security-<r>.paths`, written every round with one line per `file` of each `written` entry in the security writer's reports (empty when none ran), since those tests land after the check. Never pass `gate-<r>-<j>.paths` here: the check already judged that content, and `settled` takes no `--extra-declared`. A verifier output that no longer hashes to `<VERIFIER_SHA>` is refused as `bad-input`. Exit 1 stops the round without a commit, `needs-human` with `stop_detail` naming the first line it printed: the edits stay uncommitted, and no continuation repairs them, because the fixer that moved the tree is the one that would.
+`--security-paths` is required: `<RUN_FOLDER>/security-<r>.paths`, written every round with one line per `file` of each `written` entry in the security writer's reports (empty when none ran), since those tests land after the check. Never pass `gate-<r>-<j>.paths` here: the check already judged that content, and `settled` takes no `--extra-declared`. Exit 1 stops the round without a commit, `needs-human` with `stop_detail` naming the first line it printed: the edits stay uncommitted, and no continuation repairs them, because the fixer that moved the tree is the one that would.
 
 **Gate.** After `settled` passes, stage exactly the delta: the paths the fixer declared, the security writer's tests, and any path an earlier gate attempt's autofix changed.
 

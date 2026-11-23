@@ -125,7 +125,7 @@
 #        "result_sha":"<sha256 of the fixer file>"}|null}
 #     judged is set only on a pass: each path differing from HEAD, untracked
 #     paths included and hashed, as the check read them. settled compares the
-#     tree and the fixer file against it before the round stages anything, and
+#     tree and the fixer file against it before the round stages and again after a gate pass, and
 #     fails on head-moved, result-moved, tree-moved (one line per path; paths in
 #     the --security-paths and --gate-paths files are exempt) or bad-input.
 #     settled takes no --extra-declared (a usage error). The pre-gate run

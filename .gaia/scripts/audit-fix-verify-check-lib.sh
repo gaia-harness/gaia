@@ -25,7 +25,7 @@ add_error() {
 
 has_errors() { [ -s "$ERRORS_FILE" ]; }
 
-# Prints a declared-paths file's non-blank lines. A file written without a
+# Prints a declared-paths file's non-empty lines. A file written without a
 # trailing newline (the Write tool's) still ends its last path, so two files
 # read in turn never fuse into one path.
 read_declared_paths() {
@@ -315,15 +315,12 @@ EOF
   finish_check
 }
 
-# settled: the round runs it after a passing check and before it stages
-# anything. A fixer can keep running after it returns (a background run that
-# finishes later) and edit the tree or rewrite its result file; staging reads
-# both, so either change would reach the round's commit unverified. Only the
-# security writer's tests (--security-paths, written after the check) and, on
-# the post-gate re-check alone, that attempt's autofix paths (--gate-paths) may
-# differ; nothing else may. A gate path is never exempt before the gate, because
-# the check already judged that content. --verifier-sha pins the verifier output
-# so a fixer that can write the run folder cannot rewrite the judged record.
+# settled: the round runs it after a passing check, before it stages, and
+# again after a gate pass, before it re-stages. A fixer can keep running after
+# it returns (a background run that finishes later) and edit the tree or rewrite
+# its result file; staging reads both, so either change would reach the round's
+# commit unverified. The exempt paths and --verifier-sha are in
+# audit-fix-verify.sh's header.
 command_settled() {
   local exit_status=0 file_path paths_file judged_sha current_sha
   [ -z "$EXTRA_DECLARED_FILES" ] || die_usage 'settled takes --security-paths and --gate-paths, not --extra-declared'

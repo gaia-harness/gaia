@@ -1125,10 +1125,11 @@ passing_check() {
   reset_case
   passing_check
   edit a.txt
+  printf 'a.txt\n' >"$RUN_FOLDER/gate-1-1.paths"
   do_settled
   [ "$status" -eq 1 ]
   [[ "$output" == *"tree-moved: a.txt"* ]] || return 1
-  # row: the removed option is refused, and so are a missing security file and a duplicate gate file
+  # row: the removed option is refused, and so is a run without --security-paths
   do_settled --extra-declared "$RUN_FOLDER/security-1.paths"
   [ "$status" -eq 2 ]
   run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" \
