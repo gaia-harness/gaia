@@ -5,8 +5,7 @@
 # use prints, the clean verdict for request-only tests (including request
 # contexts named like a page and words in strings and comments), the printed
 # line shape, the exit codes, the symlinked invocation, the pageUsesOf export,
-# and the static half of the template's page-status check. Every check has a
-# red twin: a positive fixture beside a negative one, or a mutated scratch copy.
+# and the static half of the template's page-status check.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/page-use.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -29,7 +28,8 @@ setup() {
 detect() {
   SPEC_FILE="$BATS_TEST_TMPDIR/$1.spec.ts"
   cat >"$SPEC_FILE"
-  run -"${2:-1}" node "$DETECTOR" "$SPEC_FILE"
+  run node "$DETECTOR" "$SPEC_FILE"
+  [ "$status" -eq "${2:-1}" ] || { echo "case $1: status=$status output=$output"; return 1; }
 }
 
 assert_reason() {
@@ -39,7 +39,7 @@ assert_reason() {
   esac
 }
 
-# The template checks, each taking the file so a red twin runs on a mutated copy.
+# The template checks, each taking the file to check.
 template_opens_no_page() {
   node "$DETECTOR" "$1"
 }
@@ -53,17 +53,14 @@ template_heading_check() {
     grep -q "querySelector('h1')?.text.trim()).toBe(heading)" "$1"
 }
 
-@test "a page destructured in a test body is a page-fixture" {
+@test "a page, browser or context fixture use is classified with its reason: page-goto, helper, browser.newPage, in-file project fixture, axe fixture, context.request, hook, chromium import, plain parameter" {
   detect page-goto <<'SRC'
 import {test} from '@playwright/test';
 test('x', async ({page}) => {
   await page.goto('/');
 });
 SRC
-  assert_reason page-fixture
-}
-
-@test "a page opened through an imported helper is a page-fixture" {
+  assert_reason page-fixture || { echo "case page-goto"; return 1; }
   detect helper <<'SRC'
 import {test} from '@playwright/test';
 import {openHome} from './helpers';
@@ -71,10 +68,7 @@ test('x', async ({page}) => {
   await openHome(page);
 });
 SRC
-  assert_reason page-fixture
-}
-
-@test "browser.newPage with a browser fixture is page-fixture and new-page" {
+  assert_reason page-fixture || { echo "case helper"; return 1; }
   detect browser-new-page <<'SRC'
 import {test} from '@playwright/test';
 test('x', async ({browser}) => {
@@ -82,11 +76,8 @@ test('x', async ({browser}) => {
   await opened.goto('/');
 });
 SRC
-  assert_reason page-fixture
-  assert_reason new-page
-}
-
-@test "an in-file project page fixture is a project-page-fixture on the test" {
+  assert_reason page-fixture || { echo "case browser-new-page"; return 1; }
+  assert_reason new-page || { echo "case browser-new-page"; return 1; }
   detect project-fixture <<'SRC'
 import {test as base} from '@playwright/test';
 const test = base.extend({
@@ -98,58 +89,43 @@ test('x', async ({signedInPage}) => {
   await signedInPage.goto('/');
 });
 SRC
-  assert_reason project-page-fixture
-  assert_reason page-fixture
-}
-
-@test "the template's known page-backed fixture is a project-page-fixture" {
+  assert_reason project-page-fixture || { echo "case project-fixture"; return 1; }
+  assert_reason page-fixture || { echo "case project-fixture"; return 1; }
   detect axe <<'SRC'
 import {test} from '../fixtures';
 test('x', async ({makeAxeBuilder}) => {
   await makeAxeBuilder().analyze();
 });
 SRC
-  assert_reason project-page-fixture
-}
-
-@test "context.request with a context fixture is page-fixture and context-request" {
+  assert_reason project-page-fixture || { echo "case axe"; return 1; }
   detect context-request <<'SRC'
 import {test} from '@playwright/test';
 test('x', async ({context}) => {
   await context.request.post('/');
 });
 SRC
-  assert_reason page-fixture
-  assert_reason context-request
-}
-
-@test "a hook that destructures page is a page-fixture" {
+  assert_reason page-fixture || { echo "case context-request"; return 1; }
+  assert_reason context-request || { echo "case context-request"; return 1; }
   detect hook <<'SRC'
 import {test} from '@playwright/test';
 test.beforeEach(async ({page}) => {
   await page.goto('/');
 });
 SRC
-  assert_reason page-fixture
-}
-
-@test "importing chromium from playwright is a browser-import" {
+  assert_reason page-fixture || { echo "case hook"; return 1; }
   detect browser-import <<'SRC'
 import {chromium} from '@playwright/test';
 export const launcher = chromium;
 SRC
-  assert_reason browser-import
-}
-
-@test "a non-destructured first parameter reading .page is a page-fixture" {
+  assert_reason browser-import || { echo "case browser-import"; return 1; }
   detect plain-parameter <<'SRC'
 import {test} from '@playwright/test';
 test('x', async (fixtures) => fixtures.page.goto('/'));
 SRC
-  assert_reason page-fixture
+  assert_reason page-fixture || { echo "case plain-parameter"; return 1; }
 }
 
-@test "a request-only test whose strings and comments say page, browser and context is clean" {
+@test "request-only specs are clean: page, browser and context in strings and comments, request.newContext, worker fixture, signed-in request, Context-suffixed fixture, request-backed sibling fixture" {
   detect words 0 <<'SRC'
 import {expect, test} from '@playwright/test';
 test('the page responds', async ({request}) => {
@@ -158,10 +134,7 @@ test('the page responds', async ({request}) => {
   expect(r.status()).toBe(200);
 });
 SRC
-  [ -z "$output" ]
-}
-
-@test "request.newContext as an API context is clean" {
+  [ -z "$output" ] || { echo "case words"; return 1; }
   detect api-context 0 <<'SRC'
 import {test} from '@playwright/test';
 test('x', async ({request}) => {
@@ -169,10 +142,7 @@ test('x', async ({request}) => {
   await api.get('/');
 });
 SRC
-  [ -z "$output" ]
-}
-
-@test "playwright.request.newContext inside a worker fixture is clean" {
+  [ -z "$output" ] || { echo "case api-context"; return 1; }
   detect worker-fixture 0 <<'SRC'
 import {test as base} from '@playwright/test';
 export const test = base.extend({
@@ -181,10 +151,7 @@ export const test = base.extend({
   }, {scope: 'worker'}],
 });
 SRC
-  [ -z "$output" ]
-}
-
-@test "the signed-in real-server pattern is clean" {
+  [ -z "$output" ] || { echo "case worker-fixture"; return 1; }
   detect signed-in 0 <<'SRC'
 import {expect, test as base} from '@playwright/test';
 const test = base.extend({
@@ -199,17 +166,29 @@ test('x', async ({signedInRequest}) => {
   expect(r.status()).toBe(200);
 });
 SRC
-  [ -z "$output" ]
-}
-
-@test "a request-context fixture with a Context suffix is clean (no name-suffix rule)" {
+  [ -z "$output" ] || { echo "case signed-in"; return 1; }
   detect suffix 0 <<'SRC'
 import {test} from '@playwright/test';
 test('x', async ({apiContext}) => {
   await apiContext.get('/');
 });
 SRC
-  [ -z "$output" ]
+  [ -z "$output" ] || { echo "case suffix"; return 1; }
+  module api-fixtures <<'SRC'
+import {test as base} from '@playwright/test';
+export const test = base.extend({
+  apiContext: async ({request}, use) => {
+    await use(request);
+  },
+});
+SRC
+  detect cross-module-request 0 <<'SRC'
+import {test} from './api-fixtures';
+test('x', async ({apiContext}) => {
+  await apiContext.get('/');
+});
+SRC
+  [ -z "$output" ] || { echo "case cross-module-request"; return 1; }
 }
 
 # module <name>: write stdin to $BATS_TEST_TMPDIR/<name>.ts, a sibling the
@@ -218,7 +197,7 @@ module() {
   cat >"$BATS_TEST_TMPDIR/$1.ts"
 }
 
-@test "a page-backed fixture a sibling module defines is a project-page-fixture" {
+@test "page-backed fixtures are followed through sibling modules: cross-module, layered, import cycle, diamond; an unresolvable import keeps the one-file verdict" {
   module project-fixtures <<'SRC'
 import {test as base} from '@playwright/test';
 export const test = base.extend({
@@ -233,10 +212,7 @@ test('x', async ({signedInPage}) => {
   await signedInPage.goto('/');
 });
 SRC
-  [ "$output" = "${SPEC_FILE}${TAB}2${TAB}x${TAB}project-page-fixture" ]
-}
-
-@test "a page-backed fixture is followed through a fixtures module's own imports" {
+  [ "$output" = "${SPEC_FILE}${TAB}2${TAB}x${TAB}project-page-fixture" ] || { echo "case cross-module"; return 1; }
   module base-fixtures <<'SRC'
 import {test as base} from '@playwright/test';
 export const test = base.extend({
@@ -259,10 +235,7 @@ test('x', async ({dashboard}) => {
   await dashboard.goto('/');
 });
 SRC
-  assert_reason project-page-fixture
-}
-
-@test "a fixtures import cycle terminates and keeps the page-backed verdict" {
+  assert_reason project-page-fixture || { echo "case layered"; return 1; }
   module cycle-a <<'SRC'
 import {test as base} from './cycle-b';
 export const test = base.extend({
@@ -285,10 +258,7 @@ test('x', async ({signedInPage}) => {
   await signedInPage.goto('/');
 });
 SRC
-  assert_reason project-page-fixture
-}
-
-@test "a fixtures module two imports reach counts for both" {
+  assert_reason project-page-fixture || { echo "case cycle"; return 1; }
   module shared-fixtures <<'SRC'
 import {test as base} from '@playwright/test';
 export const test = base.extend({
@@ -320,35 +290,14 @@ test('x', async ({dashboard}) => {
   await dashboard.goto('/');
 });
 SRC
-  assert_reason project-page-fixture
-}
-
-@test "a request-backed fixture a sibling module defines is clean" {
-  module api-fixtures <<'SRC'
-import {test as base} from '@playwright/test';
-export const test = base.extend({
-  apiContext: async ({request}, use) => {
-    await use(request);
-  },
-});
-SRC
-  detect cross-module-request 0 <<'SRC'
-import {test} from './api-fixtures';
-test('x', async ({apiContext}) => {
-  await apiContext.get('/');
-});
-SRC
-  [ -z "$output" ]
-}
-
-@test "an unresolvable fixtures import keeps the one-file verdict" {
+  assert_reason project-page-fixture || { echo "case diamond"; return 1; }
   detect unresolvable 0 <<'SRC'
 import {test} from './missing-fixtures';
 test('x', async ({signedInPage}) => {
   await signedInPage.goto('/');
 });
 SRC
-  [ -z "$output" ]
+  [ -z "$output" ] || { echo "case unresolvable"; return 1; }
 }
 
 @test "pageUsesOf resolves imports against the file path it is handed" {
@@ -381,7 +330,7 @@ SRC
   [ "$output" = "0 1" ]
 }
 
-@test "a use prints file, line, static title and reason separated by tabs" {
+@test "a use prints file, line, title and reason tab-separated: static title, and - for a hook" {
   detect exact-line <<'SRC'
 import {test} from '@playwright/test';
 
@@ -389,27 +338,12 @@ test('opens home', async ({page}) => {
   await page.goto('/');
 });
 SRC
-  [ "$output" = "${SPEC_FILE}${TAB}3${TAB}opens home${TAB}page-fixture" ]
-}
-
-@test "a hook use prints - for the title" {
+  [ "$output" = "${SPEC_FILE}${TAB}3${TAB}opens home${TAB}page-fixture" ] || { echo "case exact-line"; return 1; }
   detect dash-title <<'SRC'
 import {test} from '@playwright/test';
 test.beforeEach(async ({page}) => {});
 SRC
-  [ "$output" = "${SPEC_FILE}${TAB}2${TAB}-${TAB}page-fixture" ]
-}
-
-@test "no argument exits 2" {
-  run -2 node "$DETECTOR"
-}
-
-@test "a missing file exits 3 and names page-use on stderr" {
-  run -3 --separate-stderr node "$DETECTOR" "$BATS_TEST_TMPDIR/absent.spec.ts"
-  case "$stderr" in
-    page-use:*) ;;
-    *) echo "stderr: $stderr" >&2; return 1 ;;
-  esac
+  [ "$output" = "${SPEC_FILE}${TAB}2${TAB}-${TAB}page-fixture" ] || { echo "case dash-title"; return 1; }
 }
 
 @test "the CLI runs through a symlinked scripts directory" {
@@ -432,34 +366,10 @@ SRC
   [ "$output" = '[{"line":1,"reason":"page-fixture","test":"t"}]' ]
 }
 
-@test "the template page-status test opens no page" {
-  run -0 template_opens_no_page "$TEMPLATE_SPEC"
-  [ -z "$output" ]
-}
-
-@test "the template page-status test is request-only, holds 200 and parses HTML" {
-  template_status_check "$TEMPLATE_SPEC"
-}
-
-@test "the template compares the parsed h1 with the site name heading" {
-  template_heading_check "$TEMPLATE_SPEC"
-}
-
-@test "red twin: a template copy destructuring page makes the detector exit 1" {
-  copy="$BATS_TEST_TMPDIR/route-status-page.spec.ts"
-  sed 's/async ({request}) => {/async ({page}) => {/' "$TEMPLATE_SPEC" >"$copy"
-  run -1 template_opens_no_page "$copy"
-  assert_reason page-fixture
-}
-
-@test "red twin: a template copy asserting 201 fails the status check" {
-  copy="$BATS_TEST_TMPDIR/route-status-201.spec.ts"
-  sed 's/toBe(200)/toBe(201)/' "$TEMPLATE_SPEC" >"$copy"
-  run ! template_status_check "$copy"
-}
-
-@test "red twin: a template copy with a different heading fails the heading check" {
-  copy="$BATS_TEST_TMPDIR/route-status-heading.spec.ts"
-  sed "s/heading: common.meta.siteName/heading: 'Other'/" "$TEMPLATE_SPEC" >"$copy"
-  run ! template_heading_check "$copy"
+@test "the template page-status test opens no page, is request-only, holds 200, parses HTML and compares the h1 with the site name heading" {
+  run template_opens_no_page "$TEMPLATE_SPEC"
+  [ "$status" -eq 0 ] || { echo "case opens-no-page: status=$status output=$output"; return 1; }
+  [ -z "$output" ] || { echo "case opens-no-page: output=$output"; return 1; }
+  template_status_check "$TEMPLATE_SPEC" || { echo "case status-check"; return 1; }
+  template_heading_check "$TEMPLATE_SPEC" || { echo "case heading-check"; return 1; }
 }

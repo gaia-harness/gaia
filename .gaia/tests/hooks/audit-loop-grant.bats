@@ -4,11 +4,11 @@
 # records a human's answer to an audit checkpoint. Every case drives the hook
 # by direct invocation with a fixture payload and a fixture transcript.
 #
-# AUDIT_LOOP_GRANT_HOOK points the suite at a scratch copy of the hook (its
-# libraries reached through a `.gaia` symlink beside it), which is how a mutant
-# is run against it without touching the working file. GRANT_BASH selects the
-# interpreter the hook runs under, so the same suite proves the hook under
-# stock /bin/bash 3.2.
+# AUDIT_LOOP_GRANT_HOOK points the suite at another copy of the hook (its
+# libraries reached through a `.gaia` symlink beside it); the decline table
+# uses scratch copies the same way to inject a failed state read or write.
+# GRANT_BASH selects the interpreter the hook runs under, so the same suite
+# proves the hook under stock /bin/bash 3.2.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/audit-loop-grant.bats < /dev/null
 #      GRANT_BASH=/bin/bash .gaia/scripts/bats5.sh .gaia/tests/hooks/audit-loop-grant.bats < /dev/null
@@ -48,6 +48,17 @@ seed_pending() {
   alf_add_checkpoint 5 allowance
 }
 
+# keep_pending / restore_pending: save the seeded state once, and put it back
+# before each table row so no row's record or corruption leaks into the next.
+keep_pending() { cp "$ALF_STATE" "$BATS_TEST_TMPDIR/pending.json"; }
+restore_pending() { cp "$BATS_TEST_TMPDIR/pending.json" "$ALF_STATE"; }
+
+# fresh_fixture: discard the fixture and build a new one, as setup does per test.
+fresh_fixture() {
+  rm -rf "${BATS_TEST_TMPDIR:?}"/*
+  setup
+}
+
 # payload <prompt> [cwd] [session] [transcript]: a UserPromptSubmit payload.
 payload() {
   "$HELPERS/mock-hook-input.sh" user-prompt-submit "${3:-s1}" "$1" |
@@ -84,6 +95,7 @@ allowed() { gaia_loop_allowed "$(cat "$ALF_STATE")"; }
   printf '%s' "$output" | grep -qF '7'
 }
 
+# bats test_tags=protected
 @test "an sdk-cli transcript (the nested claude -p shape) records nothing and says not interactive" {
   seed_pending
   snapshot
@@ -94,222 +106,137 @@ allowed() { gaia_loop_allowed "$(cat "$ALF_STATE")"; }
   printf '%s' "$output" | grep -qF 'systemMessage'
 }
 
-@test "a cli session with no entrypoint record yet records nothing and says to send another message first" {
+@test "a session that is not interactive or not yet measured records nothing and says which" {
+  local row entrypoint transcript_kind says never_says transcript
+  local rows=(
+    'cli|missing|Send any other message first|not interactive'
+    'cli|empty-file|Send any other message first|not interactive'
+    'cli|no-entrypoint|Send any other message first|not interactive'
+    'sdk-cli|missing|not interactive|Send any other message'
+    'sdk-cli|empty-file|not interactive|Send any other message'
+    'sdk-cli|no-entrypoint|not interactive|Send any other message'
+    'cli|empty-path|not interactive|'
+    'cli|directory|not interactive|'
+    'cli|resumed|not interactive|'
+    'sdk-cli|cli|not interactive|'
+    'unset|cli|not interactive|'
+  )
   seed_pending
   snapshot
   : >"$BATS_TEST_TMPDIR/tx-empty.jsonl"
   printf '%s\n' '{"type":"session-owner"}' '{"type":"queue-operation"}' >"$BATS_TEST_TMPDIR/tx-no-entrypoint.jsonl"
-  local transcript
-  for transcript in no-such.jsonl tx-empty.jsonl tx-no-entrypoint.jsonl; do
-    send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/$transcript"
-    claude_told_nothing_recorded "$transcript"
-    printf '%s' "$output" | grep -qF 'Send any other message first' || { printf 'no retry wording for %s\n' "$transcript" >&2; return 1; }
-    printf '%s' "$output" | grep -qF 'not interactive' && return 1
-  done
-  true
-}
-
-@test "an sdk-cli session with no entrypoint record yet records nothing and says not interactive" {
-  seed_pending
-  snapshot
-  : >"$BATS_TEST_TMPDIR/tx-empty.jsonl"
-  printf '%s\n' '{"type":"session-owner"}' '{"type":"queue-operation"}' >"$BATS_TEST_TMPDIR/tx-no-entrypoint.jsonl"
-  local transcript
-  for transcript in no-such.jsonl tx-empty.jsonl tx-no-entrypoint.jsonl; do
-    CLAUDE_CODE_ENTRYPOINT=sdk-cli send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/$transcript"
-    claude_told_nothing_recorded "$transcript"
-    printf '%s' "$output" | grep -qF 'not interactive' || { printf 'wrong wording for %s\n' "$transcript" >&2; return 1; }
-    printf '%s' "$output" | grep -qF 'Send any other message' && return 1
-  done
-  true
-}
-
-@test "an empty transcript path records nothing and says not interactive" {
-  seed_pending
-  snapshot
-  send 'audit-grant 3' "$ALF_ROOT" s1 ""
-  claude_told_nothing_recorded "empty path"
-  printf '%s' "$output" | grep -qF 'not interactive'
-}
-
-# mutated_library <sed-expression>: HOOK becomes a copy of the hook that redefines
-# the interactive check, after sourcing the libraries, as the library's own
-# function with the edit applied; proves the edit took.
-mutated_library() {
-  local original="$BATS_TEST_TMPDIR/interactive-check.sh" mutant="$BATS_TEST_TMPDIR/interactive-check-mutant.sh"
-  sed -n '/^gaia_loop_session_is_interactive() {$/,/^}$/p' "$REPO_ROOT/.gaia/scripts/audit-loop-state-lib.sh" >"$original"
-  [ -s "$original" ]
-  sed "$1" "$original" >"$mutant"
-  cmp -s "$original" "$mutant" && return 1
-  scratch_hook 's|^prompt="\$(printf|. "'"$mutant"'"; &|'
-}
-
-# recorded_one: the mutant admitted what the real check refuses.
-recorded_one() {
-  [ "$status" -eq 0 ]
-  [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
-}
-
-@test "mutant: admitting the missing-transcript shape records" {
-  seed_pending
-  mutated_library 's/\[ -e "\$transcript" \] || return 2/[ -e "$transcript" ] || return 0/'
-  send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/no-such.jsonl"
-  recorded_one
-}
-
-@test "mutant: admitting the no-entrypoint shape records" {
-  seed_pending
-  mutated_library 's/none) return 2 ;;/none) return 0 ;;/'
-  : >"$BATS_TEST_TMPDIR/tx-empty.jsonl"
-  send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/tx-empty.jsonl"
-  recorded_one
-}
-
-@test "mutant: dropping the environment check records for sdk-cli" {
-  seed_pending
-  mutated_library '/CLAUDE_CODE_ENTRYPOINT-}" = cli \] || return 1/d'
-  CLAUDE_CODE_ENTRYPOINT=sdk-cli send 'audit-grant 3'
-  recorded_one
-}
-
-@test "mutant: reading any instead of all records a mixed transcript" {
-  seed_pending
-  mutated_library 's/elif all(\. == "cli")/elif any(. == "cli")/'
-  printf '%s\n' '{"type":"user","entrypoint":"cli"}' '{"type":"user","entrypoint":"sdk-cli"}' >"$BATS_TEST_TMPDIR/tx-mixed.jsonl"
-  send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/tx-mixed.jsonl"
-  recorded_one
-}
-
-@test "mutant: admitting a directory path records" {
-  seed_pending
-  mutated_library 's/\[ -f "\$transcript" \] || return 1/[ -f "$transcript" ] || return 0/'
-  send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR"
-  recorded_one
-}
-
-@test "mutant: admitting an empty path records" {
-  seed_pending
-  mutated_library 's/\[ -n "\$transcript" \] || return 1/[ -n "$transcript" ] || return 0/'
-  send 'audit-grant 3' "$ALF_ROOT" s1 ""
-  recorded_one
-}
-
-@test "mutant: a hook ignoring the check's status records" {
-  seed_pending
-  scratch_hook 's/|| interactive_exit_status=\$?/|| true/'
-  send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/no-such.jsonl"
-  recorded_one
-}
-
-@test "a transcript path that is a directory records nothing" {
-  seed_pending
-  snapshot
-  send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR"
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF 'not interactive'
-}
-
-@test "the first record carrying an entrypoint decides: sdk-cli first, cli later is not interactive" {
-  seed_pending
-  printf '%s\n' '{"type":"user","entrypoint":"sdk-cli"}' '{"type":"user","entrypoint":"cli"}' >"$BATS_TEST_TMPDIR/tx-mixed.jsonl"
-  snapshot
-  send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/tx-mixed.jsonl"
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF 'not interactive'
-  printf '%s' "$output" | grep -qF "In a new Claude Code terminal session in the audited branch's checkout, send any message"
-  printf '%s' "$output" | grep -qF -- '--continue or --resume'
-}
-
-@test "a cli transcript whose first records lack entrypoint still records when every entrypoint is cli" {
-  seed_pending
-  printf '%s\n' '{"type":"summary"}' '{"type":"queue"}' '{"type":"user","entrypoint":"cli"}' '{"type":"user","entrypoint":"cli"}' >"$BATS_TEST_TMPDIR/tx-late.jsonl"
-  send 'audit-grant 1' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/tx-late.jsonl"
-  [ "$status" -eq 0 ]
-  [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
-}
-
-@test "a cli transcript that a later claude -p resume appended an sdk-cli record to records nothing" {
-  seed_pending
   printf '%s\n' '{"type":"user","entrypoint":"cli"}' '{"type":"user","entrypoint":"sdk-cli"}' >"$BATS_TEST_TMPDIR/tx-resumed.jsonl"
-  snapshot
-  send 'audit-grant 1' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/tx-resumed.jsonl"
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF 'not interactive'
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r entrypoint transcript_kind says never_says <<<"$row"
+    case "$transcript_kind" in
+      missing) transcript="$BATS_TEST_TMPDIR/no-such.jsonl" ;;
+      empty-file) transcript="$BATS_TEST_TMPDIR/tx-empty.jsonl" ;;
+      no-entrypoint) transcript="$BATS_TEST_TMPDIR/tx-no-entrypoint.jsonl" ;;
+      empty-path) transcript="" ;;
+      directory) transcript="$BATS_TEST_TMPDIR" ;;
+      resumed) transcript="$BATS_TEST_TMPDIR/tx-resumed.jsonl" ;;
+      cli) transcript="$TX_CLI" ;;
+    esac
+    if [ "$entrypoint" = unset ]; then
+      unset CLAUDE_CODE_ENTRYPOINT
+    else
+      export CLAUDE_CODE_ENTRYPOINT="$entrypoint"
+    fi
+    send 'audit-grant 3' "$ALF_ROOT" s1 "$transcript"
+    claude_told_nothing_recorded "$row"
+    printf '%s' "$output" | grep -qF -- "$says"
+    if [ -n "$never_says" ]; then
+      printf '%s' "$output" | grep -qF -- "$never_says" && return 1
+    fi
+  done
+  true
 }
 
-@test "a CLAUDE_CODE_ENTRYPOINT other than cli, or unset, records nothing even over a cli transcript" {
+@test "every transcript record carrying an entrypoint must be cli: sdk-cli first then cli declines, cli after records without one still records" {
+  local row
+  local rows=(
+    'sdk-cli first, cli later'
+    'records without entrypoint, then cli only'
+  )
+  seed_pending
+  keep_pending
+  printf '%s\n' '{"type":"user","entrypoint":"sdk-cli"}' '{"type":"user","entrypoint":"cli"}' >"$BATS_TEST_TMPDIR/tx-mixed.jsonl"
+  printf '%s\n' '{"type":"summary"}' '{"type":"queue"}' '{"type":"user","entrypoint":"cli"}' '{"type":"user","entrypoint":"cli"}' >"$BATS_TEST_TMPDIR/tx-late.jsonl"
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    restore_pending
+    case "$row" in
+      sdk-cli*)
+        snapshot
+        send 'audit-grant 3' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/tx-mixed.jsonl"
+        [ "$status" -eq 0 ]
+        unchanged
+        printf '%s' "$output" | grep -qF 'not interactive'
+        printf '%s' "$output" | grep -qF "In a new Claude Code terminal session in the audited branch's checkout, send any message"
+        printf '%s' "$output" | grep -qF -- '--continue or --resume'
+        ;;
+      *)
+        send 'audit-grant 1' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/tx-late.jsonl"
+        [ "$status" -eq 0 ]
+        [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
+        ;;
+    esac
+  done
+}
+
+@test "invoked other than with a UserPromptSubmit payload on stdin, the hook exits 1 and records nothing" {
+  local row
+  local rows=(
+    'argv and empty stdin'
+    'argv and a valid payload'
+    'empty stdin and no argv'
+    'a PostToolUse payload naming the keyword'
+  )
   seed_pending
   snapshot
-  CLAUDE_CODE_ENTRYPOINT=sdk-cli send 'audit-grant 1'
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF 'not interactive'
-  unset CLAUDE_CODE_ENTRYPOINT
-  send 'audit-grant 1'
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF 'not interactive'
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    case "$row" in
+      'argv and empty stdin') run bash -c 'printf "" | "$2" "$1" extra' _ "$HOOK" "$BASH_BIN" ;;
+      'argv and a valid payload') run bash -c 'printf %s "$1" | "$3" "$2" audit-grant' _ "$(payload 'audit-grant 2')" "$HOOK" "$BASH_BIN" ;;
+      'empty stdin and no argv') run bash -c 'printf "" | "$2" "$1"' _ "$HOOK" "$BASH_BIN" ;;
+      *) run bash -c '"$1" post-tool-use s1 Bash "echo audit-grant 3" | "$3" "$2"' _ "$HELPERS/mock-hook-input.sh" "$HOOK" "$BASH_BIN" ;;
+    esac
+    [ "$status" -eq 1 ]
+    unchanged
+  done
 }
 
-@test "a grant line pasted inside longer text is rejected visibly and records nothing" {
+@test "only the whole-prompt line records: each rejected spelling records nothing and names the accepted forms, and audit-grant 10 with surrounding whitespace records" {
+  local row prompt_text expectation
+  local rows=(
+    'please run audit-grant 3 now|names the grant form'
+    'audit-grant 0|names both forms'
+    'audit-grant 11|names both forms'
+    'audit-grant abc|names both forms'
+    'what does audit-grant 3 do?|names both forms'
+    'audit-grant  2|names both forms'
+    'audit-grant 02|names both forms'
+    '  audit-grant 10 |records'
+  )
   seed_pending
   snapshot
-  send 'please run audit-grant 3 now'
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF 'audit-grant <n>'
-}
-
-@test "invocation with argv and empty stdin exits 1" {
-  seed_pending
-  snapshot
-  run bash -c 'printf "" | "$2" "$1" extra' _ "$HOOK" "$BASH_BIN"
-  [ "$status" -eq 1 ]
-  unchanged
-}
-
-@test "invocation with argv and a valid payload exits 1 and records nothing" {
-  seed_pending
-  snapshot
-  run bash -c 'printf %s "$1" | "$3" "$2" audit-grant' _ "$(payload 'audit-grant 2')" "$HOOK" "$BASH_BIN"
-  [ "$status" -eq 1 ]
-  unchanged
-}
-
-@test "empty stdin with no argv exits 1" {
-  run bash -c 'printf "" | "$2" "$1"' _ "$HOOK" "$BASH_BIN"
-  [ "$status" -eq 1 ]
-}
-
-@test "a PostToolUse payload naming the keyword exits 1 and records nothing" {
-  seed_pending
-  snapshot
-  run bash -c '"$1" post-tool-use s1 Bash "echo audit-grant 3" | "$3" "$2"' _ "$HELPERS/mock-hook-input.sh" "$HOOK" "$BASH_BIN"
-  [ "$status" -eq 1 ]
-  unchanged
-}
-
-@test "rejected spellings record nothing and each names the accepted forms" {
-  seed_pending
-  snapshot
-  local prompt_text
-  for prompt_text in 'audit-grant 0' 'audit-grant 11' 'audit-grant abc' 'what does audit-grant 3 do?' 'audit-grant  2' 'audit-grant 02'; do
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r prompt_text expectation <<<"$row"
     send "$prompt_text"
     [ "$status" -eq 0 ]
+    if [ "$expectation" = records ]; then
+      [ "$(allowed)" = 15 ]
+      continue
+    fi
     unchanged
     printf '%s' "$output" | grep -qF 'audit-grant <n>'
-    printf '%s' "$output" | grep -qF 'audit-accept'
+    if [ "$expectation" = 'names both forms' ]; then
+      printf '%s' "$output" | grep -qF 'audit-accept'
+    fi
   done
-}
-
-@test "exactly audit-grant 10 and surrounding whitespace are accepted" {
-  seed_pending
-  send "  audit-grant 10 "
-  [ "$status" -eq 0 ]
-  [ "$(allowed)" = 15 ]
 }
 
 @test "a recorded grant lands in the state file under protected/audit-loop and the old state directory stays absent" {
@@ -322,26 +249,39 @@ recorded_one() {
   true
 }
 
-@test "a branch with no pending checkpoint records nothing and says none is pending" {
+@test "with no checkpoint pending for the session, a line records nothing and says none is pending: another branch, and a second grant after the first is answered" {
+  local row
+  local rows=(
+    'another branch'
+    'a second grant'
+  )
   seed_pending
-  alf_git checkout -q -b feat/other main
-  snapshot
-  send 'audit-grant 2' "$ALF_ROOT" s2
-  [ "$status" -eq 0 ]
-  cp "$ALF_ROOT/.gaia/local/protected/audit-loop/feat/grant.json" "$BATS_TEST_TMPDIR/after.json"
-  [ "$(jq '.allowance.answers | length' "$BATS_TEST_TMPDIR/after.json")" -eq 0 ]
-  printf '%s' "$output" | grep -qF 'no audit checkpoint is pending on branch feat/other for this session'
-}
-
-@test "a second grant after the first is answered records nothing" {
-  seed_pending
-  send 'audit-grant 2'
-  [ "$status" -eq 0 ]
-  snapshot
-  send 'audit-grant 2'
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF 'no audit checkpoint is pending'
+  keep_pending
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    restore_pending
+    case "$row" in
+      'another branch')
+        alf_git checkout -q -b feat/other main
+        snapshot
+        send 'audit-grant 2' "$ALF_ROOT" s2
+        [ "$status" -eq 0 ]
+        cp "$ALF_ROOT/.gaia/local/protected/audit-loop/feat/grant.json" "$BATS_TEST_TMPDIR/after.json"
+        [ "$(jq '.allowance.answers | length' "$BATS_TEST_TMPDIR/after.json")" -eq 0 ]
+        printf '%s' "$output" | grep -qF 'no audit checkpoint is pending on branch feat/other for this session'
+        alf_git checkout -q feat/grant
+        ;;
+      *)
+        send 'audit-grant 2'
+        [ "$status" -eq 0 ]
+        snapshot
+        send 'audit-grant 2'
+        [ "$status" -eq 0 ]
+        unchanged
+        printf '%s' "$output" | grep -qF 'no audit checkpoint is pending'
+        ;;
+    esac
+  done
 }
 
 @test "an accept at a pending checkpoint records one accept and allows one closing round" {
@@ -403,59 +343,48 @@ Accept (type exactly as the whole prompt): $(gaia_loop_accept_line)"
   [ -z "$output" ]
 }
 
-@test "worktree-audited shape: a main-checkout session answers the checkpoint its own session hit" {
+@test "from the main checkout only the session that hit the checkpoint answers it: another session, or two pending checkpoints for one session, record nothing" {
+  local row second_state
+  local rows=(
+    'a different session id'
+    'two pending checkpoints with the same session id'
+    'the session that hit the checkpoint'
+  )
   seed_pending
+  keep_pending
   alf_git checkout -q main
-  send 'audit-grant 2' "$ALF_ROOT" s1
-  [ "$status" -eq 0 ]
-  [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
-  [ "$(allowed)" = 7 ]
-}
-
-@test "two pending checkpoints with the same session id record nothing" {
-  seed_pending
-  jq '.key = "branch:feat/second" | .branch = "feat/second"' "$ALF_STATE" >"$ALF_ROOT/.gaia/local/protected/audit-loop/feat/second.json"
-  alf_git checkout -q main
-  snapshot
-  cp "$ALF_ROOT/.gaia/local/protected/audit-loop/feat/second.json" "$BATS_TEST_TMPDIR/second-before.json"
-  send 'audit-grant 2' "$ALF_ROOT" s1
-  [ "$status" -eq 0 ]
-  unchanged
-  cmp -s "$BATS_TEST_TMPDIR/second-before.json" "$ALF_ROOT/.gaia/local/protected/audit-loop/feat/second.json"
-  printf '%s' "$output" | grep -qF 'no audit checkpoint is pending'
-}
-
-@test "a different session id on the main checkout records nothing and names the session rule" {
-  seed_pending
-  alf_git checkout -q main
-  snapshot
-  send 'audit-grant 2' "$ALF_ROOT" other-session
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF 'for this session'
-  printf '%s' "$output" | grep -qF 'session whose dispatch hit the checkpoint'
-}
-
-@test "corrupt state: a message names the file and the file is untouched" {
-  seed_pending
-  printf '{ not json' >"$ALF_STATE"
-  snapshot
-  send 'audit-grant 2'
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF "$ALF_STATE"
-  printf '%s' "$output" | grep -qF 'corrupt'
-}
-
-@test "a held lock past the deadline records nothing and asks for a retry" {
-  seed_pending
-  snapshot
-  mkdir "$ALF_STATE.lock"
-  send 'audit-grant 2'
-  rmdir "$ALF_STATE.lock"
-  [ "$status" -eq 0 ]
-  unchanged
-  printf '%s' "$output" | grep -qF 'Retry'
+  second_state="$ALF_ROOT/.gaia/local/protected/audit-loop/feat/second.json"
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    restore_pending
+    case "$row" in
+      'a different session id')
+        snapshot
+        send 'audit-grant 2' "$ALF_ROOT" other-session
+        [ "$status" -eq 0 ]
+        unchanged
+        printf '%s' "$output" | grep -qF 'for this session'
+        printf '%s' "$output" | grep -qF 'session whose dispatch hit the checkpoint'
+        ;;
+      'two pending'*)
+        jq '.key = "branch:feat/second" | .branch = "feat/second"' "$ALF_STATE" >"$second_state"
+        snapshot
+        cp "$second_state" "$BATS_TEST_TMPDIR/second-before.json"
+        send 'audit-grant 2' "$ALF_ROOT" s1
+        [ "$status" -eq 0 ]
+        unchanged
+        cmp -s "$BATS_TEST_TMPDIR/second-before.json" "$second_state"
+        printf '%s' "$output" | grep -qF 'no audit checkpoint is pending'
+        rm -f "$second_state"
+        ;;
+      *)
+        send 'audit-grant 2' "$ALF_ROOT" s1
+        [ "$status" -eq 0 ]
+        [ "$(jq '.allowance.answers | length' "$ALF_STATE")" -eq 1 ]
+        [ "$(allowed)" = 7 ]
+        ;;
+    esac
+  done
 }
 
 # claude_told_nothing_recorded <why>: the hook exited 0, left the state
@@ -482,79 +411,75 @@ scratch_hook() {
   HOOK="$scratch_directory/.claude/hooks/audit-loop-grant.sh"
 }
 
-@test "a malformed line, a non-interactive session, no checkout, a held lock and nothing pending each tell Claude nothing was recorded" {
+@test "every decline tells Claude nothing was recorded, and corrupt state, a held lock and a failed read each say why" {
+  local row original_hook="$HOOK" lone_hook="$BATS_TEST_TMPDIR/lone/.claude/hooks/audit-loop-grant.sh" empty_path="$BATS_TEST_TMPDIR/nopath"
+  local rows=(
+    'malformed line'
+    'sdk-cli environment'
+    'sdk-cli transcript'
+    'missing transcript'
+    'no checkout'
+    'held lock'
+    'corrupt state'
+    'already answered'
+    'jq absent'
+    'libraries missing'
+    'read failed'
+    'write failed'
+    'nothing pending'
+  )
   seed_pending
-  snapshot
-  send 'audit-grant 0'
-  claude_told_nothing_recorded "malformed line"
-  CLAUDE_CODE_ENTRYPOINT=sdk-cli send 'audit-grant 1'
-  claude_told_nothing_recorded "sdk-cli environment"
-  send 'audit-grant 1' "$ALF_ROOT" s1 "$TX_SDK"
-  claude_told_nothing_recorded "sdk-cli transcript"
-  send 'audit-grant 1' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/no-such.jsonl"
-  claude_told_nothing_recorded "missing transcript"
-  mkdir "$BATS_TEST_TMPDIR/not-a-checkout"
-  send 'audit-grant 1' "$BATS_TEST_TMPDIR/not-a-checkout"
-  claude_told_nothing_recorded "no checkout"
-  mkdir "$ALF_STATE.lock"
-  send 'audit-grant 1'
-  rmdir "$ALF_STATE.lock"
-  claude_told_nothing_recorded "held lock"
-  alf_git checkout -q -b feat/other main
-  send 'audit-grant 1' "$ALF_ROOT" other-session
-  claude_told_nothing_recorded "nothing pending"
-}
-
-@test "a decline on corrupt state tells Claude nothing was recorded" {
-  seed_pending
-  printf '{ not json' >"$ALF_STATE"
-  snapshot
-  send 'audit-grant 1'
-  claude_told_nothing_recorded "corrupt state"
-}
-
-@test "a replayed line after the checkpoint was answered tells Claude nothing was recorded" {
-  seed_pending
-  send 'audit-grant 1'
-  snapshot
-  send 'audit-grant 1'
-  claude_told_nothing_recorded "already answered"
-}
-
-@test "a decline with jq absent tells Claude nothing was recorded" {
-  seed_pending
-  snapshot
-  local empty="$BATS_TEST_TMPDIR/nopath"
-  mkdir -p "$empty"
-  run bash -c 'printf %s "$1" | PATH="$3" "$4" "$2"' _ "$(payload 'audit-grant 2')" "$HOOK" "$empty" "$BASH_BIN"
-  claude_told_nothing_recorded "jq absent"
-}
-
-@test "a decline with the libraries missing tells Claude nothing was recorded" {
-  seed_pending
-  snapshot
-  local lone_hook="$BATS_TEST_TMPDIR/lone/.claude/hooks/audit-loop-grant.sh"
-  mkdir -p "$(dirname "$lone_hook")"
+  keep_pending
+  mkdir -p "$BATS_TEST_TMPDIR/not-a-checkout" "$empty_path" "$(dirname "$lone_hook")"
   cp "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh" "$lone_hook"
-  HOOK="$lone_hook" send 'audit-grant 2'
-  claude_told_nothing_recorded "libraries missing"
-}
-
-@test "a failed state read under the lock tells Claude nothing was recorded" {
-  seed_pending
-  snapshot
-  scratch_hook 's/^state="\$(gaia_loop_read_state "\$target" 2>\/dev\/null)"$/false/'
-  send 'audit-grant 2'
-  claude_told_nothing_recorded "read failed"
-  printf '%s\n' "$output" | grep -qF 'could not be read'
-}
-
-@test "a failed state write tells Claude nothing was recorded" {
-  seed_pending
-  snapshot
-  scratch_hook 's/! gaia_loop_write_state "\$target" "\$new"/true/'
-  send 'audit-grant 2'
-  claude_told_nothing_recorded "write failed"
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    HOOK="$original_hook"
+    restore_pending
+    [ "$row" = 'corrupt state' ] && printf '{ not json' >"$ALF_STATE"
+    if [ "$row" = 'already answered' ]; then
+      send 'audit-grant 1'
+      [ "$status" -eq 0 ]
+    fi
+    snapshot
+    case "$row" in
+      'malformed line') send 'audit-grant 0' ;;
+      'sdk-cli environment') CLAUDE_CODE_ENTRYPOINT=sdk-cli send 'audit-grant 1' ;;
+      'sdk-cli transcript') send 'audit-grant 1' "$ALF_ROOT" s1 "$TX_SDK" ;;
+      'missing transcript') send 'audit-grant 1' "$ALF_ROOT" s1 "$BATS_TEST_TMPDIR/no-such.jsonl" ;;
+      'no checkout') send 'audit-grant 1' "$BATS_TEST_TMPDIR/not-a-checkout" ;;
+      'held lock')
+        mkdir "$ALF_STATE.lock"
+        send 'audit-grant 1'
+        rmdir "$ALF_STATE.lock"
+        ;;
+      'corrupt state' | 'already answered') send 'audit-grant 1' ;;
+      'jq absent') run bash -c 'printf %s "$1" | PATH="$3" "$4" "$2"' _ "$(payload 'audit-grant 2')" "$HOOK" "$empty_path" "$BASH_BIN" ;;
+      'libraries missing') HOOK="$lone_hook" send 'audit-grant 2' ;;
+      'read failed')
+        scratch_hook 's/^state="\$(gaia_loop_read_state "\$target" 2>\/dev\/null)"$/false/'
+        send 'audit-grant 2'
+        ;;
+      'write failed')
+        scratch_hook 's/! gaia_loop_write_state "\$target" "\$new"/true/'
+        send 'audit-grant 2'
+        ;;
+      'nothing pending')
+        alf_git checkout -q -b feat/other main
+        send 'audit-grant 1' "$ALF_ROOT" other-session
+        ;;
+    esac
+    claude_told_nothing_recorded "$row"
+    case "$row" in
+      'held lock') printf '%s' "$output" | grep -qF 'Retry' ;;
+      'corrupt state')
+        printf '%s' "$output" | grep -qF "$ALF_STATE"
+        printf '%s' "$output" | grep -qF 'corrupt'
+        ;;
+      'read failed') printf '%s\n' "$output" | grep -qF 'could not be read' ;;
+    esac
+    rm -rf "$BATS_TEST_TMPDIR/scratch"
+  done
 }
 
 @test "a line that merely mentions the keyword tells Claude to answer normally" {
@@ -583,36 +508,36 @@ seed_capped() {
   alf_add_checkpoint 10 allowance
 }
 
-@test "UAT-013: a typed grant below round 10 records as today and carries source typed" {
-  # shellcheck source=/dev/null
-  . "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
-  seed_pending
-  send "audit-grant $GAIA_CONTEXT_UNIT_ROUNDS"
-  [ "$status" -eq 0 ]
-  jq -e --argjson unit_rounds "$GAIA_CONTEXT_UNIT_ROUNDS" '.allowance.answers | length == 1 and .[0].kind == "grant" and .[0].n == $unit_rounds and .[0].source == "typed"' "$ALF_STATE"
-}
-
-@test "a typed accept carries source typed" {
-  seed_pending
-  send 'audit-accept'
-  [ "$status" -eq 0 ]
-  jq -e '.allowance.answers | length == 1 and .[0].kind == "accept" and .[0].source == "typed"' "$ALF_STATE"
-}
-
-@test "a typed grant at 10 rounds used records, since past the cap each unit runs on a human answer" {
-  # shellcheck source=/dev/null
-  . "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
-  seed_capped
-  send "audit-grant $GAIA_CONTEXT_UNIT_ROUNDS"
-  [ "$status" -eq 0 ]
-  jq -e --argjson unit_rounds "$GAIA_CONTEXT_UNIT_ROUNDS" '.allowance.answers | length == 1 and .[0].kind == "grant" and .[0].n == $unit_rounds and .[0].source == "typed"' "$ALF_STATE"
-}
-
-@test "a typed accept at 10 rounds used still records, as the deliberate override" {
-  seed_capped
-  send 'audit-accept'
-  [ "$status" -eq 0 ]
-  jq -e '.allowance.answers | length == 1 and .[0].kind == "accept" and .[0].source == "typed"' "$ALF_STATE"
+@test "a typed grant or accept records with source typed, below the round cap and at it" {
+  local row seed line built=""
+  local rows=(
+    'seed_pending|grant'
+    'seed_pending|accept'
+    'seed_capped|grant'
+    'seed_capped|accept'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r seed line <<<"$row"
+    if [ "$seed" != "$built" ]; then
+      fresh_fixture
+      "$seed"
+      keep_pending
+      built="$seed"
+    fi
+    restore_pending
+    # shellcheck source=/dev/null
+    . "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
+    if [ "$line" = grant ]; then
+      send "audit-grant $GAIA_CONTEXT_UNIT_ROUNDS"
+      [ "$status" -eq 0 ]
+      jq -e --argjson unit_rounds "$GAIA_CONTEXT_UNIT_ROUNDS" '.allowance.answers | length == 1 and .[0].kind == "grant" and .[0].n == $unit_rounds and .[0].source == "typed"' "$ALF_STATE"
+    else
+      send 'audit-accept'
+      [ "$status" -eq 0 ]
+      jq -e '.allowance.answers | length == 1 and .[0].kind == "accept" and .[0].source == "typed"' "$ALF_STATE"
+    fi
+  done
 }
 
 @test "audit-accept-finding records the listed key from the checkpoint and leaves it pending; an unlisted or critical entry, or a non-interactive session, records nothing" {

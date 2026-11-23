@@ -51,18 +51,19 @@ in_home() {
   ( cd "$HOME_REPO" && command_targets_foreign_repo "$1" )
 }
 
-@test "quoted git -C sibling push: foreign (allow)" {
+@test "sibling targets via git -C or cd are foreign (allow)" {
+  echo "case: quoted git -C sibling push: foreign (allow)"
   run in_home "git -C \"$SIBLING_REPO\" push origin main"
   [ "$status" -eq 0 ]
-}
-
-@test "quoted cd sibling && git push: foreign (allow)" {
+  echo "case: quoted cd sibling && git push: foreign (allow)"
   run in_home "cd '$SIBLING_REPO' && git push origin main"
   [ "$status" -eq 0 ]
-}
-
-@test "unquoted git -C sibling push: foreign (allow)" {
+  echo "case: unquoted git -C sibling push: foreign (allow)"
   run in_home "git -C $SIBLING_REPO push origin main"
+  [ "$status" -eq 0 ]
+  add_worktree
+  echo "case: git -C <sibling repository> from a linked worktree: foreign (allow)"
+  run in_directory "$WORKTREE" "git -C \"$SIBLING_REPO\" push origin main"
   [ "$status" -eq 0 ]
 }
 
@@ -70,13 +71,23 @@ in_home() {
 # 4. Quoted `git -C "<home>"` resolves as HOME, quote-strip stays safe.
 # -----------------------------------------------------------------------------
 
-@test "quoted git -C home push: home (enforce)" {
+# bats test_tags=protected
+@test "home targets by path or checkout are enforced" {
+  echo "case: quoted git -C home push: home (enforce)"
   run in_home "git -C \"$HOME_REPO\" push origin main"
   [ "$status" -ne 0 ]
-}
-
-@test "plain git push from home: home (enforce)" {
+  echo "case: plain git push from home: home (enforce)"
   run in_home "git push origin main"
+  [ "$status" -ne 0 ]
+  add_worktree
+  echo "case: git -C <main checkout> from a linked worktree: home (enforce)"
+  run in_directory "$WORKTREE" "git -C \"$HOME_REPO\" push origin main"
+  [ "$status" -ne 0 ]
+  echo "case: git -C <linked worktree> from the main checkout: home (enforce)"
+  run in_home "git -C $WORKTREE commit -m x"
+  [ "$status" -ne 0 ]
+  echo "case: cd <main checkout> && git push from a linked worktree: home (enforce)"
+  run in_directory "$WORKTREE" "cd '$HOME_REPO' && git push origin main"
   [ "$status" -ne 0 ]
 }
 
@@ -89,6 +100,7 @@ in_home() {
 #    passing $CG/$WEB, a $VAR form would trip the home-repo main-push deny.
 # -----------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "literal \$CG token (unexpandable variable): home (enforce)" {
   run in_home 'git -C "$CG" push origin main'
   [ "$status" -ne 0 ]
@@ -116,22 +128,28 @@ in_directory() {
   ( cd "$1" && command_targets_foreign_repo "$2" )
 }
 
-@test "--repo <home> from a checkout not named for the repository: home (enforce)" {
+# The capture reads the raw command text, so a quoted value arrives with its
+# quotes while gh receives it without them.
+# bats test_tags=protected
+@test "--repo spellings of the home repository are enforced" {
   add_widget_remote "$HOME_REPO"
+  echo "case: --repo <home> from a checkout not named for the repository: home (enforce)"
   run in_home "gh pr merge 5 --repo acme/widget --squash"
   [ "$status" -ne 0 ]
-}
-
-@test "--repo <home> from a linked worktree: home (enforce)" {
-  add_widget_remote "$HOME_REPO"
+  echo "case: quoted spellings of <home>: home (enforce)"
+  run in_home 'gh pr merge 5 --repo "acme/widget"'
+  [ "$status" -ne 0 ]
+  run in_home "gh pr merge 5 --repo 'acme/widget'"
+  [ "$status" -ne 0 ]
+  run in_home 'gh pr merge 5 -R "acme/widget"'
+  [ "$status" -ne 0 ]
+  run in_home 'gh pr merge 5 --repo="acme/widget"'
+  [ "$status" -ne 0 ]
   add_worktree
+  echo "case: --repo <home> from a linked worktree: home (enforce)"
   run in_directory "$WORKTREE" "gh pr merge 5 --repo acme/widget --squash"
   [ "$status" -ne 0 ]
-}
-
-@test "-R, =, URL, .git and case spellings of <home> from a linked worktree: home (enforce)" {
-  add_widget_remote "$HOME_REPO"
-  add_worktree
+  echo "case: -R, =, URL, .git and case spellings of <home> from a linked worktree: home (enforce)"
   run in_directory "$WORKTREE" "gh pr merge 5 -R acme/widget"
   [ "$status" -ne 0 ]
   run in_directory "$WORKTREE" "gh pr merge 5 --repo=acme/widget"
@@ -144,28 +162,29 @@ in_directory() {
   [ "$status" -ne 0 ]
 }
 
-# The capture reads the raw command text, so a quoted value arrives with its
-# quotes while gh receives it without them.
-@test "quoted spellings of <home>: home (enforce)" {
+@test "--repo naming another repository is foreign (allow)" {
   add_widget_remote "$HOME_REPO"
-  run in_home 'gh pr merge 5 --repo "acme/widget"'
-  [ "$status" -ne 0 ]
-  run in_home "gh pr merge 5 --repo 'acme/widget'"
-  [ "$status" -ne 0 ]
-  run in_home 'gh pr merge 5 -R "acme/widget"'
-  [ "$status" -ne 0 ]
-  run in_home 'gh pr merge 5 --repo="acme/widget"'
-  [ "$status" -ne 0 ]
-}
-
-@test "quoted spelling of another repository: foreign (allow)" {
-  add_widget_remote "$HOME_REPO"
+  echo "case: quoted spelling of another repository: foreign (allow)"
   run in_home 'gh pr merge 5 --repo "acme/other"'
+  [ "$status" -eq 0 ]
+  echo "case: the gh invocation's own --repo still decides: foreign (allow)"
+  run in_home "gh pr merge 5 --repo other-org/other-repo"
+  [ "$status" -eq 0 ]
+  run in_home "gh pr merge 5 -R other-org/other-repo --squash"
+  [ "$status" -eq 0 ]
+  add_worktree
+  echo "case: --repo naming another repository from a linked worktree: foreign (allow)"
+  run in_directory "$WORKTREE" "gh pr merge 5 --repo acme/other --squash"
   [ "$status" -eq 0 ]
 }
 
-@test "--repo value the shell expands: home (enforce, fail closed)" {
+# bats test_tags=protected
+@test "--repo values that cannot be resolved fail closed (enforce)" {
+  echo "case: --repo with no remote to name the home repository: home (enforce, fail closed)"
+  run in_home "gh pr merge 5 --repo acme/other"
+  [ "$status" -ne 0 ]
   add_widget_remote "$HOME_REPO"
+  echo "case: --repo value the shell expands: home (enforce, fail closed)"
   run in_home 'gh pr merge 5 --repo {acme/widget,}'
   [ "$status" -ne 0 ]
   run in_home 'gh pr merge 5 --repo acme/{widget,}'
@@ -174,10 +193,26 @@ in_directory() {
   [ "$status" -ne 0 ]
   run in_home 'gh pr merge 5 --repo ~/widget'
   [ "$status" -ne 0 ]
+  echo "case: --repo value still carrying a quote after one layer is stripped: home (enforce, fail closed)"
+  run in_home 'gh pr merge 5 --repo "acme/other x"'
+  [ "$status" -ne 0 ]
+  run in_home 'gh pr merge 5 --repo acme/other\"'
+  [ "$status" -ne 0 ]
+  echo "case: --repo value not shaped [HOST/]OWNER/REPO: home (enforce, fail closed)"
+  run in_home "gh pr merge 5 --repo other"
+  [ "$status" -ne 0 ]
+  git -C "$HOME_REPO" remote set-url origin git@github.com:me/widget.git
+  echo "case: --repo <name> of any remote reads as home, so a same-named fork over-enforces"
+  run in_home "gh pr merge 5 --repo acme/widget"
+  [ "$status" -ne 0 ]
 }
 
-@test "a leading cd target is published for the caller, and cleared when there is none" {
+# A command whose first word is not `gh` carries no repository flag to read, so
+# the arms below it decide, and the leading `cd` reaches the publish it used to
+# be cut off from by any `-R` in the tool call.
+@test "a leading cd target is published for the caller" {
   add_worktree
+  echo "case: a leading cd target is published for the caller, and cleared when there is none"
   run bash -c 'cd "$1" && . "$2" && command_targets_foreign_repo "cd '"'"'$3'"'"' && git commit -m x"; printf "%s" "$GAIA_REPO_SCOPE_LEAD_CD"' _ "$HOME_REPO" "$LIBRARY_FILE" "$WORKTREE"
   [ "$output" = "$WORKTREE" ]
   run bash -c 'cd "$1" && . "$2" && GAIA_REPO_SCOPE_LEAD_CD=stale && command_targets_foreign_repo "git commit -m x"; printf "%s" "$GAIA_REPO_SCOPE_LEAD_CD"' _ "$HOME_REPO" "$LIBRARY_FILE"
@@ -185,64 +220,12 @@ in_directory() {
   # A -C target belongs to its own segment, never to the command as a whole.
   run bash -c 'cd "$1" && . "$2" && command_targets_foreign_repo "git -C $3 status && git commit -m x"; printf "%s" "$GAIA_REPO_SCOPE_LEAD_CD"' _ "$HOME_REPO" "$LIBRARY_FILE" "$WORKTREE"
   [ -z "$output" ]
+  echo "case: a leading cd is published even when a later command carries a -R"
+  run bash -c 'cd "$1" && . "$2" && command_targets_foreign_repo "cd '"'"'$3'"'"' && git commit -m x && grep -R TODO app"; printf "%s" "$GAIA_REPO_SCOPE_LEAD_CD"' _ "$HOME_REPO" "$LIBRARY_FILE" "$WORKTREE"
+  [ "$output" = "$WORKTREE" ]
 }
 
-@test "--repo value still carrying a quote after one layer is stripped: home (enforce, fail closed)" {
-  add_widget_remote "$HOME_REPO"
-  run in_home 'gh pr merge 5 --repo "acme/other x"'
-  [ "$status" -ne 0 ]
-  run in_home 'gh pr merge 5 --repo acme/other\"'
-  [ "$status" -ne 0 ]
-}
-
-@test "--repo naming another repository from a linked worktree: foreign (allow)" {
-  add_widget_remote "$HOME_REPO"
-  add_worktree
-  run in_directory "$WORKTREE" "gh pr merge 5 --repo acme/other --squash"
-  [ "$status" -eq 0 ]
-}
-
-@test "--repo <name> of any remote reads as home, so a same-named fork over-enforces" {
-  git -C "$HOME_REPO" remote add origin git@github.com:me/widget.git
-  run in_home "gh pr merge 5 --repo acme/widget"
-  [ "$status" -ne 0 ]
-}
-
-@test "--repo with no remote to name the home repository: home (enforce, fail closed)" {
-  run in_home "gh pr merge 5 --repo acme/other"
-  [ "$status" -ne 0 ]
-}
-
-@test "--repo value not shaped [HOST/]OWNER/REPO: home (enforce, fail closed)" {
-  add_widget_remote "$HOME_REPO"
-  run in_home "gh pr merge 5 --repo other"
-  [ "$status" -ne 0 ]
-}
-
-@test "git -C <main checkout> from a linked worktree: home (enforce)" {
-  add_worktree
-  run in_directory "$WORKTREE" "git -C \"$HOME_REPO\" push origin main"
-  [ "$status" -ne 0 ]
-}
-
-@test "git -C <linked worktree> from the main checkout: home (enforce)" {
-  add_worktree
-  run in_home "git -C $WORKTREE commit -m x"
-  [ "$status" -ne 0 ]
-}
-
-@test "cd <main checkout> && git push from a linked worktree: home (enforce)" {
-  add_worktree
-  run in_directory "$WORKTREE" "cd '$HOME_REPO' && git push origin main"
-  [ "$status" -ne 0 ]
-}
-
-@test "git -C <sibling repository> from a linked worktree: foreign (allow)" {
-  add_worktree
-  run in_directory "$WORKTREE" "git -C \"$SIBLING_REPO\" push origin main"
-  [ "$status" -eq 0 ]
-}
-
+# bats test_tags=protected
 @test "two git -C flags: home (enforce, the last-wins form is not modelled)" {
   run in_home "git -C $SIBLING_REPO -C $SIBLING_REPO push origin main"
   [ "$status" -ne 0 ]
@@ -252,6 +235,7 @@ in_directory() {
 # which repository a -C target belongs to, so it must enforce rather than
 # fall back to comparing toplevels, which is the comparison that misreads a
 # linked worktree.
+# bats test_tags=protected
 @test "git -C <sibling> with the main-root resolver unavailable: home (enforce, fail closed)" {
   local stage="$BATS_TEST_TMPDIR/stage"
   mkdir -p "$stage/.claude/hooks/lib"
@@ -282,45 +266,24 @@ in_directory() {
 # for a reason that has nothing to do with what they pin.
 # -----------------------------------------------------------------------------
 
-@test "another program's -R operand does not name a repository: home (enforce)" {
+# The scan hands back unquoted WORDS, so a flag value carrying the text of
+# another flag stays one word and never reads as that flag.
+# bats test_tags=protected
+@test "a -R or --repo that is not gh's own flag does not decide the call (enforce)" {
   add_widget_remote "$HOME_REPO"
+  echo "case: another program's -R operand does not name a repository: home (enforce)"
   run in_home "cp -R app/foo /tmp/x && git commit -m y"
   [ "$status" -ne 0 ]
   run in_home "grep -R app/routes . && git commit -m y"
   [ "$status" -ne 0 ]
-}
-
-@test "a trailing command's -R does not decide the gh invocation: home (enforce)" {
-  add_widget_remote "$HOME_REPO"
+  echo "case: a trailing command's -R does not decide the gh invocation: home (enforce)"
   run in_home "gh pr merge 5 && ls -R a/b"
   [ "$status" -ne 0 ]
   run in_home "gh pr merge 30 --squash && grep -R app/routes ."
   [ "$status" -ne 0 ]
-}
-
-# The scan hands back unquoted WORDS, so a flag value carrying the text of
-# another flag stays one word and never reads as that flag.
-@test "--repo text inside a quoted flag value does not name a repository: home (enforce)" {
-  add_widget_remote "$HOME_REPO"
+  echo "case: --repo text inside a quoted flag value does not name a repository: home (enforce)"
   run in_home 'gh pr merge 30 --squash --body "see --repo foo/bar for context"'
   [ "$status" -ne 0 ]
-}
-
-@test "the gh invocation's own --repo still decides: foreign (allow)" {
-  add_widget_remote "$HOME_REPO"
-  run in_home "gh pr merge 5 --repo other-org/other-repo"
-  [ "$status" -eq 0 ]
-  run in_home "gh pr merge 5 -R other-org/other-repo --squash"
-  [ "$status" -eq 0 ]
-}
-
-# A command whose first word is not `gh` carries no repository flag to read, so
-# the arms below it decide, and the leading `cd` reaches the publish it used to
-# be cut off from by any `-R` in the tool call.
-@test "a leading cd is published even when a later command carries a -R" {
-  add_worktree
-  run bash -c 'cd "$1" && . "$2" && command_targets_foreign_repo "cd '"'"'$3'"'"' && git commit -m x && grep -R TODO app"; printf "%s" "$GAIA_REPO_SCOPE_LEAD_CD"' _ "$HOME_REPO" "$LIBRARY_FILE" "$WORKTREE"
-  [ "$output" = "$WORKTREE" ]
 }
 
 # -----------------------------------------------------------------------------
@@ -333,8 +296,25 @@ in_directory() {
 # no repository at all.
 # -----------------------------------------------------------------------------
 
-@test "a foreign first gh does not exempt a home command after it: home (enforce)" {
+# The walk stops once nothing left in the call names git or gh, so that check
+# has to see a name the shell assembles from quotes, escapes and a line
+# continuation exactly as the scan does.
+# bats test_tags=protected
+@test "a foreign command never exempts a home command in the same call (enforce)" {
+  echo "case: a trailing foreign git -C does not exempt a home command before it: home (enforce)"
+  run in_home "git commit -m y && git -C $SIBLING_REPO status"
+  [ "$status" -ne 0 ]
+  run in_home "git commit --no-verify -m y && git -C '$SIBLING_REPO' status"
+  [ "$status" -ne 0 ]
+  echo "case: a cd into a sibling does not exempt a command after stepping back out: home (enforce)"
+  run in_home "cd $SIBLING_REPO && git status && cd - && git commit --no-verify -m y"
+  [ "$status" -ne 0 ]
+  run in_home "cd $SIBLING_REPO; git status; cd $HOME_REPO; git commit -m y"
+  [ "$status" -ne 0 ]
+  run in_home "cd $SIBLING_REPO && git status && cd && git commit -m y"
+  [ "$status" -ne 0 ]
   add_widget_remote "$HOME_REPO"
+  echo "case: a foreign first gh does not exempt a home command after it: home (enforce)"
   run in_home "gh pr merge 5 -R other/x && git commit -m y"
   [ "$status" -ne 0 ]
   run in_home "gh pr merge 5 -R other/x; git commit -m y"
@@ -348,26 +328,7 @@ git commit -m y"
   [ "$status" -ne 0 ]
   run in_home "gh pr merge 5 -R other/x && gh pr merge 7 -R acme/widget"
   [ "$status" -ne 0 ]
-}
-
-@test "a trailing foreign git -C does not exempt a home command before it: home (enforce)" {
-  run in_home "git commit -m y && git -C $SIBLING_REPO status"
-  [ "$status" -ne 0 ]
-  run in_home "git commit --no-verify -m y && git -C '$SIBLING_REPO' status"
-  [ "$status" -ne 0 ]
-}
-
-@test "a cd into a sibling does not exempt a command after stepping back out: home (enforce)" {
-  run in_home "cd $SIBLING_REPO && git status && cd - && git commit --no-verify -m y"
-  [ "$status" -ne 0 ]
-  run in_home "cd $SIBLING_REPO; git status; cd $HOME_REPO; git commit -m y"
-  [ "$status" -ne 0 ]
-  run in_home "cd $SIBLING_REPO && git status && cd && git commit -m y"
-  [ "$status" -ne 0 ]
-}
-
-@test "a command after a foreign one that cannot be read stays home (enforce, fail closed)" {
-  add_widget_remote "$HOME_REPO"
+  echo "case: a command after a foreign one that cannot be read stays home (enforce, fail closed)"
   run in_home "gh pr merge 5 -R other/x && (git commit -m y)"
   [ "$status" -ne 0 ]
   run in_home "gh pr merge 5 -R other/x && FOO=1 git commit -m y"
@@ -384,13 +345,7 @@ git commit -m y"
   [ "$status" -ne 0 ]
   run in_home "gh pr merge 5 -R other/x && cd $SIBLING_REPO && gh pr merge 7 -Racme/widget"
   [ "$status" -ne 0 ]
-}
-
-# The walk stops once nothing left in the call names git or gh, so that check
-# has to see a name the shell assembles from quotes, escapes and a line
-# continuation exactly as the scan does.
-@test "a home git spelled with quotes, escapes or a continuation after a foreign one: home (enforce)" {
-  add_widget_remote "$HOME_REPO"
+  echo "case: a home git spelled with quotes, escapes or a continuation after a foreign one: home (enforce)"
   run in_home 'gh pr merge 5 -R other/x && g\it commit -m y'
   [ "$status" -ne 0 ]
   run in_home 'gh pr merge 5 -R other/x && "g"it commit -m y'
@@ -403,8 +358,12 @@ t commit -m y"
 # A `cd` the shell keeps away from the commands after it must not move the
 # directory those commands are read against, or a home command after it reads
 # foreign and the whole call is exempted.
-@test "a cd the shell scopes away does not move a later home command: home (enforce)" {
+# A comment on a line of its own does not end the list or pipeline a
+# trailing `&&`, `||` or `|` carries onto the next line.
+# bats test_tags=protected
+@test "a cd the shell scopes away or may skip does not move a later home command (enforce)" {
   add_widget_remote "$HOME_REPO"
+  echo "case: a cd the shell scopes away does not move a later home command: home (enforce)"
   local foreign_command="gh pr view 5 -R other/x"
   run in_home "$foreign_command
 (
@@ -438,10 +397,7 @@ git commit -m y"
   [ "$status" -ne 0 ]
   run in_home "$foreign_command; echo | cd $SIBLING_REPO; git commit -m y"
   [ "$status" -ne 0 ]
-}
-
-@test "a cd that may not run does not move a later home command: home (enforce)" {
-  add_widget_remote "$HOME_REPO"
+  echo "case: a cd that may not run does not move a later home command: home (enforce)"
   local foreign_command="gh pr view 5 -R other/x"
   run in_home "$foreign_command; false && cd $SIBLING_REPO; git commit -m y"
   [ "$status" -ne 0 ]
@@ -450,12 +406,7 @@ git commit -m y"
   run in_home "$foreign_command; false && cd $SIBLING_REPO # note
 git commit -m y"
   [ "$status" -ne 0 ]
-}
-
-# A comment on a line of its own does not end the list or pipeline a
-# trailing `&&`, `||` or `|` carries onto the next line.
-@test "a cd continued past a comment line after &&, || or | does not move a later home command: home (enforce)" {
-  add_widget_remote "$HOME_REPO"
+  echo "case: a cd continued past a comment line after &&, || or | does not move a later home command: home (enforce)"
   local foreign_command="gh pr view 5 -R other/x"
   run in_home "$foreign_command; false && # c
 cd $SIBLING_REPO
@@ -474,6 +425,7 @@ git commit -m y"
 # The scan models neither heredocs nor ANSI-C quoting, so a stray apostrophe
 # can open a span the shell never opened and fold the home commands after it
 # into one word of a foreign command.
+# bats test_tags=protected
 @test "home commands folded into a foreign command by a quote the shell never opened: home (enforce)" {
   add_widget_remote "$HOME_REPO"
   run in_home "cat <<EOF
@@ -494,8 +446,12 @@ echo \"it's\""
 # holds it, so a foreign command's `-R` or `git -C` never reaches the payload
 # (gaia-react/gaia#2148). The scan keeps a quoted substitution as one word and
 # splits an unquoted one at its spaces, so both spellings are pinned.
-@test "a substitution naming git or gh in a foreign command's arguments: home (enforce)" {
+# zsh runs `=( )` as a process substitution, and bash 5.3 runs `${ cmd; }` in
+# the current shell; the scan hands back the unquoted funsub opener as `${`.
+# bats test_tags=protected
+@test "a substitution naming git or gh in a foreign command's arguments is home (enforce)" {
   add_widget_remote "$HOME_REPO"
+  echo "case: a substitution naming git or gh in a foreign command's arguments: home (enforce)"
   # shellcheck disable=SC2016 # the hook must receive the unexpanded opener
   run in_home 'gh pr view 5 -R other/x --jq "$(gh pr merge 30 --squash)"'
   [ "$status" -ne 0 ]
@@ -511,12 +467,7 @@ echo \"it's\""
   [ "$status" -ne 0 ]
   run in_home "git -C $SIBLING_REPO log --format \"\$(git commit -m y)\""
   [ "$status" -ne 0 ]
-}
-
-# zsh runs `=( )` as a process substitution, and bash 5.3 runs `${ cmd; }` in
-# the current shell; the scan hands back the unquoted funsub opener as `${`.
-@test "a zsh =( ) or a bash funsub naming git in a foreign command's arguments: home (enforce)" {
-  add_widget_remote "$HOME_REPO"
+  echo "case: a zsh =( ) or a bash funsub naming git in a foreign command's arguments: home (enforce)"
   run in_home "gh pr create -R other/x --body-file =(git commit -m y)"
   [ "$status" -ne 0 ]
   run in_home "git -C $SIBLING_REPO log --format =(git commit -m y)"
@@ -555,6 +506,7 @@ git push"
 }
 
 # The walk costs the call's length once per command, so it is bounded.
+# bats test_tags=protected
 @test "a long call ending in a home command is read home, inside the ceiling" {
   add_widget_remote "$HOME_REPO"
   local big i start_seconds end_seconds
@@ -571,6 +523,7 @@ git commit -m y"
   [ "$((end_seconds - start_seconds))" -le 3 ]
 }
 
+# bats test_tags=protected
 @test "a foreign call longer than the walk reads is enforced: home (fail closed)" {
   local big i
   big="cd $SIBLING_REPO"
@@ -613,6 +566,7 @@ git status"
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=protected
 @test "a call that names no repository at all stays home (enforce)" {
   run in_home "echo done"
   [ "$status" -ne 0 ]

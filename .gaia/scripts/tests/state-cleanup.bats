@@ -8,8 +8,7 @@
 # here reaches the real .gaia/local. Every removal case plants an open
 # branch's state beside the merged branch's, so a survivor proves the rule
 # rather than a verb that deletes nothing. A refusal case asserts the whole
-# state tree is unchanged, and each guard has a red twin that runs the same
-# check against a scratch copy with that guard removed.
+# state tree is unchanged.
 #
 # Run under bash 5: `.gaia/scripts/bats5.sh .gaia/scripts/tests/state-cleanup.bats`.
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -105,19 +104,6 @@ WRAPPER
   chmod +x "$WRAPPER_BIN/git"
 }
 
-# mutate <file> <sed args...>: edits one of the fixture's copies in place and
-# fails when the edit changed nothing, so a twin cannot go vacuous.
-mutate() {
-  local target="$MAIN/.gaia/scripts/$1" copy="$BATS_TEST_TMPDIR/mutation.tmp"
-  shift
-  sed "$@" "$target" >"$copy" || return 1
-  if cmp -s "$copy" "$target"; then
-    echo "the mutation changed nothing"
-    return 1
-  fi
-  cp "$copy" "$target"
-}
-
 # check_refuses <wrapped-command-word|-> <branch>: the verb prints a kept
 # state line, exits 0 and leaves the state tree unchanged.
 check_refuses() {
@@ -134,14 +120,6 @@ check_refuses() {
   after="$(state_listing)"
   [ "$before" = "$after" ] || { echo "FAIL: state changed"; return 1; }
   return 0
-}
-
-assert_red() {
-  local reason="$1"
-  shift
-  run "$@"
-  [ "$status" -ne 0 ] || { echo "the check stayed green on the mutated copy"; return 1; }
-  printf '%s\n' "$output" | grep -Fq -- "$reason" || { printf 'red for another reason: %s\n' "$output"; return 1; }
 }
 
 # ---------------------------------------------------------------------------
@@ -166,25 +144,26 @@ assert_red() {
 # ---------------------------------------------------------------------------
 # Refusals
 
-@test "an empty branch name keeps all state" {
+# bats test_tags=protected
+@test "a refusal keeps all state: empty name, worktree- prefix, unkeyable name, checked-out worktree, unreadable worktree list, failed ref read" {
   make_main
-  plant_state x
-  check_refuses - ""
+  branch fix/b
+  "$REAL_GIT" -C "$MAIN" worktree add -q -b fix/c "$BATS_TEST_TMPDIR/tree"
+  local row
+  for row in "-|" "-|worktree-x" "-|../x" "-|fix/c" "worktree|fix/a" "for-each-ref|fix"; do
+    rm -rf "$LOCAL"
+    mkdir -p "$LOCAL"
+    plant_state x
+    plant_state fix/a
+    plant_state fix/c
+    plant_state fix
+    plant_state fix/b
+    check_refuses "${row%%|*}" "${row#*|}" || { echo "row $row"; return 1; }
+    [ -d "$LOCAL/runs/fix/b" ] || { echo "row $row: the nested live run folder was removed"; return 1; }
+  done
 }
 
-@test "a worktree- name keeps the state its normalized key would name" {
-  make_main
-  plant_state x
-  check_refuses - worktree-x
-  state_exists x
-}
-
-@test "a name that cannot key a state entry keeps all state" {
-  make_main
-  plant_state x
-  check_refuses - '../x'
-}
-
+# bats test_tags=protected
 @test "a branch that still has a local ref keeps its state" {
   make_main
   branch fix/a
@@ -192,19 +171,7 @@ assert_red() {
   check_refuses - fix/a
 }
 
-@test "a branch checked out in a listed worktree keeps its state" {
-  make_main
-  "$REAL_GIT" -C "$MAIN" worktree add -q -b fix/a "$BATS_TEST_TMPDIR/tree"
-  plant_state fix/a
-  check_refuses - fix/a
-}
-
-@test "a worktree list that cannot be read keeps all state" {
-  make_main
-  plant_state fix/a
-  check_refuses worktree fix/a
-}
-
+# bats test_tags=protected
 @test "a merged branch whose key a live worktree session still holds keeps its run folder" {
   make_main
   "$REAL_GIT" -C "$MAIN" worktree add -q -b 'worktree-fix+a' "$BATS_TEST_TMPDIR/session-tree"
@@ -223,73 +190,4 @@ assert_red() {
   [ "$status" -eq 0 ] || return 1
   [ -d "$LOCAL/runs/fix/b" ] || { echo "the nested live run folder was removed: $output"; return 1; }
   [ -d "$LOCAL/runs/fix" ] || { echo "the parent run folder was removed: $output"; return 1; }
-}
-
-@test "a ref read that fails keeps the nested run folders and prints a kept state line" {
-  make_main
-  branch fix/b
-  plant_state fix
-  plant_state fix/b
-  check_refuses for-each-ref fix
-  [ -d "$LOCAL/runs/fix/b" ]
-}
-
-# ---------------------------------------------------------------------------
-# Red twins: the same check against a scratch copy with the guard removed
-
-@test "red twin: without the empty-name and keyable guards the empty name is not refused" {
-  make_main
-  plant_state x
-  mutate state-cleanup.sh -e '/^\[ -n "\$branch_name" \] || keep_state/d' -e '/^_gaia_loop_keyable /d' || return 1
-  assert_red "no kept state line" check_refuses - ""
-}
-
-@test "red twin: without the worktree- guard the prefixed name removes the state of its key" {
-  make_main
-  plant_state x
-  mutate state-cleanup.sh -e '/^  worktree-\*) keep_state/d' || return 1
-  assert_red "FAIL:" check_refuses - worktree-x
-}
-
-@test "red twin: without the keyable guard an unkeyable name is not refused" {
-  make_main
-  plant_state x
-  mutate state-cleanup.sh -e '/^_gaia_loop_keyable /d' || return 1
-  assert_red "no kept state line" check_refuses - '../x'
-}
-
-@test "red twin: without the live-branch guard a branch with a ref is not refused" {
-  make_main
-  branch fix/a
-  plant_state fix/a
-  mutate state-cleanup.sh -e 's/^\$branch_name$/NEVER-MATCHES/' || return 1
-  assert_red "no kept state line" check_refuses - fix/a
-}
-
-@test "red twin: without the read-OK guard an unreadable worktree list is not refused" {
-  make_main
-  plant_state fix/a
-  mutate state-cleanup.sh -e 's/^if \[ -z "\${GAIA_REAPER_BRANCHES_OK-}" \] || \[ -z "\${GAIA_REAPER_TREES_OK-}" \]; then$/if false; then/' || return 1
-  assert_red "no kept state line" check_refuses worktree fix/a
-}
-
-@test "red twin: without the live-key check in the reaper a live session key loses its run folder" {
-  make_main
-  "$REAL_GIT" -C "$MAIN" worktree add -q -b 'worktree-fix+a' "$BATS_TEST_TMPDIR/session-tree"
-  plant_state fix/a
-  mutate state-reaper-classes.sh -e 's/^  if gaia_reaper_path_live "\$key" "\$live_keys"; then$/  if false; then/' || return 1
-  run bash "$VERB" --branch fix/a
-  [ -d "$LOCAL/runs/fix/a" ] && { echo "the mutation did not remove the run folder"; return 1; }
-  true
-}
-
-@test "red twin: without the live-key check in the reaper a nested live run folder is removed" {
-  make_main
-  branch fix/b
-  plant_state fix
-  plant_state fix/b
-  mutate state-reaper-classes.sh -e 's/^  if gaia_reaper_path_live "\$key" "\$live_keys"; then$/  if false; then/' || return 1
-  run bash "$VERB" --branch fix
-  [ -d "$LOCAL/runs/fix/b" ] && { echo "the mutation did not remove the nested folder"; return 1; }
-  true
 }

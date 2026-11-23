@@ -1,6 +1,6 @@
 // Runs in the node project.
 // The rule itself is tested in @gaia-harness/lint; this asserts the resolved
-// project config still carries it beside the inherited entries.
+// project config still enables it.
 import type {Linter} from 'eslint';
 import {ESLint} from 'eslint';
 import {beforeAll, describe, expect, test} from 'vitest';
@@ -23,7 +23,7 @@ beforeAll(async () => {
   rules = config.rules ?? {};
 }, 60_000);
 
-const optionsOf = (ruleId: string) => {
+const optionsOf = (ruleId: string): unknown[] => {
   const entry = rules[ruleId];
 
   return Array.isArray(entry) ? entry.slice(1) : [];

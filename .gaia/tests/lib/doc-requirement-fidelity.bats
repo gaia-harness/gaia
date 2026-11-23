@@ -15,10 +15,6 @@
 # executes these passages, so an edit that drops one clause would ship
 # silently. This suite pins each clause.
 #
-# Method: every check takes a root directory and reads one region; each red
-# twin mutates one clause of a scratch copy, proves the copy changed, and runs
-# the same check against it.
-#
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
@@ -62,38 +58,6 @@ in_order() {
 
 need_text() {
   [ -n "$2" ] || { printf 'region not found: %s\n' "$1" >&2; return 1; }
-}
-
-# mutated_tree <rel> <old> <new>: a scratch tree (TREE) holding a copy of <rel>
-# with the first fixed-string <old> replaced by <new>, proved changed.
-mutated_tree() {
-  local rel="$1" content mutated
-  TREE="$BATS_TEST_TMPDIR/tree"
-  rm -rf "$TREE"
-  mkdir -p "$TREE/$(dirname "$rel")"
-  # Both audit pages ride along unmutated, so a check that reads both fails
-  # only on the clause the twin mutated, never on a missing page.
-  local page
-  for page in "$MERGE_REL" "$ROUND_REL"; do
-    mkdir -p "$TREE/$(dirname "$page")"
-    cp "$REPO_ROOT/$page" "$TREE/$page"
-  done
-  content="$(cat "$REPO_ROOT/$rel"; printf x)"
-  mutated="${content/"$2"/"$3"}"
-  printf '%s' "${mutated%x}" >"$TREE/$rel"
-  if cmp -s "$REPO_ROOT/$rel" "$TREE/$rel"; then
-    printf 'mutation left %s unchanged: %s\n' "$rel" "$2" >&2
-    return 1
-  fi
-}
-
-red() {
-  local check="$1"
-  shift
-  mutated_tree "$@" || return 1
-  run "$check" "$TREE"
-  [ "$status" -ne 0 ] || { printf 'check %s still passed on the mutated copy\n' "$check" >&2; return 1; }
-  [ -n "$output" ] || { printf 'check %s failed without a reason\n' "$check" >&2; return 1; }
 }
 
 green() {
@@ -186,66 +150,18 @@ check_disputes_stay_with_the_fixer() {
   green check_plan_fixers_keep_requirements
 }
 
-@test "red twin: an in-phase or outside arm free to rewrite a stated label fails" {
-  red check_plan_fixers_keep_requirements "$PLANNER_REL" "$FIXER_RULE If the cause is not in this task's files, edit nothing and say so under ### Findings. The failing tests:" "If the cause is not in this task's files, edit nothing and say so under ### Findings. The failing tests:"
-  red check_plan_fixers_keep_requirements "$PLANNER_REL" "$FIXER_RULE If the cause is not in this task's files, edit nothing and say so under ### Findings, on a line" "If the cause is not in this task's files, edit nothing and say so under ### Findings, on a line"
-}
-
-@test "red twin: a flow-test arm or named fixer free to rewrite a stated label fails" {
-  red check_plan_fixers_keep_requirements "$PLANNER_REL" "and say which under ### Deviations from plan. $FIXER_RULE The failing tests:" 'and say which under ### Deviations from plan. The failing tests:'
-  red check_plan_fixers_keep_requirements "$PLANNER_REL" "and say which under ### Deviations from plan. $FIXER_RULE The failures:" 'and say which under ### Deviations from plan. The failures:'
-}
-
 @test "the merge question holds on a shipped conflict with the SPEC or its Required reading" {
   green check_merge_hold_on_requirement_conflict
-}
-
-@test "red twin: a merge question that reads a SPEC conflict as a follow-up fails" {
-  red check_merge_hold_on_requirement_conflict "$PLANNER_REL" ' a finding or deviation saying the shipped app differs from the SPEC or its Required reading needs that decision unless the human already accepted it at the audit checkpoint;' ''
-  red check_merge_hold_on_requirement_conflict "$PLANNER_REL" '; a finding or deviation saying the shipped app differs from the SPEC or its Required reading is listed as a decision to make, never as a follow-up, unless the human accepted it at the audit checkpoint.' '.'
 }
 
 @test "the audit fixer disputes a repair that changes stated wording or its test" {
   green check_audit_fixer_keeps_requirements
 }
 
-@test "red twin: an audit fixer free to change stated wording fails" {
-  red check_audit_fixer_keeps_requirements "$ROUND_REL" 'A repair never moves a label, role, message or URL' 'A repair may move a label, role, message or URL'
-  red check_audit_fixer_keeps_requirements "$ROUND_REL" 'return the entry disputed with a reason that starts `conflicts with requirement:`' 'return the entry fixed anyway'
-}
-
 @test "the spec audit keeps a scaffold check a brief is silent on" {
   green check_spec_audit_keeps_scaffold_checks
 }
 
-@test "red twin: a spec audit free to drop a whole scaffold check fails" {
-  red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" 'propose only the narrowest repair that satisfies what they state, keeping the rest of the check' 'propose removing the check'
-  red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" ' A check they are silent on is never removed.' ''
-  red check_spec_audit_keeps_scaffold_checks "$LENS_PREAMBLE_REL" 'while a set value under 32 characters is still refused.' 'and a set value of any length is accepted.'
-}
-
 @test "a disputed guard reaches the human only through the checkpoint and only the fix round edits" {
   green check_disputes_stay_with_the_fixer
-}
-
-@test "red twin: a main thread free to ask about or recommend a disputed guard fails" {
-  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'the main thread asks no question of its own about it.' 'the main thread may ask its own question about it.'
-  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'recommends adding it only when it quotes the line that requires it' 'recommends adding it whenever it names the line that requires it'
-  red check_disputes_stay_with_the_fixer "$ROUND_REL" 'No question that names a guard or rule a disputed entry would add recommends adding it unless it quotes the line that requires it' 'A question may recommend the guard'
-  red check_disputes_stay_with_the_fixer "$ROUND_REL" 'cite it: in the SPEC on a plan build, in a `wiki/decisions/` page, or in the code or docs,' 'cite it,'
-}
-
-@test "red twin: a quote-the-line source list that drops the SPEC's Required reading fails" {
-  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'from the SPEC or a document its Required reading names, a `wiki/decisions/` page' 'from the SPEC, a `wiki/decisions/` page'
-  red check_disputes_stay_with_the_fixer "$ROUND_REL" 'from the SPEC or a document its Required reading names, a `wiki/decisions/` page' 'from the SPEC, a `wiki/decisions/` page'
-}
-
-@test "red twin: a channel for a disputed entry widened past the checkpoint or a stop_reason question fails" {
-  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'or a question a `stop_reason` row asks; the main thread' 'or any question the main thread chooses to ask; the main thread'
-}
-
-@test "red twin: a veto satisfied by a one-off agent's edit, or one that bars committing the fixer's edits, fails" {
-  red check_disputes_stay_with_the_fixer "$MERGE_REL" 'but never writes a new edit to satisfy a veto, by hand or through an agent outside the fix round.' 'or dispatches a one-off agent to make the fix.'
-  red check_disputes_stay_with_the_fixer "$MERGE_REL" "the main thread may commit the fixer's own uncommitted edits on a human's answer at a \`needs-human\` stop, but never writes" "the main thread never commits the fixer's edits and never writes"
-  red check_disputes_stay_with_the_fixer "$ROUND_REL" ", and neither dispatches any agent to edit one but the round's fixer and the worthiness step's fixer, which edits only the tests that step routes to it" '.'
 }

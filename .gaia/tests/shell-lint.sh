@@ -17,7 +17,16 @@
 # a usage error, a bad argument, and no pass ran at all.
 # Run it directly from anywhere: `bash .gaia/tests/shell-lint.sh`.
 #
-# Usage: shell-lint.sh [--only bash32-parse]
+# Usage: shell-lint.sh [--only bash32-parse|guards] [--paths-from <file>]
+#
+# `--paths-from` narrows the shellcheck passes and the bash-3.2 parse pass to
+# the tracked files the given NUL-delimited list names; a pass whose set comes
+# back empty is skipped, not failed. It narrows lint-errexit-status-read,
+# lint-git-path-quoting and lint-sigpipe-readers the same way, through
+# GAIA_GUARD_DELTA_FILE (.gaia/scripts/guard-discovery-lib.sh), unless the delta
+# changes that guard's own sources. The other folded guards scan the whole tree.
+# `verify-harness.sh round` passes the
+# round's delta here; branch mode and CI lint the whole tree.
 #
 # `--only bash32-parse` runs the bash-3.2 parse pass and nothing else. That is
 # how .github/workflows/shell-lint.yml arms that pass on a macOS runner, which
@@ -26,6 +35,11 @@
 # other pass either needs shellcheck or reads a surface the ubuntu leg already
 # covers. The parse pass is the one whose verdict depends on the host's
 # /bin/bash, so it is the one worth a second runner.
+#
+# `--only guards` runs the folded guards and nothing else: no shellcheck binary
+# is required and neither the shellcheck passes nor the bash-3.2 parse pass
+# run. `verify-harness.sh` uses it on a host without shellcheck, so the guards'
+# verdict over the real tree is never skipped along with the linter.
 #
 # Maintainer-only. Adopters run GAIA's bash but never author it, so the linter
 # guarding the framework's own shell has no adopter surface. Excluded from the
@@ -83,6 +97,7 @@ set -euo pipefail
 # runs every pass below, unchanged. One value is selectable, for the reason the
 # header gives.
 ONLY_PASS=
+PATHS_FROM=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --only)
@@ -95,22 +110,30 @@ while [ "$#" -gt 0 ]; do
       ONLY_PASS="$2"
       shift 2
       ;;
+    --paths-from)
+      if [ "$#" -lt 2 ] || [ ! -r "$2" ]; then
+        echo "ERROR: --paths-from needs a readable file of NUL-delimited repo-relative paths" >&2
+        exit 2
+      fi
+      PATHS_FROM="$2"
+      shift 2
+      ;;
     *)
       echo "ERROR: unknown argument: $1" >&2
-      echo "usage: shell-lint.sh [--only bash32-parse]" >&2
+      echo "usage: shell-lint.sh [--only bash32-parse|guards] [--paths-from <file>]" >&2
       exit 2
       ;;
   esac
 done
 
 case "$ONLY_PASS" in
-  '' | bash32-parse) ;;
+  '' | bash32-parse | guards) ;;
   *)
     # Reject rather than fall through to a full run. A typo'd pass name reaching
     # the default would run the shellcheck passes on the macOS leg, which
     # installs no shellcheck, and report the flag's own absence as a lint
     # failure -- loud, but about the wrong thing.
-    echo "ERROR: unknown --only pass: $ONLY_PASS (known: bash32-parse)" >&2
+    echo "ERROR: unknown --only pass: $ONLY_PASS (known: bash32-parse, guards)" >&2
     exit 2
     ;;
 esac
@@ -142,7 +165,7 @@ REPO_ROOT="$(git -C "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" rev-parse --
 echo "==> .gaia/tests/shell-lint.sh"
 
 # Both are preconditions of the shellcheck passes below and of nothing else,
-# so `--only bash32-parse` skips them. Demanding the binary unconditionally
+# so either `--only` mode skips them. Demanding the binary unconditionally
 # would red the macOS leg, whose whole cost argument is that it installs no
 # linter at all. (That last line deliberately does not begin with the bare word
 # a directive is spelled with, per the trap this file's header records.)
@@ -161,6 +184,26 @@ if [ -z "$ONLY_PASS" ]; then
   fi
 fi
 
+# narrow_to_paths_from: pass through, NUL-delimited, the paths on stdin that the
+# --paths-from list names; with no list, every path. A case match on the joined
+# list rather than an associative array, which bash 3.2 lacks.
+paths_from_joined=""
+if [ -n "$PATHS_FROM" ]; then
+  paths_from_joined="$(tr '\0' '\n' < "$PATHS_FROM")"
+fi
+narrow_to_paths_from() {
+  local candidate_path
+  while IFS= read -r -d '' candidate_path; do
+    if [ -z "$PATHS_FROM" ]; then
+      printf '%s\0' "$candidate_path"
+      continue
+    fi
+    case $'\n'"$paths_from_joined"$'\n' in
+      *$'\n'"$candidate_path"$'\n'*) printf '%s\0' "$candidate_path" ;;
+    esac
+  done
+}
+
 # Tracked files only. Worktrees under .claude/worktrees/ are untracked checkouts
 # of these same scripts, so `git ls-files` never double-counts them.
 #
@@ -177,26 +220,30 @@ fi
 sh_scripts=()
 while IFS= read -r -d '' tracked_path; do
   sh_scripts+=("$tracked_path")
-done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.sh')
+done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.sh' | narrow_to_paths_from)
 
 bats_scripts=()
 while IFS= read -r -d '' tracked_path; do
   bats_scripts+=("$tracked_path")
-done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.bats')
+done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.bats' | narrow_to_paths_from)
 
 githook_hooks=()
 while IFS= read -r -d '' tracked_path; do
   githook_hooks+=("$tracked_path")
-done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '.githooks/*')
+done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '.githooks/*' | narrow_to_paths_from)
 
 # Guard the expansion below: on bash 3.2 a bare "${sh_scripts[@]}" over an EMPTY
 # array aborts with `unbound variable` under `set -u`. An empty *.sh result also
 # means the glob or the repo root resolved wrong, which should fail loudly, not
 # lint nothing and report success. The *.bats set is allowed to be empty and is
-# simply skipped; only the always-present *.sh set is a hard precondition.
-if [ "${#sh_scripts[@]}" -eq 0 ]; then
+# simply skipped; only the always-present *.sh set is a hard precondition. A
+# --paths-from list legitimately names no script, so there it is skipped too.
+if [ "${#sh_scripts[@]}" -eq 0 ] && [ -z "$PATHS_FROM" ]; then
   echo "ERROR: no tracked *.sh files found under $REPO_ROOT" >&2
   exit 1
+fi
+if [ -n "$PATHS_FROM" ]; then
+  echo "    scope: shellcheck and the bash-3.2 parse cover only the files $PATHS_FROM lists, as do lint-errexit-status-read, lint-git-path-quoting and lint-sigpipe-readers; the other folded guards scan the whole tree"
 fi
 
 # Concurrent shellcheck workers. One shellcheck invocation is single-threaded and
@@ -334,11 +381,13 @@ report_verdict() {
   exit 0
 }
 
-# The three shellcheck passes, skipped under `--only bash32-parse` along with
+# The three shellcheck passes, skipped under either `--only` mode along with
 # the binary they need.
 if [ -z "$ONLY_PASS" ]; then
   echo "--> shellcheck *.sh (severity=$SH_SEVERITY, jobs=$JOBS): ${#sh_scripts[@]} tracked scripts"
-  if ! run_shellcheck_pass sh "$SH_SEVERITY" ${sh_scripts[@]+"${sh_scripts[@]}"}; then
+  # Only a --paths-from list reaches here with none; an empty list would
+  # divide by zero workers.
+  if [ "${#sh_scripts[@]}" -gt 0 ] && ! run_shellcheck_pass sh "$SH_SEVERITY" ${sh_scripts[@]+"${sh_scripts[@]}"}; then
     status=1
   fi
 
@@ -384,62 +433,64 @@ fi
 # SHELL_LINT_BASH32 overrides the interpreter, which is what lets the bats
 # suite drive the fail-closed and loud-skip branches on a host carrying only
 # one bash.
-BASH32="${SHELL_LINT_BASH32:-/bin/bash}"
-echo "--> bash-3.2 parse ($BASH32 -n): ${#sh_scripts[@]} tracked scripts"
-if [ ! -x "$BASH32" ]; then
-  # Fail closed, the same precondition the empty-*.sh-set guard above carries:
-  # a pass that cannot run has to say so, never report clean having parsed
-  # nothing.
-  echo "ERROR: $BASH32 is not executable; the bash-3.2 parse pass cannot run" >&2
-  status=1
-else
-  # SC2016: the single quotes are intentional. BASH_VERSINFO has to expand
-  # inside the resolved interpreter, not in this shell.
-  # shellcheck disable=SC2016
-  bash32_major="$("$BASH32" -c 'printf "%s\n" "${BASH_VERSINFO[0]}"' 2>/dev/null || true)"
-  case "$bash32_major" in
-    '' | *[!0-9]*)
-      # Fail closed for the same reason: an interpreter that will not report a
-      # version is one this pass cannot reason about.
-      echo "ERROR: $BASH32 reported no numeric major version; the bash-3.2 parse pass cannot run" >&2
-      status=1
-      ;;
-    *)
-      if [ "$bash32_major" -ge 4 ]; then
-        # Skip LOUDLY, the posture .gaia/scripts/bats5.sh already takes on the
-        # mirror-image gap. A silent skip on every bash-5 host would reproduce
-        # one layer up the exact failure this pass exists to close: the tree
-        # would read clean everywhere and be parsed nowhere.
-        echo "############################################################" >&2
-        echo "# WARNING: $BASH32 is bash $bash32_major, so the bash-3.2" >&2
-        echo "# parse pass was SKIPPED. A 3.2-only syntax error is invisible" >&2
-        echo "# to this run. Re-run on stock macOS /bin/bash (3.2.57) before" >&2
-        echo "# trusting this gate over shell syntax." >&2
-        echo "############################################################" >&2
-      else
-        # One subshell for the whole sweep rather than one per file, and run
-        # from the repo root so the file:line the interpreter prints is
-        # repo-relative. Every file is parsed before the sweep reports, so one
-        # invocation names every broken script rather than only the first.
-        if ! (
-          cd "$REPO_ROOT" || exit 2
-          sweep_exit_status=0
-          for tracked_path in ${sh_scripts[@]+"${sh_scripts[@]}"}; do
-            "$BASH32" -n "$tracked_path" || sweep_exit_status=1
-          done
-          exit "$sweep_exit_status"
-        ); then
-          status=1
+if [ "$ONLY_PASS" != guards ]; then
+  BASH32="${SHELL_LINT_BASH32:-/bin/bash}"
+  echo "--> bash-3.2 parse ($BASH32 -n): ${#sh_scripts[@]} tracked scripts"
+  if [ ! -x "$BASH32" ]; then
+    # Fail closed, the same precondition the empty-*.sh-set guard above carries:
+    # a pass that cannot run has to say so, never report clean having parsed
+    # nothing.
+    echo "ERROR: $BASH32 is not executable; the bash-3.2 parse pass cannot run" >&2
+    status=1
+  else
+    # SC2016: the single quotes are intentional. BASH_VERSINFO has to expand
+    # inside the resolved interpreter, not in this shell.
+    # shellcheck disable=SC2016
+    bash32_major="$("$BASH32" -c 'printf "%s\n" "${BASH_VERSINFO[0]}"' 2>/dev/null || true)"
+    case "$bash32_major" in
+      '' | *[!0-9]*)
+        # Fail closed for the same reason: an interpreter that will not report a
+        # version is one this pass cannot reason about.
+        echo "ERROR: $BASH32 reported no numeric major version; the bash-3.2 parse pass cannot run" >&2
+        status=1
+        ;;
+      *)
+        if [ "$bash32_major" -ge 4 ]; then
+          # Skip LOUDLY, the posture .gaia/scripts/bats5.sh already takes on the
+          # mirror-image gap. A silent skip on every bash-5 host would reproduce
+          # one layer up the exact failure this pass exists to close: the tree
+          # would read clean everywhere and be parsed nowhere.
+          echo "############################################################" >&2
+          echo "# WARNING: $BASH32 is bash $bash32_major, so the bash-3.2" >&2
+          echo "# parse pass was SKIPPED. A 3.2-only syntax error is invisible" >&2
+          echo "# to this run. Re-run on stock macOS /bin/bash (3.2.57) before" >&2
+          echo "# trusting this gate over shell syntax." >&2
+          echo "############################################################" >&2
+        else
+          # One subshell for the whole sweep rather than one per file, and run
+          # from the repo root so the file:line the interpreter prints is
+          # repo-relative. Every file is parsed before the sweep reports, so one
+          # invocation names every broken script rather than only the first.
+          if ! (
+            cd "$REPO_ROOT" || exit 2
+            sweep_exit_status=0
+            for tracked_path in ${sh_scripts[@]+"${sh_scripts[@]}"}; do
+              "$BASH32" -n "$tracked_path" || sweep_exit_status=1
+            done
+            exit "$sweep_exit_status"
+          ); then
+            status=1
+          fi
         fi
-      fi
-      ;;
-  esac
+        ;;
+    esac
+  fi
 fi
 
 # `--only bash32-parse` has run its pass and stops here. The guards below
 # read the tree with tools that have nothing to do with the host's /bin/bash, so
 # a second runner would only re-run what the ubuntu leg already did.
-if [ -n "$ONLY_PASS" ]; then
+if [ "$ONLY_PASS" = bash32-parse ]; then
   report_verdict
 fi
 
@@ -476,12 +527,37 @@ guard_script_path() {
   fi
 }
 
+# guard_delta_file <slug>: print the absolute --paths-from list for a guard that
+# takes the delta, or nothing to have it scan the whole tree. Nothing without a
+# list, and nothing when the delta changes one of the guard's own sources, where
+# a change to what it detects has to be judged over every file.
+paths_from_absolute="$PATHS_FROM"
+case "$paths_from_absolute" in
+  '' | /*) ;;
+  *) paths_from_absolute="$PWD/$paths_from_absolute" ;;
+esac
+guard_delta_file() {
+  local slug="$1"
+  [ -n "$PATHS_FROM" ] || return 0
+  case $'\n'"$paths_from_joined"$'\n' in
+    *$'\n'.gaia/scripts/guard-awk-lib.sh$'\n'* | *$'\n'.gaia/scripts/awk-interp-lib.sh$'\n'* | \
+      *$'\n'.gaia/scripts/guard-discovery-lib.sh$'\n'* | \
+      *$'\n'".gaia/scripts/$slug.sh"$'\n'* | *$'\n'".gaia/scripts/$slug-"*.sh$'\n'*)
+      printf '    scope: %s scans the whole tree, because the delta changes its own sources\n' "$slug" >&2
+      return 0
+      ;;
+  esac
+  printf '%s\n' "$paths_from_absolute"
+}
+
 # Each guard writes straight to the gate's own streams. The `$(...)` captures
 # only guard_script_path's stdout, so its GUARD OVERRIDE notice on stderr still
 # reaches the run output. `</dev/null`: none of these guards read stdin.
+# GAIA_GUARD_DELTA_FILE is set on every call, empty unless a delta is passed, so
+# a value inherited from the caller's environment never narrows a guard.
 run_guard() {
-  local slug="$1"
-  (cd "$REPO_ROOT" && bash "$(guard_script_path "$slug")") </dev/null
+  local slug="$1" delta_file="${2:-}"
+  (cd "$REPO_ROOT" && GAIA_GUARD_DELTA_FILE="$delta_file" bash "$(guard_script_path "$slug")") </dev/null
 }
 
 # Fold in the hook array-guard: shellcheck cannot model the bash-3.2.57
@@ -505,7 +581,7 @@ fi
 # the repo root so its own discovery resolves and the file:line it prints is
 # repo-relative.
 echo "--> lint-git-path-quoting (C-quoted paths from an unquoted diff or ls-files)"
-if ! run_guard lint-git-path-quoting; then
+if ! run_guard lint-git-path-quoting "$(guard_delta_file lint-git-path-quoting)"; then
   status=1
 fi
 
@@ -533,7 +609,7 @@ fi
 # class lived. Run from the repo root so its `git ls-files` discovery resolves
 # and the file:line it prints is repo-relative.
 echo "--> lint-errexit-status-read (\$? read after a command-substitution assignment under set -e)"
-if ! run_guard lint-errexit-status-read; then
+if ! run_guard lint-errexit-status-read "$(guard_delta_file lint-errexit-status-read)"; then
   status=1
 fi
 
@@ -547,7 +623,7 @@ fi
 # Run from the repo root so its `git ls-files` discovery resolves and the
 # file:line it prints is repo-relative.
 echo "--> lint-sigpipe-readers (a short-circuiting reader inverting a pipeline under pipefail)"
-if ! run_guard lint-sigpipe-readers; then
+if ! run_guard lint-sigpipe-readers "$(guard_delta_file lint-sigpipe-readers)"; then
   status=1
 fi
 
@@ -606,6 +682,14 @@ fi
 # rides the same override seam under its own slug.
 echo "--> check-retired-paths (a harness citation of a root path that moved under apps/web/)"
 if ! run_guard check-retired-paths; then
+  status=1
+fi
+
+# Fold in the protected-test gate: deleting the only test of a security or
+# enforcement behavior is otherwise caught by review alone. Not named lint-*,
+# for the same reason as the drift check above.
+echo "--> check-protected-tests (a protected bats test removed or untagged since the merge base)"
+if ! run_guard check-protected-tests; then
   status=1
 fi
 

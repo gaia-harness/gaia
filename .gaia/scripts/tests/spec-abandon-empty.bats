@@ -53,111 +53,7 @@ status_of() {
   jq -r --arg id "$1" '.items[] | select(.kind == "spec" and .id == $id) | .status' "$CATALOG"
 }
 
-# --- 1. Flips a fully empty, aged draft --------------------------------------
-
-@test "flips an empty draft older than the guard age to abandoned" {
-  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-001", created_at: $timestamp, status: "draft"}]')"
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-001)" = "abandoned" ]
-  grep -qF -- "Abandoned 1 never-authored draft(s): SPEC-001" <<<"$output"
-}
-
-@test "stamps abandoned_at on the flipped row" {
-  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-001", created_at: $timestamp, status: "draft"}]')"
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  abandoned_at="$(jq -r '.items[0].abandoned_at // empty' "$CATALOG")"
-  [ -n "$abandoned_at" ]
-}
-
-# --- 2. Leaves a draft with a draft cache untouched (any age) ----------------
-
-@test "leaves a draft with a draft-<id>.md cache untouched" {
-  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-002", created_at: $timestamp, status: "draft"}]')"
-  echo "in progress" > "$SANDBOX/.gaia/local/cache/draft-SPEC-002.md"
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-002)" = "draft" ]
-  [ -z "$output" ]
-}
-
-# --- 3. Leaves a draft with a SPEC.md untouched ------------------------------
-
-@test "leaves a draft with a SPEC.md untouched" {
-  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-003", created_at: $timestamp, status: "draft"}]')"
-  mkdir -p "$SANDBOX/.notebook/specs/SPEC-003"
-  echo "# SPEC" > "$SANDBOX/.notebook/specs/SPEC-003/SPEC.md"
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-003)" = "draft" ]
-  [ -z "$output" ]
-}
-
-@test "a draft folder holding a requirements file is not swept as a ghost" {
-  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-003", created_at: $timestamp, status: "draft"}]')"
-  mkdir -p "$SANDBOX/.notebook/specs/SPEC-003"
-  echo "# Requirements" > "$SANDBOX/.notebook/specs/SPEC-003/REQUIREMENTS.md"
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-003)" = "draft" ]
-  [ -z "$output" ]
-}
-
-# --- 4. Leaves a draft with a gate-1 snapshot untouched ----------------------
-
-@test "leaves a draft with a gate1-<id>.json snapshot untouched" {
-  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-004", created_at: $timestamp, status: "draft"}]')"
-  echo '{}' > "$SANDBOX/.gaia/local/cache/gate1-SPEC-004.json"
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-004)" = "draft" ]
-  [ -z "$output" ]
-}
-
-# --- 5. Leaves an empty draft younger than the guard age untouched ----------
-
-@test "leaves an empty draft younger than the guard age untouched" {
-  seed_catalog "$(jq -nc --arg timestamp "$(new_timestamp)" '[{id: "SPEC-005", created_at: $timestamp, status: "draft"}]')"
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-005)" = "draft" ]
-  [ -z "$output" ]
-}
-
-# --- 6. Leaves a non-draft row untouched -------------------------------------
-
-@test "leaves a specified (non-draft) row untouched even if empty and aged" {
-  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-006", created_at: $timestamp, status: "specified"}]')"
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-006)" = "specified" ]
-  [ -z "$output" ]
-}
-
-# --- 7. Unparseable created_at is treated as NOT aged ------------------------
-
-@test "treats an unparseable created_at as not aged (never guesses)" {
-  seed_catalog '[{"id": "SPEC-007", "created_at": "not-a-date", "status": "draft"}]'
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-007)" = "draft" ]
-  [ -z "$output" ]
-}
-
-# --- 8. Missing created_at is treated as NOT aged ----------------------------
-
-@test "treats a missing created_at as not aged (never guesses)" {
-  seed_catalog '[{"id": "SPEC-008", "status": "draft"}]'
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-008)" = "draft" ]
-  [ -z "$output" ]
-}
-
-# --- 9. Multiple eligible drafts flip in one pass ----------------------------
-
-@test "flips multiple eligible drafts in one pass, leaves ineligible ones" {
+@test "flips every aged empty draft to abandoned with abandoned_at and leaves a young one" {
   seed_catalog "$(jq -nc --arg old "$(old_timestamp)" --arg new "$(new_timestamp)" '[
     {id: "SPEC-010", created_at: $old, status: "draft"},
     {id: "SPEC-011", created_at: $old, status: "draft"},
@@ -170,35 +66,68 @@ status_of() {
   [ "$(status_of SPEC-012)" = "draft" ]
   grep -qF -- "SPEC-010" <<<"$output"
   grep -qF -- "SPEC-011" <<<"$output"
+  [ -n "$(jq -r '.items[] | select(.id == "SPEC-010") | .abandoned_at // empty' "$CATALOG")" ]
 }
 
-# --- 10. No catalog: exit 0, silent, no side effects -------------------------
+# prepare_kept_case <case>: seeds one catalog row the sweep must leave alone and
+# sets kept_status to the status it must still hold.
+prepare_kept_case() {
+  local case_name="$1" row
+  rm -rf "$SANDBOX/.notebook/specs/SPEC-030"
+  rm -f "$SANDBOX"/.gaia/local/cache/*
+  kept_status=draft
+  row="$(jq -nc --arg timestamp "$(old_timestamp)" '{id: "SPEC-030", created_at: $timestamp, status: "draft"}')"
+  case "$case_name" in
+    draft-cache) echo "in progress" > "$SANDBOX/.gaia/local/cache/draft-SPEC-030.md" ;;
+    spec-file)
+      mkdir -p "$SANDBOX/.notebook/specs/SPEC-030"
+      echo "# SPEC" > "$SANDBOX/.notebook/specs/SPEC-030/SPEC.md"
+      ;;
+    requirements-file)
+      mkdir -p "$SANDBOX/.notebook/specs/SPEC-030"
+      echo "# Requirements" > "$SANDBOX/.notebook/specs/SPEC-030/REQUIREMENTS.md"
+      ;;
+    gate-snapshot) echo '{}' > "$SANDBOX/.gaia/local/cache/gate1-SPEC-030.json" ;;
+    young-draft) row="$(jq -nc --arg timestamp "$(new_timestamp)" '{id: "SPEC-030", created_at: $timestamp, status: "draft"}')" ;;
+    non-draft)
+      kept_status=specified
+      row="$(jq -nc --arg timestamp "$(old_timestamp)" '{id: "SPEC-030", created_at: $timestamp, status: "specified"}')"
+      ;;
+    unparseable-created-at) row='{"id": "SPEC-030", "created_at": "not-a-date", "status": "draft"}' ;;
+    missing-created-at) row='{"id": "SPEC-030", "status": "draft"}' ;;
+  esac
+  seed_catalog "[$row]"
+}
 
-@test "no catalog file: exit 0, silent, nothing created" {
+# bats test_tags=protected
+@test "the sweep leaves a draft untouched when it holds authored work, is young, is not a draft or has no usable created_at" {
+  local case_name
+  for case_name in draft-cache spec-file requirements-file gate-snapshot young-draft non-draft unparseable-created-at missing-created-at; do
+    prepare_kept_case "$case_name"
+    run bash "$SCRIPT" "$SANDBOX"
+    [ "$status" -eq 0 ] || { echo "case $case_name: status $status"; return 1; }
+    [ "$(status_of SPEC-030)" = "$kept_status" ] || { echo "case $case_name: row changed to $(status_of SPEC-030)"; return 1; }
+    [ -z "$output" ] || { echo "case $case_name: output '$output'"; return 1; }
+  done
+}
+
+@test "no-op inputs exit 0 silently: no catalog, no draft rows, no repo_root argument" {
   rm -f "$CATALOG"
   run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -e "$CATALOG" ]
-}
+  [ "$status" -eq 0 ] || { echo "no catalog: status $status"; return 1; }
+  [ -z "$output" ] || { echo "no catalog: output '$output'"; return 1; }
+  [ ! -e "$CATALOG" ] || { echo "no catalog: catalog created"; return 1; }
 
-# --- 11. No draft rows at all: exit 0, silent --------------------------------
-
-@test "catalog with no draft rows: exit 0, silent" {
   seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-013", created_at: $timestamp, status: "merged"}]')"
   run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
+  [ "$status" -eq 0 ] || { echo "no draft rows: status $status"; return 1; }
+  [ -z "$output" ] || { echo "no draft rows: output '$output'"; return 1; }
 
-# --- 12. Missing repo_root argument: exit 0, usage to stderr -----------------
-
-@test "missing repo_root argument: exit 0" {
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
 }
 
-# --- 13. Flip flows through the real ledger-update.sh chokepoint ------------
+# --- Flip flows through the real ledger-update.sh chokepoint ----------------
 
 @test "the flip is rejected if ledger-update.sh's status guard would reject it" {
   # Sanity: ledger-update.sh itself accepts "abandoned" directly (the
@@ -210,9 +139,11 @@ status_of() {
   [ "$(status_of SPEC-014)" = "abandoned" ]
 }
 
-# --- 14. Orphan lock is removed when a ghost row is abandoned ---------------
+# --- Orphan lock: removed on abandon, and never rescues a ghost -------------
 
-@test "removes the orphan .lock file when a ghost draft is abandoned" {
+@test "a ghost draft is abandoned and its orphan .lock file removed; a lone lock never rescues it" {
+  # A dead session's lock is the ghost shape: the emptiness guard has no
+  # `.lock` check, so a locked ghost is abandoned like a lock-free one.
   seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-015", created_at: $timestamp, status: "draft"}]')"
   echo '{"spec_id":"SPEC-015"}' > "$SANDBOX/.gaia/local/cache/spec-session-SPEC-015.lock"
   run bash "$SCRIPT" "$SANDBOX"
@@ -221,21 +152,9 @@ status_of() {
   [ ! -e "$SANDBOX/.gaia/local/cache/spec-session-SPEC-015.lock" ]
 }
 
-# --- 15. A lone lock never rescues a ghost (negative guard) -----------------
+# --- A row id that would climb out of the specs folder is skipped ------------
 
-@test "a lone .lock file does not rescue an otherwise-empty ghost draft from abandonment" {
-  # A dead session's lock is precisely the ghost shape; the emptiness guard
-  # never grows a fourth (`.lock`) check, so this row is abandoned exactly
-  # like a lock-free ghost would be.
-  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-016", created_at: $timestamp, status: "draft"}]')"
-  echo '{"spec_id":"SPEC-016"}' > "$SANDBOX/.gaia/local/cache/spec-session-SPEC-016.lock"
-  run bash "$SCRIPT" "$SANDBOX"
-  [ "$status" -eq 0 ]
-  [ "$(status_of SPEC-016)" = "abandoned" ]
-}
-
-# --- 16. A row id that would climb out of the specs folder is skipped --------
-
+# bats test_tags=protected
 @test "a traversal-shaped row id is skipped with a stderr line and never flipped" {
   seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-001/../../x", created_at: $timestamp, status: "draft"}]')"
   run --separate-stderr bash "$SCRIPT" "$SANDBOX"
@@ -245,7 +164,7 @@ status_of() {
   [ "$(status_of 'SPEC-001/../../x')" = "draft" ]
 }
 
-# --- 17. Not ready: exit 3, the move line, nothing changed -------------------
+# --- Not ready: exit 3, the move line, nothing changed -----------------------
 
 @test "a not-ready notebook exits 3 with the move line and changes nothing" {
   seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-017", created_at: $timestamp, status: "draft"}]')"

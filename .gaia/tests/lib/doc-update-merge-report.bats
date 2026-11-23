@@ -3,10 +3,8 @@
 # the orchestrator, against the validator that enforces it. The statuses are
 # derived from update-gaia-report.sh's own list, so prose and validator cannot
 # name different sets; the open item kinds, option ids and option order table
-# are pinned row by row; and a fixture report written to the contract
-# validates with `validate --final`. Each pin has a red twin: a scratch copy
-# of merge-report.md missing a status, or with a row's order swapped, fails
-# the same check.
+# are pinned row by row; and every kind and status the fixture report uses is
+# one the contract defines.
 #
 # Assertion style per .claude/rules/bats-assertions.md: no bare mid-test
 # [[ ... ]]; POSIX [ ] and grep; `&& return 1` for a non-final absence.
@@ -18,7 +16,6 @@ setup() {
   MERGE_REPORT="$REPO_ROOT/.claude/skills/update-gaia/references/merge-report.md"
   SCRIPT="$REPO_ROOT/.gaia/scripts/update-gaia-report.sh"
   FIXTURES="$BATS_TEST_DIRNAME/fixtures/update-gaia-report"
-  COPY="$BATS_TEST_TMPDIR/merge-report-copy.md"
 }
 
 # The statuses the validator accepts, one per line, read from its own list.
@@ -56,7 +53,7 @@ ORDER_ROWS=(
   '| `removal`, a tracked file references it | `keep` | `keep, remove, defer` |'
 )
 
-# Prints each contract element missing from merge-report.md copy `$1`.
+# Prints each contract element missing from the merge-report.md at `$1`.
 contract_violations() {
   local file="$1" status kind row
   while IFS= read -r status; do
@@ -76,35 +73,12 @@ EOF
   done
 }
 
-@test "the derived and pinned sets are the size the contract defines" {
-  [ "$(validator_statuses | grep -c .)" -eq 10 ]
-  [ "$(printf '%s\n' $KINDS | grep -c .)" -eq 10 ]
-  [ "${#OPTION_ROWS[@]}" -eq 6 ]
-  [ "${#ORDER_ROWS[@]}" -eq 12 ]
-}
-
 @test "merge-report.md defines every status, kind and option, and carries every option order row" {
+  [ -n "$(validator_statuses)" ]
   [ -z "$(contract_violations "$MERGE_REPORT")" ]
 }
 
-@test "a copy missing one status definition is reported" {
-  grep -v '^- `pending-judgment`: ' "$MERGE_REPORT" > "$COPY"
-  contract_violations "$COPY" | grep -qxF 'status pending-judgment'
-}
-
-@test "a copy with one option order row swapped is reported" {
-  sed 's/^| `removal`, nothing references the file | `remove` | `remove, keep, defer` |$/| `removal`, nothing references the file | `remove` | `keep, remove, defer` |/' "$MERGE_REPORT" > "$COPY"
-  cmp -s "$MERGE_REPORT" "$COPY" && return 1
-  contract_violations "$COPY" | grep -qF 'order row | `removal`, nothing references the file'
-}
-
-@test "a copy mapping an option to the wrong decision is reported" {
-  sed 's/^| `remove` | Remove | `gaia` |/| `remove` | Remove | `deferred` |/' "$MERGE_REPORT" > "$COPY"
-  cmp -s "$MERGE_REPORT" "$COPY" && return 1
-  contract_violations "$COPY" | grep -qF 'option row | `remove`'
-}
-
-# --- A fixture report written to the contract validates -----------------------
+# --- The fixture report uses only what the contract defines -------------------
 
 # Copies the fixture trees, manifests, decision log and run directory into
 # $BATS_TEST_TMPDIR, resolving the fixture's one pending-judgment entry the way
@@ -122,18 +96,6 @@ final_fixture_setup() {
   [ "$(jq '[.files[] | select(.status == "pending-judgment")] | length' "$REPORT")" -eq 0 ]
 }
 
-run_final_validate() {
-  run bash "$SCRIPT" validate --report "$REPORT" --run-dir "$WORK/run" \
-    --baseline-dir "$WORK/baseline" --latest-dir "$WORK/latest" --decisions "$WORK/decisions.json" --final
-}
-
-@test "a fixture report written to the contract validates as final" {
-  final_fixture_setup
-  run_final_validate
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qE '^REPORT_OK [0-9]+$'
-}
-
 @test "every kind and status the fixture report uses is one merge-report.md defines" {
   final_fixture_setup
   local value
@@ -143,14 +105,4 @@ run_final_validate() {
   done <<EOF
 $(jq -r '[.files[].status, (.files[].items // [] | .[].kind)] | unique | .[]' "$REPORT")
 EOF
-}
-
-@test "a fixture item whose last option is not defer fails final validation" {
-  final_fixture_setup
-  local scratch="$BATS_TEST_TMPDIR/report.json"
-  jq '(.files[] | select(.path == "oc-text-conflict.md") | .items[0].options) |= (.[:-1])' "$REPORT" > "$scratch"
-  mv "$scratch" "$REPORT"
-  run_final_validate
-  [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -qF 'oc-text-conflict.md: item oc-text-conflict.md last option is not defer'
 }

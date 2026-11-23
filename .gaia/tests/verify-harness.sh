@@ -12,7 +12,11 @@
 #   bash .gaia/tests/verify-harness.sh push <sha>...   # the pre-push hook's entry: distribution checks only
 #
 # Checks, in order, each run with the tree under check as its working
-# directory: shell-lint (branch, round), line-limit (branch, round: the
+# directory: shell-lint (branch, round: its shellcheck and bash-3.2 parse
+# passes over the round's delta only, or the whole tree when the delta changes
+# an input of the gate's own verdict; the folded guards its header names over
+# the same delta, the rest over the whole tree),
+# line-limit (branch, round: the
 # fitness lint's harness line-limit rule alone), the release-scrub leak check
 # (a bare build-staging into an empty directory), 01-files-present, 02-marker-strip,
 # then the bats tests carrying the whole-tree mark (branch) and the suites the
@@ -230,7 +234,7 @@ rsync_missing=0
 bats_missing=0
 if [ "$mode" != push ] && tool_missing shellcheck; then
   shellcheck_missing=1
-  warn_missing_tool shellcheck 'brew install shellcheck' 'shell-lint'
+  warn_missing_tool shellcheck 'brew install shellcheck' 'the shellcheck and bash-3.2 parse passes of shell-lint'
 fi
 if [ "$mode" != push ] && tool_missing node; then
   node_missing=1
@@ -318,10 +322,45 @@ else
   binary_missing=0
   verify_maintainer_binary_missing "$verified_root" && binary_missing=1
 
+  # The round's delta: shell-lint lints only its files, and the change
+  # selector picks suites over it.
+  round_delta_arguments=()
+  verify_round_delta_file=""
+  if [ "$mode" = round ]; then
+    if [ -n "$(verify_git diff --name-only HEAD -- 2>/dev/null)" ]; then
+      round_delta_arguments=(HEAD)
+      delta_description="uncommitted tracked changes against HEAD"
+    elif verify_git rev-parse -q --verify 'HEAD~1^{commit}' >/dev/null 2>&1; then
+      round_delta_arguments=(HEAD~1 HEAD)
+      delta_description="the HEAD commit"
+    else
+      round_delta_arguments=("$verify_empty_tree_object" HEAD)
+      delta_description="the root commit"
+    fi
+    verify_round_delta_file="$run_temporary_directory/round-delta"
+    if ! verify_git -c core.quotepath=false diff --name-only --no-renames -z \
+      ${round_delta_arguments[@]+"${round_delta_arguments[@]}"} -- >"$verify_round_delta_file" 2>/dev/null; then
+      # Fail wide: an unread delta lints the whole tree rather than nothing.
+      printf 'WARN  the round delta could not be read; shell-lint covers the whole tree\n'
+      verify_round_delta_file=""
+      : >"$run_temporary_directory/round-delta"
+    elif verify_delta_names_shell_lint_input "$verify_round_delta_file"; then
+      printf 'NOTE  the round delta changes an input of shell-lint'\''s own verdict; shell-lint covers the whole tree\n'
+      verify_round_delta_file=""
+    fi
+    delta_path_count=0
+    while IFS= read -r -d '' delta_path; do
+      delta_path_count=$((delta_path_count + 1))
+    done <"$run_temporary_directory/round-delta"
+    printf 'DELTA  %s: %s path(s)\n' "$delta_description" "$delta_path_count"
+  fi
+
+  # Without shellcheck the linter passes cannot run, but the folded guards
+  # (the protected-test gate among them) need no linter and still run.
+  verify_shell_lint_guards_only="$shellcheck_missing"
+  verify_run_check shell-lint "$verified_root" "$merge_base" "" ""
   if [ "$shellcheck_missing" -eq 1 ]; then
-    verify_skip shell-lint "shellcheck not found"
-  else
-    verify_run_check shell-lint "$verified_root" "$merge_base" "" ""
+    verify_skip "shell-lint shellcheck and bash-3.2 parse passes" "shellcheck not found"
   fi
   if [ "$node_missing" -eq 1 ]; then
     verify_skip line-limit "node not found"
@@ -351,21 +390,7 @@ else
       selected_skip_reason="no merge base with refs/remotes/origin/main (run git fetch origin main)"
     fi
   else
-    if [ -n "$(verify_git diff --name-only HEAD -- 2>/dev/null)" ]; then
-      selector_arguments=(HEAD)
-      delta_description="uncommitted tracked changes against HEAD"
-    elif verify_git rev-parse -q --verify 'HEAD~1^{commit}' >/dev/null 2>&1; then
-      selector_arguments=(HEAD~1 HEAD)
-      delta_description="the HEAD commit"
-    else
-      selector_arguments=("$verify_empty_tree_object" HEAD)
-      delta_description="the root commit"
-    fi
-    delta_path_count=0
-    while IFS= read -r -d '' delta_path; do
-      delta_path_count=$((delta_path_count + 1))
-    done < <(verify_git -c core.quotepath=false diff --name-only --no-renames -z ${selector_arguments[@]+"${selector_arguments[@]}"} -- 2>/dev/null)
-    printf 'DELTA  %s: %s path(s)\n' "$delta_description" "$delta_path_count"
+    selector_arguments=(${round_delta_arguments[@]+"${round_delta_arguments[@]}"})
     run_whole_tree=0
     whole_tree_skip_reason="round mode leaves the whole-tree suites to branch mode and CI"
   fi

@@ -142,69 +142,80 @@ describe('update merge-package verdict table', () => {
 });
 
 describe('update merge-package recommendations', () => {
-  test('a dependency re-pin below GAIA recommends the higher GAIA range', () => {
-    const report = merge({
-      baseline: {dependencies: {react: '^5.0.0'}},
-      current: {dependencies: {react: '^5.1.0'}},
-      latest: {dependencies: {react: '^5.2.0'}},
-    });
+  test.each(
+    (
+      [
+        {
+          conflict: {
+            recommendation: {option: 'higher', side: 'gaia', value: '^5.2.0'},
+            versionValued: true,
+          },
+          files: {
+            baseline: {dependencies: {react: '^5.0.0'}},
+            current: {dependencies: {react: '^5.1.0'}},
+            latest: {dependencies: {react: '^5.2.0'}},
+          },
+          name: 'a dependency re-pin below GAIA recommends the higher GAIA range',
+        },
+        {
+          conflict: {recommendation: {option: 'higher', side: 'adopter'}},
+          files: {
+            baseline: {devDependencies: {vite: '^5.0.0'}},
+            current: {devDependencies: {vite: '~6.0.0'}},
+            latest: {devDependencies: {vite: '^5.9.0'}},
+          },
+          name: 'an adopter major ahead of GAIA recommends the adopter side',
+        },
+        {
+          conflict: {
+            recommendation: {option: 'higher', side: 'gaia'},
+            versionValued: true,
+          },
+          files: {
+            baseline: {engines: {node: '>=20'}},
+            current: {engines: {node: '>=22'}},
+            latest: {engines: {node: '>=24'}},
+          },
+          name: 'an engines conflict is version valued',
+        },
+        {
+          conflict: {
+            recommendation: {
+              option: 'higher',
+              side: 'gaia',
+              value: 'pnpm@11.3.0',
+            },
+            versionValued: true,
+          },
+          files: {
+            baseline: {packageManager: 'pnpm@11.0.0'},
+            current: {packageManager: 'pnpm@11.2.0+sha512.abc'},
+            latest: {packageManager: 'pnpm@11.3.0'},
+          },
+          name: 'a packageManager conflict compares versions without the hash',
+        },
+        {
+          conflict: {
+            recommendation: {option: 'keep', value: 'mine'},
+            versionValued: false,
+          },
+          files: {
+            baseline: {scripts: {build: 'a'}},
+            current: {scripts: {build: 'mine'}},
+            latest: {scripts: {build: 'b'}},
+          },
+          name: 'a scripts conflict is not version valued and recommends keep',
+        },
+      ] satisfies {
+        conflict: object;
+        files: Record<Which, unknown>;
+        name: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {conflict, files}) => {
+    const report = merge(files);
 
-    expect(report.conflicts[0]).toMatchObject({
-      recommendation: {option: 'higher', side: 'gaia', value: '^5.2.0'},
-      versionValued: true,
-    });
-  });
-
-  test('an adopter major ahead of GAIA recommends the adopter side', () => {
-    const report = merge({
-      baseline: {devDependencies: {vite: '^5.0.0'}},
-      current: {devDependencies: {vite: '~6.0.0'}},
-      latest: {devDependencies: {vite: '^5.9.0'}},
-    });
-
-    expect(report.conflicts[0]?.recommendation).toMatchObject({
-      option: 'higher',
-      side: 'adopter',
-    });
-  });
-
-  test('an engines conflict is version valued', () => {
-    const report = merge({
-      baseline: {engines: {node: '>=20'}},
-      current: {engines: {node: '>=22'}},
-      latest: {engines: {node: '>=24'}},
-    });
-
-    expect(report.conflicts[0]).toMatchObject({
-      recommendation: {option: 'higher', side: 'gaia'},
-      versionValued: true,
-    });
-  });
-
-  test('a packageManager conflict compares versions without the hash', () => {
-    const report = merge({
-      baseline: {packageManager: 'pnpm@11.0.0'},
-      current: {packageManager: 'pnpm@11.2.0+sha512.abc'},
-      latest: {packageManager: 'pnpm@11.3.0'},
-    });
-
-    expect(report.conflicts[0]).toMatchObject({
-      recommendation: {option: 'higher', side: 'gaia', value: 'pnpm@11.3.0'},
-      versionValued: true,
-    });
-  });
-
-  test('a scripts conflict is not version valued and recommends keep', () => {
-    const report = merge({
-      baseline: {scripts: {build: 'a'}},
-      current: {scripts: {build: 'mine'}},
-      latest: {scripts: {build: 'b'}},
-    });
-
-    expect(report.conflicts[0]).toMatchObject({
-      recommendation: {option: 'keep', value: 'mine'},
-      versionValued: false,
-    });
+    expect(report.conflicts[0]).toMatchObject(conflict);
     expect(report.conflicts[0]?.recommendation?.reason).not.toBe('');
   });
 });
@@ -253,44 +264,52 @@ describe('update merge-package deferred baselines', () => {
       section: 'devDependencies',
     });
   });
-
-  test('a missing deferred file exits non-zero with a structured error', () => {
-    for (const [name, contents] of Object.entries(deferredFixture()))
-      write(name, contents);
-
-    const exit = run(
-      argvFor([
-        '--deferred-baseline',
-        `devDependencies.vite=${path.join(root, 'absent.json')}`,
-      ])
-    );
-
-    expect(exit).not.toBe(0);
-    expect(errors.join('')).toContain('package_file_missing');
-  });
 });
 
 describe('update merge-package errors', () => {
-  test('a missing file exits non-zero with a structured error', () => {
-    write('baseline', {});
-    write('latest', {});
+  test.each(
+    (
+      [
+        {
+          argv: () =>
+            argvFor([
+              '--deferred-baseline',
+              `devDependencies.vite=${path.join(root, 'absent.json')}`,
+            ]),
+          code: 'package_file_missing',
+          files: deferredFixture(),
+          name: 'a missing deferred file exits non-zero with a structured error',
+        },
+        {
+          argv: () => argvFor(),
+          code: 'package_file_missing',
+          files: {baseline: {}, latest: {}},
+          name: 'a missing file exits non-zero with a structured error',
+        },
+        {
+          argv: () => argvFor(),
+          code: 'package_parse_failed',
+          files: {baseline: {}, current: '{ not json', latest: {}},
+          name: 'invalid JSON exits non-zero with a structured error',
+        },
+        {
+          argv: () => ['--json'],
+          code: 'invalid_arguments',
+          files: {},
+          name: 'a missing required flag exits non-zero',
+        },
+      ] satisfies {
+        argv: () => string[];
+        code: string;
+        files: Partial<Record<'deferred' | Which, unknown>>;
+        name: string;
+      }[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {argv, code, files}) => {
+    for (const [name, contents] of Object.entries(files)) write(name, contents);
 
-    expect(run(argvFor())).not.toBe(0);
-    expect(errors.join('')).toContain('package_file_missing');
-  });
-
-  test('invalid JSON exits non-zero with a structured error', () => {
-    write('baseline', {});
-    write('latest', {});
-    write('current', '{ not json');
-
-    expect(run(argvFor())).not.toBe(0);
-    expect(errors.join('')).toContain('package_parse_failed');
-  });
-
-  test('a missing required flag exits non-zero', () => {
-    expect(run(['--json'])).not.toBe(0);
-    expect(errors.join('')).toContain('invalid_arguments');
+    expect(run(argv())).not.toBe(0);
+    expect(errors.join('')).toContain(code);
   });
 
   test('prints a human summary without --json', () => {

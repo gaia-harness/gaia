@@ -51,16 +51,38 @@ setup_file() {
       cp "$LSB_TEMPLATE_ROOT/$flavor/slug" "$BATS_TEST_TMPDIR/slug"
     ) || return 1
   done
-  # The malformed-reply refusals persist the reply but never a marker, so they
-  # share one prepared sandbox per route kind instead of copying one per case.
-  # Each of those cases still asserts that no marker exists, so a marker left
-  # by an earlier case fails every later one.
+  # Two owned files routed light, for the replies that must name both.
+  (
+    BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/prepared-two-files"
+    mkdir -p "$BATS_TEST_TMPDIR"
+    lsb_init
+    lsb_full_clearance code-audit-frontend
+    lsb_commit apps/web/app/one.md "one"
+    lsb_commit apps/web/app/two.md "two"
+    routed="$(bash "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" --root "$LSB_ROOT" --member code-audit-frontend)"
+    [ "$routed" = "$(printf 'light\tlight-eligible')" ] || { printf 'two-file router: %s\n' "$routed" >&2; exit 1; }
+    cp "$LSB_TEMPLATE_ROOT/plain/slug" "$BATS_TEST_TMPDIR/slug"
+  ) || return 1
+  # Owned lines refused with a major on line 2 and a minor on line 4; each
+  # case then commits its own repair and routes it.
+  (
+    BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/prepared-refused"
+    mkdir -p "$BATS_TEST_TMPDIR"
+    lsb_init
+    lsb_commit_lines apps/web/app/notes.md 5 line
+    lsb_refuse_with_findings code-audit-frontend "[$(lsb_finding apps/web/app/notes.md 2 major false),$(lsb_finding apps/web/app/notes.md 4 minor false)]"
+    cp "$LSB_TEMPLATE_ROOT/plain/slug" "$BATS_TEST_TMPDIR/slug"
+  ) || return 1
+  # The refusal cases persist the reply but never a marker, so they share one
+  # prepared sandbox per route kind instead of copying one per case. Each case
+  # asserts that no marker exists, so a marker left by an earlier case fails
+  # every later one.
   local shared
-  for shared in light quick; do
+  for shared in light quick two-files; do
     (
       BATS_TEST_TMPDIR="$BATS_FILE_TMPDIR/shared-$shared"
       mkdir -p "$BATS_TEST_TMPDIR"
-      if [ "$shared" = quick ]; then lsb_from_template prepared-quick-plain; else lsb_from_template prepared-plain; fi
+      if [ "$shared" = quick ]; then lsb_from_template prepared-quick-plain; else lsb_from_template "prepared-${shared/light/plain}"; fi
     ) || return 1
   done
 }
@@ -168,6 +190,38 @@ use_shared_quick() {
   use_shared_sandbox quick
 }
 
+use_shared_two_files() {
+  use_shared_sandbox two-files
+}
+
+# prepare_refusal_anchored [file-body]: the refused template, then the repair
+# (every line rewritten, or the given file body), routed light.
+prepare_refusal_anchored() {
+  lsb_from_template prepared-refused || return 1
+  if [ -n "${1:-}" ]; then
+    lsb_commit apps/web/app/notes.md "$1"
+  else
+    lsb_commit_lines apps/web/app/notes.md 5 fixed
+  fi
+  lsb_route "$FRONTEND"
+  [ "$output" = "$(printf 'light\trefusal-anchored')" ] || { printf 'router: %s\n' "$output" >&2; return 1; }
+}
+
+# refuse_reply <case> <reason>: mark the reply now in the reply file; it must
+# print full <reason> and write no marker. <case> names the row on failure.
+refuse_reply() {
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  { expect_full "$2" && assert_no_marker; } || { printf 'case: %s\n' "$1" >&2; return 1; }
+}
+
+# refuse_edited <case> <reason> <jq-filter>: refuse_reply over a clear reply
+# rewritten through the filter.
+refuse_edited() {
+  clear_reply_to_file
+  reply_edit "$3"
+  refuse_reply "$1" "$2"
+}
+
 # assert_quick_refused <reason>: the last mark printed full <reason>, left no
 # marker, and the router would still send the same delta to the reviewer, so
 # the refusal came from the reply and not from a changed route.
@@ -252,52 +306,21 @@ light_sidecar_files() {
 }
 
 # bats test_tags=whole-tree
-@test "a reply named by file path clears exactly like the same reply on stdin" {
+@test "reply input: a missing, unreadable, empty or non-clear reply is refused with no stdin fallback, then the reply named by file clears and persists byte for byte" {
   prepare_light
   clear_reply_to_file
-  lsb_mark_file "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  [ "$(jq -r '[.provenance, .review, .digest, .tree] | join(" ")' "$(marker_path)")" = "earned light $(lsb_member_digest "$FRONTEND") $LSB_TREE" ]
-  [ "$(light_sidecar_files | wc -l | tr -d ' ')" = "1" ]
-  cmp -s "$REPLY_FILE" "$(verdict_path)"
-}
-
-# bats test_tags=whole-tree
-@test "a reply file that is not clear is refused by the same checks as stdin" {
-  prepare_light
-  clear_reply_to_file
-  reply_edit '.files[0].verdict = "escalate"'
-  lsb_mark_file "$FRONTEND" "$REPLY_FILE"
-  expect_full escalate
+  lsb_mark "$FRONTEND" ""
+  expect_full verdict-noop
   assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a missing reply file prints full verdict-noop and writes no marker" {
-  prepare_light
   lsb_mark_file "$FRONTEND" "$BATS_TEST_TMPDIR/no-such-reply.json"
   expect_full verdict-noop
   assert_no_marker
   [ -z "$(find "$(light_directory)" -name '.verdict.*')" ]
-}
-
-# bats test_tags=whole-tree
-@test "a missing reply file never falls back to reading the reply from stdin" {
-  prepare_light
-  clear_reply_to_file
+  # A clear reply on stdin does not rescue a missing named file.
   run bash -c 'bash "$1" --root "$2" --member "$3" --verdict "$4" <"$5"' _ \
     "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" "$LSB_ROOT" "$FRONTEND" "$BATS_TEST_TMPDIR/no-such-reply.json" "$REPLY_FILE"
   expect_full verdict-noop
   assert_no_marker
-  # Control: the same reply on stdin through the stdin form clears.
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-}
-
-# bats test_tags=whole-tree
-@test "an unreadable reply file prints full verdict-noop and writes no marker" {
-  prepare_light
-  clear_reply_to_file
   # A directory cannot be read as a reply on any platform or user, root included.
   mkdir "$BATS_TEST_TMPDIR/reply-directory"
   lsb_mark_file "$FRONTEND" "$BATS_TEST_TMPDIR/reply-directory"
@@ -311,161 +334,122 @@ light_sidecar_files() {
     expect_full verdict-noop
     assert_no_marker
   fi
-  # Control: the same reply, readable, clears.
+  lsb_escalate_reply "$FRONTEND" >"$BATS_TEST_TMPDIR/escalate-reply.json"
+  lsb_mark_file "$FRONTEND" "$BATS_TEST_TMPDIR/escalate-reply.json"
+  expect_full escalate
+  assert_no_marker
+  # The clear reply by file path, with the stricter merge-base keys that a
+  # post-clearance record ignores, and a trailing newline kept as written.
+  reply_edit '. + {extra: 1} | .reason = "one minor nit" | .files[0].extra = 1'
+  printf '\n' >>"$REPLY_FILE"
+  [ "$(jq -r .anchor_kind "$(record_path)")" = "full" ]
   lsb_mark_file "$FRONTEND" "$REPLY_FILE"
   expect_line "light-cleared"
-}
-
-# bats test_tags=whole-tree
-@test "the reply is persisted byte for byte to the keyed verdict path" {
-  prepare_light
-  clear_reply_to_file
-  printf '\n' >>"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
+  [ "$(jq -r '[.provenance, .review, .digest, .tree] | join(" ")' "$(marker_path)")" = "earned light $(lsb_member_digest "$FRONTEND") $LSB_TREE" ]
+  [ "$(light_sidecar_files | wc -l | tr -d ' ')" = "1" ]
   cmp -s "$REPLY_FILE" "$(verdict_path)"
 }
 
 # bats test_tags=whole-tree
-@test "an empty reply then a clear reply: verdict-noop, then light-cleared" {
-  prepare_light
-  lsb_mark "$FRONTEND" ""
-  expect_full verdict-noop
-  assert_no_marker
+@test "post-clearance reply validation: each malformed or mismatched reply prints full with its reason and writes no marker, and the clear twin clears" {
+  use_shared_light
   clear_reply_to_file
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-}
-
-# --- escalate ---------------------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "an escalate verdict prints full escalate, writes no marker and one escalate ledger line" {
-  prepare_light
-  lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full escalate
-  assert_no_marker
-  [ "$(wc -l <"$(ledger_path)" | tr -d ' ')" = "1" ]
-  [ "$(jq -r .verdict "$(ledger_path)")" = "escalate" ]
-}
-
-# bats test_tags=whole-tree
-@test "one escalated file among clear files escalates the whole review" {
-  lsb_init
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit apps/web/app/one.md "one"
-  lsb_commit apps/web/app/two.md "two"
-  lsb_route "$FRONTEND"
-  expect_line "$(printf 'light\tlight-eligible')"
+  : >"$REPLY_FILE"
+  refuse_reply "empty reply" verdict-noop
+  printf 'looks fine to me\n' >"$REPLY_FILE"
+  refuse_reply "non-JSON reply" verdict-noop
+  cmp -s "$REPLY_FILE" "$(verdict_path)"
+  printf '[{"path":"apps/web/app/notes.md","verdict":"clear"}]' >"$REPLY_FILE"
+  refuse_reply "JSON array reply" verdict-noop
+  refuse_edited "no files" verdict-noop 'del(.files)'
+  refuse_edited "unknown verdict" verdict-malformed '.verdict = "approve"'
+  refuse_edited "unknown per-file verdict" verdict-malformed '.files[0].verdict = "approve"'
+  refuse_edited "wrong schema number" verdict-malformed '.schema = 2'
+  refuse_edited "path the route record does not list" verdict-mismatch '.files[0].path = "apps/web/app/other.md"'
+  refuse_edited "wrong tree" verdict-mismatch '.tree = "0000000000000000000000000000000000000001"'
+  refuse_edited "wrong member" verdict-mismatch '.member = "code-audit-maintainer-shell"'
+  use_shared_two_files
   clear_reply_to_file
   [ "$(jq '.files | length' "$REPLY_FILE")" = "2" ]
-  reply_edit '.files[0].verdict = "escalate"'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full escalate
-  assert_no_marker
-}
-
-# --- malformed and mismatched replies, each with the clear twin above -----------
-
-# bats test_tags=whole-tree
-@test "non-JSON stdin prints full verdict-noop and writes no marker" {
-  use_shared_light
-  printf 'looks fine to me\n' >"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-noop
-  assert_no_marker
-  cmp -s "$REPLY_FILE" "$(verdict_path)"
-}
-
-# bats test_tags=whole-tree
-@test "JSON without files prints full verdict-noop" {
-  use_shared_light
+  refuse_edited "one escalated file among clear files" escalate '.files[0].verdict = "escalate"'
+  refuse_edited "files array one short" verdict-noop '.files |= .[0:1]'
+  refuse_edited "duplicated path in place of a routed one" verdict-mismatch '.files[1].path = .files[0].path'
   clear_reply_to_file
-  reply_edit 'del(.files)'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-noop
-  assert_no_marker
+  expect_line "light-cleared"
 }
 
 # bats test_tags=whole-tree
-@test "an unknown verdict value prints full verdict-malformed" {
-  use_shared_light
+@test "ledger: each outcome after the reply appends one line in the documented shape (failed, clear, escalate)" {
+  prepare_light
   clear_reply_to_file
   reply_edit '.verdict = "approve"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_full verdict-malformed
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "an unknown per-file verdict value prints full verdict-malformed" {
-  use_shared_light
+  [ "$(wc -l <"$(ledger_path)" | tr -d ' ')" = "1" ]
+  [ "$(jq -r '[.member, .verdict, .digest, .tree] | join(" ")' "$(ledger_path)")" = "$FRONTEND failed $(lsb_member_digest "$FRONTEND") $LSB_TREE" ]
   clear_reply_to_file
-  reply_edit '.files[0].verdict = "approve"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-malformed
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a wrong schema number prints full verdict-malformed" {
-  use_shared_light
-  clear_reply_to_file
-  reply_edit '.schema = 2'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-malformed
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a reply that is a JSON array prints full verdict-noop" {
-  use_shared_light
-  printf '[{"path":"apps/web/app/notes.md","verdict":"clear"}]' >"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-noop
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a files array one short prints full verdict-noop (the expected count catches it)" {
-  lsb_init
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit apps/web/app/one.md "one"
-  lsb_commit apps/web/app/two.md "two"
+  expect_line "light-cleared"
+  lsb_commit apps/web/app/more.md "more"
   lsb_route "$FRONTEND"
-  clear_reply_to_file
-  reply_edit '.files |= .[0:1]'
+  expect_line "$(printf 'light\tlight-eligible')"
+  lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-noop
-  assert_no_marker
+  expect_full escalate
+  [ "$(wc -l <"$(ledger_path)" | tr -d ' ')" = "3" ]
+  [ "$(jq -c '[keys[]]' "$(ledger_path)" | sort -u)" = '["anchor_kind","at","digest","marked_at","member","reviewer_dispatched_at","reviewer_duration_ms","tree","verdict"]' ]
+  [ "$(jq -r .verdict "$(ledger_path)" | paste -sd, -)" = "failed,clear,escalate" ]
+  [ "$(jq -c '[.anchor_kind, .reviewer_duration_ms]' "$(ledger_path)" | sort -u)" = '["full",null]' ]
+  jq -e '.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")' "$(ledger_path)" >/dev/null
 }
 
 # bats test_tags=whole-tree
-@test "a file path the route record does not list prints full verdict-mismatch" {
-  use_shared_light
+@test "route record, fresh route and refusal checks: each prints full with its reason and writes no marker" {
+  prepare_light
   clear_reply_to_file
-  reply_edit '.files[0].path = "apps/web/app/other.md"'
+  local record original="$BATS_TEST_TMPDIR/record.original"
+  record="$(record_path)"
+  cp "$record" "$original"
+  rm "$record"
+  refuse_reply "absent route record" no-route-record
+  printf 'not json' >"$record"
+  refuse_reply "unparseable route record" no-route-record
+  jq -c '.digest = "1111111111111111111111111111111111111111111111111111111111111111"' "$original" >"$record"
+  refuse_reply "route record naming another digest" route-stale
+  jq -c '.tree = "0000000000000000000000000000000000000001"' "$original" >"$record"
+  refuse_reply "route record naming another tree" route-stale
+  jq -c '.route = "full"' "$original" >"$record"
+  refuse_reply "route record whose route is full" route-not-light
+  cp "$original" "$record"
+  printf 'dirty\n' >>"$LSB_ROOT/apps/web/app/notes.md"
+  lsb_route "$FRONTEND" --check
+  expect_line "$(printf 'full\tdirty-tree')"
+  refuse_reply "record stored light that the fresh router calls full" recheck-full
+  lsb_git checkout -q -- apps/web/app/notes.md
+  # HEAD moving during the review by an owned change.
+  lsb_commit apps/web/app/later.md "committed while the reviewer ran"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-mismatch
+  [ "$status" -eq 0 ]
+  case "$output" in
+    "$(printf 'full\tno-route-record')" | "$(printf 'full\troute-stale')") ;;
+    *) printf 'unexpected: %s\n' "$output" >&2; return 1 ;;
+  esac
   assert_no_marker
+  lsb_git reset -q --hard HEAD~1
+  _lsb_set_head
+  local refusal before
+  # A refusal whose tree is no commit in the walk range is invisible to the
+  # router, so only this script's own check can see it.
+  refusal="$(lsb_marker_json "$FRONTEND" refused "" "0000000000000000000000000000000000000001" "$(awk 'NF { print; exit }' "$LSB_ROOT/.gaia/VERSION" | tr -d '[:space:]')" "$(lsb_member_digest "$FRONTEND")")"
+  [ -f "$refusal" ]
+  before="$(cksum <"$refusal")"
+  refuse_reply "same-digest refusal" refusal-present
+  [ -f "$refusal" ]
+  [ "$(cksum <"$refusal")" = "$before" ]
 }
 
-# bats test_tags=whole-tree
-@test "a duplicated file path in place of a routed one prints full verdict-mismatch" {
-  lsb_init
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit apps/web/app/one.md "one"
-  lsb_commit apps/web/app/two.md "two"
-  lsb_route "$FRONTEND"
-  clear_reply_to_file
-  reply_edit '.files[1].path = .files[0].path'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-mismatch
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "a wrong digest in the verdict prints full verdict-mismatch" {
   use_shared_light
   clear_reply_to_file
@@ -475,106 +459,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
-# bats test_tags=whole-tree
-@test "a wrong tree in the verdict prints full verdict-mismatch" {
-  use_shared_light
-  clear_reply_to_file
-  reply_edit '.tree = "0000000000000000000000000000000000000001"'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-mismatch
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a wrong member in the verdict prints full verdict-mismatch" {
-  use_shared_light
-  clear_reply_to_file
-  reply_edit '.member = "code-audit-maintainer-shell"'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-mismatch
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a failure after the reply was persisted appends one failed ledger line" {
-  prepare_light
-  clear_reply_to_file
-  reply_edit '.verdict = "approve"'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-malformed
-  [ "$(wc -l <"$(ledger_path)" | tr -d ' ')" = "1" ]
-  [ "$(jq -r '[.member, .verdict, .digest, .tree] | join(" ")' "$(ledger_path)")" = "$FRONTEND failed $(lsb_member_digest "$FRONTEND") $LSB_TREE" ]
-}
-
-# --- the route record -------------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "an absent route record prints full no-route-record" {
-  lsb_init
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit apps/web/app/notes.md "one line"
-  printf '{}' >"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full no-route-record
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "an unparseable route record prints full no-route-record" {
-  prepare_light
-  clear_reply_to_file
-  printf 'not json' >"$(record_path)"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full no-route-record
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a route record naming another digest prints full route-stale" {
-  prepare_light
-  clear_reply_to_file
-  jq -c '.digest = "1111111111111111111111111111111111111111111111111111111111111111"' "$(record_path)" >"$BATS_TEST_TMPDIR/record.new"
-  mv "$BATS_TEST_TMPDIR/record.new" "$(record_path)"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full route-stale
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a route record naming another tree prints full route-stale" {
-  prepare_light
-  clear_reply_to_file
-  jq -c '.tree = "0000000000000000000000000000000000000001"' "$(record_path)" >"$BATS_TEST_TMPDIR/record.new"
-  mv "$BATS_TEST_TMPDIR/record.new" "$(record_path)"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full route-stale
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a route record whose route is full prints full route-not-light" {
-  prepare_light
-  clear_reply_to_file
-  jq -c '.route = "full"' "$(record_path)" >"$BATS_TEST_TMPDIR/record.new"
-  mv "$BATS_TEST_TMPDIR/record.new" "$(record_path)"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full route-not-light
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a record stored light that the fresh router now calls full prints full recheck-full" {
-  prepare_light
-  clear_reply_to_file
-  printf 'dirty\n' >>"$LSB_ROOT/apps/web/app/notes.md"
-  lsb_route "$FRONTEND" --check
-  expect_line "$(printf 'full\tdirty-tree')"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full recheck-full
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "a hard-full edit committed after routing never clears light" {
   prepare_light
   clear_reply_to_file
@@ -588,73 +473,24 @@ light_sidecar_files() {
   assert_no_marker
 }
 
-# bats test_tags=whole-tree
-@test "HEAD moving during the review by an owned change prints full and writes no marker" {
-  prepare_light
-  clear_reply_to_file
-  lsb_commit apps/web/app/later.md "committed while the reviewer ran"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  [ "$status" -eq 0 ]
-  case "$output" in
-    "$(printf 'full\tno-route-record')" | "$(printf 'full\troute-stale')") ;;
-    *) printf 'unexpected: %s\n' "$output" >&2; return 1 ;;
-  esac
-  assert_no_marker
-}
-
-# --- refusal ----------------------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "a same-digest refusal prints full refusal-present and is left untouched" {
-  prepare_light
-  clear_reply_to_file
-  local refusal before
-  # A refusal whose tree is no commit in the walk range is invisible to the
-  # router, so only this script's own check can see it.
-  refusal="$(lsb_marker_json "$FRONTEND" refused "" "0000000000000000000000000000000000000001" "$(awk 'NF { print; exit }' "$LSB_ROOT/.gaia/VERSION" | tr -d '[:space:]')" "$(lsb_member_digest "$FRONTEND")")"
-  [ -f "$refusal" ]
-  before="$(cksum <"$refusal")"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full refusal-present
-  assert_no_marker
-  [ -f "$refusal" ]
-  [ "$(cksum <"$refusal")" = "$before" ]
-}
-
 # --- refusal-anchored checklist ---------------------------------------------
 
-# prepare_refusal_anchored <content-after-the-refusal-file-or-empty>: five owned
-# lines refused with a major on line 2 and a minor on line 4, then the
-# repair (every line rewritten, or the given file body), routed light.
-prepare_refusal_anchored() {
-  lsb_init
-  lsb_commit_lines apps/web/app/notes.md 5 line
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding apps/web/app/notes.md 2 major false),$(lsb_finding apps/web/app/notes.md 4 minor false)]"
-  if [ -n "${1:-}" ]; then
-    lsb_commit apps/web/app/notes.md "$1"
-  else
-    lsb_commit_lines apps/web/app/notes.md 5 fixed
-  fi
-  lsb_route "$FRONTEND"
-  [ "$output" = "$(printf 'light\trefusal-anchored')" ] || { printf 'router: %s\n' "$output" >&2; return 1; }
-}
-
 # bats test_tags=whole-tree
-@test "a reply resolving every open finding over a delta that changes every cited line clears light" {
+@test "refusal-anchored checklist: resolved must name every open finding as strings and nothing else; a complete reply clears and accounts for the findings" {
   prepare_refusal_anchored
   clear_reply_to_file
   [ "$(jq -c .resolved "$REPLY_FILE")" = '["r1-1","r1-2"]' ]
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  [ "$(jq -r '[.provenance, .review, .tree] | join(" ")' "$(marker_path)")" = "earned light $LSB_TREE" ]
-}
-
-# bats test_tags=whole-tree
-@test "a refusal-anchored clear accounts for the open findings in the full sidecar and retires the ledger entries" {
-  prepare_refusal_anchored
+  refuse_edited "resolved omits an open finding" verdict-incomplete '.resolved = ["r1-1"]'
+  refuse_edited "no resolved list" verdict-incomplete 'del(.resolved)'
+  refuse_edited "resolved names a key the checklist does not hold" verdict-mismatch '.resolved = ["r1-1","r1-2","r9-9"]'
+  refuse_edited "resolved is a string" verdict-malformed '.resolved = "r1-1"'
+  refuse_edited "resolved holds a non-string" verdict-malformed '.resolved = ["r1-1", 2]'
+  lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
+  refuse_reply "escalating reply" escalate
   clear_reply_to_file
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_line "light-cleared"
+  [ "$(jq -r '[.provenance, .review, .tree] | join(" ")' "$(marker_path)")" = "earned light $LSB_TREE" ]
   local sidecar ledger
   sidecar="$(full_sidecar_files)"
   [ -f "$sidecar" ]
@@ -663,108 +499,126 @@ prepare_refusal_anchored() {
   [ -z "$ledger" ] || { printf 'ledger left behind: %s\n' "$ledger" >&2; return 1; }
 }
 
-# bats test_tags=whole-tree
-@test "a reply whose resolved list omits an open finding prints full verdict-incomplete" {
-  prepare_refusal_anchored
-  clear_reply_to_file
-  reply_edit '.resolved = ["r1-1"]'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-incomplete
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a reply with no resolved list at all prints full verdict-incomplete" {
-  prepare_refusal_anchored
-  clear_reply_to_file
-  reply_edit 'del(.resolved)'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-incomplete
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a resolved list naming a key the checklist does not hold prints full verdict-mismatch" {
-  prepare_refusal_anchored
-  clear_reply_to_file
-  reply_edit '.resolved = ["r1-1","r1-2","r9-9"]'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-mismatch
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a resolved value that is not a list of strings prints full verdict-malformed" {
-  prepare_refusal_anchored
-  clear_reply_to_file
-  reply_edit '.resolved = "r1-1"'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-malformed
-  assert_no_marker
-  reply_edit '.resolved = ["r1-1", 2]'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-malformed
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "an escalating reply on a refusal-anchored route still prints full escalate" {
-  prepare_refusal_anchored
-  lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full escalate
-  assert_no_marker
-}
-
-# bats test_tags=whole-tree
-@test "a forged all-resolved reply over a cited line the delta never touched prints full checklist-unchanged" {
-  prepare_refusal_anchored "$(printf 'line 1\nfixed 2\nline 3\nline 4\nline 5')"
+# refusal_anchored_row <row> <file-body> <clear|unchanged>: a repair of the
+# given body in a sandbox of its own, marked with the all-resolved reply.
+refusal_anchored_row() {
+  local base="$BATS_TEST_TMPDIR"
+  BATS_TEST_TMPDIR="$base/row-$1"
+  mkdir -p "$BATS_TEST_TMPDIR"
+  REPLY_FILE="$BATS_TEST_TMPDIR/reply.json"
+  prepare_refusal_anchored "$2"
   clear_reply_to_file
   [ "$(jq -c .resolved "$REPLY_FILE")" = '["r1-1","r1-2"]' ]
   lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full checklist-unchanged
-  assert_no_marker
+  if [ "$3" = clear ]; then
+    expect_line "light-cleared" || { printf 'row: %s\n' "$1" >&2; return 1; }
+  else
+    { expect_full checklist-unchanged && assert_no_marker; } || { printf 'row: %s\n' "$1" >&2; return 1; }
+  fi
+  BATS_TEST_TMPDIR="$base"
+  REPLY_FILE="$base/reply.json"
 }
 
 # bats test_tags=whole-tree
-@test "a pure insertion beside each cited line counts as touching it" {
-  prepare_refusal_anchored "$(printf 'line 1
-line 2
-inserted a
-line 3
-line 4
-inserted b
-line 5')"
+@test "refusal-anchored checklist: each cited line must be touched by the delta, and a pure insertion beside it counts as touching it" {
+  refusal_anchored_row "cited-line-never-touched" "$(printf 'line 1\nfixed 2\nline 3\nline 4\nline 5')" unchanged
+  refusal_anchored_row "insertion-beside-each-cited-line" "$(printf 'line 1\nline 2\ninserted a\nline 3\nline 4\ninserted b\nline 5')" clear
+  refusal_anchored_row "insertion-beside-one-cited-line" "$(printf 'line 1\nline 2\ninserted a\nline 3\nline 4\nline 5')" unchanged
+}
+
+# --- the merge-base (first-dispatch quick) reply contract ------------------------
+
+# bats test_tags=whole-tree
+@test "merge-base reply contract: a malformed, escalating, empty or missing reply prints full with its reason and writes no marker, and the route stays quick-eligible" {
+  use_shared_quick
   clear_reply_to_file
+  lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
+  refuse_reply "escalate reply" escalate
+  : >"$REPLY_FILE"
+  refuse_reply "empty reply" verdict-noop
+  lsb_mark_file "$FRONTEND" "$BATS_TEST_TMPDIR/no-such-reply.json"
+  { expect_full verdict-noop && assert_no_marker; } || { printf 'case: missing reply file\n' >&2; return 1; }
+  refuse_edited "findings array" verdict-malformed '. + {findings: []}'
+  # The refused run persists the same timing fields, with a null duration and
+  # dispatch time when no flag names them.
+  refuse_edited "any extra key" verdict-malformed '. + {extra: 1}'
+  assert_ledger_timing null
+  [ "$(jq -r .verdict "$(ledger_path)" | tail -n 1)" = "failed" ]
+  refuse_edited "missing required key" verdict-malformed 'del(.reason)'
+  refuse_edited "file object extra key" verdict-malformed '.files[0].extra = 1'
+  refuse_edited "non-empty resolved list" verdict-malformed '.resolved = ["x"]'
+  refuse_edited "reason names a minor nit" verdict-malformed '.reason = "one minor nit"'
+  refuse_edited "file note says Minor" verdict-malformed '.files[0].note = "Minor: spacing"'
+  lsb_route "$FRONTEND" --check
+  expect_line "$(printf 'light\tquick-eligible')"
+}
+
+# bats test_tags=whole-tree
+@test "a clean reply on a merge-base record prints light-cleared with a light marker, the merge-base anchor, an empty light sidecar and the reviewer timing on its ledger line" {
+  prepare_quick
+  [ "$(jq -r .anchor_kind "$(record_path)")" = "merge-base" ]
+  clear_reply_to_file
+  [ "$(jq -c .resolved "$REPLY_FILE")" = '[]' ]
+  run bash -c 'bash "$1" --root "$2" --member "$3" --verdict - --reviewer-duration-ms 6900 --reviewer-dispatched-at 2020-01-01T00:00:00Z <"$4"' _ \
+    "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" "$LSB_ROOT" "$FRONTEND" "$REPLY_FILE"
+  expect_line "light-cleared"
+  [ "$(jq -r .review "$(marker_path)")" = "light" ]
+  [ "$(jq -r .anchor_kind "$(record_path)")" = "merge-base" ]
+  [ "$(light_sidecar_files | wc -l | tr -d ' ')" = "1" ]
+  [ "$(jq -c .findings "$(light_sidecar_files)")" = '[]' ]
+  [ "$(find "$(audit_directory)" -maxdepth 1 -name '*.findings.json' | wc -l | tr -d ' ')" = "1" ]
+  assert_ledger_timing 6900 2020-01-01T00:00:00Z
+}
+
+# bats test_tags=whole-tree
+@test "words that only contain minor or nit as a fragment still clear on a merge-base record, and no dispatch flag records a null dispatch time" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit '.reason = "a minority of tokens, nitrogen free" | .files[0].note = "reviewed unit"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_line "light-cleared"
+  [ -f "$(marker_path)" ]
+  [ "$(jq -c .reviewer_dispatched_at "$(ledger_path)")" = "null" ]
 }
 
 # bats test_tags=whole-tree
-@test "a pure insertion beside only one cited line leaves the other unchanged" {
-  prepare_refusal_anchored "$(printf 'line 1
-line 2
-inserted a
-line 3
-line 4
-line 5')"
-  clear_reply_to_file
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full checklist-unchanged
-  assert_no_marker
-}
-
-# --- telemetry and ledger ---------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "in a maintainer sandbox a clear run appends a light_outcome with the reviewer tokens" {
-  prepare_light --maintainer
+@test "in a maintainer sandbox a merge-base clear appends one light_outcome with the reviewer tokens, duration and anchor kind" {
+  prepare_quick --maintainer
   clear_reply_to_file
   run bash -c 'bash "$1" --root "$2" --member "$3" --verdict - --reviewer-tokens 4321 --reviewer-duration-ms 987 <"$4"' _ \
     "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" "$LSB_ROOT" "$FRONTEND" "$REPLY_FILE"
   expect_line "light-cleared"
   [ "$(grep -c '"light_outcome"' "$(telemetry_log)")" = "1" ]
-  [ "$(grep '"light_outcome"' "$(telemetry_log)" | jq -r '[.verdict, (.tokens | tostring), (.duration_ms | tostring)] | join(" ")')" = "clear 4321 987" ]
+  [ "$(grep '"light_outcome"' "$(telemetry_log)" | jq -r '[.verdict, (.tokens | tostring), (.duration_ms | tostring), .anchor_kind] | join(" ")')" = "clear 4321 987 merge-base" ]
+}
+
+# expect_usage_error <case> <argument...>: the script exits 2, prints no
+# decision line and persists nothing.
+expect_usage_error() {
+  local label="$1"
+  shift
+  run bash "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" "$@" </dev/null
+  grep -qE 'light-cleared|^full' <<<"$output" && { printf 'case: %s printed a decision: %s\n' "$label" "$output" >&2; return 1; }
+  { [ "$status" -eq 2 ] && [ ! -e "$(ledger_path)" ] && [ -z "$(find "$(light_directory)" -name '*.verdict.json')" ] && assert_no_marker; } || { printf 'case: %s\nstatus %s, output: %s\n' "$label" "$status" "$output" >&2; return 1; }
+}
+
+# bats test_tags=whole-tree
+@test "usage errors exit 2, print no decision line and persist nothing" {
+  prepare_quick
+  clear_reply_to_file
+  local value
+  expect_usage_error "no verdict flag" --root "$LSB_ROOT" --member "$FRONTEND"
+  expect_usage_error "bare verdict flag" --root "$LSB_ROOT" --member "$FRONTEND" --verdict
+  expect_usage_error "non-integer tokens" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --reviewer-tokens many
+  expect_usage_error "non-integer duration" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --reviewer-duration-ms 1.5
+  expect_usage_error "unknown dispatch flag" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --dispatched-at 2020-01-01T00:00:00Z
+  expect_usage_error "relative root" --root relative/path --member "$FRONTEND" --verdict -
+  expect_usage_error "member escaping the directory" --root "$LSB_ROOT" --member ../escape --verdict -
+  expect_usage_error "unknown flag" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --unknown
+  for value in "2026-10-21 05:00:00" "2026-10-21T05:00:00.123Z" "2026-10-21T05:00:00+09:00" "now" ""; do
+    expect_usage_error "dispatch time '$value'" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" --reviewer-dispatched-at "$value"
+  done
+  expect_usage_error "bare dispatch time flag" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" --reviewer-dispatched-at
 }
 
 # bats test_tags=whole-tree
@@ -775,208 +629,6 @@ line 5')"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_line "light-cleared"
   [ "$(jq -r .review "$(marker_path)")" = "light" ]
-}
-
-# bats test_tags=whole-tree
-@test "after one clear and one escalate run the ledger has two lines in the documented shape" {
-  prepare_light
-  clear_reply_to_file
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  lsb_commit apps/web/app/more.md "more"
-  lsb_route "$FRONTEND"
-  expect_line "$(printf 'light\tlight-eligible')"
-  lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full escalate
-  [ "$(wc -l <"$(ledger_path)" | tr -d ' ')" = "2" ]
-  [ "$(jq -c '[keys[]]' "$(ledger_path)" | sort -u)" = '["anchor_kind","at","digest","marked_at","member","reviewer_dispatched_at","reviewer_duration_ms","tree","verdict"]' ]
-  [ "$(jq -r .verdict "$(ledger_path)" | paste -sd, -)" = "clear,escalate" ]
-  [ "$(jq -c '[.anchor_kind, .reviewer_duration_ms]' "$(ledger_path)" | sort -u)" = '["full",null]' ]
-  jq -e '.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")' "$(ledger_path)" >/dev/null
-}
-
-# --- the merge-base (first-dispatch quick) reply contract ------------------------
-
-# bats test_tags=whole-tree
-@test "a clean reply on a merge-base record prints light-cleared with a light marker, the merge-base anchor and an empty light sidecar" {
-  prepare_quick
-  [ "$(jq -r .anchor_kind "$(record_path)")" = "merge-base" ]
-  clear_reply_to_file
-  [ "$(jq -c .resolved "$REPLY_FILE")" = '[]' ]
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  [ "$(jq -r .review "$(marker_path)")" = "light" ]
-  [ "$(jq -r .anchor_kind "$(record_path)")" = "merge-base" ]
-  [ "$(light_sidecar_files | wc -l | tr -d ' ')" = "1" ]
-  [ "$(jq -c .findings "$(light_sidecar_files)")" = '[]' ]
-  [ "$(find "$(audit_directory)" -maxdepth 1 -name '*.findings.json' | wc -l | tr -d ' ')" = "1" ]
-}
-
-# bats test_tags=whole-tree
-@test "an escalate reply on a merge-base record prints full escalate and writes no marker" {
-  prepare_quick
-  lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  assert_quick_refused escalate
-}
-
-# bats test_tags=whole-tree
-@test "an empty reply on a merge-base record prints full verdict-noop and writes no marker" {
-  prepare_quick
-  lsb_mark "$FRONTEND" ""
-  assert_quick_refused verdict-noop
-}
-
-# bats test_tags=whole-tree
-@test "a missing reply file on a merge-base record prints full verdict-noop and writes no marker" {
-  prepare_quick
-  lsb_mark_file "$FRONTEND" "$BATS_TEST_TMPDIR/no-such-reply.json"
-  assert_quick_refused verdict-noop
-}
-
-# bats test_tags=whole-tree
-@test "a merge-base reply carrying a findings array prints full verdict-malformed and writes no marker" {
-  use_shared_quick
-  clear_reply_to_file
-  reply_edit '. + {findings: []}'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  assert_quick_refused verdict-malformed
-}
-
-# bats test_tags=whole-tree
-@test "a merge-base reply carrying any extra key prints full verdict-malformed and writes no marker" {
-  use_shared_quick
-  clear_reply_to_file
-  reply_edit '. + {extra: 1}'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  assert_quick_refused verdict-malformed
-}
-
-# bats test_tags=whole-tree
-@test "a merge-base reply missing a required key prints full verdict-malformed and writes no marker" {
-  use_shared_quick
-  clear_reply_to_file
-  reply_edit 'del(.reason)'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  assert_quick_refused verdict-malformed
-}
-
-# bats test_tags=whole-tree
-@test "a merge-base reply with a file object carrying an extra key prints full verdict-malformed" {
-  use_shared_quick
-  clear_reply_to_file
-  reply_edit '.files[0].extra = 1'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  assert_quick_refused verdict-malformed
-}
-
-# bats test_tags=whole-tree
-@test "a merge-base reply with a non-empty resolved list prints full verdict-malformed" {
-  use_shared_quick
-  clear_reply_to_file
-  reply_edit '.resolved = ["x"]'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  assert_quick_refused verdict-malformed
-}
-
-# bats test_tags=whole-tree
-@test "a merge-base reply whose reason names a minor nit prints full verdict-malformed" {
-  use_shared_quick
-  clear_reply_to_file
-  reply_edit '.reason = "one minor nit"'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  assert_quick_refused verdict-malformed
-}
-
-# bats test_tags=whole-tree
-@test "a merge-base reply whose file note says Minor prints full verdict-malformed" {
-  use_shared_quick
-  clear_reply_to_file
-  reply_edit '.files[0].note = "Minor: spacing"'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  assert_quick_refused verdict-malformed
-}
-
-# bats test_tags=whole-tree
-@test "twin: words that only contain minor or nit as a fragment still clear on a merge-base record" {
-  prepare_quick
-  clear_reply_to_file
-  reply_edit '.reason = "a minority of tokens, nitrogen free" | .files[0].note = "reviewed unit"'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-}
-
-# bats test_tags=whole-tree
-@test "the stricter reply contract is merge-base only: an extra key still clears a post-clearance record" {
-  prepare_light
-  [ "$(jq -r .anchor_kind "$(record_path)")" = "full" ]
-  clear_reply_to_file
-  reply_edit '. + {extra: 1} | .reason = "one minor nit" | .files[0].extra = 1'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  [ "$(jq -r .review "$(marker_path)")" = "light" ]
-}
-
-# bats test_tags=whole-tree
-@test "a mark run on a merge-base record persists marked_at, the reviewer dispatch time, the reviewer duration and the anchor kind on its ledger line" {
-  prepare_quick
-  clear_reply_to_file
-  run bash -c 'bash "$1" --root "$2" --member "$3" --verdict - --reviewer-duration-ms 6900 --reviewer-dispatched-at 2020-01-01T00:00:00Z <"$4"' _ \
-    "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" "$LSB_ROOT" "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  assert_ledger_timing 6900 2020-01-01T00:00:00Z
-}
-
-# bats test_tags=whole-tree
-@test "a refused merge-base mark run persists the same timing fields and a null duration without the flag" {
-  prepare_quick
-  clear_reply_to_file
-  reply_edit '. + {extra: 1}'
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-malformed
-  assert_ledger_timing null
-  [ "$(jq -r .verdict "$(ledger_path)")" = "failed" ]
-}
-
-# bats test_tags=whole-tree
-@test "a merge-base mark run without the reviewer dispatch flag clears and records a null dispatch time" {
-  prepare_quick
-  clear_reply_to_file
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  [ -f "$(marker_path)" ]
-  [ "$(jq -c .reviewer_dispatched_at "$(ledger_path)")" = "null" ]
-}
-
-# bats test_tags=whole-tree
-@test "a malformed reviewer dispatch time exits 2 before anything is persisted" {
-  prepare_quick
-  clear_reply_to_file
-  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" value
-  for value in "2026-10-21 05:00:00" "2026-10-21T05:00:00.123Z" "2026-10-21T05:00:00+09:00" "now" ""; do
-    run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" --reviewer-dispatched-at "$value" </dev/null
-    [ "$status" -eq 2 ]
-    grep -qE 'light-cleared|^full' <<<"$output" && return 1
-    [ ! -e "$(ledger_path)" ]
-    assert_no_marker
-    [ -z "$(find "$(light_directory)" -name '*.verdict.json')" ]
-  done
-  run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" --reviewer-dispatched-at </dev/null
-  [ "$status" -eq 2 ]
-  grep -qE 'light-cleared|^full' <<<"$output" && return 1
-  [ ! -e "$(ledger_path)" ]
-  assert_no_marker
-  true
-}
-
-# bats test_tags=whole-tree
-@test "in a maintainer sandbox a merge-base clear reaches the telemetry outcome event with its anchor kind" {
-  prepare_quick --maintainer
-  clear_reply_to_file
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  [ "$(jq -r 'select(.event == "light_outcome") | .anchor_kind' "$(telemetry_log)")" = "merge-base" ]
 }
 
 # --- cwd independence -------------------------------------------------------
@@ -991,24 +643,6 @@ line 5')"
   expect_line "light-cleared"
   [ "$(light_sidecar_files | wc -l | tr -d ' ')" = "1" ]
   [ -z "$(find "$BATS_TEST_TMPDIR/elsewhere" -type f)" ]
-}
-
-# bats test_tags=whole-tree
-@test "a script that drops the subshell cd fails closed from an unrelated directory" {
-  prepare_light
-  clear_reply_to_file
-  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
-  # shellcheck disable=SC2016
-  grep -qF '(cd "$root" && bash "$root/.github/audit/resolve-audit-base.sh"' "$script"
-  # shellcheck disable=SC2016
-  sed 's|(cd "\$root" \&\& bash "\$root/.github/audit/resolve-audit-base.sh"|(bash "$root/.github/audit/resolve-audit-base.sh"|' "$script" >"$script.mutant"
-  # shellcheck disable=SC2016
-  grep -qF '(cd "$root" && bash "$root/.github/audit/resolve-audit-base.sh"' "$script.mutant" && return 1
-  mkdir -p "$BATS_TEST_TMPDIR/elsewhere"
-  run bash -c 'cd "$5" && bash "$1" --root "$2" --member "$3" --verdict - <"$4"' _ \
-    "$script.mutant" "$LSB_ROOT" "$FRONTEND" "$REPLY_FILE" "$BATS_TEST_TMPDIR/elsewhere"
-  expect_full sidecar-failed
-  assert_no_marker
 }
 
 # The resolver's argument-less line is a commit when it names the branch's fork
@@ -1056,32 +690,6 @@ line 5')"
   [ -z "$(find "$(audit_directory)" -maxdepth 1 -name '*.ok' -newer "$REPLY_FILE")" ]
 }
 
-# --- usage ------------------------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "usage errors exit 2 and print no decision line" {
-  lsb_init
-  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
-  run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" </dev/null
-  [ "$status" -eq 2 ]
-  run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict </dev/null
-  [ "$status" -eq 2 ]
-  run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --reviewer-tokens many </dev/null
-  [ "$status" -eq 2 ]
-  run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --reviewer-duration-ms 1.5 </dev/null
-  [ "$status" -eq 2 ]
-  run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --dispatched-at 2020-01-01T00:00:00Z </dev/null
-  [ "$status" -eq 2 ]
-  run bash "$script" --root relative/path --member "$FRONTEND" --verdict - </dev/null
-  [ "$status" -eq 2 ]
-  run bash "$script" --root "$LSB_ROOT" --member ../escape --verdict - </dev/null
-  [ "$status" -eq 2 ]
-  run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --unknown </dev/null
-  [ "$status" -eq 2 ]
-  grep -qE 'light-cleared|^full' <<<"$output" && return 1
-  true
-}
-
 # --- structural guards ------------------------------------------------------
 
 # review_light_offenders <repo>: tracked *.sh files outside the allowlist that
@@ -1114,29 +722,6 @@ review_light_offenders() {
   [ "$(git -C "$REPO_ROOT" ls-files -z -- '*.sh' | tr -cd '\0' | wc -c | tr -d ' ')" -gt 50 ]
 }
 
-@test "the guard fails on a scratch fixture with a second shell caller, and ignores prose, bats and tests-directory files" {
-  local fixture="$BATS_TEST_TMPDIR/guard-fixture"
-  git init -q -b main "$fixture"
-  mkdir -p "$fixture/.gaia/scripts/tests/helpers" "$fixture/wiki"
-  printf 'x --review light\n' >"$fixture/.gaia/scripts/audit-write-clearance.sh"
-  printf 'x --review light\n' >"$fixture/.gaia/scripts/audit-write-findings.sh"
-  printf 'x --review light\n' >"$fixture/.gaia/scripts/audit-light-mark.sh"
-  printf 'x --review light\n' >"$fixture/.gaia/scripts/tests/helpers/helper.sh"
-  printf 'x --review light\n' >"$fixture/wiki/page.md"
-  printf 'x --review light\n' >"$fixture/.gaia/scripts/tests/case.bats"
-  git -C "$fixture" add -A
-  [ -z "$(review_light_offenders "$fixture")" ]
-  printf 'bash writer --review light\n' >"$fixture/.gaia/scripts/other-caller.sh"
-  git -C "$fixture" add -A
-  [ "$(review_light_offenders "$fixture")" = ".gaia/scripts/other-caller.sh" ]
-}
-
-@test "the guard reports a scan of nothing instead of passing an empty tree" {
-  local fixture="$BATS_TEST_TMPDIR/guard-empty"
-  git init -q -b main "$fixture"
-  [ "$(review_light_offenders "$fixture")" = "scanned nothing" ]
-}
-
 # fenced_telemetry_references <file>: prints `fenced` when every line naming the
 # telemetry script sits between the shell maintainer-only markers and at least
 # one such line exists.
@@ -1151,11 +736,4 @@ fenced_telemetry_references() {
 
 @test "every line naming the telemetry script sits inside maintainer-only markers" {
   [ "$(fenced_telemetry_references "$REPO_ROOT/.gaia/scripts/audit-light-mark.sh")" = "fenced" ]
-}
-
-@test "the fence check fails once the markers are removed from a scratch copy" {
-  local copy="$BATS_TEST_TMPDIR/mark-unfenced.sh"
-  grep -v 'gaia:maintainer-only' "$REPO_ROOT/.gaia/scripts/audit-light-mark.sh" >"$copy"
-  grep -qF 'audit-light-telemetry.sh' "$copy"
-  [ "$(fenced_telemetry_references "$copy")" = "unfenced" ]
 }

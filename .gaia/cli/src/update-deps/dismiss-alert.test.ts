@@ -76,64 +76,106 @@ const dismiss = async (
   });
 
 describe('dismiss-alert refusals send no request', () => {
-  test('no --confirmed exits 1', async () => {
-    const {calls, ghRunner} = recordingGh();
-    const exit = await dismiss(
-      validArgs().filter((token) => token !== '--confirmed'),
-      {ghRunner}
-    );
-
-    expect(exit).toBe(1);
-    expect(result()).toStrictEqual({
-      alert: 41,
-      dismissed: false,
-      error: 'not-confirmed',
-    });
-    expect(calls).toHaveLength(0);
-  });
-
-  test('a gitlab.com origin is non-github-remote', async () => {
-    const {calls, ghRunner} = recordingGh();
-    const exit = await dismiss(validArgs(), {
-      ghRunner,
-      originReader: () => 'git@gitlab.com:acme/widgets.git',
-    });
-
-    expect(exit).toBe(1);
-    expect(result().error).toBe('non-github-remote');
-    expect(calls).toHaveLength(0);
-  });
-
-  test('a missing origin is no-remote', async () => {
-    const {calls, ghRunner} = recordingGh();
-    const exit = await dismiss(validArgs(), {
-      ghRunner,
-      originReader: () => null,
-    });
-
-    expect(exit).toBe(1);
-    expect(result().error).toBe('no-remote');
-    expect(calls).toHaveLength(0);
-  });
-
-  test.each([
-    ['alert abc', withFlag('--alert', 'abc')],
-    ['alert 0', withFlag('--alert', '0')],
-    ['alert 1.5', withFlag('--alert', '1.5')],
-    ['reason fix_started', withFlag('--reason', 'fix_started')],
-    ['a 300 character comment', withFlag('--comment', 'x'.repeat(300))],
+  test.each(
     [
-      'an over-long 281 character comment',
-      withFlag('--comment', 'y'.repeat(281)),
-    ],
-    ['an empty comment', withFlag('--comment', '')],
-    ['an unknown flag', validArgs(['--bogus', 'x'])],
-  ])('%s is invalid-arguments and exits 2', async (_label, argv) => {
+      {
+        alert: 41,
+        argv: validArgs().filter((token) => token !== '--confirmed'),
+        error: 'not-confirmed',
+        exit: 1,
+        name: 'no --confirmed exits 1',
+        origin: GITHUB_ORIGIN,
+      },
+      {
+        alert: 41,
+        argv: validArgs(),
+        error: 'non-github-remote',
+        exit: 1,
+        name: 'a gitlab.com origin is non-github-remote',
+        origin: 'git@gitlab.com:acme/widgets.git',
+      },
+      {
+        alert: 41,
+        argv: validArgs(),
+        error: 'no-remote',
+        exit: 1,
+        name: 'a missing origin is no-remote',
+        origin: null,
+      },
+      {
+        alert: null,
+        argv: withFlag('--alert', 'abc'),
+        error: 'invalid-arguments',
+        exit: EXIT_CODES.INVALID_ARGUMENTS,
+        name: 'alert abc is invalid-arguments and exits 2',
+        origin: GITHUB_ORIGIN,
+      },
+      {
+        alert: null,
+        argv: withFlag('--alert', '0'),
+        error: 'invalid-arguments',
+        exit: EXIT_CODES.INVALID_ARGUMENTS,
+        name: 'alert 0 is invalid-arguments and exits 2',
+        origin: GITHUB_ORIGIN,
+      },
+      {
+        alert: null,
+        argv: withFlag('--alert', '1.5'),
+        error: 'invalid-arguments',
+        exit: EXIT_CODES.INVALID_ARGUMENTS,
+        name: 'alert 1.5 is invalid-arguments and exits 2',
+        origin: GITHUB_ORIGIN,
+      },
+      {
+        alert: null,
+        argv: withFlag('--reason', 'fix_started'),
+        error: 'invalid-arguments',
+        exit: EXIT_CODES.INVALID_ARGUMENTS,
+        name: 'reason fix_started is invalid-arguments and exits 2',
+        origin: GITHUB_ORIGIN,
+      },
+      {
+        alert: null,
+        argv: withFlag('--comment', 'x'.repeat(300)),
+        error: 'invalid-arguments',
+        exit: EXIT_CODES.INVALID_ARGUMENTS,
+        name: 'a 300 character comment is invalid-arguments and exits 2',
+        origin: GITHUB_ORIGIN,
+      },
+      {
+        alert: null,
+        argv: withFlag('--comment', 'y'.repeat(281)),
+        error: 'invalid-arguments',
+        exit: EXIT_CODES.INVALID_ARGUMENTS,
+        name: 'an over-long 281 character comment is invalid-arguments and exits 2',
+        origin: GITHUB_ORIGIN,
+      },
+      {
+        alert: null,
+        argv: withFlag('--comment', ''),
+        error: 'invalid-arguments',
+        exit: EXIT_CODES.INVALID_ARGUMENTS,
+        name: 'an empty comment is invalid-arguments and exits 2',
+        origin: GITHUB_ORIGIN,
+      },
+      {
+        alert: null,
+        argv: validArgs(['--bogus', 'x']),
+        error: 'invalid-arguments',
+        exit: EXIT_CODES.INVALID_ARGUMENTS,
+        name: 'an unknown flag is invalid-arguments and exits 2',
+        origin: GITHUB_ORIGIN,
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', async (_name, {alert, argv, error, exit, origin}) => {
     const {calls, ghRunner} = recordingGh();
-    const exit = await dismiss(argv, {ghRunner});
+    const exitCode = await dismiss(argv, {
+      ghRunner,
+      originReader: () => origin,
+    });
 
-    expect(exit).toBe(EXIT_CODES.INVALID_ARGUMENTS);
-    expect(result().error).toBe('invalid-arguments');
+    expect(exitCode).toBe(exit);
+    expect(result()).toStrictEqual({alert, dismissed: false, error});
     expect(calls).toHaveLength(0);
   });
 });
@@ -171,48 +213,43 @@ describe('dismiss-alert request', () => {
     expect(calls).toHaveLength(1);
   });
 
-  test('HTTP 403 is forbidden, the call carries a timeout, and stderr never reaches stdout', async () => {
-    const {calls, ghRunner} = recordingGh({
-      exitCode: 1,
-      ok: false,
-      stderr: 'gh: Forbidden (HTTP 403) token ghp_secret',
-    });
+  test.each(
+    (
+      [
+        {
+          error: 'forbidden',
+          name: 'HTTP 403 is forbidden, the call carries a timeout, and stderr never reaches stdout',
+          response: {
+            exitCode: 1,
+            ok: false,
+            stderr: 'gh: Forbidden (HTTP 403) token ghp_secret',
+          },
+        },
+        {
+          error: 'request-failed',
+          name: 'a timed out call is request-failed even if its stderr mentions 403',
+          response: {
+            exitCode: -1,
+            ok: false,
+            stderr: 'HTTP 403',
+            timedOut: true,
+          },
+        },
+        {
+          error: 'request-failed',
+          name: 'any other failure is request-failed and echoes no stderr',
+          response: {exitCode: 1, ok: false, stderr: 'HTTP 500 ghp_secret'},
+        },
+      ] satisfies {error: string; name: string; response: GhResult}[]
+    ).map((row) => [row.name, row] as const)
+  )('%s', async (_name, {error, response}) => {
+    const {calls, ghRunner} = recordingGh(response);
     const exit = await dismiss(validArgs(), {ghRunner});
 
     expect(exit).toBe(1);
-    expect(result()).toStrictEqual({
-      alert: 41,
-      dismissed: false,
-      error: 'forbidden',
-    });
+    expect(result()).toStrictEqual({alert: 41, dismissed: false, error});
     expect(stdout()).not.toContain('ghp_secret');
     expect(calls[0]?.timeoutMs).toBe(60_000);
-  });
-
-  test('a timed out call is request-failed even if its stderr mentions 403', async () => {
-    const {ghRunner} = recordingGh({
-      exitCode: -1,
-      ok: false,
-      stderr: 'HTTP 403',
-      timedOut: true,
-    });
-    const exit = await dismiss(validArgs(), {ghRunner});
-
-    expect(exit).toBe(1);
-    expect(result().error).toBe('request-failed');
-  });
-
-  test('any other failure is request-failed and echoes no stderr', async () => {
-    const {ghRunner} = recordingGh({
-      exitCode: 1,
-      ok: false,
-      stderr: 'HTTP 500 ghp_secret',
-    });
-    const exit = await dismiss(validArgs(), {ghRunner});
-
-    expect(exit).toBe(1);
-    expect(result().error).toBe('request-failed');
-    expect(stdout()).not.toContain('ghp_secret');
   });
 
   test('--help prints usage naming the verb and exits 0', async () => {

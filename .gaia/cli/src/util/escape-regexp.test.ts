@@ -56,36 +56,63 @@ const NOT_ESCAPED = [
 ];
 
 describe('escapeRegExp', () => {
-  test.each(ESCAPED)('escapes %s', (character) => {
-    expect(escapeRegExp(character)).toBe(`${BACKSLASH}${character}`);
+  test.each(
+    [
+      ...ESCAPED.map((character) => ({
+        expected: `${BACKSLASH}${character}`,
+        input: character,
+        name: `escapes ${character}`,
+      })),
+      ...NOT_ESCAPED.map((character) => ({
+        expected: character,
+        input: character,
+        name: `leaves ${character} alone`,
+      })),
+      {
+        expected: String.raw`a\.b\.c`,
+        input: 'a.b.c',
+        name: 'escapes every occurrence, not just the first',
+      },
+      {expected: '', input: '', name: 'returns the empty string unchanged'},
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, input}) => {
+    expect(escapeRegExp(input)).toBe(expected);
   });
 
-  test.each(NOT_ESCAPED)('leaves %s alone', (character) => {
-    expect(escapeRegExp(character)).toBe(character);
-  });
+  // Unescaped, `a.c` matches `abc` and `a+` matches `aaa`. Escaped, neither
+  // does: this is the failure a missing metacharacter produces, and it is
+  // silent, because the wrong pattern is still a valid regex.
+  test.each(
+    (
+      [
+        {
+          matches: true,
+          name: 'the escaped form matches its own input literally',
+          pairs: [
+            [
+              `wiki/A (draft) [v1] {2}.md|*+?^$${BACKSLASH}x`,
+              `wiki/A (draft) [v1] {2}.md|*+?^$${BACKSLASH}x`,
+            ],
+          ],
+        },
+        {
+          matches: false,
+          name: 'the escaped form does not match a string the metacharacters would',
+          pairs: [
+            ['a.c', 'abc'],
+            ['a+', 'aaa'],
+          ],
+        },
+      ] as const
+    ).map((row) => [row.name, row] as const)
+  )('%s', (_name, {matches, pairs}) => {
+    expect.hasAssertions();
 
-  test('escapes every occurrence, not just the first', () => {
-    expect(escapeRegExp('a.b.c')).toBe(String.raw`a\.b\.c`);
-  });
-
-  test('returns the empty string unchanged', () => {
-    expect(escapeRegExp('')).toBe('');
-  });
-
-  test('the escaped form matches its own input literally', () => {
-    const literal = `wiki/A (draft) [v1] {2}.md|*+?^$${BACKSLASH}x`;
-
-    expect(new RegExp(`^${escapeRegExp(literal)}$`, 'u').test(literal)).toBe(
-      true
-    );
-  });
-
-  test('the escaped form does not match a string the metacharacters would', () => {
-    // Unescaped, `a.c` matches `abc` and `a+` matches `aaa`. Escaped, neither
-    // does: this is the failure a missing metacharacter produces, and it is
-    // silent, because the wrong pattern is still a valid regex.
-    expect(new RegExp(`^${escapeRegExp('a.c')}$`, 'u').test('abc')).toBe(false);
-    expect(new RegExp(`^${escapeRegExp('a+')}$`, 'u').test('aaa')).toBe(false);
+    for (const [literal, candidate] of pairs) {
+      expect(
+        new RegExp(`^${escapeRegExp(literal)}$`, 'u').test(candidate)
+      ).toBe(matches);
+    }
   });
 
   test('an escaped path with a bracket compiles instead of throwing', () => {

@@ -54,14 +54,29 @@ describe('setup enable-delete-branch', () => {
     vi.restoreAllMocks();
   });
 
-  test('PATCHes delete_branch_on_merge=true on success', async () => {
-    const handle = sandbox.installGhShim({exitCode: 0});
+  test.each([
+    {
+      applied: true,
+      error: undefined,
+      name: 'PATCHes delete_branch_on_merge=true on success',
+      ok: true,
+      shim: {exitCode: 0},
+    },
+    {
+      applied: false,
+      error: 'gh_api_error',
+      name: 'returns applied: false with error on gh failure',
+      ok: false,
+      shim: {exitCode: 1},
+    },
+  ])('$name', async ({applied, error, ok, shim}) => {
+    const handle = sandbox.installGhShim(shim);
     restore = handle.restore;
 
     const exit = await run(['--owner', 'foo', '--repo', 'bar'], {
       cwd: sandbox.root,
     });
-    expect(exit).toBe(0);
+    expect(exit === 0).toBe(ok);
 
     const recorded = JSON.parse(
       readFileSync(sandbox.ghArgvPath, 'utf8')
@@ -79,43 +94,36 @@ describe('setup enable-delete-branch', () => {
       string,
       unknown
     >;
-    expect(parsed.applied).toBe(true);
+    expect(parsed.applied).toBe(applied);
+    expect(parsed.error).toBe(error);
   });
 
-  test('returns applied: false with error on gh failure', async () => {
-    const handle = sandbox.installGhShim({exitCode: 1});
-    restore = handle.restore;
+  test.each([
+    {
+      args: ['--repo', 'bar'],
+      name: 'exits non-zero when --owner missing',
+      stream: 'err',
+      succeeds: false,
+      text: 'missing_required_arg',
+    },
+    {
+      args: ['--owner', 'foo', '--repo', 'bar', '--bogus'],
+      name: 'rejects unknown flags',
+      stream: 'err',
+      succeeds: false,
+      text: 'unknown flag',
+    },
+    {
+      args: ['--help'],
+      name: '--help exits 0',
+      stream: 'out',
+      succeeds: true,
+      text: 'Usage:',
+    },
+  ] as const)('$name', async ({args, stream, succeeds, text}) => {
+    const exit = await run([...args], {cwd: sandbox.root});
 
-    const exit = await run(['--owner', 'foo', '--repo', 'bar'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).not.toBe(0);
-
-    const parsed = JSON.parse(stdio.out.join('').trim()) as Record<
-      string,
-      unknown
-    >;
-    expect(parsed.applied).toBe(false);
-    expect(parsed.error).toBe('gh_api_error');
-  });
-
-  test('exits non-zero when --owner missing', async () => {
-    const exit = await run(['--repo', 'bar'], {cwd: sandbox.root});
-    expect(exit).not.toBe(0);
-    expect(stdio.err.join('')).toContain('missing_required_arg');
-  });
-
-  test('rejects unknown flags', async () => {
-    const exit = await run(['--owner', 'foo', '--repo', 'bar', '--bogus'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).not.toBe(0);
-    expect(stdio.err.join('')).toContain('unknown flag');
-  });
-
-  test('--help exits 0', async () => {
-    const exit = await run(['--help'], {cwd: sandbox.root});
-    expect(exit).toBe(0);
-    expect(stdio.out.join('')).toContain('Usage:');
+    expect(exit === 0).toBe(succeeds);
+    expect(stdio[stream].join('')).toContain(text);
   });
 });

@@ -395,25 +395,11 @@ describe('scaffold route --data: refusals write nothing', () => {
     expect(existsSync(path.join(sandbox.root, 'app', 'pages'))).toBe(false);
   };
 
-  test('--data query without TanStack Query names the init command', () => {
-    writeItemsService(sandbox.root, {queries: true, query: false});
+  describe('scaffold route --data refuses each bad request and writes nothing', () => {
+    type ServiceOptions = Parameters<typeof writeItemsService>[1];
 
-    const result = scaffold(
-      sandbox.root,
-      dataArgs('--data', 'query', '--service', 'items', '--shape', 'list')
-    );
-
-    expect(result.exit).toBe(1);
-    expect(result.stderr).toContain('init configure-data-layer --query true');
-    expectNothingWritten();
-  });
-
-  test.each(['client', 'query'])('--data %s with --loader', (data) => {
-    writeItemsService(sandbox.root, {queries: true, query: true});
-
-    const result = scaffold(
-      sandbox.root,
-      dataArgs(
+    const loaderRows = ['client', 'query'].map((data) => ({
+      args: dataArgs(
         '--data',
         data,
         '--service',
@@ -421,113 +407,130 @@ describe('scaffold route --data: refusals write nothing', () => {
         '--shape',
         'list',
         '--loader'
-      )
-    );
+      ),
+      name: `--data ${data} with --loader`,
+      service: {queries: true, query: true},
+      stderr: ['--loader does not combine with --data', 'HydrateFallback'],
+    }));
 
-    expect(result.exit).toBe(1);
-    expect(result.stderr).toContain('--loader does not combine with --data');
-    expect(result.stderr).toContain('HydrateFallback');
-    expectNothingWritten();
-  });
+    test.each([
+      {
+        args: dataArgs(
+          '--data',
+          'query',
+          '--service',
+          'items',
+          '--shape',
+          'list'
+        ),
+        name: '--data query without TanStack Query names the init command',
+        service: {queries: true, query: false},
+        stderr: ['init configure-data-layer --query true'],
+      },
+      ...loaderRows,
+      {
+        args: dataArgs('--data', 'server', '--shape', 'list'),
+        name: '--data server without --service',
+        service: undefined as ServiceOptions,
+        stderr: ['--data needs --service'],
+      },
+      {
+        args: dataArgs('--shape', 'list'),
+        name: '--shape without --data',
+        service: undefined as ServiceOptions,
+        stderr: ['pass --data'],
+      },
+      {
+        args: dataArgs(
+          '--data',
+          'static',
+          '--service',
+          'items',
+          '--shape',
+          'list'
+        ),
+        name: 'an unknown --data value',
+        service: undefined as ServiceOptions,
+        stderr: ['--data must be one of'],
+      },
+      {
+        args: dataArgs(
+          '--data',
+          'server',
+          '--service',
+          'orders',
+          '--shape',
+          'list'
+        ),
+        name: 'a missing service folder',
+        service: undefined as ServiceOptions,
+        stderr: ['service folder not found'],
+      },
+      {
+        args: dataArgs(
+          '--data',
+          'server',
+          '--service',
+          'items',
+          '--shape',
+          'list'
+        ),
+        name: 'an unreadable parsers.ts names the file and the expected shape',
+        service: {
+          parsers: 'export const itemSchema = buildSchema();\n',
+        },
+        stderr: [
+          'app/services/gaia/items/parsers.ts',
+          'export const itemSchema = z.object({',
+        ],
+      },
+      {
+        args: dataArgs(
+          '--data',
+          'server',
+          '--service',
+          'items',
+          '--shape',
+          'list'
+        ),
+        name: 'a field expression the scaffold cannot render is refused',
+        service: {
+          parsers: [
+            'export const itemSchema = z.object({',
+            '  id: z.string(),',
+            '  tags: z.array(z.string()),',
+            '});',
+            '',
+            'export const itemInputSchema = itemSchema.omit({id: true});',
+            '',
+          ].join('\n'),
+        },
+        stderr: ['tags: z.array(z.string()),'],
+      },
+      {
+        args: dataArgs(
+          '--data',
+          'query',
+          '--service',
+          'items',
+          '--shape',
+          'detail'
+        ),
+        name: '--data query with a service that has no queries.ts names --queries-only',
+        service: {queries: false, query: true},
+        stderr: ['scaffold service items --queries-only'],
+      },
+    ])('$name', ({args, service, stderr}) => {
+      writeItemsService(sandbox.root, service);
 
-  test('--data server without --service', () => {
-    writeItemsService(sandbox.root);
+      const result = scaffold(sandbox.root, args);
 
-    const result = scaffold(
-      sandbox.root,
-      dataArgs('--data', 'server', '--shape', 'list')
-    );
+      expect(result.exit).toBe(1);
 
-    expect(result.exit).toBe(1);
-    expect(result.stderr).toContain('--data needs --service');
-    expectNothingWritten();
-  });
-
-  test('--shape without --data', () => {
-    writeItemsService(sandbox.root);
-
-    const result = scaffold(sandbox.root, dataArgs('--shape', 'list'));
-
-    expect(result.exit).toBe(1);
-    expect(result.stderr).toContain('pass --data');
-    expectNothingWritten();
-  });
-
-  test('an unknown --data value', () => {
-    writeItemsService(sandbox.root);
-
-    const result = scaffold(
-      sandbox.root,
-      dataArgs('--data', 'static', '--service', 'items', '--shape', 'list')
-    );
-
-    expect(result.exit).toBe(1);
-    expect(result.stderr).toContain('--data must be one of');
-    expectNothingWritten();
-  });
-
-  test('a missing service folder', () => {
-    writeItemsService(sandbox.root);
-
-    const result = scaffold(
-      sandbox.root,
-      dataArgs('--data', 'server', '--service', 'orders', '--shape', 'list')
-    );
-
-    expect(result.exit).toBe(1);
-    expect(result.stderr).toContain('service folder not found');
-    expectNothingWritten();
-  });
-
-  test('an unreadable parsers.ts names the file and the expected shape', () => {
-    writeItemsService(sandbox.root, {
-      parsers: 'export const itemSchema = buildSchema();\n',
+      for (const fragment of stderr) {
+        expect(result.stderr).toContain(fragment);
+      }
+      expectNothingWritten();
     });
-
-    const result = scaffold(
-      sandbox.root,
-      dataArgs('--data', 'server', '--service', 'items', '--shape', 'list')
-    );
-
-    expect(result.exit).toBe(1);
-    expect(result.stderr).toContain('app/services/gaia/items/parsers.ts');
-    expect(result.stderr).toContain('export const itemSchema = z.object({');
-    expectNothingWritten();
-  });
-
-  test('a field expression the scaffold cannot render is refused', () => {
-    writeItemsService(sandbox.root, {
-      parsers: [
-        'export const itemSchema = z.object({',
-        '  id: z.string(),',
-        '  tags: z.array(z.string()),',
-        '});',
-        '',
-        'export const itemInputSchema = itemSchema.omit({id: true});',
-        '',
-      ].join('\n'),
-    });
-
-    const result = scaffold(
-      sandbox.root,
-      dataArgs('--data', 'server', '--service', 'items', '--shape', 'list')
-    );
-
-    expect(result.exit).toBe(1);
-    expect(result.stderr).toContain('tags: z.array(z.string()),');
-    expectNothingWritten();
-  });
-
-  test('--data query with a service that has no queries.ts names --queries-only', () => {
-    writeItemsService(sandbox.root, {queries: false, query: true});
-
-    const result = scaffold(
-      sandbox.root,
-      dataArgs('--data', 'query', '--service', 'items', '--shape', 'detail')
-    );
-
-    expect(result.exit).toBe(1);
-    expect(result.stderr).toContain('scaffold service items --queries-only');
-    expectNothingWritten();
   });
 });

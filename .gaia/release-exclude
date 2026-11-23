@@ -65,6 +65,8 @@
 # on an adopter clone invokes. It also sources guard-awk-lib.sh, withheld
 # below, so the absent dependency would decide the withhold on its own.
 .gaia/scripts/lint-git-path-quoting.sh
+# That lint's class detector, sourced only by it, withheld with it.
+.gaia/scripts/lint-git-path-quoting-detect.sh
 # The workflow run-interpolation lint guards GAIA's own CI workflow YAML, its
 # and composite actions, against a `${{ }}` expression substituted into a `run:` script body. Withheld
 # on the same reasoning as the diff-quoting lint above: shell-lint.sh, its only
@@ -92,12 +94,18 @@
 # The two halves of that lint's shared detector, sourced only by it, withheld with it.
 .gaia/scripts/lint-errexit-status-read-walk.sh
 .gaia/scripts/lint-errexit-status-read-detect.sh
+# That lint's per-surface scan programs, sourced only by it, withheld with it.
+.gaia/scripts/lint-errexit-status-read-surfaces.sh
 # The SIGPIPE-reader lint flags a short-circuiting reader -- a `grep` or `rg` told to stop early, in whichever spelling the gate's own header enumerates -- standing downstream of a pipe where `pipefail` is armed, in a tracked shell script or in an Actions `run:` body, the shape whose pipeline status inverts on a match because the reader closes the pipe and the upstream dies of SIGPIPE. Withheld on the same reasoning as the lints above: every one of its runners is release-excluded, so shipping this file would ship a check nothing on an adopter clone invokes. Those runners are shell-lint.sh, excluded by the .gaia/tests entry below, and the sibling bats suite .gaia/scripts/tests/lint-sigpipe-readers.bats via the separate .gaia/scripts/tests entry beside it. It also sources guard-awk-lib.sh, withheld just below, so the absent dependency would decide the withhold on its own. An adopter clone does carry a populated scan surface, so neither withhold rests on an empty one.
 .gaia/scripts/lint-sigpipe-readers.sh
+# That lint's class detector, sourced only by it, withheld with it.
+.gaia/scripts/lint-sigpipe-readers-detect.sh
 # The awk-source library the bats-arming shell guards source; every one of those guards is itself withheld above, so nothing on an adopter clone sources it.
 .gaia/scripts/guard-awk-lib.sh
 # The GAIA_AWK interpreter resolver, sourced by guard-awk-lib.sh just above. Withheld on the absent consumer, a stronger ground than the absent-runner reasoning most of the lints above rest on: every file that sources this library, through guard-awk-lib.sh, is itself withheld, so an adopter clone has nothing that would ever source it. What is NOT claimed: the resolver is generic over any awk call site in the tree, not only the surface it currently serves, so shipping it later to widen GAIA_AWK's governed surface would be a re-decision rather than a correction. The consumer set is not counted here, because `git grep -l guard-awk-lib` reads it out of the tree, and a hand-kept cardinal beside it is a second copy that nothing holds to the tree.
 .gaia/scripts/awk-interp-lib.sh
+# The scan-surface discovery guard-awk-lib.sh sources beside it, withheld with it.
+.gaia/scripts/guard-discovery-lib.sh
 # The shipped-tree leak assertion: it proves no release-excluded path survived
 # into the tree that becomes the tarball. Withheld on the absent caller: its one
 # caller is release.yml (category 9), and an adopter clone never stages a GAIA
@@ -121,6 +129,8 @@
 # The retired-path gate fails on a harness citation of a root path that moved under apps/web, or of the retired frontend package root, and its allowlist names the surviving ones. Both describe GAIA's own harness layout, and its runner (shell-lint.sh) and sibling suites (.gaia/scripts/tests/check-retired-paths.bats, .gaia/scripts/tests/retired-frontend-root.bats) are release-excluded, so an adopter clone would carry a check nothing invokes.
 .gaia/scripts/check-retired-paths.sh
 .gaia/retired-paths-allowlist.tsv
+# The protected-test gate guards GAIA's own bats suites, which are release-excluded, and its runner (shell-lint.sh) is too, so an adopter clone would carry a check nothing invokes.
+.gaia/scripts/check-protected-tests.sh
 # Derives the bats suites a change must re-run before an audit dispatch and in each audit round. Every caller sits inside a maintainer-only block the bundle-time scrub removes, and the suites it selects are release-excluded, so an adopter clone would carry a helper nothing invokes.
 .gaia/scripts/bats-suites-for-change.sh
 # Appends light-review routing events to a local log and tallies it. Adopters record nothing, and the tally reads a log only the maintainer repo ever writes, so an adopter clone would carry a script nothing invokes. Its shipped callers sit inside maintainer-only blocks the bundle-time scrub removes.
@@ -139,6 +149,10 @@
 .gaia/scripts/debt-source-lib.sh
 # Reports tech-debt filings per branch from the maintainer-only source line, which a release tree never writes, so an adopter clone would carry a report with nothing to read.
 .gaia/scripts/debt-source-report.sh
+# The reach classifier bats-suites-for-change.sh sources to decide which suites read a changed file only as a fixture. Its one consumer is withheld above, so an adopter clone would carry a library nothing sources.
+.gaia/scripts/bats-selector-reach-lib.sh
+# The helper-following library bats-suites-for-change.sh sources beside the reach classifier. Its one consumer is withheld above, so an adopter clone would carry a library nothing sources.
+.gaia/scripts/bats-selector-helper-lib.sh
 
 # --- 2. Maintainer-only wiki content ---
 # Internal vault administration files and team-specific knowledge that
@@ -197,6 +211,8 @@ apps/web/app/utils/tests/csf-shapes.stories.tsx
 apps/web/app/utils/tests/csf-meta-play.stories.tsx
 apps/web/test/dev-ports.test.ts
 apps/web/test/dev-ports-vite-plugin.test.ts
+apps/web/test/dev-ports-vite-plugin-launch.test.ts
+apps/web/test/dev-ports-vite-plugin-helpers.ts
 apps/web/test/dev-ports-reuse.test.ts
 apps/web/test/story-a11y-opt-outs.test.ts
 apps/web/test/playwright-story-index.test.ts
@@ -327,6 +343,8 @@ apps/web/test/eslint/require-css-escape.test.ts
 .github/workflows/forensics-triage.yml
 .github/workflows/shell-lint.yml
 .github/forensics
+# Maintainer-only PR gate over the shipped surface; an adopter clone never runs it.
+.github/workflows/shipped-surface-leak-check.yml
 
 # --- 10. Maintainer-only distribution-boundary taxonomy ---
 # `.gaia/cli/health/` holds the distribution-boundary taxonomy the release

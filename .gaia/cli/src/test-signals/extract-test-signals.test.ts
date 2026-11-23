@@ -685,36 +685,36 @@ describe('extract-test-signals story mode: signal rotation', () => {
 const OLD_FORMAT_LINE = `extract-test-signals: ${STORY_FILE_REL} is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4\n`;
 
 describe('extract-test-signals story mode: old formats', () => {
-  test('a CSF3 file exits 8 with the migration line and no stdout', () => {
-    const result = runStory(`
+  test.each(
+    [
+      {
+        name: 'a CSF3 file exits 8 with the migration line and no stdout',
+        source: `
       const meta = {component: Widget, title: 'Widget'};
       export default meta;
       export const Default = {play: async () => drive()};
-    `);
-
-    expect(result.status).toBe(8);
-    expect(result.stdout).toBe('');
-    expect(result.stderr).toBe(OLD_FORMAT_LINE);
-  });
-
-  test('a CSF2 Template.bind file exits 8 with the migration line', () => {
-    const result = runStory(`
+    `,
+      },
+      {
+        name: 'a CSF2 Template.bind file exits 8 with the migration line',
+        source: `
       export default {component: Widget, title: 'Widget'};
       const Template = (args) => <Widget {...args} />;
       export const Default = Template.bind({});
-    `);
+    `,
+      },
+      {
+        name: 'a storiesOf file exits 8 even with a preview meta beside it',
+        source: `${META}
+      storiesOf('Widget', module).add('default', () => <Widget />);
+    `,
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {source}) => {
+    const result = runStory(source);
 
     expect(result.status).toBe(8);
     expect(result.stdout).toBe('');
-    expect(result.stderr).toBe(OLD_FORMAT_LINE);
-  });
-
-  test('a storiesOf file exits 8 even with a preview meta beside it', () => {
-    const result = runStory(`${META}
-      storiesOf('Widget', module).add('default', () => <Widget />);
-    `);
-
-    expect(result.status).toBe(8);
     expect(result.stderr).toBe(OLD_FORMAT_LINE);
   });
 });
@@ -734,135 +734,118 @@ const expectRefusal = (source: string, exportName: string, reason: RegExp) => {
 };
 
 describe('extract-test-signals story mode: refusal', () => {
-  test('a file that is neither CSF4 nor an older format is refused, not sent to migration', () => {
-    expectRefusal(
-      `${META}
+  test.each(
+    [
+      {
+        exportName: 'default',
+        name: 'a file that is neither CSF4 nor an older format is refused, not sent to migration',
+        reason: /not a CSF4 story file/,
+        source: `${META}
       export const Leftover = {args: {size: 'large'}};
     `,
-      'default',
-      /not a CSF4 story file/
-    );
-  });
-
-  test('a file with no preview import is refused as unknown', () => {
-    expectRefusal(
-      `import preview from './somewhere/else';
+      },
+      {
+        exportName: 'default',
+        name: 'a file with no preview import is refused as unknown',
+        reason: /not a CSF4 story file/,
+        source: `import preview from './somewhere/else';
       const meta = preview.meta({component: Widget, title: 'Widget'});
       export const Default = meta.story({});
     `,
-      'default',
-      /not a CSF4 story file/
-    );
-  });
-
-  test('a play bound to an imported identifier is refused', () => {
-    expectRefusal(
-      `import {sharedPlay} from './plays';
+      },
+      {
+        exportName: 'Default',
+        name: 'a play bound to an imported identifier is refused',
+        reason: /imported identifier sharedPlay/,
+        source: `import {sharedPlay} from './plays';
       ${META}
       export const Default = meta.story({play: sharedPlay});
     `,
-      'Default',
-      /imported identifier sharedPlay/
-    );
-  });
-
-  test('a play bound to a mutable binding is refused', () => {
-    expectRefusal(
-      `${META}
+      },
+      {
+        exportName: 'Default',
+        name: 'a play bound to a mutable binding is refused',
+        reason: /not a const or function declaration/,
+        source: `${META}
       let sharedPlay = async () => drive();
       export const Default = meta.story({play: sharedPlay});
     `,
-      'Default',
-      /not a const or function declaration/
-    );
-  });
-
-  test('an imported play inherited through extend is refused on the extend story', () => {
-    expectRefusal(
-      `import {sharedPlay} from './plays';
+      },
+      {
+        exportName: 'Variant',
+        name: 'an imported play inherited through extend is refused on the extend story',
+        reason: /imported identifier sharedPlay/,
+        source: `import {sharedPlay} from './plays';
       ${META}
       const Hidden = meta.story({play: sharedPlay});
       export const Variant = Hidden.extend({});
     `,
-      'Variant',
-      /imported identifier sharedPlay/
-    );
-  });
-
-  test('a .test() call whose name is not a string literal is refused', () => {
-    expectRefusal(
-      `${META}
+      },
+      {
+        exportName: 'Default',
+        name: 'a .test() call whose name is not a string literal is refused',
+        reason: /string literal/,
+        source: `${META}
       export const Default = meta.story({});
       const label = 'dynamic';
       Default.test(\`\${label} name\`, async () => check());
     `,
-      'Default',
-      /string literal/
-    );
-  });
-
-  test('a .test() on a story that is not exported is refused', () => {
-    expectRefusal(
-      `${META}
+      },
+      {
+        exportName: 'Hidden',
+        name: 'a .test() on a story that is not exported is refused',
+        reason: /not an exported story/,
+        source: `${META}
       const Hidden = meta.story({});
       Hidden.test('runs', async () => check());
     `,
-      'Hidden',
-      /not an exported story/
-    );
-  });
-
-  test('an assignment to a story after its declaration is refused', () => {
-    expectRefusal(
-      `${META}
+      },
+      {
+        exportName: 'Default',
+        name: 'an assignment to a story after its declaration is refused',
+        reason: /assign/,
+        source: `${META}
       export const Default = meta.story({});
       Default.play = async () => drive();
     `,
-      'Default',
-      /assign/
-    );
-  });
-
-  test('an extend cycle is refused', () => {
-    expectRefusal(
-      `${META}
+      },
+      {
+        exportName: 'First',
+        name: 'an extend cycle is refused',
+        reason: /cycle/,
+        source: `${META}
       export const First = Second.extend({});
       export const Second = First.extend({});
     `,
-      'First',
-      /cycle/
-    );
-  });
-
-  test('a meta excludeStories is refused before any story', () => {
-    expectRefusal(
-      `${PREVIEW_IMPORT}
+      },
+      {
+        exportName: 'default',
+        name: 'a meta excludeStories is refused before any story',
+        reason: /excludeStories/,
+        source: `${PREVIEW_IMPORT}
       const meta = preview.meta({component: Widget, excludeStories: /.*Data$/, title: 'Widget'});
       export const Primary = meta.story({play: async () => drive()});
     `,
-      'default',
-      /excludeStories/
-    );
-  });
-
-  test('an export clause is refused', () => {
-    expectRefusal(
-      `${META}
+      },
+      {
+        exportName: 'Shown',
+        name: 'an export clause is refused',
+        reason: /`export \{…\}` clause/,
+        source: `${META}
       const Hidden = meta.story({play: async () => drive()});
       export {Hidden as Shown};
     `,
-      'Shown',
-      /`export \{…\}` clause/
-    );
-  });
-
-  test('non-literal story tags are refused', () => {
-    expectRefusal(
-      `${META}
+      },
+      {
+        exportName: 'Tagged',
+        name: 'non-literal story tags are refused',
+        reason: /tags/,
+        source: `${META}
       export const Tagged = meta.story({play: async () => drive(), tags: makeTags()});
     `,
-      'Tagged',
-      /tags/
-    );
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {exportName, reason, source}) => {
+    expectRefusal(source, exportName, reason);
   });
 });

@@ -48,17 +48,13 @@ describe('gradeFromCounts', () => {
 });
 
 describe('overallGrade', () => {
-  test('is the lowest graded category', () => {
-    expect(overallGrade(['A+', 'B', 'C-', 'A'])).toBe('C-');
-    expect(overallGrade(['A+', 'F', 'D'])).toBe('F');
-  });
-
-  test('ignores n/a categories', () => {
-    expect(overallGrade(['n/a', 'A', 'n/a', 'B+'])).toBe('B+');
-  });
-
-  test('is n/a when every category is n/a or none is given', () => {
-    expect(overallGrade(['n/a', 'n/a'])).toBe('n/a');
-    expect(overallGrade([])).toBe('n/a');
+  test.each<[string, Grade[], Grade]>([
+    ['is the lowest graded category', ['A+', 'B', 'C-', 'A'], 'C-'],
+    ['is the lowest graded category, F included', ['A+', 'F', 'D'], 'F'],
+    ['ignores n/a categories', ['n/a', 'A', 'n/a', 'B+'], 'B+'],
+    ['is n/a when every category is n/a', ['n/a', 'n/a'], 'n/a'],
+    ['is n/a when none is given', [], 'n/a'],
+  ])('%s', (_name, input, expected) => {
+    expect(overallGrade(input)).toBe(expected);
   });
 });

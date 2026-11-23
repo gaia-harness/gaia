@@ -6,6 +6,9 @@ import {readCursor} from '../cache.js';
 import {run} from '../cursor-cmd.js';
 import {encodeToken} from '../token.js';
 
+const forgeToken = (decodedForm: string): string =>
+  Buffer.from(decodedForm, 'utf8').toString('base64url');
+
 describe('residue-cursor', () => {
   const dirs: string[] = [];
 
@@ -49,46 +52,35 @@ describe('residue-cursor', () => {
     expect(existsSync(cursorFile)).toBe(false);
   });
 
-  test('advance with a malformed token is refused with a non-zero exit and writes no cursor file', () => {
+  test.each([
+    {
+      accepted: false,
+      title:
+        'advance with a malformed token is refused with a non-zero exit and writes no cursor file',
+      token: 'not a token',
+    },
+    {
+      accepted: false,
+      title:
+        'advance with a well-formed token whose decoded path is a traversal is refused, and writes no cursor file',
+      token: forgeToken('9:../../etc/passwd:1'),
+    },
+    {
+      accepted: true,
+      title:
+        'a valid token on the same call shape is accepted, proving the refusal above is a match rather than a blanket',
+      token: encodeToken({line: 1, path: 'app/ok.ts', pr_number: 1}),
+    },
+  ])('$title', ({accepted, token}) => {
     const root = makeRoot();
 
-    const exitCode = run(['advance', '--token', 'not a token'], {cwd: root});
+    const exitCode = run(['advance', '--token', token], {cwd: root});
 
-    expect(exitCode).not.toBe(0);
+    expect(exitCode === 0).toBe(accepted);
     expect(
       existsSync(
         path.join(root, '.gaia', 'local', 'cache', 'residual-cursor.json')
       )
-    ).toBe(false);
-  });
-
-  test('advance with a well-formed token whose decoded path is a traversal is refused, and writes no cursor file', () => {
-    const root = makeRoot();
-    const forged = Buffer.from('9:../../etc/passwd:1', 'utf8')
-      .toString('base64')
-      .replaceAll('+', '-')
-      .replaceAll('/', '_')
-      .replaceAll('=', '');
-
-    const exitCode = run(['advance', '--token', forged], {cwd: root});
-
-    expect(exitCode).not.toBe(0);
-    expect(
-      existsSync(
-        path.join(root, '.gaia', 'local', 'cache', 'residual-cursor.json')
-      )
-    ).toBe(false);
-  });
-
-  test('a valid token on the same call shape is accepted, proving the refusal above is a match rather than a blanket', () => {
-    const root = makeRoot();
-    const token = encodeToken({line: 1, path: 'app/ok.ts', pr_number: 1});
-
-    expect(run(['advance', '--token', token], {cwd: root})).toBe(0);
-    expect(
-      existsSync(
-        path.join(root, '.gaia', 'local', 'cache', 'residual-cursor.json')
-      )
-    ).toBe(true);
+    ).toBe(accepted);
   });
 });

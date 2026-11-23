@@ -60,68 +60,51 @@ fixture_with() {
   printf '%s\n' "$fixture_directory"
 }
 
-@test "the sanctioned rooted form passes" {
-  local root
-  root="$(fixture_with '["\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-rm-rf.sh\""]')"
-  run gaia_check_hook_command_rooting "$root"
-  [ "$status" -eq 0 ]
+@test "a rooted command, or one naming no path, passes" {
+  local commands_json root
+  for commands_json in \
+    '["\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-rm-rf.sh\""]' \
+    '["/opt/gaia/.claude/hooks/block-rm-rf.sh"]' \
+    '["echo hi"]'; do
+    root="$(fixture_with "$commands_json")"
+    run gaia_check_hook_command_rooting "$root"
+    [ "$status" -eq 0 ] || { echo "commands $commands_json: status $status"; return 1; }
+  done
 }
 
-@test "a plain absolute path passes" {
-  local root
-  root="$(fixture_with '["/opt/gaia/.claude/hooks/block-rm-rf.sh"]')"
-  run gaia_check_hook_command_rooting "$root"
-  [ "$status" -eq 0 ]
-}
-
+# bats test_tags=protected
 @test "a bare repo-relative command is caught" {
-  local root
-  root="$(fixture_with '[".claude/hooks/block-rm-rf.sh"]')"
-  run gaia_check_hook_command_rooting "$root"
-  [ "$status" -ne 0 ]
-  grep -qF -- "block-rm-rf.sh" <<<"$output"
+  local row commands_json named unnamed root
+  for row in \
+    '[".claude/hooks/block-rm-rf.sh"]|block-rm-rf.sh|' \
+    '["bash .gaia/statusline/gaia-statusline.sh"]|gaia-statusline.sh|' \
+    '["\"$(git rev-parse --show-toplevel)/.claude/hooks/a.sh\"", ".claude/hooks/b.sh", "/abs/.claude/hooks/c.sh"]|b.sh|a.sh'; do
+    IFS='|' read -r commands_json named unnamed <<<"$row"
+    root="$(fixture_with "$commands_json")"
+    run gaia_check_hook_command_rooting "$root"
+    [ "$status" -ne 0 ] || { echo "row $named: passed"; return 1; }
+    grep -qF -- "$named" <<<"$output" || { echo "row $named: not named in the report"; return 1; }
+    # A rooted sibling must not be reported beside the unrooted one.
+    if [ -n "$unnamed" ]; then
+      grep -qF -- "$unnamed" <<<"$output" && { echo "row $named: reported rooted $unnamed"; return 1; }
+    fi
+  done
+  return 0
 }
 
-@test "a repo-relative command behind an interpreter word is caught" {
-  local root
-  root="$(fixture_with '["bash .gaia/statusline/gaia-statusline.sh"]')"
-  run gaia_check_hook_command_rooting "$root"
-  [ "$status" -ne 0 ]
-  grep -qF -- "gaia-statusline.sh" <<<"$output"
-}
-
-@test "a command naming no path is not a finding" {
-  local root
-  root="$(fixture_with '["echo hi"]')"
-  run gaia_check_hook_command_rooting "$root"
-  [ "$status" -eq 0 ]
-}
-
-@test "one unrooted command among rooted ones is still caught" {
-  local root
-  root="$(fixture_with '["\"$(git rev-parse --show-toplevel)/.claude/hooks/a.sh\"", ".claude/hooks/b.sh", "/abs/.claude/hooks/c.sh"]')"
-  run gaia_check_hook_command_rooting "$root"
-  [ "$status" -ne 0 ]
-  grep -qF -- "b.sh" <<<"$output"
-  grep -qF -- "a.sh" <<<"$output" && return 1
-  true
-}
-
-@test "an empty command set is reported as a failure, never as a pass" {
+@test "an empty command set or a missing settings.json is a failure, never a pass" {
   local fixture_directory
   fixture_directory="$(mktemp -d "$BATS_TEST_TMPDIR/fixture.XXXXXX")"
   mkdir -p "$fixture_directory/.claude"
   printf '%s\n' '{"hooks":{}}' > "$fixture_directory/.claude/settings.json"
   run gaia_check_hook_command_rooting "$fixture_directory"
-  [ "$status" -ne 0 ]
-}
+  [ "$status" -ne 0 ] || { echo "empty command set passed"; return 1; }
 
-@test "a missing settings.json is a usage failure, not a pass" {
-  local fixture_directory
   fixture_directory="$(mktemp -d "$BATS_TEST_TMPDIR/fixture.XXXXXX")"
   run gaia_check_hook_command_rooting "$fixture_directory"
   [ "$status" -ne 0 ]
 }
+
 
 # Coverage is per element: the set is derived from the artifact that owns it
 # (.claude/settings.json) rather than restated here, and every derived command

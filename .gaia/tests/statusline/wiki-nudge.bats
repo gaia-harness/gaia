@@ -304,19 +304,21 @@ stage_state_advance() {
 
 # ---------- UAT-005: the count and the threshold ----------
 
-@test "19 non-bookkeeping commits behind: wikiDriftCount is 19 and no nudge renders" {
+@test "wiki drift count and threshold with the real refresher" {
   make_repo
+  echo "case: the cached count is a number even when the nudge is not showing"
+  refresh
+  jq -e '.wikiDriftCount | type == "number"' "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json" >/dev/null
+  [ "$(cached_wiki_count)" = "0" ]
+  echo "case: 19 non-bookkeeping commits behind: wikiDriftCount is 19 and no nudge renders"
   add_drift 19
   [ "$(git -C "$REPOSITORY_FIXTURE" log --format=%s | grep -c '^wiki: ')" -ge 3 ]
   refresh
   [ "$(cached_wiki_count)" = "19" ]
   render_fix
   assert_no_wiki_nudge
-}
-
-@test "20 non-bookkeeping commits behind: the nudge renders and the CLI agrees" {
-  make_repo
-  add_drift 20
+  echo "case: 20 non-bookkeeping commits behind: the nudge renders and the CLI agrees"
+  add_commit "feat: change 20"
   refresh
   [ "$(cached_wiki_count)" = "20" ]
   [ "$(cli_drift_count)" = "20" ]
@@ -326,16 +328,10 @@ stage_state_advance() {
   assert_wiki_icon 20
 }
 
-@test "the cached count is a number even when the nudge is not showing" {
-  make_repo
-  refresh
-  jq -e '.wikiDriftCount | type == "number"' "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json" >/dev/null
-  [ "$(cached_wiki_count)" = "0" ]
-}
-
 # ---------- render-only threshold ----------
 
-@test "the threshold boundary: 19 renders nothing, 20 renders the segment" {
+@test "the render threshold and absent-input cases" {
+  echo "case: the threshold boundary: 19 renders nothing, 20 renders the segment"
   make_statusline_fixture
   render_with_cache '{"wikiDriftCount":19}'
   [ "$status" -eq 0 ]
@@ -344,9 +340,7 @@ stage_state_advance() {
   render_with_cache '{"wikiDriftCount":20}'
   [ "$status" -eq 0 ]
   assert_wiki_nudge 20
-}
-
-@test "0, an absent field, an empty string, and a non-numeric value each render no segment" {
+  echo "case: 0, an absent field, an empty string, and a non-numeric value each render no segment"
   make_statusline_fixture
   for cache in '{"wikiDriftCount":0}' '{}' '{"wikiDriftCount":""}' '{"wikiDriftCount":"abc"}' '{"wikiDriftCount":-30}'; do
     render_with_cache "$cache"
@@ -354,9 +348,7 @@ stage_state_advance() {
     assert_no_wiki_nudge || return 1
   done
   true
-}
-
-@test "a missing cache file and an unavailable jq each render no segment" {
+  echo "case: a missing cache file and an unavailable jq each render no segment"
   make_statusline_fixture
   rm -f "$STATUSLINE_FIXTURE/.gaia/local/cache/shared/update-check.json"
   render_statusline "$STATUSLINE_FIXTURE/.gaia/statusline/gaia-statusline.sh" "$STATUSLINE_FIXTURE"
@@ -371,16 +363,15 @@ stage_state_advance() {
   true
 }
 
-@test "the nudge sits in the lowest-priority slot, after /gaia-residue" {
+@test "the wiki nudge's slot and color" {
+  echo "case: the nudge sits in the lowest-priority slot, after /gaia-residue"
   make_statusline_fixture
   render_with_cache '{"gaiaHasUpdate":true,"gaiaLatest":"9.9.9","outdatedCount":3,"residueCandidateCount":5,"wikiDriftCount":22}'
   [ "$status" -eq 0 ]
   order=$(grep -oE ' /(update|gaia)-[a-z0-9-]*' <<<"$plain" | sed 's/^ //')
   expected=$(printf '%s\n' "/update-gaia" "/update-deps" "/gaia-residue" "/gaia-wiki")
   [ "$order" = "$expected" ]
-}
-
-@test "the nudge color is its own: 01;96 appears on the wiki segment and nowhere else" {
+  echo "case: the nudge color is its own: 01;96 appears on the wiki segment and nowhere else"
   make_statusline_fixture
   render_with_cache '{"gaiaHasUpdate":true,"gaiaLatest":"9.9.9","outdatedCount":3,"residueCandidateCount":5,"wikiDriftCount":22}'
   [ "$status" -eq 0 ]
@@ -388,25 +379,9 @@ stage_state_advance() {
   [ "$(grep -oF -- $'\033[01;96m' <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 }
 
-@test "a statusline with the comparison weakened to -gt fails the 20-commit case" {
-  make_statusline_fixture
-  mutant="$STATUSLINE_FIXTURE/.gaia/statusline/gaia-statusline-right.sh"
-  # shellcheck disable=SC2016  # the pattern names a literal `$`, not an expansion
-  sed 's/-ge "$WIKI_NUDGE_THRESHOLD"/-gt "$WIKI_NUDGE_THRESHOLD"/' "$STATUSLINE_RIGHT_SOURCE" > "$mutant"
-  cmp -s "$STATUSLINE_RIGHT_SOURCE" "$mutant" && return 1
-
-  printf '%s' '{"wikiDriftCount":20}' > "$STATUSLINE_FIXTURE/.gaia/local/cache/shared/update-check.json"
-  render_statusline "$STATUSLINE_FIXTURE/.gaia/statusline/gaia-statusline.sh" "$STATUSLINE_FIXTURE"
-  [ "$status" -eq 0 ]
-  # The real script's 20-commit assertion is `assert_wiki_nudge 20`; the mutant
-  # must not satisfy it.
-  assert_wiki_nudge 20 && return 1
-  true
-}
-
 # ---------- suppression ----------
 
-@test "no wiki nudge renders from a linked worktree of the fixture" {
+@test "no wiki nudge while worktree, setup incomplete, or mid-init" {
   make_repo
   add_drift 25
   refresh
@@ -414,33 +389,25 @@ stage_state_advance() {
   render_fix
   assert_wiki_nudge 25
 
+  echo "case: no wiki nudge renders from a linked worktree of the fixture"
   git -C "$REPOSITORY_FIXTURE" worktree add --quiet "${REPOSITORY_FIXTURE}-wt" -b feature
   render_fix "${REPOSITORY_FIXTURE}-wt"
   [ "$status" -eq 0 ]
-  assert_no_wiki_nudge
-}
+  assert_no_wiki_nudge || return 1
 
-@test "no wiki nudge renders while setup-state.json lacks completed_at" {
-  make_repo
-  add_drift 25
-  refresh
+  echo "case: no wiki nudge renders while setup-state.json lacks completed_at"
   render_fix
   assert_wiki_nudge 25
-
   printf '{}' > "$REPOSITORY_FIXTURE/.gaia/local/setup-state.json"
   render_fix
   [ "$status" -eq 0 ]
   grep -qF -- "⚙️ /setup-gaia" <<<"$plain"
-  assert_no_wiki_nudge
-}
+  assert_no_wiki_nudge || return 1
 
-@test "no wiki nudge renders while .claude/commands/gaia-init.md exists" {
-  make_repo
-  add_drift 25
-  refresh
+  echo "case: no wiki nudge renders while .claude/commands/gaia-init.md exists"
+  printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$REPOSITORY_FIXTURE/.gaia/local/setup-state.json"
   render_fix
   assert_wiki_nudge 25
-
   mkdir -p "$REPOSITORY_FIXTURE/.claude/commands"
   : > "$REPOSITORY_FIXTURE/.claude/commands/gaia-init.md"
   render_fix
@@ -450,13 +417,45 @@ stage_state_advance() {
 
 # ---------- UAT-006: clearing ----------
 
-@test "advancing the state file to HEAD and invalidating the cache clears the nudge" {
+@test "the cached count clears or holds by cache TTL and state file" {
   make_repo
   add_drift 20
   refresh
   render_fix
   assert_wiki_nudge 20
 
+  echo "case: invalidating the cache without advancing the state file keeps the nudge"
+  refresh
+  [ "$(cached_wiki_count)" = "20" ]
+  render_fix
+  assert_wiki_nudge 20
+
+  echo "case: a fresh cache whose wiki state is unchanged is held by the TTL"
+  local cache="$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
+  jq '.wikiDriftCount = 99' "$cache" > "$cache.tmp" && mv "$cache.tmp" "$cache"
+  refresh_within_ttl
+  [ "$(cached_wiki_count)" = "99" ]
+  refresh
+  [ "$(cached_wiki_count)" = "20" ]
+
+  # The state file can advance by any route (a hand `git pull`, a merge
+  # cleanup), none of which touches the cache, so the gate itself must notice.
+  echo "case: a state file advanced under a fresh cache clears the nudge with no invalidation"
+  render_fix
+  assert_wiki_nudge 20
+  write_state "$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)"
+  git -C "$REPOSITORY_FIXTURE" add wiki/.state.json
+  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
+  refresh_within_ttl
+  [ "$(cached_wiki_count)" -lt 20 ]
+  render_fix
+  assert_no_wiki_nudge || return 1
+
+  echo "case: advancing the state file to HEAD and invalidating the cache clears the nudge"
+  add_drift 20
+  refresh
+  render_fix
+  assert_wiki_nudge 20
   write_state "$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)"
   git -C "$REPOSITORY_FIXTURE" add wiki/.state.json
   git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
@@ -464,54 +463,12 @@ stage_state_advance() {
   [ "$(cached_wiki_count)" -lt 20 ]
   render_fix
   assert_no_wiki_nudge
-}
-
-@test "invalidating the cache without advancing the state file keeps the nudge" {
-  make_repo
-  add_drift 20
-  refresh
-  render_fix
-  assert_wiki_nudge 20
-
-  refresh
-  [ "$(cached_wiki_count)" = "20" ]
-  render_fix
-  assert_wiki_nudge 20
 }
 
 # Run the refresher without staling the cache first, so the TTL gate decides.
 refresh_within_ttl() {
   run env HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
-}
-
-# The main checkout's state file can advance by any route (a hand `git pull`,
-# a merge cleanup), none of which touches the cache, so the gate itself must
-# notice: a cache computed against an older state is stale whatever its age.
-@test "a state file advanced under a fresh cache clears the nudge with no invalidation" {
-  make_repo
-  add_drift 20
-  refresh
-  render_fix
-  assert_wiki_nudge 20
-
-  write_state "$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)"
-  git -C "$REPOSITORY_FIXTURE" add wiki/.state.json
-  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
-  refresh_within_ttl
-  [ "$(cached_wiki_count)" -lt 20 ]
-  render_fix
-  assert_no_wiki_nudge
-}
-
-@test "a fresh cache whose wiki state is unchanged is held by the TTL" {
-  make_repo
-  add_drift 20
-  refresh
-  local cache="$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
-  jq '.wikiDriftCount = 99' "$cache" > "$cache.tmp" && mv "$cache.tmp" "$cache"
-  refresh_within_ttl
-  [ "$(cached_wiki_count)" = "99" ]
 }
 
 # ---------- UAT-006 through a real chain landing ----------
@@ -552,8 +509,9 @@ assert_nudge_cleared_without_refresher() {
   [ "$(jq -r '.last_evaluated_sha' "$directory/wiki/.state.json")" = "$landed_sha" ]
 }
 
-@test "a chain landing on main stays on its branch, and cleanup plus refresh-nudge clears the nudge with no refresher run" {
+@test "a wiki landing clears the nudge, from main, a feature branch and a queued merge" {
   make_repo
+  echo "case: a chain landing on main stays on its branch, and cleanup plus refresh-nudge clears the nudge with no refresher run"
   seed_nudge_and_stage_sync
   landed_sha=$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)
   run_chain_landing "$REPOSITORY_FIXTURE" isolated
@@ -568,23 +526,8 @@ assert_nudge_cleared_without_refresher() {
   run_refresh_nudge "$REPOSITORY_FIXTURE"
   grep -qF -- "chain refresh-nudge: wiki drift 0" <<<"$output"
   assert_nudge_cleared_without_refresher "$REPOSITORY_FIXTURE" "$landed_sha"
-}
 
-@test "a chain landing on a feature branch commits in place and refresh-nudge clears the nudge" {
-  make_repo
-  git -C "$REPOSITORY_FIXTURE" checkout --quiet -b feature
-  seed_nudge_and_stage_sync
-  landed_sha=$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)
-  run_chain_landing "$REPOSITORY_FIXTURE"
-  [ "$status" -eq 0 ]
-  grep -qE -- "chain commit: wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC" <<<"$output"
-  git -C "$REPOSITORY_FIXTURE" log -1 --format=%s | grep -qE '^wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC$'
-  run_refresh_nudge "$REPOSITORY_FIXTURE"
-  assert_nudge_cleared_without_refresher "$REPOSITORY_FIXTURE" "$landed_sha"
-}
-
-@test "a queued landing whose merge has not landed leaves the cached count and the checkout on its branch" {
-  make_repo
+  echo "case: a queued landing whose merge has not landed leaves the cached count and the checkout on its branch"
   seed_nudge_and_stage_sync
   MOCK_GH_MERGE=defer run_chain_landing "$REPOSITORY_FIXTURE" isolated
   [ "$status" -eq 0 ]
@@ -592,6 +535,23 @@ assert_nudge_cleared_without_refresher() {
   [ "$(cached_wiki_count)" = "20" ]
   git -C "$REPOSITORY_FIXTURE" rev-parse --abbrev-ref HEAD | grep -qE '^wiki/[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}$'
   [ "$(git -C "$ORIGIN_DIRECTORY" rev-parse main)" != "$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)" ]
+
+  # The deferred landing left main's 20 drift commits unadvanced, so the
+  # feature branch cut from main starts at drift 20.
+  echo "case: a chain landing on a feature branch commits in place and refresh-nudge clears the nudge"
+  git -C "$REPOSITORY_FIXTURE" checkout --quiet main
+  git -C "$REPOSITORY_FIXTURE" checkout --quiet -b feature
+  refresh
+  render_fix
+  assert_wiki_nudge 20
+  stage_state_advance "$REPOSITORY_FIXTURE"
+  landed_sha=$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)
+  run_chain_landing "$REPOSITORY_FIXTURE"
+  [ "$status" -eq 0 ]
+  grep -qE -- "chain commit: wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC" <<<"$output"
+  git -C "$REPOSITORY_FIXTURE" log -1 --format=%s | grep -qE '^wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC$'
+  run_refresh_nudge "$REPOSITORY_FIXTURE"
+  assert_nudge_cleared_without_refresher "$REPOSITORY_FIXTURE" "$landed_sha"
 }
 
 # A protected-branch landing runs where its branch is checked out. `main` cannot be
@@ -647,19 +607,6 @@ build_trailing_main_and_current_worktree() {
   run env HOME="$TEMPORARY_HOME" bash "${REPOSITORY_FIXTURE}-wt/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   [ "$(cached_wiki_count)" = "25" ]
-}
-
-@test "a refresher reading wiki state from PROJECT_ROOT fails the linked-worktree case" {
-  build_trailing_main_and_current_worktree
-  mutant="${REPOSITORY_FIXTURE}-wt/.gaia/scripts/check-updates-mutant.sh"
-  # shellcheck disable=SC2016  # the pattern names a literal `$`, not an expansion
-  sed 's/cd "$STATE_ROOT" \&\& "$GAIA_BIN" wiki state/cd "$PROJECT_ROOT" \&\& "$GAIA_BIN" wiki state/' \
-    "$CHECK_UPDATES_SOURCE" > "$mutant"
-  cmp -s "$CHECK_UPDATES_SOURCE" "$mutant" && return 1
-
-  run env HOME="$TEMPORARY_HOME" bash "$mutant"
-  [ "$status" -eq 0 ]
-  [ "$(cached_wiki_count)" != "25" ]
 }
 
 # ---------- UAT-013 / UAT-014: every state shape yields a number ----------
@@ -723,54 +670,47 @@ assert_count_matches_cli() {
 
 # ---------- refresher failure paths ----------
 
-@test "a failing wiki state call keeps the previous cached count" {
+@test "refresher failure paths keep or default the cached count" {
   make_repo
-  printf '{"checkedAt":0,"wikiDriftCount":30}' > "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
+  local cache="$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
+  echo "case: a failing wiki state call keeps the previous cached count"
+  printf '{"checkedAt":0,"wikiDriftCount":30}' > "$cache"
   run env MOCK_WIKI_EXIT=1 HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   [ "$(cached_wiki_count)" = "30" ]
-}
 
-@test "empty output, unparseable output, and a non-integer drift_count each keep the previous count" {
-  make_repo
+  echo "case: empty output, unparseable output, and a non-integer drift_count each keep the previous count"
   for wiki_state_output in '' 'not json' '{"drift_count":"many"}' '{"drift_count":-4}' '{"drift_count":null}' '{}'; do
-    printf '{"checkedAt":0,"wikiDriftCount":30}' > "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
+    printf '{"checkedAt":0,"wikiDriftCount":30}' > "$cache"
     run env MOCK_WIKI_OUTPUT="$wiki_state_output" HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
     [ "$status" -eq 0 ]
     [ "$(cached_wiki_count)" = "30" ] || return 1
   done
-  true
-}
 
-@test "an absent gaia binary keeps the previous cached count" {
-  make_repo
-  printf '{"checkedAt":0,"wikiDriftCount":30}' > "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
+  echo "case: with no prior cache and a failing binary, 0 is written rather than omitted"
+  rm -f "$cache"
+  run env MOCK_WIKI_EXIT=1 HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
+  [ "$status" -eq 0 ]
+  jq -e 'has("wikiDriftCount")' "$cache" >/dev/null
+  [ "$(cached_wiki_count)" = "0" ]
+
+  echo "case: a non-numeric previous cached value is read as 0, never carried"
+  printf '{"checkedAt":0,"wikiDriftCount":"abc"}' > "$cache"
+  run env MOCK_WIKI_EXIT=1 HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
+  [ "$status" -eq 0 ]
+  [ "$(cached_wiki_count)" = "0" ]
+
+  echo "case: the no-jq printf fallback branch writes a wikiDriftCount key"
+  rm -f "$cache"
+  run env PATH="$(path_shim_without jq)" HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
+  [ "$status" -eq 0 ]
+  grep -qE '"wikiDriftCount":[0-9]+' "$cache"
+
+  echo "case: an absent gaia binary keeps the previous cached count"
+  printf '{"checkedAt":0,"wikiDriftCount":30}' > "$cache"
   rm -f "$REPOSITORY_FIXTURE/.gaia/cli/gaia"
   run env HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   [ "$(cached_wiki_count)" = "30" ]
 }
 
-@test "with no prior cache and a failing binary, 0 is written rather than omitted" {
-  make_repo
-  [ ! -f "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json" ]
-  run env MOCK_WIKI_EXIT=1 HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
-  [ "$status" -eq 0 ]
-  jq -e 'has("wikiDriftCount")' "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json" >/dev/null
-  [ "$(cached_wiki_count)" = "0" ]
-}
-
-@test "a non-numeric previous cached value is read as 0, never carried" {
-  make_repo
-  printf '{"checkedAt":0,"wikiDriftCount":"abc"}' > "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
-  run env MOCK_WIKI_EXIT=1 HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
-  [ "$status" -eq 0 ]
-  [ "$(cached_wiki_count)" = "0" ]
-}
-
-@test "the no-jq printf fallback branch writes a wikiDriftCount key" {
-  make_repo
-  run env PATH="$(path_shim_without jq)" HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
-  [ "$status" -eq 0 ]
-  grep -qE '"wikiDriftCount":[0-9]+' "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
-}

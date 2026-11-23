@@ -80,72 +80,80 @@ run_hook_without_library() {
 }
 
 
+# The Bash|Monitor matcher delivers Monitor payloads too, and a Monitor
+# command reads files exactly as a Bash command does.
+run_hook_monitor() {
+  local command_line="$1"
+  local json
+  json=$(jq -n --arg command "$command_line" '{tool_name: "Monitor", tool_input: {command: $command}}')
+  invoke_hook "$json" "$HOOK_ABSOLUTE_PATH"
+}
+
+# run_verdict_row <tool>|<allow|deny>|<input>: drive one case-table row and
+# check its verdict, reporting the row on failure. <tool> is Read, Bash,
+# Monitor, GrepPath or GrepGlob. The input is everything after the second `|`,
+# so a command may carry pipes of its own.
+run_verdict_row() {
+  local row="$1" tool verdict input
+  tool=${row%%|*}; row=${row#*|}; verdict=${row%%|*}; input=${row#*|}
+  case "$tool" in
+    Read) run_hook_read "$input" ;;
+    Bash) run_hook_bash "$input" ;;
+    Monitor) run_hook_monitor "$input" ;;
+    GrepPath) run_hook_grep "$input" "" ;;
+    GrepGlob) run_hook_grep "" "$input" ;;
+    *) echo "unknown row tool: $tool"; return 1 ;;
+  esac
+  [ "$status" -eq 0 ] || { echo "case $tool $input: status=$status output=$output"; return 1; }
+  if grep -qF -- '"permissionDecision": "deny"' <<<"$output"; then
+    [ "$verdict" = deny ] || { echo "case $tool $input: denied, expected allow"; return 1; }
+  else
+    [ "$verdict" = allow ] || { echo "case $tool $input: allowed, expected deny"; return 1; }
+  fi
+}
+
+# run_settings_row <label> <jq expression>: the expression holds over settings.json.
+run_settings_row() {
+  run jq -e "$2" "$SETTINGS_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || { echo "case $1: settings.json fails: $2"; return 1; }
+}
 
 # --- Read-tool denies ---
 
+# bats test_tags=protected
 @test "Read a nested packages/api/.env.production is denied" {
   run_hook_read "packages/api/.env.production"
   assert_denied_by_json
 }
 
-# --- Read-tool allow ---
-
-@test "Read .env.example is allowed" {
-  run_hook_read ".env.example"
-  assert_allowed_by_json
-}
-
-# --- Bash denies: recognized readers against variants ---
-
-@test "cat .env.local is denied" {
-  run_hook_bash "cat .env.local"
-  assert_denied_by_json
-}
-
-@test "cat a nested packages/api/.env.production is denied" {
-  run_hook_bash "cat packages/api/.env.production"
-  assert_denied_by_json
-}
-
-# --- Bash denies: residual read paths ---
-
-@test "source .env is denied" {
-  run_hook_bash "source .env"
-  assert_denied_by_json
-}
-
-@test ". ./.env is denied" {
-  run_hook_bash ". ./.env"
-  assert_denied_by_json
-}
-
-@test "x=\$(<.env) is denied" {
-  # The single-quoting is deliberate: the payload must reach the hook verbatim
-  # so it classifies the literal command text. Never double-quote it, which
-  # would expand $(<.env) here and defeat the test.
+# --- Bash denies: readers, residual read paths and shell forms ---
+#
+# The segment walk splits on each of `|`, `&`, `;`, `(` and `)`, so it covers
+# &&, ; and || and reaches into `$(...)`. `.env*`, `.env.*` and `.env?` each expand
+# to dotenv files in the directory, so they read the same bytes the literal path
+# does; the predicate once matched only the literal spellings with a regex no
+# metacharacter satisfies, so the globs were allowed while `cat .env` was denied.
+# The single-quoted rows are deliberate: the payload must reach the hook
+# verbatim so it classifies the literal command text.
+@test "a dotenv read through a reader command or a shell form is denied" {
+  local row
   # shellcheck disable=SC2016
-  run_hook_bash 'x=$(<.env)'
-  assert_denied_by_json
-}
-
-@test "xxd .env is denied" {
-  run_hook_bash "xxd .env"
-  assert_denied_by_json
-}
-
-@test "true && cat .env.local is denied (compound-command segment walk)" {
-  run_hook_bash "true && cat .env.local"
-  assert_denied_by_json
-}
-
-@test "cd /tmp; cat .env.local is denied (semicolon segment walk)" {
-  run_hook_bash "cd /tmp; cat .env.local"
-  assert_denied_by_json
-}
-
-@test "false || cat .env.local is denied (or segment walk)" {
-  run_hook_bash "false || cat .env.local"
-  assert_denied_by_json
+  for row in \
+    "Bash|deny|cat .env.local" \
+    "Bash|deny|cat packages/api/.env.production" \
+    "Bash|deny|source .env" \
+    "Bash|deny|. ./.env" \
+    'Bash|deny|x=$(<.env)' \
+    "Bash|deny|xxd .env" \
+    "Bash|deny|true && cat .env.local" \
+    "Bash|deny|cd /tmp; cat .env.local" \
+    "Bash|deny|false || cat .env.local" \
+    'Bash|deny|x=$(cat .env)' \
+    'Bash|deny|cat .env*' \
+    'Bash|deny|cat .env.*' \
+    'Bash|deny|cat .env?'; do
+    run_verdict_row "$row" || return 1
+  done
 }
 
 # --- Bash denies: bare environment dumps ---
@@ -156,635 +164,361 @@ run_hook_without_library() {
 }
 
 # --- Bash: heredoc bodies and the dump reason ---
-
-# Built with printf so each payload carries real newlines and tabs.
-@test "a cat heredoc with a quoted delimiter writing the word env is allowed" {
-  run_hook_bash "$(printf "cat > notes.md <<'EOF'\n(env) plus the transcript\nEOF")"
-  assert_allowed_by_json
+#
+# Built with printf so each payload carries real newlines and tabs. A cat or
+# tee heredoc with a quoted delimiter and no pipe only writes data; anything a
+# shell runs, or whose body cannot be proven closed, keeps its body judged.
+@test "a data heredoc is allowed and a runnable or unproven body is denied" {
+  local row verdict payload
+  for row in \
+    "allow|cat > notes.md <<'EOF'\n(env) plus the transcript\nEOF" \
+    "allow|tee notes.md <<-\"END\"\n\tprintenv\n\tEND" \
+    "allow|git commit -m \"\$(cat <<'EOF'\nenv\nEOF\n)\"" \
+    "deny|cat > notes.md <<'EOF'\nx\nEOF\nprintenv" \
+    "deny|bash <<'EOF'\ncat .env\nEOF" \
+    "deny|cat <<'EOF' | sh\nprintenv\nEOF" \
+    "deny|cat > notes.md <<EOF\nenv\nEOF" \
+    "deny|cat > notes.md <<'EOF'\nprintenv" \
+    "deny|cat <<<'EOF'\nprintenv\nEOF"; do
+    verdict=${row%%|*}
+    payload=$(printf "${row#*|}")
+    run_hook_bash "$payload"
+    if [ "$verdict" = allow ]; then
+      assert_allowed_by_json || { echo "not allowed: ${row#*|}"; return 1; }
+    else
+      assert_denied_by_json || { echo "not denied: ${row#*|}"; return 1; }
+    fi
+  done
 }
 
-@test "a tee heredoc with a double-quoted dash delimiter writing printenv is allowed" {
-  run_hook_bash "$(printf 'tee notes.md <<-"END"\n\tprintenv\n\tEND')"
-  assert_allowed_by_json
-}
-
-@test "a commit message heredoc carrying a line that is only env is allowed" {
-  run_hook_bash "$(printf "git commit -m \"\$(cat <<'EOF'\nenv\nEOF\n)\"")"
-  assert_allowed_by_json
-}
-
-@test "a printenv after a closed data heredoc is still denied" {
-  run_hook_bash "$(printf "cat > notes.md <<'EOF'\nx\nEOF\nprintenv")"
-  assert_denied_by_json
-}
-
-@test "a quoted heredoc fed to bash keeps its body judged" {
-  run_hook_bash "$(printf "bash <<'EOF'\ncat .env\nEOF")"
-  assert_denied_by_json
-}
-
-@test "a cat heredoc piped onward to a shell keeps its body judged" {
-  run_hook_bash "$(printf "cat <<'EOF' | sh\nprintenv\nEOF")"
-  assert_denied_by_json
-}
-
-@test "an unquoted heredoc keeps its body judged" {
-  run_hook_bash "$(printf 'cat > notes.md <<EOF\nenv\nEOF')"
-  assert_denied_by_json
-}
-
-@test "a data heredoc with no closing line keeps its body judged" {
-  run_hook_bash "$(printf "cat > notes.md <<'EOF'\nprintenv")"
-  assert_denied_by_json
-}
-
-@test "a here-string is not read as a heredoc opener" {
-  run_hook_bash "$(printf "cat <<<'EOF'\nprintenv\nEOF")"
-  assert_denied_by_json
-}
-
-@test "a regex alternation naming env is denied with a reason naming the split and the -e spelling" {
+@test "a regex alternation naming the dump words is denied with a reason naming the split and the -e spelling" {
   run_hook_bash "grep -n -E '(env|printenv)' notes.md"
   assert_denied_by_json
   grep -qF -- "without regard for quotes" <<<"$output"
   grep -qF -- "own -e operand" <<<"$output"
 }
 
-# --- Bash allows: env as a runner ---
-
-@test "env NODE_ENV=production node app.js is allowed" {
-  run_hook_bash "env NODE_ENV=production node app.js"
-  assert_allowed_by_json
-}
-
-# --- Bash allows: false-positive guards ---
-
-@test "pnpm dev is allowed" {
-  run_hook_bash "pnpm dev"
-  assert_allowed_by_json
-}
-
-@test "pnpm i && pnpm dev is allowed (benign compound command)" {
-  run_hook_bash "pnpm i && pnpm dev"
-  assert_allowed_by_json
-}
-
-@test "cat app/services/env.ts is allowed" {
-  run_hook_bash "cat app/services/env.ts"
-  assert_allowed_by_json
-}
-
-@test "cat README.md is allowed" {
-  run_hook_bash "cat README.md"
-  assert_allowed_by_json
-}
-
-@test "cp .env.example .env is allowed" {
-  run_hook_bash "cp .env.example .env"
-  assert_allowed_by_json
-}
-
-@test "grep '.env' .gitignore is allowed (pattern, not a file read)" {
-  run_hook_bash "grep '.env' .gitignore"
-  assert_allowed_by_json
-}
-
-# --- Bash denies: the grep family, which needs argument grammar ---
-
-@test "grep SECRET .env is denied" {
-  run_hook_bash "grep SECRET .env"
-  assert_denied_by_json
-}
-
-@test "grep -rn SECRET .env.local is denied" {
-  run_hook_bash "grep -rn SECRET .env.local"
-  assert_denied_by_json
-}
-
-@test "rg SECRET .env.production is denied" {
-  run_hook_bash "rg SECRET .env.production"
-  assert_denied_by_json
-}
-
-@test "grep -f pats.txt .env.local is denied (the target file, not the pattern file)" {
-  # -f names a file of patterns, which grep opens itself; this walk does not
-  # treat that value as a candidate. The positional target file after it still
-  # is.
-  run_hook_bash "grep -f pats.txt .env.local"
-  assert_denied_by_json
-}
-
-# --- Bash allows: the grep family, pattern operand not mistaken for a path ---
-
-@test "grep -e .env .gitignore is allowed (-e supplies the pattern)" {
-  run_hook_bash "grep -e .env .gitignore"
-  assert_allowed_by_json
-}
-
-@test "grep --include=*.ts SECRET app is allowed" {
-  run_hook_bash "grep --include=*.ts SECRET app"
-  assert_allowed_by_json
-}
-
-# --- Bash: filter flags whose value SELECTS the files a search reads ---
-
-@test "grep -r SECRET --include='.env' . is denied (the filter selects the dotenv class)" {
-  run_hook_bash "grep -r SECRET --include='.env' ."
-  assert_denied_by_json
-}
-
-@test "rg -g '.env*' SECRET is denied" {
-  run_hook_bash "rg -g '.env*' SECRET"
-  assert_denied_by_json
-}
-
-@test "rg --glob=.env.local SECRET is denied" {
-  run_hook_bash "rg --glob=.env.local SECRET"
-  assert_denied_by_json
-}
-
-@test "rg -g '!.env*' SECRET stays allowed" {
-  # Not a guard on the negation skip: is_dotenv_path never matches a basename
-  # starting with `!`, so this stays green with the skip removed. The skip is
-  # guarded by the table-driven negated-glob test further down this file.
-  run_hook_bash "rg -g '!.env*' SECRET"
-  assert_allowed_by_json
-}
-
-@test "grep -r -g '!*.md,.env*' SECRET . is denied (ugrep negates each comma-list element alone)" {
-  run_hook_bash "grep -r -g '!*.md,.env*' SECRET ."
-  assert_denied_by_json
-}
-
-@test "grep -r -g '*.md,.env.local' SECRET . is denied (each comma-list element is judged)" {
-  run_hook_bash "grep -r -g '*.md,.env.local' SECRET ."
-  assert_denied_by_json
-}
-
-@test "grep -r SECRET --exclude=.env . is allowed (--exclude names files not read)" {
-  run_hook_bash "grep -r SECRET --exclude=.env ."
-  assert_allowed_by_json
-}
-
-@test "rg -g '*.ts' .env app is allowed (the select flag still consumes its value)" {
-  run_hook_bash "rg -g '*.ts' .env app"
-  assert_allowed_by_json
-}
-
-@test "grep SECRET .env.example is allowed" {
-  run_hook_bash "grep SECRET .env.example"
-  assert_allowed_by_json
-}
-
-@test "rg --ignore-file .rgignore SECRET app is allowed" {
-  # --ignore-file names a file of globs and supplies no pattern, so the
-  # positional after it is still the pattern rather than a path.
-  run_hook_bash "rg --ignore-file .rgignore SECRET app"
-  assert_allowed_by_json
-}
-
-@test "ls -la .env is allowed (non-reading)" {
-  run_hook_bash "ls -la .env"
-  assert_allowed_by_json
-}
-
-@test "cat .env.example is allowed " {
-  run_hook_bash "cat .env.example"
-  assert_allowed_by_json
-}
-
-# --- Structural ---
-
-@test "block-sensitive-read.sh is executable" {
-  [ -x "$HOOK_ABSOLUTE_PATH" ]
-}
-
-@test "settings.json registers block-sensitive-read.sh under the Read matcher" {
-  hook_registered "$SETTINGS_ABSOLUTE_PATH" '.hooks.PreToolUse[] | select(.matcher == "Read")' block-sensitive-read.sh
-}
-
-@test "settings.json registers block-sensitive-read.sh on the Bash|Monitor matcher" {
-  hook_registered "$SETTINGS_ABSOLUTE_PATH" '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")' block-sensitive-read.sh
-}
-
-# The Bash|Monitor matcher delivers Monitor payloads too, and a Monitor
-# command reads files exactly as a Bash command does.
-run_hook_monitor() {
-  local command_line="$1"
-  local json
-  json=$(jq -n --arg command "$command_line" '{tool_name: "Monitor", tool_input: {command: $command}}')
-  invoke_hook "$json" "$HOOK_ABSOLUTE_PATH"
-}
-
-@test "Monitor cat .env.local is denied" {
-  run_hook_monitor "cat .env.local"
-  assert_denied_by_json
-}
-
-@test "Monitor tail on a secret path is denied" {
-  run_hook_monitor "tail -f secrets/api.key"
-  assert_denied_by_json
-}
-
-@test "Monitor tail on an ordinary log is allowed" {
-  run_hook_monitor "tail -f app.log"
-  assert_allowed_by_json
-}
-
-@test "permissions.deny carries no Read() rule at all" {
-  # Not merely "no Read(.env)": ANY Read() deny rule arms the bypass-immune
-  # deniedPathInsideDirectory breaker, so the guarantee this hook is paid to
-  # provide is the empty set, and a well-meaning re-addition of any one of them
-  # silently reinstates the prompt storm this suite exists to keep away.
-  run jq -e '[.permissions.deny[] | select(startswith("Read("))] | length == 0' "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-}
-
-@test "permissions.deny keeps the write-side .env backstop" {
-  # Edit(.env) blocks every file-writing tool (Write, Edit, MultiEdit,
-  # NotebookEdit), so a separate Write(.env) deny is redundant and is
-  # intentionally absent. Only the READ half moved to the hook layer; an Edit()
-  # rule arms no read breaker and therefore costs nothing to keep.
-  run jq -e '.permissions.deny | index("Edit(.env)")' "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-}
-
-@test "permissions.deny adds no .env.example deny and no .env.* glob" {
-  run jq -e '[.permissions.deny[] | select(contains(".env.example") or contains(".env.*"))] | length == 0' "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-}
-
-# --- Regression: a discard-listed flag that is value-less for the invoked tool ---
+# --- allows: env as a runner, false-positive guards, non-reading uses ---
 #
-# Each of these was ALLOWED before the flag tables dropped -r, -T and the bare
+# `grep '.env' .gitignore` names .env as a pattern, not a file read; `ls` reads
+# no content; `.environment` is not a dotenv variant.
+@test "benign commands and non-reading uses of dotenv names are allowed" {
+  local row
+  for row in \
+    "Read|allow|.env.example" \
+    "Bash|allow|env NODE_ENV=production node app.js" \
+    "Bash|allow|pnpm dev" \
+    "Bash|allow|pnpm i && pnpm dev" \
+    "Bash|allow|cat app/services/env.ts" \
+    "Bash|allow|cat README.md" \
+    "Bash|allow|cp .env.example .env" \
+    "Bash|allow|grep '.env' .gitignore" \
+    "Bash|allow|ls -la .env" \
+    "Bash|allow|cat .env.example" \
+    "Bash|allow|cat .environment"; do
+    run_verdict_row "$row" || return 1
+  done
+}
+
+# --- Bash: the grep family, which needs argument grammar (dotenv) ---
+#
+# -f names a file of patterns and -e supplies the pattern, which grep opens or
+# reads itself; this walk does not treat that value as a candidate, and the
+# positional target after it still is. --ignore-file names a file of globs and
+# supplies no pattern, so the positional after it is still the pattern. A filter
+# flag whose value SELECTS the files a recursive search reads (--include, -g,
+# --glob) is judged on that value; ugrep negates each comma-list element alone,
+# so every element is judged; --exclude names files not read. A select flag
+# still consumes its value, so in `rg -g '*.ts' .env app` the .env is the
+# pattern. The `!.env*` row is not a guard on the negation skip: the dotenv
+# predicate never matches a basename starting with `!`, so it stays green with
+# the skip removed; the skip is guarded by the derived negated-glob test below.
+@test "grep and rg are judged on the target file and select-filter value, not the pattern or exclude operand (dotenv)" {
+  local row
+  for row in \
+    "Bash|deny|grep SECRET .env" \
+    "Bash|deny|grep -rn SECRET .env.local" \
+    "Bash|deny|rg SECRET .env.production" \
+    "Bash|deny|grep -f pats.txt .env.local" \
+    "Bash|allow|grep -e .env .gitignore" \
+    "Bash|allow|grep --include=*.ts SECRET app" \
+    "Bash|deny|grep -r SECRET --include='.env' ." \
+    "Bash|deny|rg -g '.env*' SECRET" \
+    "Bash|deny|rg --glob=.env.local SECRET" \
+    "Bash|allow|rg -g '!.env*' SECRET" \
+    "Bash|deny|grep -r -g '!*.md,.env*' SECRET ." \
+    "Bash|deny|grep -r -g '*.md,.env.local' SECRET ." \
+    "Bash|allow|grep -r SECRET --exclude=.env ." \
+    "Bash|allow|rg -g '*.ts' .env app" \
+    "Bash|allow|grep SECRET .env.example" \
+    "Bash|allow|rg --ignore-file .rgignore SECRET app"; do
+    run_verdict_row "$row" || return 1
+  done
+}
+
+@test "Monitor applies the same read deny" {
+  local row
+  for row in \
+    "Monitor|deny|cat .env.local" \
+    "Monitor|deny|tail -f secrets/api.key" \
+    "Monitor|allow|tail -f app.log"; do
+    run_verdict_row "$row" || return 1
+  done
+}
+
+# Not merely "no Read(.env)": ANY Read() deny rule arms the bypass-immune
+# deniedPathInsideDirectory breaker, so the guarantee this hook is paid to
+# provide is the empty set, and a well-meaning re-addition of any one of them
+# silently reinstates the prompt storm this suite exists to keep away.
+# Edit(.env) blocks every file-writing tool (Write, Edit, MultiEdit,
+# NotebookEdit), so a separate Write(.env) deny is redundant and is
+# intentionally absent. Only the READ half moved to the hook layer; an Edit()
+# rule arms no read breaker and therefore costs nothing to keep.
+@test "permissions.deny keeps only the write-side backstop" {
+  run_settings_row no-read-rule '[.permissions.deny[] | select(startswith("Read("))] | length == 0' || return 1
+  run_settings_row edit-env-backstop '.permissions.deny | index("Edit(.env)")' || return 1
+  run_settings_row no-example-or-glob-deny '[.permissions.deny[] | select(contains(".env.example") or contains(".env.*"))] | length == 0' || return 1
+}
+
+# --- grep flag arity: a discard-listed flag that is value-less for the invoked tool ---
+#
+# Each deny row was ALLOWED before the flag tables dropped -r, -T and the bare
 # --color/--colour spelling. The flag ate the pattern, the path was then taken
 # as the pattern, and the walk emitted no operand at all, so the guard passed a
-# dotenv read through in silence. `-rn` and `-R` denied throughout, which is
-# what kept the class invisible: `grep -r PATTERN PATH` is the most idiomatic
-# recursive spelling there is, and it sat untested beside two working ones.
-
-@test "grep -r SECRET .env is denied (bare -r is value-less for grep)" {
-  run_hook_bash "grep -r SECRET .env"
-  assert_denied_by_json
-}
-
-@test "grep -ir PASSWORD .env.production is denied (clustered, -r last)" {
-  run_hook_bash "grep -ir PASSWORD .env.production"
-  assert_denied_by_json
-}
-
-@test "grep -T SECRET .env is denied (bare -T is value-less for grep)" {
-  run_hook_bash "grep -T SECRET .env"
-  assert_denied_by_json
-}
-
-@test "grep --color SECRET .env is denied (optional-value for grep)" {
-  run_hook_bash "grep --color SECRET .env"
-  assert_denied_by_json
-}
-
-@test "grep --colour SECRET .env is denied" {
-  run_hook_bash "grep --colour SECRET .env"
-  assert_denied_by_json
-}
-
-@test "rg -r X .env.local is denied (over-reads the pattern, fail-closed)" {
-  run_hook_bash "rg -r X .env.local"
-  assert_denied_by_json
-}
-
-@test "grep --color=auto .env .gitignore is allowed (= form supplies its own value)" {
-  run_hook_bash "grep --color=auto .env .gitignore"
-  assert_allowed_by_json
+# dotenv or secret read through in silence. `-rn` and `-R` denied throughout,
+# which is what kept the class invisible: `grep -r PATTERN PATH` is the most
+# idiomatic recursive spelling there is. rg's -r over-reads the pattern and
+# fails closed; an `=` form supplies its own value.
+@test "grep flag arity: value-less, optional-value and equals forms (dotenv and secret)" {
+  local row
+  for row in \
+    "Bash|deny|grep -r SECRET .env" \
+    "Bash|deny|grep -ir PASSWORD .env.production" \
+    "Bash|deny|grep -T SECRET .env" \
+    "Bash|deny|grep --color SECRET .env" \
+    "Bash|deny|grep --colour SECRET .env" \
+    "Bash|deny|rg -r X .env.local" \
+    "Bash|allow|grep --color=auto .env .gitignore" \
+    "Bash|deny|grep -r TOKEN certs/server.key" \
+    "Bash|deny|grep -T TOKEN certs/server.pem" \
+    "Bash|deny|grep --color TOKEN certs/server.key" \
+    "Bash|deny|rg -r X secrets/prod.json" \
+    "Bash|allow|grep --color=auto server.key .gitignore"; do
+    run_verdict_row "$row" || return 1
+  done
 }
 
 # --- Grep tool: content mode returns file contents, so it reads a path ---
 
-@test "Grep path .env.production is denied" {
-  run_hook_grep ".env.production" ""
-  assert_denied_by_json
+@test "the Grep tool is denied on dotenv and secret paths and globs" {
+  local row
+  for row in \
+    "GrepPath|deny|.env.production" \
+    "GrepGlob|deny|.env" \
+    "GrepPath|allow|.env.example" \
+    "GrepPath|allow|app/routes" \
+    "GrepPath|deny|certs/server.key" \
+    "GrepPath|deny|secrets/prod.json" \
+    "GrepGlob|deny|*.key" \
+    "GrepPath|allow|app/lib/keychain.ts"; do
+    run_verdict_row "$row" || return 1
+  done
 }
 
-@test "Grep glob .env is denied (the filter selects the dotenv class)" {
-  run_hook_grep "" ".env"
-  assert_denied_by_json
-}
-
-@test "Grep path .env.example is allowed" {
-  run_hook_grep ".env.example" ""
-  assert_allowed_by_json
-}
-
-@test "Grep path app/routes is allowed" {
-  run_hook_grep "app/routes" ""
-  assert_allowed_by_json
-}
-
-@test "settings.json registers block-sensitive-read.sh under the Grep matcher" {
-  hook_registered "$SETTINGS_ABSOLUTE_PATH" '.hooks.PreToolUse[] | select(.matcher == "Grep")' block-sensitive-read.sh
-}
-
-# --- Fail-closed on a grammar-load failure ---
+# --- Fail-closed on a library-load failure ---
 #
-# The arm this pins used to be `exit 1`. Only exit 2 or a structured deny blocks
-# a PreToolUse call, so a missing library allowed every dotenv read with a
-# stderr line as the only trace. Asserting the deny payload rather than the exit
-# status is the point: the exit status was 1 then and is 0 now, and neither
-# value distinguishes a guard that is running from one that is not.
+# The reader-operands arm used to be `exit 1`. Only exit 2 or a structured deny
+# blocks a PreToolUse call, so a missing library allowed every dotenv and secret
+# read with a stderr line as the only trace. Asserting the deny payload rather
+# than the exit status is the point: the exit status was 1 then and is 0 now,
+# and neither value distinguishes a guard that is running from one that is not.
+# The hook-payload row runs a scratch copy of the hooks directory with
+# lib/hook-payload.sh removed, so the real library is never hidden from the live
+# session's own calls; it refuses with exit 2.
+@test "a missing reader-operands or hook-payload library denies rather than allows" {
+  local label command_line scratch_directory json
+  local reader_operands_message='BLOCKED: block-sensitive-read.sh could not load lib/reader-operands.sh, so the read-side dotenv and secret-path guard is not running. This denial is fail-closed by design. Restore .claude/hooks/lib/reader-operands.sh to clear it.'
+  for label in reader-operands-dotenv reader-operands-secret-path; do
+    case "$label" in
+      reader-operands-dotenv) command_line='cat .env.local' ;;
+      reader-operands-secret-path) command_line='cat certs/server.key' ;;
+    esac
+    run_hook_without_library "$command_line"
+    [ "$status" -eq 0 ] || { echo "case $label: status=$status"; return 1; }
+    grep -qF -- '"permissionDecision": "deny"' <<<"$output" || { echo "case $label: not denied"; return 1; }
+    grep -qF -- "$reader_operands_message" <<<"$output" || { echo "case $label: no fail-closed reason"; return 1; }
+  done
 
-@test "a missing lib/reader-operands.sh denies a dotenv read rather than allowing the call" {
-  run_hook_without_library 'cat .env.local'
-  assert_denied_by_json
-  grep -qF -- 'BLOCKED: block-sensitive-read.sh could not load lib/reader-operands.sh, so the read-side dotenv and secret-path guard is not running. This denial is fail-closed by design. Restore .claude/hooks/lib/reader-operands.sh to clear it.' <<<"$output"
+  scratch_directory="$BATS_TEST_TMPDIR/no-payload-lib"
+  mkdir -p "$scratch_directory"
+  cp -R "$HOOKS_SOURCE_DIRECTORY/lib" "$scratch_directory/lib"
+  rm -f "$scratch_directory/lib/hook-payload.sh"
+  cp "$HOOK_ABSOLUTE_PATH" "$scratch_directory/"
+  json=$(jq -n --arg file_path ".env" '{tool_name: "Read", tool_input: {file_path: $file_path}}')
+  invoke_hook "$json" "$scratch_directory/block-sensitive-read.sh"
+  [ "$status" -eq 2 ] || { echo "case hook-payload-dotenv: status=$status, expected 2"; return 1; }
+  grep -qF -- 'cannot load lib/hook-payload.sh' <<<"$output" || { echo "case hook-payload-dotenv: no load reason"; return 1; }
 }
 
-# --- The sandbox tier the removed Read(.env) rule used to carry ---
+# --- The sandbox tier the removed Read() rules used to carry ---
 #
 # Read(.env) merged into the OS sandbox boundary, where it reached a subprocess
 # spawned by sandboxed Bash. A hook never sees a subprocess open(), so deleting
 # the rule without this declaration would have dropped that tier in silence.
-
-@test "settings.json declares sandbox.filesystem.denyRead for the dotenv class" {
-  run jq -e '
-    .sandbox.filesystem.denyRead as $d
-    | ($d | index(".env")) != null and ($d | index(".env.*")) != null
-  ' "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-}
-
 # A sandbox filesystem path with no prefix resolves against the project root, so
-# the bare pair above reaches the root dotenv and nothing deeper. This hook
+# the bare dotenv pair reaches the root dotenv and nothing deeper; this hook
 # decides on the basename and denies a dotenv at any depth, so without the
 # depth-qualified pair the tool tier and the subprocess tier disagree about the
-# same file in a monorepo.
-@test "settings.json denies the dotenv class at any depth, not only at the root" {
-  run jq -e '
+# same file in a monorepo. The hook lets a TypeScript file whose name mentions
+# credentials through, so the sandbox re-opens the same spellings, or a
+# sandboxed Playwright or Vitest run cannot open a login UAT spec the Read tool
+# can. The docs never rank one glob against another, so each allow carries a
+# narrower secrets/ re-deny that keeps such a file under a secrets directory
+# denied. Markdown stays denied at both tiers.
+@test "the settings.json sandbox denyRead block covers dotenv and secret classes" {
+  run_settings_row dotenv-at-root '
+    .sandbox.filesystem.denyRead as $d
+    | ($d | index(".env")) != null and ($d | index(".env.*")) != null
+  ' || return 1
+  run_settings_row dotenv-at-any-depth '
     .sandbox.filesystem.denyRead as $d
     | ($d | index("**/.env")) != null and ($d | index("**/.env.*")) != null
-  ' "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-}
-
-@test "settings.json keeps .env.example readable inside the sandbox deny" {
-  run jq -e '
+  ' || return 1
+  run_settings_row env-example-readable '
     .sandbox.filesystem.allowRead as $a
     | ($a | index(".env.example")) != null
       and ($a | index("**/.env.example")) != null
-  ' "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
+  ' || return 1
+  run_settings_row secret-classes '
+    .sandbox.filesystem.denyRead as $d
+    | ["**/*.key", "**/*.pem", "**/*credential*", "**/secrets/**"]
+    | all(. as $needle | $d | index($needle) != null)
+  ' || return 1
+  run_settings_row credential-typescript-reopened-only '
+    .sandbox.filesystem as $f
+    | ["ts", "tsx", "mts", "cts"]
+    | all(. as $ext
+          | ($f.allowRead | index("**/*credential*." + $ext)) != null
+            and ($f.denyRead | index("**/secrets/**/*credential*." + $ext)) != null)
+      and ($f.allowRead | map(select(test("credential"))) | length) == 4
+  ' || return 1
 }
-
-# --- Regression: a command substitution ---
-#
-# The segment split reaches into `$(...)` because the parens are in its
-# character set.
-
-@test "x=\$(cat .env) is denied (dollar-paren substitution)" {
-  run_hook_bash 'x=$(cat .env)'
-  assert_denied_by_json
-}
-
-# --- Regression: a glob spelling of a dotenv read ---
-#
-# `.env*` and `.env.*` each expand to every dotenv file in the directory, so they
-# read the same bytes the literal path does. The predicate matches the literal
-# spellings with a regex, which no metacharacter satisfies, so the globs were
-# allowed while `cat .env` beside them was denied. The sibling secrets predicate
-# never had the gap, because it matches with `case` globs.
-
-@test "cat .env* is denied (glob spelling of the dotenv read)" {
-  run_hook_bash 'cat .env*'
-  assert_denied_by_json
-}
-
-@test "cat .env.* is denied (dotted glob spelling)" {
-  run_hook_bash 'cat .env.*'
-  assert_denied_by_json
-}
-
-@test "cat .env? is denied (single-character glob)" {
-  run_hook_bash 'cat .env?'
-  assert_denied_by_json
-}
-
-@test "cat .environment is allowed (the stem is not a dotenv variant)" {
-  run_hook_bash 'cat .environment'
-  assert_allowed_by_json
-}
-
 
 # --- Read-tool denies, one per path class the removed Read() globs covered ---
 
+# bats test_tags=protected
 @test "Read certs/server.key is denied" {
   run_hook_read "certs/server.key"
   assert_denied_by_json
 }
 
-@test "Read config/aws-credentials.json is denied" {
-  run_hook_read "config/aws-credentials.json"
-  assert_denied_by_json
-}
-
-@test "Read secrets/prod.json is denied" {
-  run_hook_read "secrets/prod.json"
-  assert_denied_by_json
-}
-
-@test "Read a nested deploy/secrets/live/token.txt is denied" {
-  # The replaced glob matched only a file DIRECTLY inside secrets/. Covering the
-  # whole subtree is a deliberate widening: a secret one level deeper is not
-  # less of a secret.
-  run_hook_read "deploy/secrets/live/token.txt"
-  assert_denied_by_json
-}
-
-@test "Read config/AWS_Credentials.json is denied (case-insensitive)" {
-  # The replaced glob was case-sensitive. This is the second deliberate widening.
-  run_hook_read "config/AWS_Credentials.json"
-  assert_denied_by_json
-}
-
-# Every credential-store spelling stays denied through the Read tool and a Bash
-# reader once TypeScript names are carved out of the match.
-@test "every credential-store spelling stays denied, through Read and through cat" {
-  local credential_path
+# The replaced secrets/ glob matched only a file DIRECTLY inside secrets/;
+# covering the whole subtree is a deliberate widening, as is the
+# case-insensitive credential match. Every credential-store spelling stays
+# denied through the Read tool and a Bash reader once TypeScript names are
+# carved out of the match, a TypeScript file under a secrets/ directory stays
+# denied, and the near-misses a substring match would get wrong stay readable.
+@test "credential-store paths are denied through Read and cat, TypeScript mentions stay readable" {
+  local rows=() row credential_path source_path
+  rows+=(
+    "Read|deny|config/aws-credentials.json"
+    "Read|deny|secrets/prod.json"
+    "Read|deny|deploy/secrets/live/token.txt"
+    "Read|deny|config/AWS_Credentials.json"
+  )
   for credential_path in credentials credentials.json .aws/credentials \
     config/aws-credentials.json db.credentials CREDENTIALS credential.yml \
     gcloud/application_default_credentials.json google-credentials.txt \
     credentials.ini credentials.js docs/credentials.md docs/Credentials.MDX; do
-    run_hook_read "$credential_path"
-    assert_denied_by_json || { echo "Read allowed: $credential_path"; return 1; }
-    run_hook_bash "cat $credential_path"
-    assert_denied_by_json || { echo "cat allowed: $credential_path"; return 1; }
+    rows+=("Read|deny|$credential_path" "Bash|deny|cat $credential_path")
   done
-}
-
-@test "a rendered UAT spec whose name only mentions credentials is readable" {
-  run_hook_read "apps/web/.playwright/e2e/auth/login-rejects-invalid-credentials.spec.ts"
-  assert_allowed_by_json
-}
-
-@test "TypeScript files whose names only mention credentials are readable, through Read and through cat" {
-  local source_path
+  rows+=("Read|allow|apps/web/.playwright/e2e/auth/login-rejects-invalid-credentials.spec.ts")
   for source_path in app/auth/credentials.test.ts app/auth/credential-form.tsx \
     app/auth/credentials.ts app/auth/credentials.mts; do
-    run_hook_read "$source_path"
-    assert_allowed_by_json || { echo "Read denied: $source_path"; return 1; }
-    run_hook_bash "cat $source_path"
-    assert_allowed_by_json || { echo "cat denied: $source_path"; return 1; }
+    rows+=("Read|allow|$source_path" "Bash|allow|cat $source_path")
+  done
+  rows+=(
+    "Read|deny|deploy/secrets/credentials.ts"
+    "Read|allow|app/components/button/index.tsx"
+    "Read|allow|app/lib/keychain.ts"
+    "Read|allow|mysecrets/notes.md"
+    "Read|allow|secrets-old/notes.md"
+  )
+  for row in "${rows[@]}"; do
+    run_verdict_row "$row" || return 1
   done
 }
 
-@test "a TypeScript file under a secrets/ directory stays denied" {
-  run_hook_read "deploy/secrets/credentials.ts"
-  assert_denied_by_json
+# --- Each path class keeps its own deny reason, dotenv ruling first ---
+#
+# Each row: <label>|<tool>|<input>|<needles, ^-separated>|<forbidden needle>.
+# Both dotenv denies name what Claude can do without the value; the secret-path
+# deny names the next step. When an input matches both classes, the dotenv
+# reason is the one emitted.
+@test "each denial carries the reason for its class" {
+  local row label tool input needles forbidden needle
+  for row in \
+    "dotenv-next-step-read|Read|.env.local|Next step: refer to the variable by its name^read '.env.example' for the list of keys|" \
+    "dotenv-next-step-cat|Bash|cat .env.local|Next step: refer to the variable by its name^read '.env.example' for the list of keys|" \
+    "secret-next-step-read|Read|credentials.json|Next step:|" \
+    "secret-next-step-cat|Bash|cat credentials.json|Next step:|" \
+    "bare-env-dump|Bash|env|reads as an environment dump|key, certificate, or credential" \
+    "dotenv-tool-reason|Read|.env.local|reading '.env' / '.env.*' files is denied to protect local secrets. Only '.env.example' is readable.|" \
+    "secret-tool-reason|Read|id_rsa.pem|reading key, certificate, and credential files is denied to protect local secrets.|" \
+    "dotenv-reader-reason|Bash|cat .env|reading a .env / .env.* file (a reader, sourcing, or redirection) is denied|" \
+    "secret-reader-reason|Bash|cat certs/server.key|a command here reads a key, certificate, or credential path|" \
+    "printenv-dump-reason|Bash|printenv|begins with env or printenv and names no command to run|" \
+    "grep-secrets-directory|GrepPath|secrets/|reading key, certificate, and credential files is denied|" \
+    "dotenv-wins-read|Read|secrets/.env|reading '.env' / '.env.*' files is denied|reading key, certificate, and credential files" \
+    "dotenv-wins-command|Bash|cat certs/server.key; cat .env.local|reading a .env / .env.* file|reads a key, certificate, or credential path"; do
+    label=${row%%|*}; row=${row#*|}; tool=${row%%|*}; row=${row#*|}
+    input=${row%%|*}; row=${row#*|}; needles=${row%%|*}; forbidden=${row#*|}
+    run_verdict_row "$tool|deny|$input" || { echo "case $label: not denied"; return 1; }
+    while [ -n "$needles" ]; do
+      needle=${needles%%^*}
+      grep -qF -- "$needle" <<<"$output" || { echo "case $label: missing reason: $needle"; return 1; }
+      [ "$needle" = "$needles" ] && needles='' || needles=${needles#*^}
+    done
+    if [ -n "$forbidden" ] && grep -qF -- "$forbidden" <<<"$output"; then
+      echo "case $label: carries the other class's reason: $forbidden"; return 1
+    fi
+  done
 }
 
-@test "both dotenv denies name what Claude can do without the value" {
-  run_hook_read ".env.local"
-  assert_denied_by_json
-  grep -qF -- "Next step: refer to the variable by its name" <<<"$output"
-  grep -qF -- "read '.env.example' for the list of keys" <<<"$output"
-  run_hook_bash "cat .env.local"
-  assert_denied_by_json
-  grep -qF -- "Next step: refer to the variable by its name" <<<"$output"
-  grep -qF -- "read '.env.example' for the list of keys" <<<"$output"
-}
-
-@test "the secret-path deny names the readable spelling and the next step" {
-  run_hook_read "credentials.json"
-  assert_denied_by_json
-  grep -qF -- "Next step:" <<<"$output"
-  run_hook_bash "cat credentials.json"
-  assert_denied_by_json
-  grep -qF -- "Next step:" <<<"$output"
-}
-
-# --- Read-tool allows: the near-misses a substring match would get wrong ---
-
-@test "Read app/components/button/index.tsx is allowed" {
-  run_hook_read "app/components/button/index.tsx"
-  assert_allowed_by_json
-}
-
-@test "Read app/lib/keychain.ts is allowed (not a .key extension)" {
-  run_hook_read "app/lib/keychain.ts"
-  assert_allowed_by_json
-}
-
-@test "Read mysecrets/notes.md is allowed (segment-bounded, not a substring)" {
-  run_hook_read "mysecrets/notes.md"
-  assert_allowed_by_json
-}
-
-@test "Read secrets-old/notes.md is allowed (segment-bounded, not a prefix)" {
-  run_hook_read "secrets-old/notes.md"
-  assert_allowed_by_json
-}
-
-# --- Bash denies: readers against a secret path ---
-
-@test "grep TOKEN certs/server.pem is denied" {
-  run_hook_bash "grep TOKEN certs/server.pem"
-  assert_denied_by_json
-}
-
-@test "rg TOKEN secrets/prod.json is denied" {
-  run_hook_bash "rg TOKEN secrets/prod.json"
-  assert_denied_by_json
-}
-
-@test "grep -f pats.txt certs/server.key is denied (the target file, not the pattern file)" {
-  run_hook_bash "grep -f pats.txt certs/server.key"
-  assert_denied_by_json
-}
-
+# --- Bash: the grep family over a secret path ---
+#
 # --file (long form of -f) supplies the pattern the same way -e/--regexp does,
 # so the positional after it is still an ordinary target file; --exclude-from
 # and --ignore-file name a file of globs and supply no pattern, so one still
-# has to follow. None of the three flags' own values reach the predicate: grep
-# opens them itself, but this walk does not treat them as candidates.
-
-@test "grep --file pats.txt certs/server.key is denied (the target file, not the pattern file)" {
-  run_hook_bash "grep --file pats.txt certs/server.key"
-  assert_denied_by_json
-}
-
-@test "grep --exclude-from globs.txt TOKEN certs/server.key is denied (the target file, not the glob file)" {
-  run_hook_bash "grep --exclude-from globs.txt TOKEN certs/server.key"
-  assert_denied_by_json
-}
-
-# --- Bash: filter flags whose value SELECTS the files a search reads ---
-#
-# The Grep tool arm already denies a `glob` naming a secret class; these pin the
-# Bash spellings of the same filter to the same verdict.
-
-@test "rg -g '*.key' TOKEN is denied (the filter selects the secret class)" {
-  run_hook_bash "rg -g '*.key' TOKEN"
-  assert_denied_by_json
-}
-
-@test "rg --glob '*.key' TOKEN is denied" {
-  run_hook_bash "rg --glob '*.key' TOKEN"
-  assert_denied_by_json
-}
-
-@test "rg --iglob '*.key' TOKEN is denied" {
-  run_hook_bash "rg --iglob '*.key' TOKEN"
-  assert_denied_by_json
-}
-
-@test "grep -r TOKEN --include='*.key' . is denied" {
-  run_hook_bash "grep -r TOKEN --include='*.key' ."
-  assert_denied_by_json
-}
-
-@test "grep -r TOKEN --include='*.pem' . is denied" {
-  run_hook_bash "grep -r TOKEN --include='*.pem' ."
-  assert_denied_by_json
-}
-
-@test "rg -g '!*.key' TOKEN is allowed (a negated glob excludes the class)" {
-  run_hook_bash "rg -g '!*.key' TOKEN"
-  assert_allowed_by_json
-}
-
-@test "grep -r -g '!*.md,*.key' TOKEN . is denied (ugrep negates each comma-list element alone)" {
-  run_hook_bash "grep -r -g '!*.md,*.key' TOKEN ."
-  assert_denied_by_json
-}
-
-@test "grep -r --glob='*.md,*.key' TOKEN . is denied (each comma-list element is judged)" {
-  run_hook_bash "grep -r --glob='*.md,*.key' TOKEN ."
-  assert_denied_by_json
-}
-
-@test "grep -r -g '!*.key,!*.pem' TOKEN . is allowed (every element negated)" {
-  run_hook_bash "grep -r -g '!*.key,!*.pem' TOKEN ."
-  assert_allowed_by_json
-}
-
-@test "grep -r -g '^*.key' TOKEN . is allowed (ugrep reads a leading ^ as an exclusion)" {
-  run_hook_bash "grep -r -g '^*.key' TOKEN ."
-  assert_allowed_by_json
-}
-
-@test "grep -r TOKEN --exclude=*.key . is allowed (--exclude names files not read)" {
-  run_hook_bash "grep -r TOKEN --exclude=*.key ."
-  assert_allowed_by_json
-}
-
-@test "grep -r TOKEN --exclude-dir=secrets . is allowed" {
-  run_hook_bash "grep -r TOKEN --exclude-dir=secrets ."
-  assert_allowed_by_json
-}
-
-@test "rg -g '*.ts' server.key app is allowed (the select flag still consumes its value)" {
-  # If -g stopped consuming its value, '*.ts' would be taken as the pattern and
-  # server.key emitted as a file operand.
-  run_hook_bash "rg -g '*.ts' server.key app"
-  assert_allowed_by_json
+# has to follow. None of the three flags' own values reach the predicate. The
+# Grep tool arm already denies a `glob` naming a secret class; the filter rows
+# pin the Bash spellings of the same filter to the same verdict. ugrep negates
+# each comma-list element alone and reads a leading ^ as an exclusion. If -g
+# stopped consuming its value in `rg -g '*.ts' server.key app`, '*.ts' would be
+# taken as the pattern and server.key emitted as a file operand.
+@test "grep and rg over a secret-path target or class filter" {
+  local row
+  for row in \
+    "Bash|deny|grep TOKEN certs/server.pem" \
+    "Bash|deny|rg TOKEN secrets/prod.json" \
+    "Bash|deny|grep -f pats.txt certs/server.key" \
+    "Bash|deny|grep --file pats.txt certs/server.key" \
+    "Bash|deny|grep --exclude-from globs.txt TOKEN certs/server.key" \
+    "Bash|deny|rg -g '*.key' TOKEN" \
+    "Bash|deny|rg --glob '*.key' TOKEN" \
+    "Bash|deny|rg --iglob '*.key' TOKEN" \
+    "Bash|deny|grep -r TOKEN --include='*.key' ." \
+    "Bash|deny|grep -r TOKEN --include='*.pem' ." \
+    "Bash|allow|rg -g '!*.key' TOKEN" \
+    "Bash|deny|grep -r -g '!*.md,*.key' TOKEN ." \
+    "Bash|deny|grep -r --glob='*.md,*.key' TOKEN ." \
+    "Bash|allow|grep -r -g '!*.key,!*.pem' TOKEN ." \
+    "Bash|allow|grep -r -g '^*.key' TOKEN ." \
+    "Bash|allow|grep -r TOKEN --exclude=*.key ." \
+    "Bash|allow|grep -r TOKEN --exclude-dir=secrets ." \
+    "Bash|allow|rg -g '*.ts' server.key app"; do
+    run_verdict_row "$row" || return 1
+  done
 }
 
 @test "every select flag reader-operands.sh carries denies a secret passed as its value" {
@@ -913,45 +647,22 @@ run_hook_monitor() {
   [ "$denied" -eq 0 ]
 }
 
-@test "x=\$(<certs/server.key) is denied (redirection)" {
-  # The single-quoting is deliberate: the payload must reach the hook verbatim
-  # so it classifies the literal command text. Never double-quote it, which
-  # would expand the substitution here and defeat the test.
+# The single-quoted rows reach the hook verbatim, so it classifies the literal
+# command text. `grep server.key .gitignore` is the single most important allow
+# in this file: without grep argument grammar the pattern operand reads as a
+# path and it denies.
+@test "a secret read through redirection, substitution or segments is denied" {
+  local row
   # shellcheck disable=SC2016
-  run_hook_bash 'x=$(<certs/server.key)'
-  assert_denied_by_json
-}
-
-@test "true && cat certs/server.key is denied (compound-command segment walk)" {
-  run_hook_bash "true && cat certs/server.key"
-  assert_denied_by_json
-}
-
-# --- Bash allows: false-positive guards ---
-
-@test "grep server.key .gitignore is allowed (pattern, not a file read)" {
-  # The single most important allow in this file. Without grep argument
-  # grammar the pattern operand reads as a path and this denies.
-  run_hook_bash "grep server.key .gitignore"
-  assert_allowed_by_json
-}
-
-@test "ls -la certs/server.key is allowed (non-reading)" {
-  run_hook_bash "ls -la certs/server.key"
-  assert_allowed_by_json
-}
-
-@test "cat mysecrets/notes.md is allowed (segment-bounded)" {
-  run_hook_bash "cat mysecrets/notes.md"
-  assert_allowed_by_json
-}
-
-@test "bare env is denied with the dump reason, not a secret-path reason" {
-  run_hook_bash "env"
-  assert_denied_by_json
-  grep -qF -- 'reads as an environment dump' <<<"$output"
-  grep -qF -- 'key, certificate, or credential' <<<"$output" && return 1
-  return 0
+  for row in \
+    'Bash|deny|x=$(<certs/server.key)' \
+    "Bash|deny|true && cat certs/server.key" \
+    "Bash|allow|grep server.key .gitignore" \
+    "Bash|allow|ls -la certs/server.key" \
+    "Bash|allow|cat mysecrets/notes.md" \
+    'Bash|deny|x=$(cat certs/server.key)'; do
+    run_verdict_row "$row" || return 1
+  done
 }
 
 # --- Structural ---
@@ -971,188 +682,12 @@ run_hook_monitor() {
   [ "$status" -eq 0 ]
 }
 
-# --- Regression: a discard-listed flag that is value-less for the invoked tool ---
-#
-# Each of these was ALLOWED before the flag tables dropped -r, -T and the bare
-# --color/--colour spelling. The flag ate the pattern, the path was then taken
-# as the pattern, and the walk emitted no operand at all, so the guard passed a
-# secret read through in silence. `-rn` denied throughout, which is what kept
-# the class invisible: the idiomatic spelling sat untested beside a working one.
-
-@test "grep -r TOKEN certs/server.key is denied (bare -r is value-less for grep)" {
-  run_hook_bash "grep -r TOKEN certs/server.key"
-  assert_denied_by_json
-}
-
-@test "grep -T TOKEN certs/server.pem is denied (bare -T is value-less for grep)" {
-  run_hook_bash "grep -T TOKEN certs/server.pem"
-  assert_denied_by_json
-}
-
-@test "grep --color TOKEN certs/server.key is denied (optional-value for grep)" {
-  run_hook_bash "grep --color TOKEN certs/server.key"
-  assert_denied_by_json
-}
-
-@test "rg -r X secrets/prod.json is denied (over-reads the pattern, fail-closed)" {
-  run_hook_bash "rg -r X secrets/prod.json"
-  assert_denied_by_json
-}
-
-@test "grep --color=auto server.key .gitignore is allowed (= form supplies its own value)" {
-  run_hook_bash "grep --color=auto server.key .gitignore"
-  assert_allowed_by_json
-}
-
-# --- Grep tool: content mode returns file contents, so it reads a path ---
-
-@test "Grep path certs/server.key is denied" {
-  run_hook_grep "certs/server.key" ""
-  assert_denied_by_json
-}
-
-@test "Grep path secrets/prod.json is denied" {
-  run_hook_grep "secrets/prod.json" ""
-  assert_denied_by_json
-}
-
-@test "Grep glob *.key is denied (the filter selects the secret class)" {
-  run_hook_grep "" "*.key"
-  assert_denied_by_json
-}
-
-@test "Grep path app/lib/keychain.ts is allowed" {
-  run_hook_grep "app/lib/keychain.ts" ""
-  assert_allowed_by_json
-}
-
 @test "settings.json registers block-sensitive-read.sh exactly once under the Grep matcher" {
   run jq -e '[.hooks.PreToolUse[] | select(.matcher == "Grep") | .hooks[] | select(.command | contains("block-sensitive-read.sh"))] | length == 1' "$SETTINGS_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
 }
 
-# --- Fail-closed on a grammar-load failure ---
-#
-# The arm this pins used to be `exit 1`. Only exit 2 or a structured deny blocks
-# a PreToolUse call, so a missing library allowed every secret read with a
-# stderr line as the only trace. Asserting the deny payload rather than the exit
-# status is the point: the exit status was 1 then and is 0 now, and neither
-# value distinguishes a guard that is running from one that is not.
-
-@test "a missing lib/reader-operands.sh denies a secret-path read rather than allowing the call" {
-  run_hook_without_library 'cat certs/server.key'
-  assert_denied_by_json
-  grep -qF -- 'BLOCKED: block-sensitive-read.sh could not load lib/reader-operands.sh, so the read-side dotenv and secret-path guard is not running. This denial is fail-closed by design. Restore .claude/hooks/lib/reader-operands.sh to clear it.' <<<"$output"
-}
-
-# --- The sandbox tier the removed Read() rules used to carry ---
-
-@test "settings.json declares sandbox.filesystem.denyRead for the secret classes" {
-  run jq -e '
-    .sandbox.filesystem.denyRead as $d
-    | ["**/*.key", "**/*.pem", "**/*credential*", "**/secrets/**"]
-    | all(. as $needle | $d | index($needle) != null)
-  ' "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-}
-
-# The hook lets a TypeScript file whose name mentions credentials through, so
-# the sandbox re-opens the same spellings, or a sandboxed Playwright or Vitest
-# run cannot open a login UAT spec the Read tool can. The docs never rank one
-# glob against another, so each allow carries a narrower secrets/ re-deny that
-# keeps such a file under a secrets directory denied. Markdown stays denied at
-# both tiers.
-@test "settings.json re-opens credential-named TypeScript in the sandbox, and only that" {
-  run jq -e '
-    .sandbox.filesystem as $f
-    | ["ts", "tsx", "mts", "cts"]
-    | all(. as $ext
-          | ($f.allowRead | index("**/*credential*." + $ext)) != null
-            and ($f.denyRead | index("**/secrets/**/*credential*." + $ext)) != null)
-      and ($f.allowRead | map(select(test("credential"))) | length) == 4
-  ' "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-}
-
-# --- Regression: a command substitution ---
-#
-# The segment split reaches into `$(...)` because the parens are in its
-# character set.
-
-@test "x=\$(cat certs/server.key) is denied (dollar-paren substitution)" {
-  run_hook_bash 'x=$(cat certs/server.key)'
-  assert_denied_by_json
-}
-
-# --- Each path class keeps its own deny reason, dotenv ruling first ---
-
-@test "Read .env.local is denied with the dotenv tool reason" {
-  run_hook_read ".env.local"
-  assert_denied_by_json
-  grep -qF -- "reading '.env' / '.env.*' files is denied to protect local secrets. Only '.env.example' is readable." <<<"$output"
-}
-
-@test "Read id_rsa.pem is denied with the secret-path tool reason" {
-  run_hook_read "id_rsa.pem"
-  assert_denied_by_json
-  grep -qF -- "reading key, certificate, and credential files is denied to protect local secrets." <<<"$output"
-}
-
-@test "cat .env is denied with the dotenv reader reason" {
-  run_hook_bash "cat .env"
-  assert_denied_by_json
-  grep -qF -- "reading a .env / .env.* file (a reader, sourcing, or redirection) is denied" <<<"$output"
-}
-
-@test "cat certs/server.key is denied with the secret-path reader reason" {
-  run_hook_bash "cat certs/server.key"
-  assert_denied_by_json
-  grep -qF -- "a command here reads a key, certificate, or credential path" <<<"$output"
-}
-
-@test "printenv is denied with the dump reason" {
-  run_hook_bash "printenv"
-  assert_denied_by_json
-  grep -qF -- "begins with env or printenv and names no command to run" <<<"$output"
-}
-
-@test "Grep with path secrets/ is denied with the secret-path tool reason" {
-  run_hook_grep "secrets/" ""
-  assert_denied_by_json
-  grep -qF -- "reading key, certificate, and credential files is denied" <<<"$output"
-}
-
-@test "Read secrets/.env emits the dotenv reason, not the secret-path one" {
-  run_hook_read "secrets/.env"
-  assert_denied_by_json
-  grep -qF -- "reading '.env' / '.env.*' files is denied" <<<"$output"
-  grep -qF -- "reading key, certificate, and credential files" <<<"$output" && return 1
-  return 0
-}
-
-@test "a command naming a key path before a dotenv path emits the dotenv reason" {
-  run_hook_bash "cat certs/server.key; cat .env.local"
-  assert_denied_by_json
-  grep -qF -- "reading a .env / .env.* file" <<<"$output"
-  grep -qF -- "reads a key, certificate, or credential path" <<<"$output" && return 1
-  return 0
-}
-
 # --- the shared payload reader ---
-
-# A scratch copy of the hooks directory with lib/hook-payload.sh removed, so the
-# real library is never hidden from the live session's own calls.
-@test "a missing lib/hook-payload.sh refuses a dotenv read rather than allowing the call" {
-  local scratch_directory="$BATS_TEST_TMPDIR/no-payload-lib" json
-  mkdir -p "$scratch_directory"
-  cp -R "$HOOKS_SOURCE_DIRECTORY/lib" "$scratch_directory/lib"
-  rm -f "$scratch_directory/lib/hook-payload.sh"
-  cp "$HOOK_ABSOLUTE_PATH" "$scratch_directory/"
-  json=$(jq -n --arg file_path ".env" '{tool_name: "Read", tool_input: {file_path: $file_path}}')
-  invoke_hook "$json" "$scratch_directory/block-sensitive-read.sh"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'cannot load lib/hook-payload.sh' <<<"$output"
-}
 
 @test "an ordinary Bash call and a Read call each run at most one jq" {
   local shim_directory="$BATS_TEST_TMPDIR/shim" real_jq json

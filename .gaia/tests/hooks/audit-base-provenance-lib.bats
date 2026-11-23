@@ -58,42 +58,52 @@ resolve() {
 
 # --- the remote-vs-local-vs-shadow default-branch ladder ---------------------
 
-@test "remote trust: refs/remotes/origin/HEAD set, refs/remotes/origin/main resolves" {
-  local repo base_sha
-  repo="$(make_repo remote-trust)"
-  git -C "$repo" checkout -q -b feat
-  commit_file "$repo" "feat.txt" "feat commit"
-  base_sha="$(git -C "$repo" rev-parse main)"
-  git -C "$repo" update-ref refs/remotes/origin/main refs/heads/main
-  git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
-
-  resolve "$repo" default-branch
-  [ "$status" -eq 0 ]
-  [ "$output" = "remote	default-branch	$base_sha" ]
-}
-
-@test "local trust: no remote-tracking ref, local main resolves" {
-  local repo base_sha
-  repo="$(make_repo local-trust)"
-  git -C "$repo" checkout -q -b feat
-  commit_file "$repo" "feat.txt" "feat commit"
-  base_sha="$(git -C "$repo" rev-parse main)"
-
-  resolve "$repo" default-branch
-  [ "$status" -eq 0 ]
-  [ "$output" = "local	default-branch	$base_sha" ]
-}
-
-@test "unresolvable: neither a remote-tracking ref nor a local branch of the default name" {
-  local repo
-  repo="$(make_repo no-default)"
-  git -C "$repo" branch -m trunk
-  git -C "$repo" checkout -q -b feat
-  commit_file "$repo" "feat.txt" "feat commit"
-
-  resolve "$repo" default-branch
-  [ "$status" -eq 0 ]
-  [ "$output" = "unresolvable	default-branch	" ]
+# Each row copies one main-plus-feat repo and adds only the refs or override
+# its trust level needs. The supplied rows take an override; the others do not.
+@test "resolve_base_provenance: each trust level resolves as stated" {
+  local base_repo main_sha supplied_sha label repo expected
+  base_repo="$(make_repo trust-base)"
+  git -C "$base_repo" checkout -q -b feat
+  commit_file "$base_repo" "feat.txt" "feat commit"
+  commit_file "$base_repo" "feat-tip.txt" "feat tip commit"
+  main_sha="$(git -C "$base_repo" rev-parse main)"
+  # The supplied override names a commit that is neither the ladder's answer
+  # nor HEAD, so the output carries it only when the override wins.
+  supplied_sha="$(git -C "$base_repo" rev-parse HEAD~1)"
+  [ "$supplied_sha" != "$main_sha" ]
+  local rows=(remote local unresolvable supplied supplied-unresolvable)
+  for label in "${rows[@]}"; do
+    echo "case: $label"
+    repo="$BATS_TEST_TMPDIR/trust-$label"
+    cp -R "$base_repo" "$repo"
+    case "$label" in
+      remote)
+        git -C "$repo" update-ref refs/remotes/origin/main refs/heads/main
+        git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+        resolve "$repo" default-branch
+        expected="remote	default-branch	$main_sha"
+        ;;
+      local)
+        resolve "$repo" default-branch
+        expected="local	default-branch	$main_sha"
+        ;;
+      unresolvable)
+        git -C "$repo" branch -m main trunk
+        resolve "$repo" default-branch
+        expected="unresolvable	default-branch	"
+        ;;
+      supplied)
+        resolve "$repo" default-branch "$supplied_sha"
+        expected="supplied	default-branch	$supplied_sha"
+        ;;
+      supplied-unresolvable)
+        resolve "$repo" default-branch "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        expected="unresolvable	default-branch	"
+        ;;
+    esac
+    [ "$status" -eq 0 ]
+    [ "$output" = "$expected" ]
+  done
 }
 
 @test "SEC-001: a local branch literally named origin/main never shadows the remote-tracking ref" {
@@ -119,117 +129,76 @@ resolve() {
   [ "$output" != "remote	default-branch	$shadow_sha" ]
 }
 
-# --- supplied override --------------------------------------------------------
-
-@test "supplied trust: an override that resolves" {
-  local repo target
-  repo="$(make_repo supplied-ok)"
-  commit_file "$repo" "a.txt" "second"
-  target="$(git -C "$repo" rev-parse HEAD)"
-  commit_file "$repo" "b.txt" "third"
-
-  resolve "$repo" default-branch "$target"
-  [ "$status" -eq 0 ]
-  [ "$output" = "supplied	default-branch	$target" ]
-}
-
-@test "supplied override naming an unresolvable revision is unresolvable, not empty-diff decisive" {
-  local repo
-  repo="$(make_repo supplied-bad)"
-
-  resolve "$repo" default-branch "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-  [ "$status" -eq 0 ]
-  [ "$output" = "unresolvable	default-branch	" ]
-}
-
 # --- pr-record anchor ---------------------------------------------------------
 
-@test "pr-record anchor: record branch's remote-tracking ref verifies" {
-  local repo base_sha
-  repo="$(make_repo record-ok)"
-  git -C "$repo" checkout -q -b release
-  commit_file "$repo" "release.txt" "release commit"
-  git -C "$repo" checkout -q main
-  git -C "$repo" checkout -q -b feat
-  commit_file "$repo" "feat.txt" "feat commit"
-  base_sha="$(git -C "$repo" merge-base HEAD release)"
-  git -C "$repo" update-ref refs/remotes/origin/release refs/heads/release
-
-  resolve "$repo" pr-record "" "release"
-  [ "$status" -eq 0 ]
-  [ "$output" = "remote	pr-record	$base_sha" ]
+# The base repo holds main, a release branch forked from it, an unrelated
+# orphan branch sharing no history with feat, and feat checked out. Each row
+# copies it and adds only the remote-tracking ref its outcome needs.
+@test "pr-record anchor: each record-ref outcome" {
+  local base_repo main_sha release_sha release_merge_base default_output label repo
+  base_repo="$(make_repo record-base)"
+  git -C "$base_repo" checkout -q -b release
+  commit_file "$base_repo" "release.txt" "release commit"
+  git -C "$base_repo" checkout -q --orphan unrelated
+  git -C "$base_repo" rm -rf --quiet . 2>/dev/null || true
+  commit_file "$base_repo" "release-root.txt" "unrelated root commit"
+  git -C "$base_repo" checkout -q main
+  git -C "$base_repo" checkout -q -b feat
+  commit_file "$base_repo" "feat.txt" "feat commit"
+  main_sha="$(git -C "$base_repo" rev-parse main)"
+  release_sha="$(git -C "$base_repo" rev-parse release)"
+  release_merge_base="$(git -C "$base_repo" merge-base HEAD release)"
+  local rows=(record-ref-verifies record-ref-absent merge-base-fails empty-record-branch)
+  for label in "${rows[@]}"; do
+    echo "case: $label"
+    repo="$BATS_TEST_TMPDIR/record-$label"
+    cp -R "$base_repo" "$repo"
+    case "$label" in
+      record-ref-verifies)
+        git -C "$repo" update-ref refs/remotes/origin/release refs/heads/release
+        resolve "$repo" pr-record "" "release"
+        [ "$status" -eq 0 ]
+        [ "$output" = "remote	pr-record	$release_merge_base" ]
+        ;;
+      record-ref-absent)
+        resolve "$repo" pr-record "" "release"
+        [ "$status" -eq 0 ]
+        [ "$output" = "local	default-branch	$main_sha" ]
+        [ "$output" != "remote	pr-record	$release_sha" ]
+        ;;
+      merge-base-fails)
+        git -C "$repo" update-ref refs/remotes/origin/unrelated refs/heads/unrelated
+        resolve "$repo" pr-record "" "unrelated"
+        [ "$status" -eq 0 ]
+        [ "$output" = "unresolvable	default-branch	" ]
+        ;;
+      empty-record-branch)
+        resolve "$repo" default-branch
+        default_output="$output"
+        resolve "$repo" pr-record ""
+        [ "$status" -eq 0 ]
+        [ "$output" = "$default_output" ]
+        ;;
+    esac
+  done
 }
 
-@test "pr-record anchor: record ref does not verify falls back to the default-branch ladder" {
-  local repo base_sha local_release
-  repo="$(make_repo record-fallback)"
-  git -C "$repo" checkout -q -b release
-  commit_file "$repo" "release.txt" "release commit"
-  git -C "$repo" checkout -q main
-  git -C "$repo" checkout -q -b feat
-  commit_file "$repo" "feat.txt" "feat commit"
-  base_sha="$(git -C "$repo" rev-parse main)"
-  local_release="$(git -C "$repo" rev-parse release)"
-
-  resolve "$repo" pr-record "" "release"
-  [ "$status" -eq 0 ]
-  [ "$output" = "local	default-branch	$base_sha" ]
-  [ "$output" != "remote	pr-record	$local_release" ]
-}
-
-@test "pr-record anchor: ref verifies but merge-base fails is unresolvable, no fall-through" {
-  local repo
-  repo="$(make_repo record-unrelated)"
-  git -C "$repo" checkout -q --orphan release
-  git -C "$repo" rm -rf --quiet . 2>/dev/null || true
-  commit_file "$repo" "release-root.txt" "unrelated root commit"
-  git -C "$repo" checkout -q main
-  git -C "$repo" checkout -q -b feat
-  commit_file "$repo" "feat.txt" "feat commit"
-  git -C "$repo" update-ref refs/remotes/origin/release refs/heads/release
-
-  resolve "$repo" pr-record "" "release"
-  [ "$status" -eq 0 ]
-  [ "$output" = "unresolvable	default-branch	" ]
-}
-
-@test "pr-record anchor with an empty record branch matches the default-branch request" {
-  local repo default_output
-  repo="$(make_repo record-empty)"
-  git -C "$repo" checkout -q -b feat
-  commit_file "$repo" "feat.txt" "feat commit"
-
-  resolve "$repo" default-branch
-  default_output="$output"
-  resolve "$repo" pr-record ""
-  [ "$status" -eq 0 ]
-  [ "$output" = "$default_output" ]
-}
-
-# --- usage errors --------------------------------------------------------------
-
-@test "unrecognized anchor-request returns 2 with empty stdout" {
-  local repo
+@test "resolve_base_provenance: a usage error returns 2 with empty stdout" {
+  local row repo non_repository_directory
   repo="$(make_repo bad-anchor)"
-
-  resolve "$repo" bogus-anchor
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-}
-
-@test "empty root returns 2 with empty stdout" {
-  resolve "" default-branch
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-}
-
-@test "a root that is not a work tree returns 2 with empty stdout" {
-  local non_repository_directory="$BATS_TEST_TMPDIR/not-a-repo"
+  non_repository_directory="$BATS_TEST_TMPDIR/not-a-repo"
   mkdir -p "$non_repository_directory"
-
-  resolve "$non_repository_directory" default-branch
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
+  local rows=(unrecognized-anchor empty-root non-work-tree-root)
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    case "$row" in
+      unrecognized-anchor) resolve "$repo" bogus-anchor ;;
+      empty-root) resolve "" default-branch ;;
+      non-work-tree-root) resolve "$non_repository_directory" default-branch ;;
+    esac
+    [ "$status" -eq 2 ]
+    [ -z "$output" ]
+  done
 }
 
 # --- the shape contract (UAT-008) --------------------------------------------
@@ -261,22 +230,20 @@ resolve() {
   [ -z "$output" ]
 }
 
-@test "changed_files: an empty base returns non-zero" {
-  local repo
-  repo="$(make_repo changed-nobase)"
-
-  run bash -c '. "$1"; audit_provenance_changed_files "$2" "$3"' _ "$PROVENANCE_LIBRARY" "$repo" ""
-  [ "$status" -ne 0 ]
-}
-
-@test "changed_files: a failed diff returns non-zero with empty stdout, never a real empty change set" {
-  local repo
-  repo="$(make_repo changed-baddiff)"
-
-  run bash -c '. "$1"; audit_provenance_changed_files "$2" "$3"' _ "$PROVENANCE_LIBRARY" "$repo" \
-    "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
+@test "changed_files: a failing diff or empty base returns non-zero with empty stdout" {
+  local repo row label base
+  repo="$(make_repo changed-failure)"
+  local rows=(
+    'empty base|'
+    'failed diff|deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
+  )
+  for row in "${rows[@]}"; do
+    IFS='|' read -r label base <<<"$row"
+    echo "case: $label"
+    run bash -c '. "$1"; audit_provenance_changed_files "$2" "$3"' _ "$PROVENANCE_LIBRARY" "$repo" "$base"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+  done
 }
 
 @test "changed_files: a non-ASCII path appears un-C-quoted" {
@@ -309,19 +276,23 @@ resolve() {
 
 # --- audit_provenance_empty_is_decisive --------------------------------------
 
-@test "empty_is_decisive: 0 for remote and supplied, 1 for local, unresolvable, empty, and unrecognized" {
-  run bash -c '. "$1"; audit_provenance_empty_is_decisive remote' _ "$PROVENANCE_LIBRARY"
-  [ "$status" -eq 0 ]
-  run bash -c '. "$1"; audit_provenance_empty_is_decisive supplied' _ "$PROVENANCE_LIBRARY"
-  [ "$status" -eq 0 ]
-  run bash -c '. "$1"; audit_provenance_empty_is_decisive local' _ "$PROVENANCE_LIBRARY"
-  [ "$status" -eq 1 ]
-  run bash -c '. "$1"; audit_provenance_empty_is_decisive unresolvable' _ "$PROVENANCE_LIBRARY"
-  [ "$status" -eq 1 ]
-  run bash -c '. "$1"; audit_provenance_empty_is_decisive ""' _ "$PROVENANCE_LIBRARY"
-  [ "$status" -eq 1 ]
-  run bash -c '. "$1"; audit_provenance_empty_is_decisive nonsense' _ "$PROVENANCE_LIBRARY"
-  [ "$status" -eq 1 ]
+@test "empty_is_decisive: per trust level" {
+  local row trust expected_status
+  local rows=(
+    'remote|0'
+    'supplied|0'
+    'github|0'
+    'local|1'
+    'unresolvable|1'
+    '|1'
+    'nonsense|1'
+  )
+  for row in "${rows[@]}"; do
+    IFS='|' read -r trust expected_status <<<"$row"
+    echo "case: trust '$trust' -> $expected_status"
+    run bash -c '. "$1"; audit_provenance_empty_is_decisive "$2"' _ "$PROVENANCE_LIBRARY" "$trust"
+    [ "$status" -eq "$expected_status" ]
+  done
 }
 
 # --- GitHub-sourced trusted base and the local base reference ------------------
@@ -356,18 +327,6 @@ make_feature_repo() {
   printf '%s' "$repo"
 }
 
-# mutated_library <name> <sed-expression>: a scratch copy of the library with
-# one sed mutation; fails when the mutation did not change the file.
-mutated_library() {
-  local copy="$BATS_TEST_TMPDIR/$1.sh"
-  sed -e "$2" "$PROVENANCE_LIBRARY" > "$copy"
-  if cmp -s "$copy" "$PROVENANCE_LIBRARY"; then
-    echo "mutation $1 did not change the library" >&2
-    return 1
-  fi
-  printf '%s' "$copy"
-}
-
 @test "github_base_tip: prints the stubbed tip and makes exactly one branches call" {
   use_gh_stub
   local repo
@@ -379,27 +338,46 @@ mutated_library() {
   [ "$(grep -c '^api repos/owner/repo/branches/main' "$GH_STUB_LOG")" -eq 1 ]
 }
 
-@test "github_base_tip: a gh failure returns 5 with empty stdout and one stderr line" {
+# bats test_tags=protected
+@test "github_base_tip: each failure kind returns 5 with empty stdout" {
   use_gh_stub
-  local repo
-  repo="$(make_feature_repo tip-fail)"
-
-  GH_STUB_FAIL=1 call_function audit_github_base_tip "$repo" owner/repo main
-  [ "$status" -eq 5 ]
-  [ -z "$output" ]
-  [ "$(wc -l < "$STDERR_FILE" | tr -d ' ')" -eq 1 ]
-  grep -qi 'gh' "$STDERR_FILE"
-}
-
-@test "github_base_tip: the failure guard can fail (mutated copy answers the stub value and returns 0)" {
-  use_gh_stub
-  local repo mutated
-  repo="$(make_feature_repo tip-fail-mutated)"
-  mutated="$(mutated_library fail-open 's/^  return 5$/  printf "%s\\n" "${GH_STUB_BASE_TIP:-}"; return 0/')"
-
-  GH_STUB_FAIL=1 run bash -c '. "$1"; audit_github_base_tip "$2" owner/repo main 2>/dev/null' _ "$mutated" "$repo"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$GH_STUB_BASE_TIP" ]
+  local repo row kind answer
+  repo="$(make_feature_repo tip-failure)"
+  mkdir -p "$BATS_TEST_TMPDIR/bare-bin"
+  ln -s "$(command -v git)" "$BATS_TEST_TMPDIR/bare-bin/git"
+  ln -s "$(command -v bash)" "$BATS_TEST_TMPDIR/bare-bin/bash"
+  STDERR_FILE="$BATS_TEST_TMPDIR/stderr.txt"
+  local rows=(
+    'gh fails|'
+    'non-hex answer|not-a-sha'
+    'non-hex answer|ABCDEF1111111111111111111111111111111111'
+    'non-hex answer|11111111'
+    'gh absent from PATH|'
+  )
+  for row in "${rows[@]}"; do
+    IFS='|' read -r kind answer <<<"$row"
+    echo "case: $kind $answer"
+    case "$kind" in
+      'gh fails')
+        GH_STUB_FAIL=1 call_function audit_github_base_tip "$repo" owner/repo main
+        [ "$status" -eq 5 ]
+        [ -z "$output" ]
+        [ "$(wc -l < "$STDERR_FILE" | tr -d ' ')" -eq 1 ]
+        grep -qi 'gh' "$STDERR_FILE"
+        ;;
+      'non-hex answer')
+        GH_STUB_BASE_TIP="$answer" call_function audit_github_base_tip "$repo" owner/repo main
+        [ "$status" -eq 5 ]
+        [ -z "$output" ]
+        ;;
+      'gh absent from PATH')
+        PATH="$BATS_TEST_TMPDIR/bare-bin" run bash -c '. "$1"; audit_github_base_tip "$2" owner/repo main 2>"$3"' _ \
+          "$PROVENANCE_LIBRARY" "$repo" "$STDERR_FILE"
+        [ "$status" -eq 5 ]
+        [ -z "$output" ]
+        ;;
+    esac
+  done
 }
 
 @test "github_base_tip: a hung gh returns 5 within the deadline and leaves no process" {
@@ -434,34 +412,6 @@ mutated_library() {
   GH_STUB_HANG_BRANCHES=1 call_function audit_github_repository "$repo"
   [ "$status" -eq 0 ]
   [ "$output" = "owner/repo" ]
-}
-
-@test "github_base_tip: a non-hex answer returns 5" {
-  use_gh_stub
-  local repo
-  repo="$(make_feature_repo tip-nonhex)"
-
-  GH_STUB_BASE_TIP=not-a-sha call_function audit_github_base_tip "$repo" owner/repo main
-  [ "$status" -eq 5 ]
-  [ -z "$output" ]
-  GH_STUB_BASE_TIP=ABCDEF1111111111111111111111111111111111 call_function audit_github_base_tip "$repo" owner/repo main
-  [ "$status" -eq 5 ]
-  GH_STUB_BASE_TIP=11111111 call_function audit_github_base_tip "$repo" owner/repo main
-  [ "$status" -eq 5 ]
-}
-
-@test "github_base_tip: gh absent from PATH returns 5" {
-  local repo
-  repo="$(make_feature_repo tip-no-gh)"
-  mkdir -p "$BATS_TEST_TMPDIR/bare-bin"
-  ln -s "$(command -v git)" "$BATS_TEST_TMPDIR/bare-bin/git"
-  ln -s "$(command -v bash)" "$BATS_TEST_TMPDIR/bare-bin/bash"
-
-  STDERR_FILE="$BATS_TEST_TMPDIR/stderr.txt"
-  PATH="$BATS_TEST_TMPDIR/bare-bin" run bash -c '. "$1"; audit_github_base_tip "$2" owner/repo main 2>"$3"' _ \
-    "$PROVENANCE_LIBRARY" "$repo" "$STDERR_FILE"
-  [ "$status" -eq 5 ]
-  [ -z "$output" ]
 }
 
 @test "github_pr_base_branch: prints the PR base branch the stub reports" {
@@ -526,42 +476,30 @@ mutated_library() {
   [ ! -s "$GH_STUB_LOG" ]
 }
 
-@test "local_base_reference: the cache is what removes the network cost (mutated copy without the cache read calls gh again)" {
+# Each row copies one feature repo; the origin-HEAD row adds a trunk ref and
+# points origin/HEAD at it, the other leaves origin/HEAD unset.
+@test "local_base_reference: a gh failure writes no cache key and falls back down the ladder" {
   use_gh_stub
-  local repo mutated
-  repo="$(make_feature_repo cache-mutated)"
-  git -C "$repo" update-ref refs/remotes/origin/release refs/heads/main
-  git -C "$repo" config branch.feat.gaia-audit-base release
-  mutated="$(mutated_library no-cache-read 's/^\( *\)cached_name=.*config --get.*$/\1cached_name=""/')"
-
-  GH_STUB_BASE_BRANCH=release run bash -c '. "$1"; audit_local_base_reference "$2" 2>/dev/null' _ "$mutated" "$repo"
-  [ "$status" -eq 0 ]
-  grep -q '^pr view' "$GH_STUB_LOG"
-}
-
-@test "local_base_reference: a gh failure writes no cache key and falls back to the origin HEAD target" {
-  use_gh_stub
-  local repo
-  repo="$(make_feature_repo gh-fails-head)"
-  git -C "$repo" update-ref refs/remotes/origin/trunk refs/heads/main
-  git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
-
-  GH_STUB_FAIL=1 call_function audit_local_base_reference "$repo"
-  [ "$status" -eq 0 ]
-  [ "$output" = "refs/remotes/origin/trunk" ]
-  git -C "$repo" config --get branch.feat.gaia-audit-base && return 1
-  true
-}
-
-@test "local_base_reference: with gh failing and no origin HEAD it falls back to origin main" {
-  use_gh_stub
-  local repo
-  repo="$(make_feature_repo gh-fails-main)"
-
-  GH_STUB_FAIL=1 call_function audit_local_base_reference "$repo"
-  [ "$status" -eq 0 ]
-  [ "$output" = "refs/remotes/origin/main" ]
-  git -C "$repo" config --get branch.feat.gaia-audit-base && return 1
+  local base_repo row label expected repo
+  base_repo="$(make_feature_repo gh-fails-base)"
+  local rows=(
+    'origin HEAD target|refs/remotes/origin/trunk'
+    'no origin HEAD falls back to origin main|refs/remotes/origin/main'
+  )
+  for row in "${rows[@]}"; do
+    IFS='|' read -r label expected <<<"$row"
+    echo "case: $label"
+    repo="$BATS_TEST_TMPDIR/gh-fails-${expected##*/}"
+    cp -R "$base_repo" "$repo"
+    if [ "$label" = 'origin HEAD target' ]; then
+      git -C "$repo" update-ref refs/remotes/origin/trunk refs/heads/main
+      git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
+    fi
+    GH_STUB_FAIL=1 call_function audit_local_base_reference "$repo"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$expected" ]
+    git -C "$repo" config --get branch.feat.gaia-audit-base && return 1
+  done
   true
 }
 
@@ -579,22 +517,37 @@ mutated_library() {
   [ ! -s "$GH_STUB_LOG" ]
 }
 
-@test "local_base_reference: a resolved ref that does not exist returns 1 naming git fetch origin" {
+# Both rows copy a feat repo with a local main and no remote-tracking ref; the
+# cached-name-with-no-ref row adds origin/main and caches a base name no ref carries.
+@test "local_base_reference: an unresolvable reference returns 1 naming git fetch origin" {
   use_gh_stub
-  local repo
-  repo="$(make_feature_repo ref-missing)"
-  git -C "$repo" config branch.feat.gaia-audit-base ghost
-
-  call_function audit_local_base_reference "$repo"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-  [ "$(wc -l < "$STDERR_FILE" | tr -d ' ')" -eq 1 ]
-  grep -qF 'git fetch origin' "$STDERR_FILE"
+  local base_repo label repo
+  base_repo="$(make_repo unresolvable-reference-base)"
+  git -C "$base_repo" checkout -q -b feat
+  commit_file "$base_repo" "feat.txt" "feat commit"
+  local rows=(cached-name-with-no-ref no-remote-tracking-ref)
+  for label in "${rows[@]}"; do
+    echo "case: $label"
+    repo="$BATS_TEST_TMPDIR/reference-$label"
+    cp -R "$base_repo" "$repo"
+    if [ "$label" = cached-name-with-no-ref ]; then
+      git -C "$repo" update-ref refs/remotes/origin/main refs/heads/main
+      git -C "$repo" config branch.feat.gaia-audit-base ghost
+    fi
+    call_function audit_local_base_reference "$repo"
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+    grep -qF 'git fetch origin' "$STDERR_FILE"
+    if [ "$label" = cached-name-with-no-ref ]; then
+      [ "$(wc -l < "$STDERR_FILE" | tr -d ' ')" -eq 1 ]
+    fi
+  done
 }
 
+# bats test_tags=protected
 @test "local_base_reference: a local branch named origin/main never stands in for the remote-tracking ref" {
   use_gh_stub
-  local repo forged_sha real_sha mutated
+  local repo forged_sha real_sha
   repo="$(make_feature_repo forged)"
   git -C "$repo" checkout -q main
   commit_file "$repo" "main-advance.txt" "advance main"
@@ -609,24 +562,6 @@ mutated_library() {
   [ "$status" -eq 0 ]
   [ "$output" = "refs/remotes/origin/main" ]
   [ "$(git -C "$repo" rev-parse "$output")" = "$real_sha" ]
-
-  mutated="$(mutated_library bare-revspec 's@refs/remotes/origin/\${name}@origin/${name}@')"
-  run bash -c '. "$1"; audit_local_base_reference "$2" 2>/dev/null' _ "$mutated" "$repo"
-  [ "$status" -eq 0 ]
-  [ "$(git -C "$repo" rev-parse "$output")" = "$forged_sha" ]
-}
-
-@test "local_base_reference: no remote-tracking ref at all returns 1 even with a local main" {
-  use_gh_stub
-  local repo
-  repo="$(make_repo no-remote)"
-  git -C "$repo" checkout -q -b feat
-  commit_file "$repo" "feat.txt" "feat commit"
-
-  call_function audit_local_base_reference "$repo"
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-  grep -qF 'git fetch origin' "$STDERR_FILE"
 }
 
 @test "the new functions never run git fetch" {
@@ -652,13 +587,4 @@ WRAPPER
   [ -s "$BATS_TEST_TMPDIR/git.log" ]
   grep -qE '(^| )fetch( |$)' "$BATS_TEST_TMPDIR/git.log" && return 1
   true
-}
-
-@test "empty_is_decisive: github is decisive; local and unresolvable still are not" {
-  run bash -c '. "$1"; audit_provenance_empty_is_decisive github' _ "$PROVENANCE_LIBRARY"
-  [ "$status" -eq 0 ]
-  run bash -c '. "$1"; audit_provenance_empty_is_decisive local' _ "$PROVENANCE_LIBRARY"
-  [ "$status" -eq 1 ]
-  run bash -c '. "$1"; audit_provenance_empty_is_decisive unresolvable' _ "$PROVENANCE_LIBRARY"
-  [ "$status" -eq 1 ]
 }

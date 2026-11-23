@@ -158,8 +158,9 @@ listing() {
 
 # --- 2. Colocated plan delete, parent untouched -----------------------------
 
-@test "colocated plan: parent SPEC SUMMARY.md present + gaia-plan close -> plan/ deleted, parent SPEC folder and SPEC.md untouched" {
+@test "colocated plan and plan-2: a gaia-plan close for the spec ref deletes each, parent SPEC untouched" {
   seed_plan ".notebook/specs/SPEC-005/plan"
+  seed_plan ".notebook/specs/SPEC-005/plan-2"
   echo "spec body" > "$SANDBOX/.notebook/specs/SPEC-005/SPEC.md"
   echo "# SPEC-005" > "$SANDBOX/.notebook/specs/SPEC-005/SUMMARY.md"
   seed_close spec:SPEC-005 gaia-plan
@@ -168,50 +169,19 @@ listing() {
   assert_deleted "$SANDBOX/.notebook/specs/SPEC-005/plan"
   [ -d "$SANDBOX/.notebook/specs/SPEC-005" ]
   [ -f "$SANDBOX/.notebook/specs/SPEC-005/SPEC.md" ]
+  [ -d "$SANDBOX/.notebook/specs/SPEC-005/plan-2" ]
   grep -qF "Deleted plan folder: .notebook/specs/SPEC-005/plan" <<<"$output"
   grep -qF "the usage ledger holds the run record" <<<"$output"
-}
-
-# --- 3. Colocated plan-2 revision, same delete semantics --------------------
-
-@test "colocated plan-2 revision: parent SPEC SUMMARY.md present + gaia-plan close -> deleted, parent untouched" {
-  seed_plan ".notebook/specs/SPEC-005/plan-2"
-  echo "# SPEC-005" > "$SANDBOX/.notebook/specs/SPEC-005/SUMMARY.md"
-  seed_close spec:SPEC-005 gaia-plan
   run run_in_sandbox ".notebook/specs/SPEC-005/plan-2"
   [ "$status" -eq 0 ]
   assert_deleted "$SANDBOX/.notebook/specs/SPEC-005/plan-2"
+  [ -f "$SANDBOX/.notebook/specs/SPEC-005/SUMMARY.md" ]
   grep -qF "Deleted plan folder: .notebook/specs/SPEC-005/plan-2" <<<"$output"
 }
 
-@test "colocated plans: one gaia-plan close for the spec ref clears both plan and plan-2" {
-  seed_plan ".notebook/specs/SPEC-005/plan"
-  seed_plan ".notebook/specs/SPEC-005/plan-2"
-  echo "# SPEC-005" > "$SANDBOX/.notebook/specs/SPEC-005/SUMMARY.md"
-  seed_close spec:SPEC-005 gaia-plan
-  run run_in_sandbox ".notebook/specs/SPEC-005/plan"
-  [ "$status" -eq 0 ]
-  assert_deleted "$SANDBOX/.notebook/specs/SPEC-005/plan"
-  run run_in_sandbox ".notebook/specs/SPEC-005/plan-2"
-  [ "$status" -eq 0 ]
-  assert_deleted "$SANDBOX/.notebook/specs/SPEC-005/plan-2"
-}
+# --- 3. Consolidation gate: the parent SUMMARY.md must exist and verify ------
 
-# --- 3a. Wrong workflow does not clear the gate -----------------------------
-
-@test "colocated plan: only a gaia-spec close for the spec ref -> kept with the gaia-plan keep line" {
-  seed_plan ".notebook/specs/SPEC-005/plan"
-  echo "# SPEC-005" > "$SANDBOX/.notebook/specs/SPEC-005/SUMMARY.md"
-  seed_close spec:SPEC-005 gaia-spec
-  run run_in_sandbox ".notebook/specs/SPEC-005/plan"
-  [ "$status" -eq 0 ]
-  [ -d "$SANDBOX/.notebook/specs/SPEC-005/plan" ]
-  [ "$output" = "Kept .notebook/specs/SPEC-005/plan: no gaia-plan run recorded for spec:SPEC-005; outside a live gaia-plan run, record it: bash .gaia/scripts/usage.sh record spec:SPEC-005 --workflow gaia-plan --start <iso>" ]
-}
-
-# --- 3b. Fail-closed consolidation gate: no parent SUMMARY.md -> kept --------
-
-@test "colocated plan: parent SPEC has no consolidated SUMMARY.md yet -> plan/ kept (fail-closed consolidation gate)" {
+@test "colocated plan is kept until the parent SUMMARY.md exists and, with the verifier present, is well-formed" {
   seed_plan ".notebook/specs/SPEC-020/plan"
   echo "spec body" > "$SANDBOX/.notebook/specs/SPEC-020/SPEC.md"
   seed_close spec:SPEC-020 gaia-plan
@@ -219,31 +189,27 @@ listing() {
   [ "$status" -eq 0 ]
   [ -d "$SANDBOX/.notebook/specs/SPEC-020/plan" ]
   [ -f "$SANDBOX/.notebook/specs/SPEC-020/plan/PROGRESS.md" ]
-  grep -qF "Retained plan" <<<"$output"
-}
-
-@test "colocated plan-2: deleted only when the parent SUMMARY.md exists; absent, it is kept" {
-  seed_plan ".notebook/specs/SPEC-001/plan-2"
-  seed_close spec:SPEC-001 gaia-plan
-
-  run run_in_sandbox ".notebook/specs/SPEC-001/plan-2"
-  [ "$status" -eq 0 ]
-  [ -f "$SANDBOX/.notebook/specs/SPEC-001/plan-2/PROGRESS.md" ]
   grep -qF "Retained plan (parent SPEC not yet consolidated)" <<<"$output"
 
-  echo "# SPEC-001" > "$SANDBOX/.notebook/specs/SPEC-001/SUMMARY.md"
-  run run_in_sandbox ".notebook/specs/SPEC-001/plan-2"
+  # The same plan is deleted once the parent SUMMARY.md exists.
+  echo "# SPEC-020" > "$SANDBOX/.notebook/specs/SPEC-020/SUMMARY.md"
+  run run_in_sandbox ".notebook/specs/SPEC-020/plan"
   [ "$status" -eq 0 ]
-  assert_deleted "$SANDBOX/.notebook/specs/SPEC-001/plan-2"
-}
+  assert_deleted "$SANDBOX/.notebook/specs/SPEC-020/plan"
 
-# --- 3c. Real summary-verify.sh delegation: well-formed SUMMARY.md -> deleted
-
-@test "colocated plan: real summary-verify.sh present + well-formed parent SUMMARY.md -> plan/ deleted" {
+  # With the real verifier present, a malformed SUMMARY.md keeps the plan and a
+  # well-formed one deletes it.
   copy_summary_verify
+  seed_plan ".notebook/specs/SPEC-022/plan"
+  echo "not well-formed" > "$SANDBOX/.notebook/specs/SPEC-022/SUMMARY.md"
+  seed_close spec:SPEC-022 gaia-plan
+  run run_in_sandbox ".notebook/specs/SPEC-022/plan"
+  [ "$status" -eq 0 ]
+  [ -d "$SANDBOX/.notebook/specs/SPEC-022/plan" ]
+  grep -qF "Retained plan" <<<"$output"
+
   seed_plan ".notebook/specs/SPEC-021/plan"
-  echo "spec body" > "$SANDBOX/.notebook/specs/SPEC-021/SPEC.md"
-  cat > "$SANDBOX/.notebook/specs/SPEC-021/SUMMARY.md" <<'EOF'
+  cat > "$SANDBOX/.notebook/specs/SPEC-021/SUMMARY.md" <<'SUMMARY'
 ---
 wiki_promote_default: ask
 wiki_promote_targets: [decisions]
@@ -251,26 +217,12 @@ wiki_promote_targets: [decisions]
 # SPEC-021
 
 Consolidated body.
-EOF
+SUMMARY
   seed_close spec:SPEC-021 gaia-plan
   run run_in_sandbox ".notebook/specs/SPEC-021/plan"
   [ "$status" -eq 0 ]
   assert_deleted "$SANDBOX/.notebook/specs/SPEC-021/plan"
   grep -qF "Deleted plan folder: .notebook/specs/SPEC-021/plan" <<<"$output"
-}
-
-# --- 3d. Real summary-verify.sh delegation: malformed SUMMARY.md -> kept ----
-
-@test "colocated plan: real summary-verify.sh present + malformed parent SUMMARY.md -> plan/ kept" {
-  copy_summary_verify
-  seed_plan ".notebook/specs/SPEC-022/plan"
-  echo "spec body" > "$SANDBOX/.notebook/specs/SPEC-022/SPEC.md"
-  echo "not well-formed" > "$SANDBOX/.notebook/specs/SPEC-022/SUMMARY.md"
-  seed_close spec:SPEC-022 gaia-plan
-  run run_in_sandbox ".notebook/specs/SPEC-022/plan"
-  [ "$status" -eq 0 ]
-  [ -d "$SANDBOX/.notebook/specs/SPEC-022/plan" ]
-  grep -qF "Retained plan" <<<"$output"
 }
 
 # --- 4. A slug-named plan folder is not a plan folder of the notebook --------
@@ -290,40 +242,42 @@ EOF
   grep -qF "plan-archive: refusing .notebook/plans/bare" <<<"$output"
 }
 
-# --- 5. Gate blocks: no close row -> kept with the recovery command ----------
+# --- 5. Usage-ledger gate: a missing close keeps the folder ------------------
 
-@test "gate blocks: no close row for the plan -> folder kept, keep line names the ref and the recovery command" {
+@test "usage-ledger gate keeps the folder and names the recovery command when the gaia-plan close is absent" {
   seed_plan ".notebook/plans/PLAN-006"
   seed_plan_row PLAN-006
   run run_in_sandbox ".notebook/plans/PLAN-006"
   [ "$status" -eq 0 ]
-  [ -d "$SANDBOX/.notebook/plans/PLAN-006" ]
   [ -f "$SANDBOX/.notebook/plans/PLAN-006/PROGRESS.md" ]
   [ "$output" = "Kept .notebook/plans/PLAN-006: no gaia-plan run recorded for plan:PLAN-006; outside a live gaia-plan run, record it: bash .gaia/scripts/usage.sh record plan:PLAN-006 --workflow gaia-plan --start <iso>" ]
-}
 
-@test "gate blocks: a gaia-spec close for the plan ref does not clear it" {
-  seed_plan ".notebook/plans/PLAN-006"
-  seed_close plan:PLAN-006 gaia-spec
-  run run_in_sandbox ".notebook/plans/PLAN-006"
+  # A gaia-spec close for the plan ref does not clear it.
+  seed_plan ".notebook/plans/PLAN-016"
+  seed_close plan:PLAN-016 gaia-spec
+  run run_in_sandbox ".notebook/plans/PLAN-016"
   [ "$status" -eq 0 ]
-  [ -f "$SANDBOX/.notebook/plans/PLAN-006/PROGRESS.md" ]
-  grep -qF "no gaia-plan run recorded for plan:PLAN-006" <<<"$output"
-}
+  [ -f "$SANDBOX/.notebook/plans/PLAN-016/PROGRESS.md" ]
+  grep -qF "no gaia-plan run recorded for plan:PLAN-016" <<<"$output"
 
-@test "gate blocks: usage.jsonl missing -> folder kept, keep line names the ledger path" {
-  seed_plan ".notebook/plans/PLAN-006"
-  rm -f "$TELEMETRY/usage.jsonl"
-  run run_in_sandbox ".notebook/plans/PLAN-006"
+  # Nor does a gaia-spec close for the spec ref clear a colocated plan.
+  seed_plan ".notebook/specs/SPEC-005/plan"
+  echo "# SPEC-005" > "$SANDBOX/.notebook/specs/SPEC-005/SUMMARY.md"
+  seed_close spec:SPEC-005 gaia-spec
+  run run_in_sandbox ".notebook/specs/SPEC-005/plan"
   [ "$status" -eq 0 ]
-  [ -f "$SANDBOX/.notebook/plans/PLAN-006/PROGRESS.md" ]
-  [ "$output" = "Kept .notebook/plans/PLAN-006: usage ledger missing or unreadable (.gaia/local/telemetry/usage.jsonl) for plan:PLAN-006; once it reads, outside a live gaia-plan run, record it: bash .gaia/scripts/usage.sh record plan:PLAN-006 --workflow gaia-plan --start <iso>" ]
-}
+  [ -d "$SANDBOX/.notebook/specs/SPEC-005/plan" ]
+  [ "$output" = "Kept .notebook/specs/SPEC-005/plan: no gaia-plan run recorded for spec:SPEC-005; outside a live gaia-plan run, record it: bash .gaia/scripts/usage.sh record spec:SPEC-005 --workflow gaia-plan --start <iso>" ]
 
-@test "gate blocks: colocated plan with usage.jsonl missing -> kept, keep line names the spec ref" {
+  # A missing ledger keeps both a spec-less and a colocated plan.
+  seed_plan ".notebook/plans/PLAN-017"
   seed_plan ".notebook/specs/SPEC-007/plan"
   echo "# SPEC-007" > "$SANDBOX/.notebook/specs/SPEC-007/SUMMARY.md"
   rm -f "$TELEMETRY/usage.jsonl"
+  run run_in_sandbox ".notebook/plans/PLAN-017"
+  [ "$status" -eq 0 ]
+  [ -f "$SANDBOX/.notebook/plans/PLAN-017/PROGRESS.md" ]
+  [ "$output" = "Kept .notebook/plans/PLAN-017: usage ledger missing or unreadable (.gaia/local/telemetry/usage.jsonl) for plan:PLAN-017; once it reads, outside a live gaia-plan run, record it: bash .gaia/scripts/usage.sh record plan:PLAN-017 --workflow gaia-plan --start <iso>" ]
   run run_in_sandbox ".notebook/specs/SPEC-007/plan"
   [ "$status" -eq 0 ]
   [ -d "$SANDBOX/.notebook/specs/SPEC-007/plan" ]
@@ -341,18 +295,6 @@ EOF
   [ "$(plan_row_field PLAN-007 status)" = "merged" ]
   [ -n "$(plan_row_field PLAN-007 merged_at)" ]
   grep -qF "Kept .notebook/plans/PLAN-007" <<<"$output"
-}
-
-# --- 7. Slug-named folder: no row stamp attempt -----------------------------
-
-@test "slug-named folder: refused, and no unrelated row is stamped" {
-  seed_plan ".notebook/plans/cache-consolidation"
-  seed_plan_row PLAN-005
-  run run_in_sandbox ".notebook/plans/cache-consolidation"
-  [ "$status" -eq 0 ]
-  [ -d "$SANDBOX/.notebook/plans/cache-consolidation" ]
-  # Unrelated PLAN-005 row is untouched, proving no stray stamp fired.
-  [ "$(plan_row_field PLAN-005 status)" = "ready" ]
 }
 
 # --- 8. Spec-colocated plan: deletion never stamps any plan row --------------
@@ -384,6 +326,7 @@ EOF
 
 # --- 9b. Spec-less PLAN-NNN with no SUMMARY.md yet: kept, not reduced ------
 
+# bats test_tags=protected
 @test "spec-less PLAN-NNN with no SUMMARY.md yet: kept intact, not reduced (fail-closed consolidation gate)" {
   local plan_directory="$SANDBOX/.notebook/plans/PLAN-010"
   mkdir -p "$plan_directory/.work"
@@ -448,42 +391,62 @@ EOF
   [ -f "$main_checkout/.notebook/plans/PLAN-042/SUMMARY.md" ]
 }
 
-# --- 10. Refuse operating inside the archived/ tree -------------------------
+# --- 10. Path classification refuses every shape the notebook does not accept --
 
-@test "refuses the notebook plans archived/<slug> (nested-under-archived guard)" {
+@test "refuses each path the notebook library does not accept and leaves the tree untouched" {
+  local outside_plan="$BATS_TEST_TMPDIR/outside-plan"
+  local outside_root="$BATS_TEST_TMPDIR/outside-root"
+  seed_plan ".notebook/plans/PLAN-001"
+  seed_plan ".notebook/plans/PLAN-002"
   seed_plan ".notebook/plans/archived/foo"
-  run run_in_sandbox ".notebook/plans/archived/foo"
-  [ "$status" -eq 0 ]
-  # Untouched: every seeded entry still present, nothing pruned or deleted.
-  [ -f "$SANDBOX/.notebook/plans/archived/foo/KICKOFF.md" ]
-  [ -f "$SANDBOX/.notebook/plans/archived/foo/RUNNING" ]
-  [ -f "$SANDBOX/.notebook/plans/archived/foo/.work/x" ]
-  grep -qF "refusing" <<<"$output"
-}
-
-# --- 11. Refuse out-of-shape relative path ----------------------------------
-
-@test "refuses a relative path outside the notebook" {
-  mkdir -p "$SANDBOX/some/other/dir"
-  : > "$SANDBOX/some/other/dir/file"
-  run run_in_sandbox "some/other/dir"
-  [ "$status" -eq 0 ]
-  [ -f "$SANDBOX/some/other/dir/file" ]
-  grep -qF "refusing" <<<"$output"
-}
-
-@test "refuses the pre-notebook local locations and leaves them untouched" {
+  seed_plan ".notebook/plans/cache-consolidation"
+  seed_plan ".notebook/specs/SPEC-005/plan"
+  seed_plan ".notebook/specs/SPEC-001"
   seed_plan ".gaia/local/plans/PLAN-001"
   seed_plan ".gaia/local/specs/SPEC-001/plan"
+  mkdir -p "$SANDBOX/some/other/dir" "$SANDBOX/.notebook/plan"
+  : > "$SANDBOX/some/other/dir/file"
+  : > "$SANDBOX/.notebook/plan/escaped-marker"
+  echo "# SPEC-001" > "$SANDBOX/.notebook/specs/SPEC-001/SUMMARY.md"
+  seed_plan_row PLAN-005
+  mkdir -p "$outside_plan" "$outside_root/plans/PLAN-001"
+  echo "precious" > "$outside_plan/PROGRESS.md"
+  echo "precious" > "$outside_root/plans/PLAN-001/PROGRESS.md"
+  mkdir -p "$SANDBOX/.notebook/specs/SPEC-003"
+  echo "# SPEC-003" > "$SANDBOX/.notebook/specs/SPEC-003/SUMMARY.md"
+  ln -s "$outside_plan" "$SANDBOX/.notebook/specs/SPEC-003/plan"
   seed_close plan:PLAN-001 gaia-plan
+  seed_close plan:PLAN-002 gaia-plan
+  seed_close plan:cache-consolidation gaia-plan
+  seed_close spec:SPEC-001 gaia-plan
+  seed_close spec:SPEC-003 gaia-plan
+  seed_close spec:SPEC-005 gaia-plan
+  local before candidate
   before="$(listing)"
-  run run_in_sandbox ".gaia/local/plans/PLAN-001"
-  [ "$status" -eq 0 ]
-  grep -qF "refusing" <<<"$output"
-  run run_in_sandbox ".gaia/local/specs/SPEC-001/plan"
-  [ "$status" -eq 0 ]
-  grep -qF "refusing" <<<"$output"
-  [ "$(listing)" = "$before" ]
+  for candidate in \
+    ".notebook/plans/archived/foo" \
+    ".notebook/plans/cache-consolidation" \
+    "some/other/dir" \
+    ".gaia/local/plans/PLAN-001" \
+    ".gaia/local/specs/SPEC-001/plan" \
+    "$outside_root/plans/PLAN-001" \
+    ".notebook/plans/.." \
+    ".notebook/plans//" \
+    ".notebook/specs/../plan" \
+    ".notebook/plans/../specs/SPEC-001" \
+    ".notebook/plans/PLAN-001/.work" \
+    ".notebook/plans/PLAN-001/.." \
+    ".notebook/plans/PLAN-001/../PLAN-002" \
+    ".notebook/specs/SPEC-003/plan"; do
+    run run_in_sandbox "$candidate"
+    [ "$status" -eq 0 ] || { echo "candidate $candidate: status $status"; return 1; }
+    grep -qF "refusing" <<<"$output" || { echo "candidate $candidate: no refusal: $output"; return 1; }
+    [ "$(listing)" = "$before" ] || { echo "candidate $candidate: tree changed"; return 1; }
+  done
+  [ -L "$SANDBOX/.notebook/specs/SPEC-003/plan" ]
+  [ "$(plan_row_field PLAN-005 status)" = "ready" ]
+  [ "$(cat "$outside_plan/PROGRESS.md")" = "precious" ]
+  [ "$(cat "$outside_root/plans/PLAN-001/PROGRESS.md")" = "precious" ]
 }
 
 @test "a refusal prints the accepted locations from the library, not a spelled path" {
@@ -504,48 +467,26 @@ EOF
   grep -qF "does not exist" <<<"$output"
 }
 
-# --- 13. Absolute-under-repo normalizes -------------------------------------
+# --- 13. Accepted spellings normalize ---------------------------------------
 
-@test "absolute path under repo root normalizes to the same end-state" {
+@test "an absolute path under the repo root and a single trailing slash reach the same end-state" {
   seed_plan ".notebook/plans/PLAN-030"
+  seed_plan ".notebook/plans/PLAN-031"
   seed_close plan:PLAN-030 gaia-plan
+  seed_close plan:PLAN-031 gaia-plan
   run run_in_sandbox "$SANDBOX/.notebook/plans/PLAN-030"
   [ "$status" -eq 0 ]
   [ ! -e "$SANDBOX/.notebook/plans/PLAN-030/PROGRESS.md" ]
   grep -qF "Reduced plan folder to SUMMARY.md (kept for age-reap): .notebook/plans/PLAN-030" <<<"$output"
-}
-
-@test "an absolute and a repo-relative spelling reach the same end-state" {
-  seed_plan ".notebook/plans/PLAN-001"
-  seed_plan ".notebook/plans/PLAN-002"
-  seed_close plan:PLAN-001 gaia-plan
-  seed_close plan:PLAN-002 gaia-plan
-  run run_in_sandbox "$SANDBOX/.notebook/plans/PLAN-001"
+  run run_in_sandbox ".notebook/plans/PLAN-031/"
   [ "$status" -eq 0 ]
-  run run_in_sandbox ".notebook/plans/PLAN-002"
-  [ "$status" -eq 0 ]
-  for plan_name in PLAN-001 PLAN-002; do
-    [ -f "$SANDBOX/.notebook/plans/$plan_name/SUMMARY.md" ]
-    [ ! -e "$SANDBOX/.notebook/plans/$plan_name/RUNNING" ]
-    [ "$(find "$SANDBOX/.notebook/plans/$plan_name" -mindepth 1 | wc -l | tr -d ' ')" = "1" ]
-  done
-}
-
-# --- 14. Absolute-outside-repo refuses ----------------------------------------
-
-@test "absolute path outside repo root refuses" {
-  OUTSIDE_RAW="$(mktemp -d "${BATS_TEST_TMPDIR}/outside.XXXXXX")"
-  OUTSIDE="$(cd "$OUTSIDE_RAW" && pwd -P)"
-  mkdir -p "$OUTSIDE/plans/PLAN-001"
-  : > "$OUTSIDE/plans/PLAN-001/SUMMARY.md"
-  run run_in_sandbox "$OUTSIDE/plans/PLAN-001"
-  [ "$status" -eq 0 ]
-  [ -f "$OUTSIDE/plans/PLAN-001/SUMMARY.md" ]
-  grep -qF "refusing" <<<"$output"
+  [ ! -e "$SANDBOX/.notebook/plans/PLAN-031/PROGRESS.md" ]
+  grep -qF "Reduced plan folder to SUMMARY.md (kept for age-reap): .notebook/plans/PLAN-031" <<<"$output"
 }
 
 # --- 15. Refuse "." slug (would resolve to plans/ itself, mass-deleting siblings) --
 
+# bats test_tags=protected
 @test "refuses the notebook plans folder plus a dot segment (mass-delete guard)" {
   seed_plan ".notebook/plans/PLAN-011"
   mkdir -p "$SANDBOX/.notebook/plans/PLAN-012"
@@ -559,83 +500,7 @@ EOF
   grep -qF "refusing" <<<"$output"
 }
 
-# --- 16. Refuse ".." slug ------------------------------------------------------
-
-@test "refuses the notebook plans folder plus a parent segment (mass-delete guard)" {
-  seed_plan ".notebook/plans/PLAN-011"
-  seed_plan ".notebook/specs/SPEC-005/plan"
-  run run_in_sandbox ".notebook/plans/.."
-  [ "$status" -eq 0 ]
-  # Untouched: sibling trees under the notebook survive.
-  [ -f "$SANDBOX/.notebook/plans/PLAN-011/KICKOFF.md" ]
-  [ -f "$SANDBOX/.notebook/specs/SPEC-005/plan/KICKOFF.md" ]
-  grep -qF "refusing" <<<"$output"
-}
-
-# --- 17. Refuse doubled trailing slash (empty slug, same mass-delete guard) --------
-
-@test "refuses the notebook plans folder with a doubled trailing slash (empty slug)" {
-  seed_plan ".notebook/plans/PLAN-011"
-  mkdir -p "$SANDBOX/.notebook/plans/PLAN-012"
-  : > "$SANDBOX/.notebook/plans/PLAN-012/marker"
-  run run_in_sandbox ".notebook/plans//"
-  [ "$status" -eq 0 ]
-  [ -f "$SANDBOX/.notebook/plans/PLAN-011/KICKOFF.md" ]
-  [ -f "$SANDBOX/.notebook/plans/PLAN-012/marker" ]
-  grep -qF "refusing" <<<"$output"
-}
-
-# --- 18. Well-formed slug with a single trailing slash still resolves ------------
-
-@test "trailing slash on a well-formed slug still resolves correctly" {
-  seed_plan ".notebook/plans/PLAN-031"
-  seed_close plan:PLAN-031 gaia-plan
-  run run_in_sandbox ".notebook/plans/PLAN-031/"
-  [ "$status" -eq 0 ]
-  [ ! -e "$SANDBOX/.notebook/plans/PLAN-031/PROGRESS.md" ]
-  grep -qF "Reduced plan folder to SUMMARY.md (kept for age-reap): .notebook/plans/PLAN-031" <<<"$output"
-}
-
-# --- 19. Refuse a specs-arm path that climbs out ------------------------------------
-
-@test "refuses the notebook specs folder plus a parent segment (spec-part path escape)" {
-  seed_plan ".notebook/specs/SPEC-005/plan"
-  mkdir -p "$SANDBOX/.notebook/plan"
-  : > "$SANDBOX/.notebook/plan/escaped-marker"
-  run run_in_sandbox ".notebook/specs/../plan"
-  [ "$status" -eq 0 ]
-  [ -f "$SANDBOX/.notebook/specs/SPEC-005/plan/KICKOFF.md" ]
-  [ -f "$SANDBOX/.notebook/plan/escaped-marker" ]
-  grep -qF "refusing" <<<"$output"
-}
-
-# --- 20. Classification red twins ------------------------------------------------
-
-@test "refuses a climb out of the plans folder into the specs folder, untouched" {
-  seed_plan ".notebook/specs/SPEC-001"
-  echo "# SPEC-001" > "$SANDBOX/.notebook/specs/SPEC-001/SUMMARY.md"
-  seed_close spec:SPEC-001 gaia-plan
-  before="$(listing)"
-  run run_in_sandbox ".notebook/plans/../specs/SPEC-001"
-  [ "$status" -eq 0 ]
-  grep -qF "refusing" <<<"$output"
-  [ "$(listing)" = "$before" ]
-}
-
-@test "refuses a path that names a child of a plan folder or a dot segment after it, untouched" {
-  seed_plan ".notebook/plans/PLAN-001"
-  seed_plan ".notebook/plans/PLAN-002"
-  seed_close plan:PLAN-001 gaia-plan
-  seed_close plan:PLAN-002 gaia-plan
-  before="$(listing)"
-  for candidate in ".notebook/plans/PLAN-001/.work" ".notebook/plans/PLAN-001/.." ".notebook/plans/PLAN-001/../PLAN-002"; do
-    run run_in_sandbox "$candidate"
-    [ "$status" -eq 0 ]
-    grep -qF "refusing" <<<"$output"
-  done
-  [ "$(listing)" = "$before" ]
-}
-
+# bats test_tags=protected
 @test "refuses a symlinked plan folder and leaves the folder it points at untouched" {
   outside="$BATS_TEST_TMPDIR/outside-target"
   mkdir -p "$outside/.work"
@@ -650,31 +515,6 @@ EOF
   [ -L "$SANDBOX/.notebook/plans/PLAN-002" ]
   [ "$(cat "$outside/SUMMARY.md")" = "precious" ]
   [ -f "$outside/PROGRESS.md" ]
-}
-
-@test "refuses a symlinked colocated plan folder and leaves the folder it points at untouched" {
-  outside="$BATS_TEST_TMPDIR/outside-plan"
-  mkdir -p "$outside"
-  echo "precious" > "$outside/PROGRESS.md"
-  mkdir -p "$SANDBOX/.notebook/specs/SPEC-001"
-  echo "# SPEC-001" > "$SANDBOX/.notebook/specs/SPEC-001/SUMMARY.md"
-  ln -s "$outside" "$SANDBOX/.notebook/specs/SPEC-001/plan"
-  seed_close spec:SPEC-001 gaia-plan
-  run run_in_sandbox ".notebook/specs/SPEC-001/plan"
-  [ "$status" -eq 0 ]
-  grep -qF "refusing" <<<"$output"
-  [ -L "$SANDBOX/.notebook/specs/SPEC-001/plan" ]
-  [ "$(cat "$outside/PROGRESS.md")" = "precious" ]
-}
-
-@test "refuses an absolute path outside the notebook that merely has plans in its name" {
-  mkdir -p "$BATS_TEST_TMPDIR/x/plans/PLAN-001"
-  echo "summary" > "$BATS_TEST_TMPDIR/x/plans/PLAN-001/SUMMARY.md"
-  echo "progress" > "$BATS_TEST_TMPDIR/x/plans/PLAN-001/PROGRESS.md"
-  run run_in_sandbox "$BATS_TEST_TMPDIR/x/plans/PLAN-001"
-  [ "$status" -eq 0 ]
-  grep -qF "refusing" <<<"$output"
-  [ -f "$BATS_TEST_TMPDIR/x/plans/PLAN-001/PROGRESS.md" ]
 }
 
 # --- 21. Readiness -----------------------------------------------------------------

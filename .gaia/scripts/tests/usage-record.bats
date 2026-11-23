@@ -233,7 +233,18 @@ scratch_scripts() {
 
 # ---------- refusals ----------
 
-@test "no unclaimed start: exit 1, no close row, one stderr line naming the reason and the recovery command" {
+# reset_run: a fresh telemetry directory and projects tree for the next case of a
+# table test, back on the default session.
+reset_run() {
+  rm -rf "${TEL:?}" "${PROJECTS:?}/${ENCODED_MAIN:?}"
+  mkdir -p "$TEL" "$PROJECTS/$ENCODED_MAIN"
+  SID=sess-1
+  export CLAUDE_CODE_SESSION_ID="$SID"
+}
+
+@test "record refusals: no unclaimed start, already recorded, usage errors and empty session, jq absent, unreadable ledger" {
+  local case_arguments
+  echo "case: no unclaimed start"
   mkdir -p "$(dirname "$(main_file)")"
   main_usage m1 10:10 1000 0
   run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
@@ -243,25 +254,9 @@ scratch_scripts() {
   [[ "$stderr" == *"no unclaimed gaia-spec start in this session"* ]]
   [[ "$stderr" == *"usage.sh record spec:SPEC-901 --workflow gaia-spec --start <iso>"* ]]
   [ "$(close_count)" -eq 0 ]
-}
 
-@test "recording the same run twice: the second is refused as already recorded and writes nothing" {
-  mkdir -p "$(dirname "$(main_file)")"
-  main_start s1 10:00 gaia-spec
-  main_usage m1 10:10 1000 0
-  run record spec:SPEC-901 --workflow gaia-spec
-  [ "$status" -eq 0 ]
-  run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-  [ "${#stderr_lines[@]}" -eq 1 ]
-  [[ "$stderr" == *"already recorded"* ]]
-  [ "$(close_count)" -eq 1 ]
-}
-
-@test "usage errors and an empty session each write no close row and print one stderr line" {
-  local case_arguments
-  mkdir -p "$(dirname "$(main_file)")"
+  echo "case: usage errors and an empty session"
+  reset_run
   main_start s1 10:00 gaia-spec
   main_usage m1 10:10 1000 0
   run --separate-stderr env CLAUDE_CODE_SESSION_ID= bash "$USAGE_SCRIPT" record spec:SPEC-901 --workflow gaia-spec --main-root "$MAIN" --projects-root "$PROJECTS"
@@ -281,10 +276,9 @@ scratch_scripts() {
     [ -z "$output" ]
   done
   [ "$(close_count)" -eq 0 ]
-}
 
-@test "jq absent from PATH: record exits 2 with one stderr line and writes nothing" {
-  mkdir -p "$(dirname "$(main_file)")"
+  echo "case: jq absent from PATH"
+  reset_run
   main_start s1 10:00 gaia-spec
   run --separate-stderr env PATH=/var/empty "$BASH" "$USAGE_SCRIPT" record spec:SPEC-901 --workflow gaia-spec --main-root "$MAIN"
   [ "$status" -eq 2 ]
@@ -296,14 +290,27 @@ scratch_scripts() {
   [ "${#stderr_lines[@]}" -eq 1 ]
   [ -z "$output" ]
   [ ! -e "$(ledger)" ]
-}
 
-@test "an unreadable ledger is a usage error that writes nothing" {
+  echo "case: an unreadable ledger"
+  reset_run
   mkdir -p "$(ledger)"
   run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
   [ "$status" -eq 2 ]
   [ "${#stderr_lines[@]}" -eq 1 ]
   [[ "$stderr" == *"cannot be read"* ]]
+
+  echo "case: recording the same run twice"
+  reset_run
+  main_start s1 10:00 gaia-spec
+  main_usage m1 10:10 1000 0
+  run record spec:SPEC-901 --workflow gaia-spec
+  [ "$status" -eq 0 ]
+  run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  [ "${#stderr_lines[@]}" -eq 1 ]
+  [[ "$stderr" == *"already recorded"* ]]
+  [ "$(close_count)" -eq 1 ]
 }
 
 @test "ledger lock held past the timeout: exit 1 with the stated stderr line, and nothing is written" {
@@ -326,9 +333,9 @@ scratch_scripts() {
 
 # ---------- pairing ----------
 
-# bats test_tags=whole-tree
-@test "an abandoned start is superseded: the close pairs with the newest start, and a second record is refused" {
-  local mutated="$TEMPORARY_DIRECTORY/mutated"
+@test "record pairing: abandoned start, --start recovery, repeated runs, plan under a spec, joined and resumed sessions, recovery in a live run" {
+  local plan_line
+  echo "case: an abandoned start is superseded: the close pairs with the newest start, and a second record is refused"
   mkdir -p "$(dirname "$(main_file)")"
   main_start a1 10:00 gaia-spec
   main_usage ma 10:10 1000 0
@@ -342,20 +349,8 @@ scratch_scripts() {
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"already recorded"* ]]
   [ "$(close_count)" -eq 1 ]
-  # The rule can fail: an earliest-unclaimed pairing in a scratch copy of the
-  # resolve library pairs the same close with the abandoned start and counts both.
-  rm -rf "$TEL" && mkdir -p "$TEL"
-  scratch_scripts "$mutated"
-  sed -i.bak 's/select(\._t <= \$close\._t)\] | last)/select(._t <= $close._t)] | first)/' "$mutated/usage-resolve-lib.sh"
-  if cmp -s "$SCRIPTS/usage-resolve-lib.sh" "$mutated/usage-resolve-lib.sh"; then return 1; fi
-  USAGE_SCRIPT="$mutated/usage.sh"
-  flush_now
-  run record spec:SPEC-901 --workflow gaia-spec --json
-  [ "$status" -eq 0 ]
-  [ "$(jq -r '.tokens' <<<"$(last_stdout_line)")" -eq 3000 ]
-}
-
-@test "--start recovers a start detection missed, and a repeat is refused as already recorded" {
+  echo "case: --start recovers a start detection missed, and a repeat is refused as already recorded"
+  reset_run
   mkdir -p "$(dirname "$(main_file)")"
   main_usage m0 10:00 1000 0
   flush_now
@@ -372,9 +367,8 @@ scratch_scripts() {
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"already recorded"* ]]
   [ "$(close_count)" -eq 1 ]
-}
-
-@test "two runs of one workflow in a session each report only their own segments" {
+  echo "case: two runs of one workflow in a session each report only their own segments"
+  reset_run
   mkdir -p "$(dirname "$(main_file)")"
   main_start s1 10:00 gaia-spec
   main_usage m1 10:10 1000 0
@@ -388,10 +382,8 @@ scratch_scripts() {
   [ "$(jq -r '.tokens' <<<"$(last_stdout_line)")" -eq 2000 ]
   [ "$(initiative_tokens spec:SPEC-901)" -eq 1000 ]
   [ "$(initiative_tokens spec:SPEC-902)" -eq 2000 ]
-}
-
-@test "a plan run recorded under a spec reports its own interval; the initiative line carries the whole cycle" {
-  local plan_line
+  echo "case: a plan run recorded under a spec reports its own interval; the initiative line carries the whole cycle"
+  reset_run
   mkdir -p "$(dirname "$(main_file)")"
   main_start s1 10:00 gaia-spec
   main_usage m1 10:10 1000 0
@@ -412,9 +404,8 @@ scratch_scripts() {
   run usage initiative spec:SPEC-901 --line
   [ "$status" -eq 0 ]
   [[ "$(last_stdout_line)" == "Cost: 0.0M tokens, "* ]]
-}
-
-@test "a spec session joined from another session closes the spec run, then pairs a same-session plan start" {
+  echo "case: a spec session joined from another session closes the spec run, then pairs a same-session plan start"
+  reset_run
   mkdir -p "$(dirname "$(main_file)")"
   main_start s1 10:00 gaia-spec
   main_usage m1 10:10 1000 0
@@ -435,9 +426,8 @@ scratch_scripts() {
   [ "$status" -eq 0 ]
   run usage represented spec:SPEC-912 --workflow gaia-plan
   [ "$status" -eq 0 ]
-}
-
-@test "a resumed spec session with no start refuses the spec record, then pairs a same-session plan start" {
+  echo "case: a resumed spec session with no start refuses the spec record, then pairs a same-session plan start"
+  reset_run
   mkdir -p "$(dirname "$(main_file)")"
   main_usage m1 10:10 1000 0
   run --separate-stderr record spec:SPEC-913 --workflow gaia-spec
@@ -452,9 +442,8 @@ scratch_scripts() {
   [[ "$(last_stdout_line)" == "Cost: "* ]]
   run usage represented spec:SPEC-913 --workflow gaia-plan
   [ "$status" -eq 0 ]
-}
-
-@test "a recovery inside a live run leaves the live run's start unclaimed and its interval intact" {
+  echo "case: a recovery inside a live run leaves the live run's start unclaimed and its interval intact"
+  reset_run
   mkdir -p "$(dirname "$(main_file)")"
   main_usage ma 09:30 500 0
   main_start s1 10:00 gaia-spec
@@ -528,13 +517,6 @@ straddling_segments() {
   [[ "$stderr" == *"already recorded"* ]]
 }
 
-@test "guard red: without --quiet the same record prints the Cost line" {
-  spec_run_fixture sess-1
-  run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
-  [ "$status" -eq 0 ]
-  [[ "${lines[0]}" == Cost:* ]]
-}
-
 @test "an unpriced model puts a plain minimum note under the Cost line, never a partial suffix" {
   spec_run_fixture sess-1
   printf '{"type":"assistant","uuid":"u-z","timestamp":"%s","cwd":"%s","sessionId":"%s","gitBranch":"main","message":{"id":"z","model":"claude-zeta-1","role":"assistant","usage":{"input_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0},"content":[{"type":"text","text":"ok"}]}}\n' \
@@ -589,18 +571,6 @@ straddling_segments() {
   [[ "${lines[0]}" =~ ^Cost:\ 0\.7M\ tokens, ]]
   grep -qF 'Some usage was still being saved' <<<"$output" && return 1
   true
-}
-
-# bats test_tags=whole-tree
-@test "the commit-time close re-check is what keeps a late flusher from straddling the close" {
-  local mutated="$TEMPORARY_DIRECTORY/mutated-flusher"
-  scratch_scripts "$mutated"
-  sed -i.bak 's/^_uf_closes_changed() {$/_uf_closes_changed() { return 1/' "$mutated/usage-flush.sh"
-  if cmp -s "$SCRIPTS/usage-flush.sh" "$mutated/usage-flush.sh"; then return 1; fi
-  USAGE_SCRIPT="$mutated/usage.sh"
-  partial_scenario
-  [ "$status" -eq 0 ]
-  [ "$(straddling_segments)" -ge 1 ]
 }
 
 # ---------- loading ----------

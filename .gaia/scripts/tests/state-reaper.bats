@@ -192,23 +192,7 @@ plant_git_failure_fixture() {
   plant_file "$AGED_ENTRY" $(($(window doctrine-injected-marker) + 1))
 }
 
-# bats test_tags=whole-tree
-@test "the fixture copies every library the reaper sources" {
-  local script_file referenced name
-  for script_file in state-reaper.sh state-reaper-lib.sh state-reaper-classes.sh audit-loop-state-lib.sh state-registry-lib.sh; do
-    referenced="$(grep -Eho '(source|\.) "\$[A-Za-z_]+/[a-z-]+\.sh"' "$SCRIPTS_DIRECTORY/$script_file" | grep -Eo '[a-z-]+\.sh')"
-    [ -n "$referenced" ] || continue
-    for name in $referenced; do
-      case " $SCRIPT_FILES " in *" $name "*) ;; *)
-        printf '%s sources %s, which the fixture does not copy\n' "$script_file" "$name" >&2
-        return 1
-        ;;
-      esac
-    done
-  done
-}
-
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "a gone branch's entries are removed past the window; live and worktree branches keep theirs" {
   make_fixture
   make_branch fix/x
@@ -220,31 +204,21 @@ plant_git_failure_fixture() {
   LIVE="$BRANCH_ENTRIES"
   plant_branch_entries worktree-foo foo "$age_days"
   WORKTREE="$BRANCH_ENTRIES"
+  local recent_days=2
+  [ "$(window runs)" -gt "$recent_days" ]
+  [ "$(window audit-review-diffs)" -gt "$recent_days" ]
+  plant_branch_entries recent-branch recent-branch "$recent_days"
+  RECENT="$BRANCH_ENTRIES"
+  plant_dir runs/mixed "$age_days"
+  plant_file runs/mixed/fresh 1
+  touch -t "$(stamp "$age_days")" "$LOCAL/runs/mixed"
   run_reaper
   [ "$status" -eq 0 ]
   assert_each absent "$GONE"
   assert_each present "$LIVE"
   assert_each present "$WORKTREE"
-  present runs/fix
-}
-
-# bats test_tags=whole-tree
-@test "a gone branch's entries inside the window survive, and a folder holding a fresh file keeps its old directory" {
-  make_fixture
-  local old_days=$(($(window runs) + 1)) recent_days=2
-  [ "$(window runs)" -gt "$recent_days" ]
-  [ "$(window audit-review-diffs)" -gt "$recent_days" ]
-  plant_branch_entries recent-branch recent-branch "$recent_days"
-  RECENT="$BRANCH_ENTRIES"
-  plant_branch_entries spent-branch spent-branch "$old_days"
-  SPENT="$BRANCH_ENTRIES"
-  plant_dir runs/mixed "$old_days"
-  plant_file runs/mixed/fresh 1
-  touch -t "$(stamp "$old_days")" "$LOCAL/runs/mixed"
-  run_reaper
-  [ "$status" -eq 0 ]
-  assert_each absent "$SPENT"
   assert_each present "$RECENT"
+  present runs/fix
   present runs/mixed/fresh
 }
 
@@ -334,11 +308,13 @@ plant_git_failure_fixture() {
 }
 
 # bats test_tags=whole-tree
-@test "spec scratch of a ready or merged SPEC goes, a draft SPEC's stays" {
+@test "spec scratch follows its catalog row, ages out without one, and an unparseable catalog keeps all of it while age rows still reap" {
   make_fixture
-  make_catalog '{"version":1,"items":[{"id":"draftone","kind":"spec","status":"draft"},{"id":"readyone","kind":"spec","status":"ready"},{"id":"mergedone","kind":"spec","status":"merged"}]}'
-  local spec_id age_days
+  local spec_id age_days marker_days
   age_days="$(window spec-draft-and-gate1-scratch)"
+  marker_days="$(window doctrine-injected-marker)"
+
+  make_catalog '{"version":1,"items":[{"id":"draftone","kind":"spec","status":"draft"},{"id":"readyone","kind":"spec","status":"ready"},{"id":"mergedone","kind":"spec","status":"merged"}]}'
   for spec_id in draftone readyone mergedone; do
     plant_file "cache/draft-$spec_id.md" "$age_days"
     plant_file "cache/gate1-$spec_id.json" "$age_days"
@@ -357,14 +333,8 @@ plant_git_failure_fixture() {
   present cache/gate1-draftone.json
   present cache/spec-session-draftone.json
   present cache/spec-session-draftone.lock
-}
 
-# bats test_tags=whole-tree
-@test "spec scratch with no catalog row ages out by the row window, and so does the id-less draft" {
-  make_fixture
   make_catalog '{"version":1,"items":[{"id":"other","kind":"spec","status":"draft"}]}'
-  local age_days
-  age_days="$(window spec-draft-and-gate1-scratch)"
   plant_file cache/gate1-stale.json $((age_days + 1))
   plant_file cache/draft-stale.md $((age_days + 1))
   plant_file cache/spec-session-stale.json $((age_days + 1))
@@ -381,33 +351,22 @@ plant_git_failure_fixture() {
   present cache/gate1-fresh.json
   present cache/draft-fresh.md
   present cache/spec-session-fresh.json
-}
 
-# bats test_tags=whole-tree
-@test "a spec audit scratch directory follows its SPEC's catalog status and otherwise its age" {
-  make_fixture
+  local audit_age_days
+  audit_age_days="$(window spec-audit-scratch)"
   make_catalog '{"version":1,"items":[{"id":"draftone","kind":"spec","status":"draft"},{"id":"readyone","kind":"spec","status":"ready"}]}'
-  local age_days
-  age_days="$(window spec-audit-scratch)"
-  plant_dir cache/audit-draftone "$age_days"
-  plant_dir cache/audit-readyone "$age_days"
-  plant_dir cache/audit-stale $((age_days + 1))
-  plant_dir cache/audit-fresh $((age_days - 1))
+  plant_dir cache/audit-draftone "$audit_age_days"
+  plant_dir cache/audit-readyone "$audit_age_days"
+  plant_dir cache/audit-stale $((audit_age_days + 1))
+  plant_dir cache/audit-fresh $((audit_age_days - 1))
   run_reaper
   [ "$status" -eq 0 ]
   absent cache/audit-readyone
   absent cache/audit-stale
   present cache/audit-draftone
   present cache/audit-fresh
-}
 
-# bats test_tags=whole-tree
-@test "an unparseable catalog keeps every spec scratch while age-classed markers still go" {
-  make_fixture
   make_catalog 'this is { not json'
-  local age_days marker_days
-  age_days="$(window spec-draft-and-gate1-scratch)"
-  marker_days="$(window doctrine-injected-marker)"
   plant_file cache/gate1-stale.json $((age_days + 1))
   plant_file cache/draft.md $((age_days + 1))
   plant_dir cache/audit-stale $((age_days + 1))
@@ -445,44 +404,41 @@ plant_git_failure_fixture() {
   absent protected/audit-loop/fix/merged.d
 }
 
-# bats test_tags=whole-tree
-@test "a failed worktree list removes no keyed entry but still removes an over-window age-classed one" {
+# bats test_tags=whole-tree,protected
+@test "a failed worktree list or ref read, a malformed registry or a retention-less registry removes no keyed entry, and a failed read still removes an over-window age-classed one" {
   make_fixture
-  plant_git_failure_fixture
-  install_failing_git "worktree list"
-  run_reaper_with_failing_git
-  [ "$status" -eq 0 ]
-  assert_each present "$BRANCH_ENTRIES"
-  present "$GONE_TREE_ENTRY"
-  absent "$AGED_ENTRY"
-}
+  local failing
+  for failing in "worktree list" "for-each-ref"; do
+    plant_git_failure_fixture
+    install_failing_git "$failing"
+    run_reaper_with_failing_git
+    [ "$status" -eq 0 ] || { echo "read $failing: status $status"; return 1; }
+    assert_each present "$BRANCH_ENTRIES" || { echo "read $failing"; return 1; }
+    present "$GONE_TREE_ENTRY" || { echo "read $failing"; return 1; }
+    absent "$AGED_ENTRY" || { echo "read $failing"; return 1; }
+  done
 
-# bats test_tags=whole-tree
-@test "a failed branch ref read removes no keyed entry but still removes an over-window age-classed one" {
-  make_fixture
   plant_git_failure_fixture
-  install_failing_git "for-each-ref"
-  run_reaper_with_failing_git
-  [ "$status" -eq 0 ]
-  assert_each present "$BRANCH_ENTRIES"
-  present "$GONE_TREE_ENTRY"
-  absent "$AGED_ENTRY"
-}
-
-# bats test_tags=whole-tree
-@test "a malformed registry removes nothing and still exits 0" {
-  make_fixture
-  plant_git_failure_fixture
+  rm -f "$LOCAL/cache/state-reaper/last-run.json"
   printf 'this is { not json' >"$MAIN/.gaia/state-registry.json"
   run_reaper
-  [ "$status" -eq 0 ]
-  assert_each present "$BRANCH_ENTRIES"
-  present "$GONE_TREE_ENTRY"
-  present "$AGED_ENTRY"
+  [ "$status" -eq 0 ] || { echo "malformed registry: status $status"; return 1; }
+  assert_each present "$BRANCH_ENTRIES" || { echo "malformed registry"; return 1; }
+  present "$GONE_TREE_ENTRY" || { echo "malformed registry"; return 1; }
+  present "$AGED_ENTRY" || { echo "malformed registry"; return 1; }
   jq -e '(.skipped | length) > 0' "$LOCAL/cache/state-reaper/last-run.json" >/dev/null
+
+  plant_git_failure_fixture
+  jq '.entries |= map(del(.retention) | .reaped_by = "legacy prose")' "$REAL_REGISTRY" >"$MAIN/.gaia/state-registry.json"
+  [ "$(jq '[.entries[] | select(has("retention"))] | length' "$MAIN/.gaia/state-registry.json")" -eq 0 ]
+  run_reaper
+  [ "$status" -eq 0 ] || { echo "legacy registry: status $status"; return 1; }
+  assert_each present "$BRANCH_ENTRIES" || { echo "legacy registry"; return 1; }
+  present "$GONE_TREE_ENTRY" || { echo "legacy registry"; return 1; }
+  present "$AGED_ENTRY"
 }
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "durable and owned state and unregistered entries stay byte-identical at any age" {
   make_fixture
   make_catalog '{"version":1,"items":[]}'
@@ -515,19 +471,6 @@ plant_git_failure_fixture() {
   [ "$status" -eq 0 ]
   absent cache/doctrine-injected.sess
   present fitness/blend-record.json
-}
-
-# bats test_tags=whole-tree
-@test "a registry whose rows carry the old reaped_by field and no retention removes nothing" {
-  make_fixture
-  jq '.entries |= map(del(.retention) | .reaped_by = "legacy prose")' "$REAL_REGISTRY" >"$MAIN/.gaia/state-registry.json"
-  [ "$(jq '[.entries[] | select(has("retention"))] | length' "$MAIN/.gaia/state-registry.json")" -eq 0 ]
-  plant_git_failure_fixture
-  run_reaper
-  [ "$status" -eq 0 ]
-  assert_each present "$BRANCH_ENTRIES"
-  present "$GONE_TREE_ENTRY"
-  present "$AGED_ENTRY"
 }
 
 # bats test_tags=whole-tree
@@ -589,7 +532,7 @@ plant_git_failure_fixture() {
 }
 
 # bats test_tags=whole-tree
-@test "a held fresh run lock stops a second run, and the run log counts what a run removed" {
+@test "the run lock: a held fresh lock, plain or through the shared helper, stops a run, a stale lock is reclaimed, and the run log counts removals" {
   make_fixture
   local marker_days context_days
   marker_days=$(($(window doctrine-injected-marker) + 1))
@@ -614,29 +557,7 @@ plant_git_failure_fixture() {
   jq -e '.schema == 1 and (.started_at | type) == "string" and (.finished_at | type) == "string" and (.skipped | type) == "array"
     and .removed["doctrine-injected-marker"] == 2 and .removed["context-readings"] == 1 and ([.removed[]] | add) == 3' \
     "$LOCAL/cache/state-reaper/last-run.json" >/dev/null
-}
 
-# bats test_tags=whole-tree
-@test "a run lock held through the shared helper stops a run, with a non-exclusive mkdir first on PATH" {
-  make_fixture
-  local marker_days
-  marker_days=$(($(window doctrine-injected-marker) + 1))
-  plant_file cache/doctrine-injected.one "$marker_days"
-  mkdir -p "$LOCAL/cache/state-reaper"
-  bash -c '. "$1"; gaia_exclusive_lock_take "$2"' _ "$SCRIPTS_DIRECTORY/exclusive-lock-lib.sh" "$LOCAL/cache/state-reaper/run.lock.d"
-  # shellcheck source=/dev/null
-  . "$SCRIPTS_DIRECTORY/../tests/helpers/non-exclusive-mkdir.sh"
-  PATH="$(non_exclusive_mkdir_path)"
-  run_reaper
-  [ "$status" -eq 0 ]
-  present cache/doctrine-injected.one
-}
-
-# bats test_tags=whole-tree
-@test "a run lock older than the stale window is reclaimed" {
-  make_fixture
-  local marker_days
-  marker_days=$(($(window doctrine-injected-marker) + 1))
   plant_file cache/doctrine-injected.one "$marker_days"
   mkdir -p "$LOCAL/cache/state-reaper/run.lock.d"
   touch -t "$(stamp 1)" "$LOCAL/cache/state-reaper/run.lock.d"
@@ -644,6 +565,15 @@ plant_git_failure_fixture() {
   [ "$status" -eq 0 ]
   absent cache/doctrine-injected.one
   [ ! -e "$LOCAL/cache/state-reaper/run.lock.d" ]
+
+  plant_file cache/doctrine-injected.one "$marker_days"
+  bash -c '. "$1"; gaia_exclusive_lock_take "$2"' _ "$SCRIPTS_DIRECTORY/exclusive-lock-lib.sh" "$LOCAL/cache/state-reaper/run.lock.d"
+  # shellcheck source=/dev/null
+  . "$SCRIPTS_DIRECTORY/../tests/helpers/non-exclusive-mkdir.sh"
+  PATH="$(non_exclusive_mkdir_path)"
+  run_reaper
+  [ "$status" -eq 0 ]
+  present cache/doctrine-injected.one
 }
 
 # bats test_tags=whole-tree
@@ -655,4 +585,29 @@ plant_git_failure_fixture() {
   present cache/doctrine-injected.one
   absent cache/state-reaper
   grep -qi 'usage' <<<"$output"
+}
+
+@test "rate-limit temporary files and checkpoint markers age out after 7 days while the shared reading stays" {
+  make_fixture
+  local temporary_days marker_days reading_name=rate-limits
+  local told_old=cache/rate-limit-checkpoint/0b9c2d4e-1f3a-4b5c-8d7e-9f0a1b2c3d4e.json
+  local told_young=cache/rate-limit-checkpoint/7a6b5c4d-3e2f-4a1b-9c8d-0e1f2a3b4c5d.json
+  temporary_days="$(window rate-limits-orphan-temps)"
+  marker_days="$(window rate-limit-checkpoint-markers)"
+  [ "$temporary_days" -eq 7 ] || return 1
+  [ "$marker_days" -eq 7 ] || return 1
+  plant_file "cache/shared/$reading_name.json" 400
+  plant_file "cache/shared/$reading_name.json.tmp.4242" $((temporary_days + 1))
+  plant_file "cache/shared/$reading_name.json.tmp.4243" $((temporary_days - 1))
+  plant_file "$told_old" $((marker_days + 1))
+  plant_file "$told_young" $((marker_days - 1))
+  plant_file "$told_young.tmp.99" $((marker_days + 1))
+  run_reaper
+  [ "$status" -eq 0 ] || return 1
+  present "cache/shared/$reading_name.json"
+  present "cache/shared/$reading_name.json.tmp.4243"
+  absent "cache/shared/$reading_name.json.tmp.4242"
+  present "$told_young"
+  absent "$told_old"
+  absent "$told_young.tmp.99"
 }

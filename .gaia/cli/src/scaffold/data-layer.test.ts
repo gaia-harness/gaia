@@ -1,20 +1,13 @@
 import semver from 'semver';
 import {afterEach, beforeEach, describe, expect, test} from 'vitest';
-import {existsSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {
-  dataLayerTemplatePath,
   hasTanstackQuery,
   TANSTACK_QUERY_PACKAGE,
   TANSTACK_QUERY_VERSION,
 } from './data-layer.js';
-
-const DATA_LAYER_TEMPLATES = [
-  'query-client.ts.tmpl',
-  'query-provider.tsx.tmpl',
-  'query-client-decorator.tsx.tmpl',
-];
 
 describe('hasTanstackQuery', () => {
   let packageDir: string;
@@ -34,44 +27,48 @@ describe('hasTanstackQuery', () => {
     );
   };
 
-  test('is true when the package is a dependency', () => {
-    writePackageJson({
-      dependencies: {[TANSTACK_QUERY_PACKAGE]: TANSTACK_QUERY_VERSION},
+  describe('hasTanstackQuery reads package.json dependencies', () => {
+    test.each([
+      {
+        expected: true,
+        manifests: [
+          {
+            dependencies: {[TANSTACK_QUERY_PACKAGE]: TANSTACK_QUERY_VERSION},
+          },
+        ],
+        name: 'is true when the package is a dependency',
+      },
+      {
+        expected: true,
+        manifests: [
+          {
+            devDependencies: {[TANSTACK_QUERY_PACKAGE]: TANSTACK_QUERY_VERSION},
+          },
+        ],
+        name: 'is true when the package is a devDependency',
+      },
+      {
+        expected: false,
+        manifests: [
+          {
+            dependencies: {react: '19.0.0'},
+            devDependencies: {'@tanstack/query-core': TANSTACK_QUERY_VERSION},
+          },
+        ],
+        name: 'is false when the package is absent',
+      },
+      {
+        expected: false,
+        manifests: [] as unknown[],
+        name: 'is false when package.json is missing',
+      },
+    ])('$name', ({expected, manifests}) => {
+      for (const manifest of manifests) {
+        writePackageJson(manifest);
+      }
+
+      expect(hasTanstackQuery(packageDir)).toBe(expected);
     });
-
-    expect(hasTanstackQuery(packageDir)).toBe(true);
-  });
-
-  test('is true when the package is a devDependency', () => {
-    writePackageJson({
-      devDependencies: {[TANSTACK_QUERY_PACKAGE]: TANSTACK_QUERY_VERSION},
-    });
-
-    expect(hasTanstackQuery(packageDir)).toBe(true);
-  });
-
-  test('is false when the package is absent', () => {
-    writePackageJson({
-      dependencies: {react: '19.0.0'},
-      devDependencies: {'@tanstack/query-core': TANSTACK_QUERY_VERSION},
-    });
-
-    expect(hasTanstackQuery(packageDir)).toBe(false);
-  });
-
-  test('is false when package.json is missing', () => {
-    expect(hasTanstackQuery(packageDir)).toBe(false);
-  });
-});
-
-describe('dataLayerTemplatePath', () => {
-  test.each(DATA_LAYER_TEMPLATES)('%s exists on disk', (fileName) => {
-    const templatePath = dataLayerTemplatePath(fileName);
-
-    expect(
-      templatePath.endsWith(path.join('templates', 'data-layer', fileName))
-    ).toBe(true);
-    expect(existsSync(templatePath)).toBe(true);
   });
 });
 

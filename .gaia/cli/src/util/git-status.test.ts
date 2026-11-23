@@ -10,41 +10,47 @@
 import {describe, expect, test} from 'vitest';
 import {porcelainZPaths} from './git-status.js';
 
+const ROWS: {cases: [string, string[]][]; name: string}[] = [
+  {
+    cases: [[' M wiki/log.md\0', ['wiki/log.md']]],
+    name: 'returns the path of a modified record without its status columns',
+  },
+  {
+    cases: [['R  app/new.ts\0app/old.ts\0', ['app/new.ts', 'app/old.ts']]],
+    name: 'takes a rename origin record whole, since it carries no status prefix',
+  },
+  {
+    cases: [['C  app/new.ts\0app/old.ts\0', ['app/new.ts', 'app/old.ts']]],
+    name: 'takes a copy origin record whole, exactly as a rename origin',
+  },
+  {
+    cases: [
+      [
+        'R  Config/new\0Config/old\0 M package.json\0',
+        ['Config/new', 'Config/old', 'package.json'],
+      ],
+    ],
+    name: 'does not read an origin path beginning with R or C as a status record',
+  },
+  {
+    cases: [
+      [' M wiki/Café Notes.md\0', ['wiki/Café Notes.md']],
+      ['?? wiki/"quoted" page.md\0', ['wiki/"quoted" page.md']],
+    ],
+    name: 'never unquotes, since -z emits raw bytes and a quote can be part of a name',
+  },
+  {cases: [['', []]], name: 'reports no paths for a clean tree'},
+];
+
 describe('porcelainZPaths', () => {
-  test('returns the path of a modified record without its status columns', () => {
-    expect(porcelainZPaths(' M wiki/log.md\0')).toEqual(['wiki/log.md']);
-  });
+  test.each(ROWS.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {cases}) => {
+      expect.hasAssertions();
 
-  test('takes a rename origin record whole, since it carries no status prefix', () => {
-    expect(porcelainZPaths('R  app/new.ts\0app/old.ts\0')).toEqual([
-      'app/new.ts',
-      'app/old.ts',
-    ]);
-  });
-
-  test('takes a copy origin record whole, exactly as a rename origin', () => {
-    expect(porcelainZPaths('C  app/new.ts\0app/old.ts\0')).toEqual([
-      'app/new.ts',
-      'app/old.ts',
-    ]);
-  });
-
-  test('does not read an origin path beginning with R or C as a status record', () => {
-    expect(
-      porcelainZPaths('R  Config/new\0Config/old\0 M package.json\0')
-    ).toEqual(['Config/new', 'Config/old', 'package.json']);
-  });
-
-  test('never unquotes, since -z emits raw bytes and a quote can be part of a name', () => {
-    expect(porcelainZPaths(' M wiki/Café Notes.md\0')).toEqual([
-      'wiki/Café Notes.md',
-    ]);
-    expect(porcelainZPaths('?? wiki/"quoted" page.md\0')).toEqual([
-      'wiki/"quoted" page.md',
-    ]);
-  });
-
-  test('reports no paths for a clean tree', () => {
-    expect(porcelainZPaths('')).toEqual([]);
-  });
+      for (const [stream, paths] of cases) {
+        expect(porcelainZPaths(stream)).toEqual(paths);
+      }
+    }
+  );
 });

@@ -1,5 +1,6 @@
 import {describe, expect, test} from 'vitest';
 import {familyOf, projectModelFromSettings, resolveModel} from './model.js';
+import type {ModelFamily} from './types.js';
 
 describe('familyOf', () => {
   test.each([
@@ -20,17 +21,23 @@ describe('familyOf', () => {
 });
 
 describe('resolveModel', () => {
-  test('prefers the file model over the project model', () => {
-    expect(resolveModel('opus', 'sonnet')).toBe('opus');
-  });
-
-  test('falls back to the project model for inherit or absent', () => {
-    expect(resolveModel('inherit', 'sonnet')).toBe('sonnet');
-    expect(resolveModel(undefined, 'haiku')).toBe('haiku');
-  });
-
-  test('is unresolved when neither names a family', () => {
-    expect(resolveModel(undefined, 'unresolved')).toBe('unresolved');
+  test.each<[string, unknown, ModelFamily, ModelFamily]>([
+    ['prefers the file model over the project model', 'opus', 'sonnet', 'opus'],
+    [
+      'falls back to the project model for inherit',
+      'inherit',
+      'sonnet',
+      'sonnet',
+    ],
+    ['falls back to the project model for absent', undefined, 'haiku', 'haiku'],
+    [
+      'is unresolved when neither names a family',
+      undefined,
+      'unresolved',
+      'unresolved',
+    ],
+  ])('%s', (_name, fileModel, projectModel, expected) => {
+    expect(resolveModel(fileModel, projectModel)).toBe(expected);
   });
 });
 

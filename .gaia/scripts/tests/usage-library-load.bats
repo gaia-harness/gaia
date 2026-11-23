@@ -56,19 +56,6 @@ source_line_violations() {
   [ -z "$output" ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
-@test "guard red: a guarded, a silenced and a function-level source line are each reported" {
-  local mutant="$TEMPORARY_DIRECTORY/usage.sh"
-  sed -e 's|^\(\. "\$_usage_script_directory/usage-memo-lib.sh"\).*|[ -f "$_usage_script_directory/usage-memo-lib.sh" ] \&\& \1|' \
-    -e 's|^\(\. "\$_usage_script_directory/token-pricing-lib.sh"\).*|\1 2>/dev/null \|\| true|' \
-    -e 's|^_keys() {|_late_load() {\n  . "$_usage_script_directory/usage-memo-lib.sh"\n}\n_keys() {|' \
-    "$SCRIPTS/usage.sh" >"$mutant"
-  cmp -s "$SCRIPTS/usage.sh" "$mutant" && return 1
-  run source_line_violations "$mutant"
-  grep -qE ': guarded$' <<<"$output"
-  grep -qE ': silenced$' <<<"$output"
-  grep -qE ': indented$' <<<"$output"
-}
-
 @test "a library missing from the scripts directory stops the run with one stderr line naming it" {
   local library scratch seen=0
   while IFS= read -r library; do

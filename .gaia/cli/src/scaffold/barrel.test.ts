@@ -40,28 +40,72 @@ describe('insertIntoBarrel', () => {
     sandbox.cleanup();
   });
 
-  test('inserts a new export at the alphabetically correct position', () => {
-    const filePath = writeBarrel(
-      sandbox.dir,
-      [
-        "export * from './alpha';",
-        "export * from './charlie';",
-        "export * from './delta';",
-        '',
-      ].join('\n')
-    );
+  describe('insertIntoBarrel places an export alphabetically', () => {
+    test.each([
+      {
+        expected: [
+          "export * from './alpha';",
+          "export * from './bravo';",
+          "export * from './charlie';",
+          "export * from './delta';",
+          '',
+        ].join('\n'),
+        initial: [
+          "export * from './alpha';",
+          "export * from './charlie';",
+          "export * from './delta';",
+          '',
+        ].join('\n'),
+        insert: "export * from './bravo';",
+        name: 'inserts a new export at the alphabetically correct position',
+      },
+      {
+        expected: [
+          "export * from './bravo';",
+          "export * from './charlie';",
+          "export * from './delta';",
+          '',
+        ].join('\n'),
+        initial: [
+          "export * from './charlie';",
+          "export * from './delta';",
+          '',
+        ].join('\n'),
+        insert: "export * from './bravo';",
+        name: 'inserts before lexicographically-larger first entry',
+      },
+      {
+        expected: [
+          "export * from './alpha';",
+          "export * from './bravo';",
+          "export * from './charlie';",
+          '',
+        ].join('\n'),
+        initial: [
+          "export * from './alpha';",
+          "export * from './bravo';",
+          '',
+        ].join('\n'),
+        insert: "export * from './charlie';",
+        name: 'appends after lexicographically-smaller last entry',
+      },
+      {
+        expected: [
+          '// placeholder barrel',
+          "export * from './alpha';",
+          '',
+        ].join('\n'),
+        initial: ['// placeholder barrel', ''].join('\n'),
+        insert: "export * from './alpha';",
+        name: 'appends to a file with no existing export-from lines',
+      },
+    ])('$name', ({expected, initial, insert}) => {
+      const filePath = writeBarrel(sandbox.dir, initial);
 
-    insertIntoBarrel(filePath, "export * from './bravo';");
+      insertIntoBarrel(filePath, insert);
 
-    expect(read(filePath)).toBe(
-      [
-        "export * from './alpha';",
-        "export * from './bravo';",
-        "export * from './charlie';",
-        "export * from './delta';",
-        '',
-      ].join('\n')
-    );
+      expect(read(filePath)).toBe(expected);
+    });
   });
 
   test('is idempotent: second call with same line is a no-op', () => {
@@ -82,88 +126,54 @@ describe('insertIntoBarrel', () => {
     expect(matches).toHaveLength(1);
   });
 
-  test('inserts before lexicographically-larger first entry', () => {
-    const filePath = writeBarrel(
-      sandbox.dir,
-      ["export * from './charlie';", "export * from './delta';", ''].join('\n')
-    );
+  describe('insertIntoBarrel preserves comments and line endings', () => {
+    test.each([
+      {
+        expected: [
+          '// barrel for the foo namespace',
+          '',
+          "export * from './alpha';",
+          "export * from './bravo';",
+          "export * from './charlie';",
+          '',
+        ].join('\n'),
+        initial: [
+          '// barrel for the foo namespace',
+          '',
+          "export * from './alpha';",
+          "export * from './charlie';",
+          '',
+        ].join('\n'),
+        name: 'preserves leading comments and blank lines',
+      },
+      {
+        expected: [
+          "export * from './alpha';",
+          "export * from './bravo';",
+          '',
+        ].join('\n'),
+        initial: ["export * from './alpha';", ''].join('\n'),
+        name: 'preserves trailing newline at EOF',
+      },
+      {
+        expected: [
+          "export * from './alpha';",
+          "export * from './bravo';",
+          "export * from './charlie';",
+        ].join('\n'),
+        initial: [
+          "export * from './alpha';",
+          "export * from './charlie';",
+        ].join('\n'),
+        name: 'preserves absent trailing newline at EOF',
+      },
+    ])('$name', ({expected, initial}) => {
+      const filePath = writeBarrel(sandbox.dir, initial);
 
-    insertIntoBarrel(filePath, "export * from './bravo';");
+      insertIntoBarrel(filePath, "export * from './bravo';");
 
-    expect(read(filePath)).toBe(
-      [
-        "export * from './bravo';",
-        "export * from './charlie';",
-        "export * from './delta';",
-        '',
-      ].join('\n')
-    );
-  });
-
-  test('appends after lexicographically-smaller last entry', () => {
-    const filePath = writeBarrel(
-      sandbox.dir,
-      ["export * from './alpha';", "export * from './bravo';", ''].join('\n')
-    );
-
-    insertIntoBarrel(filePath, "export * from './charlie';");
-
-    expect(read(filePath)).toBe(
-      [
-        "export * from './alpha';",
-        "export * from './bravo';",
-        "export * from './charlie';",
-        '',
-      ].join('\n')
-    );
-  });
-
-  test('preserves leading comments and blank lines', () => {
-    const filePath = writeBarrel(
-      sandbox.dir,
-      [
-        '// barrel for the foo namespace',
-        '',
-        "export * from './alpha';",
-        "export * from './charlie';",
-        '',
-      ].join('\n')
-    );
-
-    insertIntoBarrel(filePath, "export * from './bravo';");
-
-    expect(read(filePath)).toBe(
-      [
-        '// barrel for the foo namespace',
-        '',
-        "export * from './alpha';",
-        "export * from './bravo';",
-        "export * from './charlie';",
-        '',
-      ].join('\n')
-    );
-  });
-
-  test('preserves trailing newline at EOF', () => {
-    const filePath = writeBarrel(
-      sandbox.dir,
-      ["export * from './alpha';", ''].join('\n')
-    );
-
-    insertIntoBarrel(filePath, "export * from './bravo';");
-
-    expect(read(filePath).endsWith('\n')).toBe(true);
-  });
-
-  test('preserves absent trailing newline at EOF', () => {
-    const filePath = writeBarrel(
-      sandbox.dir,
-      ["export * from './alpha';", "export * from './charlie';"].join('\n')
-    );
-
-    insertIntoBarrel(filePath, "export * from './bravo';");
-
-    expect(read(filePath).endsWith('\n')).toBe(false);
+      expect(read(filePath)).toBe(expected);
+    });
   });
 
   test('handles named-export form (export {Foo} from)', () => {
@@ -186,18 +196,5 @@ describe('insertIntoBarrel', () => {
         '',
       ].join('\n')
     );
-  });
-
-  test('appends to a file with no existing export-from lines', () => {
-    const filePath = writeBarrel(
-      sandbox.dir,
-      ['// placeholder barrel', ''].join('\n')
-    );
-
-    insertIntoBarrel(filePath, "export * from './alpha';");
-
-    const after = read(filePath);
-    expect(after).toContain("export * from './alpha';");
-    expect(after.endsWith('\n')).toBe(true);
   });
 });

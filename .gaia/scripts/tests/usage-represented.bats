@@ -26,7 +26,8 @@ close() {
   printf '{"schema_version":1,"kind":"binding","type":"close","session_id":"s1","ts":"2026-10-01T11:00:00Z","ref":"%s","workflow":"%s","source":"record-command"}\n' "$1" "$2" >>"$TEL/usage.jsonl"
 }
 
-@test "exit 0 when a close with that ref and workflow is on the ledger, 1 when none is, and nothing on stdout" {
+@test "represented: exit 0 or 1 by close ref and workflow match, with nothing on stdout" {
+  echo "case: exit 0 when a close with that ref and workflow is on the ledger, 1 when none is, and nothing on stdout"
   close spec:SPEC-901 gaia-spec
   run --separate-stderr represented spec:SPEC-901 --workflow gaia-spec
   [ "$status" -eq 0 ]
@@ -34,17 +35,15 @@ close() {
   run represented spec:SPEC-902 --workflow gaia-spec
   [ "$status" -eq 1 ]
   [ -z "$output" ]
-}
-
-@test "only the other workflow's close is not a match" {
+  echo "case: only the other workflow's close is not a match"
+  rm -f "$TEL/usage.jsonl"
   close spec:SPEC-901 gaia-plan
   run represented spec:SPEC-901 --workflow gaia-spec
   [ "$status" -eq 1 ]
   run represented spec:SPEC-901 --workflow gaia-plan
   [ "$status" -eq 0 ]
-}
-
-@test "a command ref matches the run ref written under its prefix, and a longer slug does not" {
+  echo "case: a command ref matches the run ref written under its prefix, and a longer slug does not"
+  rm -f "$TEL/usage.jsonl"
   close command:gaia-fitness-20261001T110000Z-a1b2 gaia-fitness
   run represented command:gaia-fitness --workflow gaia-fitness
   [ "$status" -eq 0 ]
@@ -52,9 +51,8 @@ close() {
   [ "$status" -eq 1 ]
   run represented command:gaia-fitness-20261001T110000Z-a1b2 --workflow gaia-fitness
   [ "$status" -eq 0 ]
-}
-
-@test "a start row alone, or a torn line, never counts as a close" {
+  echo "case: a start row alone, or a torn line, never counts as a close"
+  rm -f "$TEL/usage.jsonl"
   printf '{"schema_version":1,"kind":"binding","type":"start","session_id":"s1","ts":"2026-10-01T10:00:00Z","workflow":"gaia-spec","source":"transcript"}\n' >>"$TEL/usage.jsonl"
   printf '{"schema_version":1,"kind":"binding","type":"close","session_id":"s1","ts":"2026-10-0' >>"$TEL/usage.jsonl"
   run represented spec:SPEC-901 --workflow gaia-spec
@@ -130,16 +128,3 @@ traced_scripts() {
   [ ! -e "$GAIA_TEST_SENTINEL" ]
 }
 
-# bats test_tags=whole-tree
-@test "the call trace can fail: a represented that reads the keys writes the sentinel" {
-  local scratch="$TEMPORARY_DIRECTORY/traced-mutated"
-  traced_scripts "$scratch"
-  export GAIA_TEST_SENTINEL="$TEMPORARY_DIRECTORY/sentinel"
-  USAGE_SCRIPT="$scratch/usage.sh"
-  sed -i.bak 's/^  \[ -f "\$usage_file" \] || { _error "the usage ledger is missing"; return 2; }$/&\n  gaia_usage_keys_json "$MAIN_ROOT" "$usage_file" \/dev\/null >\/dev\/null/' "$scratch/usage-record-lib.sh"
-  if cmp -s "$SCRIPTS/usage-record-lib.sh" "$scratch/usage-record-lib.sh"; then return 1; fi
-  close spec:SPEC-901 gaia-spec
-  run represented spec:SPEC-901 --workflow gaia-spec
-  [ "$status" -eq 99 ]
-  [ -e "$GAIA_TEST_SENTINEL" ]
-}

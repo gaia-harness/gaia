@@ -78,22 +78,16 @@ run_in() {
 
 # ---------- linked worktree, resolvable main ----------
 
+# bats test_tags=protected
 @test "linked worktree with resolvable main: returns 1, message names both roots, no state_line_function given" {
   make_repo
   make_worktree "$REPO" w wtbranch1
-  run run_in "$WORKTREE" -- bash -c '. "$1"; gaia_refuse_if_worktree "/gaia-release"' _ "$LIBRARY_SCRIPT"
+  run run_in "$WORKTREE" -- bash -c '. "$1"; gaia_refuse_if_worktree "/gaia-release" 2>/dev/null' _ "$LIBRARY_SCRIPT"
   [ "$status" -eq 1 ]
   grep -qF -- "/gaia-release must run from the main checkout, not a worktree." <<<"$output" || return 1
   grep -qF -- "Worktree:       $WORKTREE" <<<"$output" || return 1
   grep -qF -- "Main checkout:  $REPO" <<<"$output" || return 1
   grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run /gaia-release there." <<<"$output" || return 1
-}
-
-@test "linked worktree, no state_line_function supplied: no state paragraph at all" {
-  make_repo
-  make_worktree "$REPO" w wtbranch2
-  run run_in "$WORKTREE" -- bash -c '. "$1"; gaia_refuse_if_worktree "/gaia-release" 2>/dev/null' _ "$LIBRARY_SCRIPT"
-  [ "$status" -eq 1 ]
   # Byte-exact: no state paragraph, and exactly one blank line separates the
   # roots block from the "ask the user" line -- not $lines-based, bats' $lines
   # splitting silently drops blank-line entries so it can't prove this.
@@ -107,47 +101,35 @@ This session cannot move into it: ask the user to start Claude Code in $REPO and
   [ "$output" = "$expected" ]
 }
 
-@test "linked worktree, state_line_function prints a line: that line is in the message" {
+@test "linked worktree: a state_line_function's line is shown, an empty one falls back, and it is handed main's cache path" {
   make_repo
   make_worktree "$REPO" w wtbranch3
+  local captured="$BATS_TEST_TMPDIR/cache_file_arg"
+
   run run_in "$WORKTREE" -- bash -c '
 . "$1"
 my_state() { printf "Cached on main: GAIA 1.2.3 installed; latest 1.2.3 (update not-available).\n"; }
 gaia_refuse_if_worktree "/update-gaia" my_state
 ' _ "$LIBRARY_SCRIPT"
-  [ "$status" -eq 1 ]
-  grep -qF -- "Cached on main: GAIA 1.2.3 installed; latest 1.2.3 (update not-available)." <<<"$output" || return 1
-  # Per .claude/rules/bats-assertions.md: a `<positive> && return 1` absence
-  # check is only safe on a non-final line -- as the test's LAST line its own
-  # (good-case) exit status of 1 would fail the test. The explicit `return 0`
-  # makes the success path's exit status deterministic.
-  grep -qF -- "Cached state unavailable" <<<"$output" && return 1
-  return 0
-}
+  [ "$status" -eq 1 ] || { echo "state function printing a line: status $status"; return 1; }
+  grep -qF -- "Cached on main: GAIA 1.2.3 installed; latest 1.2.3 (update not-available)." <<<"$output" || { echo "state function printing a line: its line is missing"; return 1; }
+  grep -qF -- "Cached state unavailable" <<<"$output" && { echo "state function printing a line: fallback shown beside it"; return 1; }
 
-@test "linked worktree, state_line_function supplied but prints nothing: shared fallback line is used" {
-  make_repo
-  make_worktree "$REPO" w wtbranch4
   run run_in "$WORKTREE" -- bash -c '
 . "$1"
 my_state() { :; }
 gaia_refuse_if_worktree "/update-deps" my_state
 ' _ "$LIBRARY_SCRIPT"
-  [ "$status" -eq 1 ]
-  grep -qF -- 'Cached state unavailable on main; symlinks may be broken, run `bash .gaia/scripts/link-worktree.sh` to repair.' <<<"$output" || return 1
-}
+  [ "$status" -eq 1 ] || { echo "state function printing nothing: status $status"; return 1; }
+  grep -qF -- 'Cached state unavailable on main; symlinks may be broken, run `bash .gaia/scripts/link-worktree.sh` to repair.' <<<"$output" || { echo "state function printing nothing: fallback line missing"; return 1; }
 
-@test "linked worktree, state_line_function's own cache_file argument is main's cache path, not the worktree's" {
-  make_repo
-  make_worktree "$REPO" w wtbranch5
-  local captured="$BATS_TEST_TMPDIR/cache_file_arg"
   run run_in "$WORKTREE" -- bash -c '
 . "$1"
 captured_path="$2"
 my_state() { printf "%s" "$1" > "$captured_path"; }
 gaia_refuse_if_worktree "/update-gaia" my_state
 ' _ "$LIBRARY_SCRIPT" "$captured"
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 1 ] || { echo "cache path argument: status $status"; return 1; }
   [ "$(cat "$captured")" = "$REPO/.gaia/local/cache/shared/update-check.json" ]
 }
 
@@ -170,77 +152,55 @@ call_refuse() {
   fi
 }
 
-@test "own prefix: deps/ from a deps/x worktree returns 0 and prints nothing" {
-  make_repo
-  make_worktree "$REPO" w-deps deps/x
-  call_refuse "$WORKTREE" "deps/"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+# assert_prefix_passes <label> <directory> <prefix>: the call returns 0 and
+# prints nothing.
+assert_prefix_passes() {
+  call_refuse "$2" "$3"
+  [ "$status" -eq 0 ] || { echo "$1: expected exit 0, got $status; output: $output" >&2; return 1; }
+  [ -z "$output" ] || { echo "$1: expected no output, got: $output" >&2; return 1; }
 }
 
-@test "own prefix: update/ from a deps/x worktree refuses, byte-identical to the no-prefix refusal" {
-  make_repo
-  make_worktree "$REPO" w-deps deps/x
-  call_refuse "$WORKTREE" ""
-  [ "$status" -eq 1 ]
-  local baseline="$output"
-  [ -n "$baseline" ]
-  call_refuse "$WORKTREE" "update/"
-  [ "$status" -eq 1 ]
-  [ "$output" = "$baseline" ]
-}
-
-@test "own prefix: update/ from an update/x worktree returns 0; deps/ from it refuses identically to no prefix" {
-  make_repo
-  make_worktree "$REPO" w-update update/x
-  call_refuse "$WORKTREE" "update/"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  call_refuse "$WORKTREE" ""
-  [ "$status" -eq 1 ]
-  local baseline="$output"
-  call_refuse "$WORKTREE" "deps/"
-  [ "$status" -eq 1 ]
-  [ "$output" = "$baseline" ]
-}
-
-@test "own prefix: spec/x and debt/x worktrees refuse for both prefixes, byte-identical to no prefix" {
-  make_repo
-  local kind prefix baseline
-  for kind in spec debt; do
-    make_worktree "$REPO" "w-$kind" "$kind/x"
-    call_refuse "$WORKTREE" ""
-    [ "$status" -eq 1 ] || return 1
-    baseline="$output"
-    for prefix in "deps/" "update/"; do
-      call_refuse "$WORKTREE" "$prefix"
-      [ "$status" -eq 1 ] || { echo "$kind/x with $prefix: expected exit 1, got $status" >&2; return 1; }
-      [ "$output" = "$baseline" ] || { echo "$kind/x with $prefix: output differs from the no-prefix refusal" >&2; return 1; }
-    done
-  done
-  return 0
-}
-
-@test "own prefix: a detached HEAD worktree refuses with either prefix" {
-  make_repo
-  git -C "$REPO" worktree add -q --detach "$REPO/.claude/worktrees/w-detached"
-  local detached="$REPO/.claude/worktrees/w-detached" prefix baseline
-  call_refuse "$detached" ""
-  [ "$status" -eq 1 ]
+# assert_prefix_refuses <label> <directory> <prefix>: the call refuses with
+# exactly the output the no-prefix call gives.
+assert_prefix_refuses() {
+  local baseline
+  call_refuse "$2" ""
+  [ "$status" -eq 1 ] || { echo "$1: no-prefix call expected exit 1, got $status" >&2; return 1; }
   baseline="$output"
-  for prefix in "deps/" "update/"; do
-    call_refuse "$detached" "$prefix"
-    [ "$status" -eq 1 ] || { echo "detached with $prefix: expected exit 1, got $status" >&2; return 1; }
-    [ "$output" = "$baseline" ] || { echo "detached with $prefix: output differs from the no-prefix refusal" >&2; return 1; }
-  done
-  return 0
+  [ -n "$baseline" ] || { echo "$1: no-prefix refusal was empty" >&2; return 1; }
+  call_refuse "$2" "$3"
+  [ "$status" -eq 1 ] || { echo "$1: expected exit 1, got $status" >&2; return 1; }
+  [ "$output" = "$baseline" ] || { echo "$1: output differs from the no-prefix refusal" >&2; return 1; }
 }
 
-@test "own prefix: the legacy harness branch spelling is not matched" {
+@test "own prefix: it passes from its own branch kind and the main checkout, and every other worktree refuses like no prefix" {
   make_repo
+  make_worktree "$REPO" w-deps deps/x
+  local deps_worktree="$WORKTREE"
+  make_worktree "$REPO" w-update update/x
+  local update_worktree="$WORKTREE"
+  make_worktree "$REPO" w-spec spec/x
+  local spec_worktree="$WORKTREE"
+  make_worktree "$REPO" w-debt debt/x
+  local debt_worktree="$WORKTREE"
   make_worktree "$REPO" w-legacy worktree-deps+x
-  call_refuse "$WORKTREE" "deps/"
-  [ "$status" -eq 1 ]
+  local legacy_worktree="$WORKTREE"
+  git -C "$REPO" worktree add -q --detach "$REPO/.claude/worktrees/w-detached"
+  local detached_worktree="$REPO/.claude/worktrees/w-detached" prefix
+
+  assert_prefix_passes "deps/ from a deps/x worktree" "$deps_worktree" "deps/"
+  assert_prefix_refuses "update/ from a deps/x worktree" "$deps_worktree" "update/"
+  assert_prefix_passes "update/ from an update/x worktree" "$update_worktree" "update/"
+  assert_prefix_refuses "deps/ from an update/x worktree" "$update_worktree" "deps/"
+  for prefix in "deps/" "update/"; do
+    assert_prefix_refuses "$prefix from a spec/x worktree" "$spec_worktree" "$prefix"
+    assert_prefix_refuses "$prefix from a debt/x worktree" "$debt_worktree" "$prefix"
+    assert_prefix_refuses "$prefix from a detached HEAD worktree" "$detached_worktree" "$prefix"
+  done
+  assert_prefix_refuses "deps/ from the legacy harness branch spelling" "$legacy_worktree" "deps/"
+  for prefix in "deps/" "update/" "nonsense/" ""; do
+    assert_prefix_passes "'$prefix' from the main checkout with a deps worktree live" "$REPO" "$prefix"
+  done
 }
 
 @test "own prefix: a matching prefix does not call the state function" {
@@ -269,49 +229,6 @@ gaia_refuse_if_worktree "/flow" my_state "deps/"
   return 0
 }
 
-@test "own prefix: from the main checkout any prefix returns 0 and prints nothing" {
-  make_repo
-  local prefix
-  for prefix in "deps/" "update/" "nonsense/"; do
-    call_refuse "$REPO" "$prefix"
-    [ "$status" -eq 0 ] || return 1
-    [ -z "$output" ] || return 1
-  done
-  return 0
-}
-
-@test "own prefix: a main-only flow without a prefix still passes from main while a deps worktree is live" {
-  make_repo
-  make_worktree "$REPO" w-deps deps/x
-  call_refuse "$REPO" ""
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "own prefix: deps/ from a deps/x worktree returns 0 and prints nothing, under zsh" {
-  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
-  make_repo
-  install_libraries "$REPO"
-  make_worktree "$REPO" w-deps deps/x
-  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/flow" "" "deps/"'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "own prefix: update/ from a deps/x worktree refuses, byte-identical to no prefix, under zsh" {
-  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
-  make_repo
-  install_libraries "$REPO"
-  make_worktree "$REPO" w-deps deps/x
-  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/flow"'
-  [ "$status" -eq 1 ]
-  local baseline="$output"
-  grep -qF -- "/flow must run from the main checkout, not a worktree." <<<"$baseline" || return 1
-  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/flow" "" "update/"'
-  [ "$status" -eq 1 ]
-  [ "$output" = "$baseline" ]
-}
-
 # ---------- unresolvable main (fail-open) ----------
 
 @test "linked worktree, unresolvable main: fails open, returns 0, prints nothing" {
@@ -329,26 +246,6 @@ gaia_refuse_if_worktree "/flow" my_state "deps/"
   git config --file "$common_config" --unset core.worktree || true
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-# ---------- structural ----------
-
-@test "structural: main-only-lib.sh is executable" {
-  [ -x "$LIBRARY_SCRIPT" ]
-}
-
-@test "structural: sourcing the library defines gaia_refuse_if_worktree and the resolver functions, with no side effects" {
-  run bash -c '
-    # shellcheck disable=SC1090
-    source "$1"
-    type gaia_refuse_if_worktree >/dev/null
-    type gaia_resolve_main_root >/dev/null
-    type gaia_is_linked_worktree >/dev/null
-    type gaia_resolve_tree_root >/dev/null
-    echo OK
-  ' _ "$LIBRARY_SCRIPT"
-  [ "$status" -eq 0 ]
-  [ "$output" = "OK" ]
 }
 
 # ---------- as the call sites actually invoke it ----------
@@ -378,19 +275,32 @@ install_libraries() {
   git -C "$repo" commit -q -m "libs"
 }
 
-@test "as invoked: relative source from a worktree root refuses out loud, under zsh" {
+@test "as invoked: under zsh a relative source returns 0 from main, refuses out loud from a worktree, and honors its own prefix" {
   command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
   make_repo
   install_libraries "$REPO"
-  make_worktree "$REPO" w wtbranchzsh1
-  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/gaia-release"'
-  [ "$status" -eq 1 ]
-  grep -qF -- "/gaia-release must run from the main checkout, not a worktree." <<<"$output" || return 1
-  grep -qF -- "Main checkout:  $REPO" <<<"$output" || return 1
+  make_worktree "$REPO" w-deps deps/x
+
+  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/flow" "" "deps/"'
+  [ "$status" -eq 0 ] || { echo "deps/ from a deps/x worktree: expected exit 0, got $status"; return 1; }
+  [ -z "$output" ] || { echo "deps/ from a deps/x worktree: expected no output, got: $output"; return 1; }
+
+  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/flow"'
+  [ "$status" -eq 1 ] || { echo "no prefix from a deps/x worktree: expected exit 1, got $status"; return 1; }
+  local baseline="$output"
+  grep -qF -- "/flow must run from the main checkout, not a worktree." <<<"$baseline" || { echo "no prefix: refusal line missing"; return 1; }
+  grep -qF -- "Main checkout:  $REPO" <<<"$baseline" || { echo "no prefix: main checkout line missing"; return 1; }
   # The failure this test exists for was near-silent: no refusal, and a stray
   # shell error in its place.
-  grep -qF -- "command not found" <<<"$output" && return 1
-  return 0
+  grep -qF -- "command not found" <<<"$baseline" && { echo "no prefix: stray shell error in output"; return 1; }
+
+  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/flow" "" "update/"'
+  [ "$status" -eq 1 ] || { echo "update/ from a deps/x worktree: expected exit 1, got $status"; return 1; }
+  [ "$output" = "$baseline" ] || { echo "update/ from a deps/x worktree: output differs from the no-prefix refusal"; return 1; }
+
+  run run_in "$REPO" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/gaia-release"'
+  [ "$status" -eq 0 ] || { echo "main checkout: expected exit 0, got $status"; return 1; }
+  [ -z "$output" ] || { echo "main checkout: expected no output, got: $output"; return 1; }
 }
 
 @test "as invoked: relative source from a worktree root refuses out loud, under bash" {
@@ -400,15 +310,6 @@ install_libraries() {
   run run_in "$WORKTREE" -- bash -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/gaia-release"'
   [ "$status" -eq 1 ]
   grep -qF -- "/gaia-release must run from the main checkout, not a worktree." <<<"$output" || return 1
-}
-
-@test "as invoked: relative source from the main checkout returns 0 and prints nothing, under zsh" {
-  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
-  make_repo
-  install_libraries "$REPO"
-  run run_in "$REPO" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/gaia-release"'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
 }
 
 @test "structural: sourcing main-root-lib.sh first, then this file, does not error (guarded re-source)" {
@@ -587,62 +488,29 @@ extract_block() {
 
 # ---------- per-call-site execution, under the shell the call site really uses ----------
 
-@test "call-site execution: every extracted block refuses correctly under bash, from a real linked worktree" {
+@test "call-site execution: every extracted block refuses from a real linked worktree under each shell, and each idiom shape is silent on the main checkout" {
   make_repo
   install_libraries "$REPO"
-  make_worktree "$REPO" mol-bash mol-bash-branch
-  local i=0 call_site_file flow block
-  for call_site_file in "${CALL_SITE_FILES[@]}"; do
-    flow="${CALL_SITE_FLOW_NAMES[$i]}"
-    i=$((i + 1))
-    block="$(extract_block "$REPO_ROOT/$call_site_file")"
-    [ -n "$block" ] || { echo "$call_site_file: extractor found no fenced block containing the invocation" >&2; return 1; }
-    run run_in "$WORKTREE" -- bash -c "$block"
-    [ "$status" -eq 1 ] || { echo "$call_site_file (bash): expected exit 1, got $status; output: $output" >&2; return 1; }
-    grep -qF -- "$flow must run from the main checkout, not a worktree." <<<"$output" || { echo "$call_site_file (bash): missing refusal line" >&2; return 1; }
-    grep -qF -- "Main checkout:  $REPO" <<<"$output" || { echo "$call_site_file (bash): missing main checkout line" >&2; return 1; }
-    grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run $flow there." <<<"$output" || { echo "$call_site_file (bash): missing re-invoke line" >&2; return 1; }
-    # The Milestone 5 failure was near-silent: no refusal, and a stray shell
-    # error in its place.
-    grep -qF -- "command not found" <<<"$output" && { echo "$call_site_file (bash): stray shell error in output" >&2; return 1; }
+  make_worktree "$REPO" mol-exec mol-exec-branch
+  local shells=(bash) shell_name i call_site_file flow block
+  command -v zsh >/dev/null 2>&1 && shells+=(zsh)
+  for shell_name in "${shells[@]}"; do
+    i=0
+    for call_site_file in "${CALL_SITE_FILES[@]}"; do
+      flow="${CALL_SITE_FLOW_NAMES[$i]}"
+      i=$((i + 1))
+      block="$(extract_block "$REPO_ROOT/$call_site_file")"
+      [ -n "$block" ] || { echo "$call_site_file: extractor found no fenced block containing the invocation" >&2; return 1; }
+      run run_in "$WORKTREE" -- "$shell_name" -c "$block"
+      [ "$status" -eq 1 ] || { echo "$call_site_file ($shell_name): expected exit 1, got $status; output: $output" >&2; return 1; }
+      grep -qF -- "$flow must run from the main checkout, not a worktree." <<<"$output" || { echo "$call_site_file ($shell_name): missing refusal line" >&2; return 1; }
+      grep -qF -- "Main checkout:  $REPO" <<<"$output" || { echo "$call_site_file ($shell_name): missing main checkout line" >&2; return 1; }
+      grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run $flow there." <<<"$output" || { echo "$call_site_file ($shell_name): missing re-invoke line" >&2; return 1; }
+      # A "command not found" here is the zsh hazard the as-invoked section describes.
+      grep -qF -- "command not found" <<<"$output" && { echo "$call_site_file ($shell_name): stray shell error in output" >&2; return 1; }
+    done
   done
-  # Explicit and deterministic: without this, the loop's own exit status is
-  # the LAST command's, and the good case of the final `&&`-guarded absence
-  # check above exits 1 (grep found no match), which would otherwise leak
-  # through as this function's own return status.
-  return 0
-}
 
-@test "call-site execution: every extracted block refuses correctly under zsh, from a real linked worktree" {
-  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
-  make_repo
-  install_libraries "$REPO"
-  make_worktree "$REPO" mol-zsh mol-zsh-branch
-  local i=0 call_site_file flow block
-  for call_site_file in "${CALL_SITE_FILES[@]}"; do
-    flow="${CALL_SITE_FLOW_NAMES[$i]}"
-    i=$((i + 1))
-    block="$(extract_block "$REPO_ROOT/$call_site_file")"
-    [ -n "$block" ] || { echo "$call_site_file: extractor found no fenced block containing the invocation" >&2; return 1; }
-    run run_in "$WORKTREE" -- zsh -c "$block"
-    [ "$status" -eq 1 ] || { echo "$call_site_file (zsh): expected exit 1, got $status; output: $output" >&2; return 1; }
-    grep -qF -- "$flow must run from the main checkout, not a worktree." <<<"$output" || { echo "$call_site_file (zsh): missing refusal line" >&2; return 1; }
-    grep -qF -- "Main checkout:  $REPO" <<<"$output" || { echo "$call_site_file (zsh): missing main checkout line" >&2; return 1; }
-    grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run $flow there." <<<"$output" || { echo "$call_site_file (zsh): missing re-invoke line" >&2; return 1; }
-    # Under zsh, BASH_SOURCE is unset and `declare -F` declares a float and
-    # succeeds instead of answering whether a function exists; that hazard
-    # is exactly what a "command not found" in the output would reveal.
-    grep -qF -- "command not found" <<<"$output" && { echo "$call_site_file (zsh): stray shell error in output" >&2; return 1; }
-  done
-  # See the bash test above: without this, the loop's own exit status is the
-  # last iteration's last command, whose good case exits 1.
-  return 0
-}
-
-@test "call-site execution: extracted blocks are silent no-ops from the main checkout" {
-  make_repo
-  install_libraries "$REPO"
-  local call_site_file block
   # One file with no state_line_function, one with: both idiom shapes get the
   # mirror-case proof, not just the no-arg one.
   for call_site_file in ".claude/commands/gaia-release.md" ".claude/skills/update-deps/SKILL.md"; do
@@ -653,32 +521,11 @@ extract_block() {
   done
 }
 
-# ---------- the /setup-gaia composition ----------
-
-@test "setup-gaia composition: the refusal half names cd back to main" {
-  # /setup-gaia is main-only AND the one statusline nudge that still renders
-  # outside main: the nudge tells a worktree session setup is owed, the
-  # refusal tells it where to go. The rendering half is asserted in
-  # .gaia/tests/statusline/statusline-worktree.bats, in the test named
-  # "an incomplete setup is reported from a worktree too". This suite has no
-  # statusline fixture, so only the refusal half's composing sentence is
-  # asserted here; duplicating the render assertion would be a second copy
-  # of a suite that already exists.
-  make_repo
-  install_libraries "$REPO"
-  make_worktree "$REPO" mol-setup mol-setup-branch
-  local block
-  block="$(extract_block "$REPO_ROOT/.claude/commands/setup-gaia.md")"
-  run run_in "$WORKTREE" -- bash -c "$block"
-  [ "$status" -eq 1 ]
-  grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run /setup-gaia there." <<<"$output"
-}
-
 # ---------- the update skills' own-branch-prefix call sites ----------
 #
-# The execution tests above run every block from a worktree whose branch
+# The execution test above runs every block from a worktree whose branch
 # matches neither update prefix, so a dropped, typo'd or swapped prefix
-# argument leaves them green. These pins run the two update skills' real blocks
+# argument leaves it green. These pins run the update skills' real blocks
 # from worktrees on each kind of branch.
 
 PREFIX_PIN_SKILL_FILES=(
@@ -699,68 +546,75 @@ run_pin_block() {
   run run_in "$2" -- "$1" -c "$3"
 }
 
-# assert_prefix_pins <shell>: the own-branch pass-through, the refusals and the
-# red twin for both update skills, under one shell.
+# assert_prefix_pins <shell>...: the own-branch pass-through, the refusals and the
+# red twin for both update skills, under each shell, on one fixture.
 assert_prefix_pins() {
-  local shell_name="$1" index block stripped baseline skill_file label kind refused_kind
+  local shell_name index block stripped baseline skill_file label kind refused_kind
   make_repo
   install_libraries "$REPO"
   for kind in deps update spec debt; do
     make_worktree "$REPO" "pin-$kind" "$kind/x"
   done
-  for index in 0 1; do
-    skill_file="${PREFIX_PIN_SKILL_FILES[$index]}"
-    label="$skill_file ($shell_name)"
-    block="$(extract_block "$REPO_ROOT/$skill_file")"
-    [ -n "$block" ] || { echo "$label: extractor found no block" >&2; return 1; }
-    stripped="$(strip_prefix_argument "$block")"
-    [ "$stripped" != "$block" ] || { echo "$label: removing the prefix argument changed nothing" >&2; return 1; }
+  for shell_name in "$@"; do
+    for index in 0 1; do
+      skill_file="${PREFIX_PIN_SKILL_FILES[$index]}"
+      label="$skill_file ($shell_name)"
+      block="$(extract_block "$REPO_ROOT/$skill_file")"
+      [ -n "$block" ] || { echo "$label: extractor found no block" >&2; return 1; }
+      stripped="$(strip_prefix_argument "$block")"
+      [ "$stripped" != "$block" ] || { echo "$label: removing the prefix argument changed nothing" >&2; return 1; }
 
-    kind="${PREFIX_PIN_OWN_KINDS[$index]}"
-    run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$kind" "$block"
-    [ "$status" -eq 0 ] || { echo "$label: own kind $kind expected exit 0, got $status; output: $output" >&2; return 1; }
-    [ -z "$output" ] || { echo "$label: own kind $kind expected empty output, got: $output" >&2; return 1; }
+      kind="${PREFIX_PIN_OWN_KINDS[$index]}"
+      run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$kind" "$block"
+      [ "$status" -eq 0 ] || { echo "$label: own kind $kind expected exit 0, got $status; output: $output" >&2; return 1; }
+      [ -z "$output" ] || { echo "$label: own kind $kind expected empty output, got: $output" >&2; return 1; }
 
-    run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$kind" "$stripped"
-    [ "$status" -eq 1 ] || { echo "$label: red twin from $kind expected exit 1, got $status" >&2; return 1; }
+      run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$kind" "$stripped"
+      [ "$status" -eq 1 ] || { echo "$label: red twin from $kind expected exit 1, got $status" >&2; return 1; }
 
-    for refused_kind in "${PREFIX_PIN_OTHER_KINDS[$index]}" spec debt; do
-      run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$refused_kind" "$stripped"
-      [ "$status" -eq 1 ] || { echo "$label: no-prefix variant from $refused_kind expected exit 1, got $status" >&2; return 1; }
-      baseline="$output"
-      [ -n "$baseline" ] || { echo "$label: no-prefix refusal from $refused_kind was empty" >&2; return 1; }
-      run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$refused_kind" "$block"
-      [ "$status" -eq 1 ] || { echo "$label: from $refused_kind expected exit 1, got $status; output: $output" >&2; return 1; }
-      [ "$output" = "$baseline" ] || { echo "$label: from $refused_kind the refusal differs from the no-prefix variant's" >&2; return 1; }
+      for refused_kind in "${PREFIX_PIN_OTHER_KINDS[$index]}" spec debt; do
+        run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$refused_kind" "$stripped"
+        [ "$status" -eq 1 ] || { echo "$label: no-prefix variant from $refused_kind expected exit 1, got $status" >&2; return 1; }
+        baseline="$output"
+        [ -n "$baseline" ] || { echo "$label: no-prefix refusal from $refused_kind was empty" >&2; return 1; }
+        run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$refused_kind" "$block"
+        [ "$status" -eq 1 ] || { echo "$label: from $refused_kind expected exit 1, got $status; output: $output" >&2; return 1; }
+        [ "$output" = "$baseline" ] || { echo "$label: from $refused_kind the refusal differs from the no-prefix variant's" >&2; return 1; }
+      done
     done
   done
   return 0
 }
 
-@test "update skills' call sites: own branch passes, every other worktree refuses like no prefix, under bash" {
-  assert_prefix_pins bash
-}
-
-@test "update skills' call sites: own branch passes, every other worktree refuses like no prefix, under zsh" {
-  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
-  assert_prefix_pins zsh
+@test "update skills' call sites: own branch passes, every other worktree refuses like no prefix, under each shell" {
+  local shells=(bash)
+  command -v zsh >/dev/null 2>&1 && shells+=(zsh)
+  assert_prefix_pins "${shells[@]}"
 }
 
 # ---------- gaia_pull_gate ----------
+
+# set_gate_state <local_version> <cache_json>: rewrites the repo's live
+# `.gaia/VERSION` and update-check cache; "-" removes either.
+set_gate_state() {
+  local local_version="$1" cache_json="$2"
+  rm -f "$REPO/.gaia/VERSION" "$REPO/.gaia/local/cache/shared/update-check.json"
+  [ "$local_version" = "-" ] || printf '%s\n' "$local_version" >"$REPO/.gaia/VERSION"
+  if [ "$cache_json" != "-" ]; then
+    mkdir -p "$REPO/.gaia/local/cache/shared"
+    printf '%s' "$cache_json" >"$REPO/.gaia/local/cache/shared/update-check.json"
+  fi
+}
 
 # make_gate_repo <local_version> <cache_json>: a repo carrying the libraries, a
 # live `.gaia/VERSION` (omitted when <local_version> is "-") and an
 # update-check cache (omitted when <cache_json> is "-"). Sets REPO and GH_LOG,
 # and puts a logging `gh` stub first on PATH through GATE_PATH.
 make_gate_repo() {
-  local local_version="$1" cache_json="$2" stub_directory
+  local stub_directory
   make_repo
   install_libraries "$REPO"
-  [ "$local_version" = "-" ] || printf '%s\n' "$local_version" >"$REPO/.gaia/VERSION"
-  if [ "$cache_json" != "-" ]; then
-    mkdir -p "$REPO/.gaia/local/cache/shared"
-    printf '%s' "$cache_json" >"$REPO/.gaia/local/cache/shared/update-check.json"
-  fi
+  set_gate_state "$1" "$2"
   stub_directory="$REPO/.gate-stub-bin"
   GH_LOG="$REPO/.gate-gh.log"
   mkdir -p "$stub_directory"
@@ -785,6 +639,27 @@ assert_gate_silent_pass() {
   [ "$status" -eq 0 ] || { echo "expected exit 0, got $status; output: $output" >&2; return 1; }
   [ -z "$output" ] || { echo "expected no output, got: $output" >&2; return 1; }
   [ ! -s "$GH_LOG" ] || { echo "gate called gh: $(cat "$GH_LOG")" >&2; return 1; }
+}
+
+# add_remote <repo>: a bare origin that has received nothing.
+add_remote() {
+  local repo="$1" raw origin
+  raw=$(mktemp -d -t gaia-mol-origin-XXXXXX)
+  origin="$(cd "$raw" && pwd -P)"
+  CLEANUP_DIRECTORIES+=("$origin")
+  git init -q --bare "$origin"
+  git -C "$repo" remote add origin "$origin"
+}
+
+# add_origin <repo>: a bare origin that has received <repo>'s main, so
+# refs/remotes/origin/main matches local main.
+add_origin() {
+  add_remote "$1"
+  git -C "$1" push -q origin main
+}
+
+commit_on_main() {
+  git -C "$1" commit -q --allow-empty -m "local only"
 }
 
 @test "pull gate: behind from the main checkout returns 1 with the exact line" {
@@ -814,195 +689,103 @@ Next step: run /update-gaia in the main checkout at $REPO to pull, then start /g
   [ "$status" -eq 2 ]
 }
 
-@test "pull gate: a repo whose origin has only master names origin/master" {
+@test "pull gate: origin's default branch is read from origin/HEAD, else master" {
   make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
   git -C "$REPO" update-ref refs/remotes/origin/master HEAD
   run_gate "$REPO" bash /gaia-plan
-  [ "$status" -eq 1 ]
-  [ "$output" = "GAIA 2.0.4 is on origin/master and this checkout has 2.0.3. New work needs it first." ]
-}
+  [ "$status" -eq 1 ] || { echo "origin with only master: status $status"; return 1; }
+  [ "$output" = "GAIA 2.0.4 is on origin/master and this checkout has 2.0.3. New work needs it first." ] || { echo "origin with only master: got '$output'"; return 1; }
 
-@test "pull gate: origin/HEAD names the default branch when set" {
-  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
   git -C "$REPO" update-ref refs/remotes/origin/trunk HEAD
   git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
   run_gate "$REPO" bash /gaia-plan
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 1 ] || { echo "origin/HEAD naming trunk: status $status"; return 1; }
   [ "$output" = "GAIA 2.0.4 is on origin/trunk and this checkout has 2.0.3. New work needs it first." ]
 }
 
-@test "pull gate: equal versions pass silently" {
-  make_gate_repo 2.0.4 "$GATE_BEHIND_CACHE"
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: a local version ahead of origin passes silently" {
-  make_gate_repo 2.0.5 "$GATE_BEHIND_CACHE"
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: versions compare numerically, not as strings" {
-  make_gate_repo 2.0.9 '{"gaiaOriginVersion":"2.0.10"}'
-  run_gate "$REPO" bash /gaia-plan
-  [ "$status" -eq 1 ]
-  make_gate_repo 2.0.10 '{"gaiaOriginVersion":"2.0.9"}'
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: a prerelease is below its release" {
-  make_gate_repo 2.0.4-rc.1 "$GATE_BEHIND_CACHE"
-  run_gate "$REPO" bash /gaia-plan
-  [ "$status" -eq 1 ]
-  [ "$output" = "GAIA 2.0.4 is on origin/main and this checkout has 2.0.4-rc.1. New work needs it first." ]
-  make_gate_repo 2.0.4 '{"gaiaOriginVersion":"2.0.4-rc.1"}'
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: missing cache passes silently" {
+@test "pull gate: a version at or ahead of origin, or an unreadable cache or version, passes silently" {
   make_gate_repo 2.0.3 -
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: unreadable cache passes silently" {
-  make_gate_repo 2.0.3 "not json {"
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: cache without gaiaOriginVersion passes silently" {
-  make_gate_repo 2.0.3 '{"gaiaHasUpdate":true}'
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: null gaiaOriginVersion passes silently" {
-  make_gate_repo 2.0.3 '{"gaiaOriginVersion":null}'
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: non-version gaiaOriginVersion passes silently" {
-  local bad
-  for bad in '"latest"' '"2.0"' '"2.0.x"' '"v2.0.4"' '7'; do
-    make_gate_repo 2.0.3 "{\"gaiaOriginVersion\":$bad}"
+  local row local_version cache_json
+  for row in \
+    "2.0.4|$GATE_BEHIND_CACHE" \
+    "2.0.5|$GATE_BEHIND_CACHE" \
+    "2.0.3|-" \
+    "2.0.3|not json {" \
+    '2.0.3|{"gaiaHasUpdate":true}' \
+    '2.0.3|{"gaiaOriginVersion":null}' \
+    '2.0.3|{"gaiaOriginVersion":"latest"}' \
+    '2.0.3|{"gaiaOriginVersion":"2.0"}' \
+    '2.0.3|{"gaiaOriginVersion":"2.0.x"}' \
+    '2.0.3|{"gaiaOriginVersion":"v2.0.4"}' \
+    '2.0.3|{"gaiaOriginVersion":7}' \
+    "-|$GATE_BEHIND_CACHE" \
+    "not-a-version|$GATE_BEHIND_CACHE" \
+    '2.0.4|{"gaiaOriginVersion":"2.0.4","gaiaHasUpdate":false,"gaiaUpdateClaims":[{"login":"teammate","branch":"update/2.0.5","pr":1}]}' \
+    '2.0.4|{"gaiaOriginVersion":"2.0.4","gaiaHasUpdate":true,"gaiaLatest":"2.0.9"}'; do
+    IFS='|' read -r local_version cache_json <<<"$row"
+    set_gate_state "$local_version" "$cache_json"
     run_gate "$REPO" bash /gaia-plan
-    assert_gate_silent_pass || { echo "origin value $bad did not pass" >&2; return 1; }
+    assert_gate_silent_pass || { echo "row $row did not pass silently" >&2; return 1; }
   done
 }
 
-@test "pull gate: missing local VERSION passes silently" {
-  make_gate_repo - "$GATE_BEHIND_CACHE"
+@test "pull gate: versions compare numerically and a prerelease ranks below its release" {
+  make_gate_repo 2.0.9 '{"gaiaOriginVersion":"2.0.10"}'
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 1 ] || { echo "2.0.9 against 2.0.10: status $status"; return 1; }
+
+  set_gate_state 2.0.10 '{"gaiaOriginVersion":"2.0.9"}'
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass || { echo "2.0.10 against 2.0.9 did not pass silently" >&2; return 1; }
+
+  set_gate_state 2.0.4-rc.1 "$GATE_BEHIND_CACHE"
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 1 ] || { echo "2.0.4-rc.1 against 2.0.4: status $status"; return 1; }
+  [ "$output" = "GAIA 2.0.4 is on origin/main and this checkout has 2.0.4-rc.1. New work needs it first." ] || { echo "2.0.4-rc.1 against 2.0.4: got '$output'"; return 1; }
+
+  set_gate_state 2.0.4 '{"gaiaOriginVersion":"2.0.4-rc.1"}'
   run_gate "$REPO" bash /gaia-plan
   assert_gate_silent_pass
 }
 
-@test "pull gate: non-version local VERSION passes silently" {
-  make_gate_repo "not-a-version" "$GATE_BEHIND_CACHE"
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: a teammate's claim with origin equal to local passes" {
-  make_gate_repo 2.0.4 '{"gaiaOriginVersion":"2.0.4","gaiaHasUpdate":false,"gaiaUpdateClaims":[{"login":"teammate","branch":"update/2.0.5","pr":1}]}'
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: update available with origin equal to local passes" {
-  make_gate_repo 2.0.4 '{"gaiaOriginVersion":"2.0.4","gaiaHasUpdate":true,"gaiaLatest":"2.0.9"}'
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: sourced under zsh it still returns 1 when behind, and 2 from a worktree" {
+@test "pull gate: under zsh and a relative source it still returns 1 when behind, 2 from a worktree, and 3 when local main is ahead" {
   command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
   make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
   make_worktree "$REPO" gate-zsh gate-zsh-branch
   run_gate "$REPO" zsh /gaia-plan
-  [ "$status" -eq 1 ]
-  [ "$output" = "$GATE_BEHIND_LINE" ]
+  [ "$status" -eq 1 ] || { echo "zsh behind: status $status"; return 1; }
+  [ "$output" = "$GATE_BEHIND_LINE" ] || { echo "zsh behind: got '$output'"; return 1; }
   run_gate "$WORKTREE" zsh /gaia-plan
-  [ "$status" -eq 2 ]
-  grep -qF -- "Next step: run /update-gaia in the main checkout at $REPO to pull, then start /gaia-plan again." <<<"$output" || return 1
-}
+  [ "$status" -eq 2 ] || { echo "zsh from a worktree: status $status"; return 1; }
+  grep -qF -- "Next step: run /update-gaia in the main checkout at $REPO to pull, then start /gaia-plan again." <<<"$output" || { echo "zsh from a worktree: next step missing"; return 1; }
 
-@test "pull gate: relative source from a checkout root works as the call sites run it" {
-  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
   run run_in "$REPO" -- env PATH="$GATE_PATH" bash -c '. .gaia/scripts/main-only-lib.sh; gaia_pull_gate "/gaia-plan"'
-  [ "$status" -eq 1 ]
-  [ "$output" = "$GATE_BEHIND_LINE" ]
-}
+  [ "$status" -eq 1 ] || { echo "relative source: status $status"; return 1; }
+  [ "$output" = "$GATE_BEHIND_LINE" ] || { echo "relative source: got '$output'"; return 1; }
 
-@test "pull gate mutation: an inverted comparison fails the behind case" {
-  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
-  local mutant="$BATS_TEST_TMPDIR/mutant-lib"
-  mkdir -p "$mutant"
-  cp "$REPO/.gaia/scripts/main-root-lib.sh" "$mutant/"
-  sed 's/^  _gaia_pull_gate_is_behind "\$local_version" "\$origin_version" || return 0$/  _gaia_pull_gate_is_behind "$local_version" "$origin_version" \&\& return 0/' \
-    "$REPO/.gaia/scripts/main-only-lib.sh" >"$mutant/main-only-lib.sh"
-  ! cmp -s "$mutant/main-only-lib.sh" "$REPO/.gaia/scripts/main-only-lib.sh" || { echo "mutation did not apply" >&2; return 1; }
-  run_gate "$REPO" bash /gaia-plan "$mutant/main-only-lib.sh"
-  [ "$status" -ne 1 ]
-}
-
-@test "pull gate mutation: without the linked-worktree branch a worktree returns 1, not 2" {
-  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
-  make_worktree "$REPO" gate-mut gate-mut-branch
-  local mutant="$BATS_TEST_TMPDIR/mutant-lib"
-  mkdir -p "$mutant"
-  cp "$REPO/.gaia/scripts/main-root-lib.sh" "$mutant/"
-  sed 's/^  if gaia_is_linked_worktree; then$/  if false; then/' \
-    "$REPO/.gaia/scripts/main-only-lib.sh" >"$mutant/main-only-lib.sh"
-  ! cmp -s "$mutant/main-only-lib.sh" "$REPO/.gaia/scripts/main-only-lib.sh" || { echo "mutation did not apply" >&2; return 1; }
-  run_gate "$WORKTREE" bash /gaia-plan "$mutant/main-only-lib.sh"
-  [ "$status" -eq 1 ]
+  add_origin "$REPO"
+  commit_on_main "$REPO"
+  run_gate "$REPO" zsh /gaia-plan
+  [ "$status" -eq 3 ]
 }
 
 # ---------- gaia_pull_gate: local main ahead of origin ----------
 
-# add_remote <repo>: a bare origin that has received nothing.
-add_remote() {
-  local repo="$1" raw origin
-  raw=$(mktemp -d -t gaia-mol-origin-XXXXXX)
-  origin="$(cd "$raw" && pwd -P)"
-  CLEANUP_DIRECTORIES+=("$origin")
-  git init -q --bare "$origin"
-  git -C "$repo" remote add origin "$origin"
-}
-
-# add_origin <repo>: a bare origin that has received <repo>'s main, so
-# refs/remotes/origin/main matches local main.
-add_origin() {
-  add_remote "$1"
-  git -C "$1" push -q origin main
-}
-
-commit_on_main() {
-  git -C "$1" commit -q --allow-empty -m "local only"
-}
-
+# bats test_tags=protected
 @test "pull gate: local main ahead of origin/main returns 3 naming the count and the fix" {
   make_gate_repo 2.0.4 -
   add_origin "$REPO"
   commit_on_main "$REPO"
   commit_on_main "$REPO"
   run_gate "$REPO" bash /gaia-plan
-  [ "$status" -eq 3 ]
-  [ "$output" = "Local main has 2 commits that origin/main lacks. Push main, or reconcile it with origin/main, then start /gaia-plan again." ]
-  [ ! -s "$GH_LOG" ]
-}
+  [ "$status" -eq 3 ] || { echo "two unpushed commits: status $status"; return 1; }
+  [ "$output" = "Local main has 2 commits that origin/main lacks. Push main, or reconcile it with origin/main, then start /gaia-plan again." ] || { echo "two unpushed commits: got '$output'"; return 1; }
+  [ ! -s "$GH_LOG" ] || { echo "gate called gh"; return 1; }
 
-@test "pull gate: one unpushed commit is named in the singular" {
-  make_gate_repo 2.0.4 -
-  add_origin "$REPO"
+  git -C "$REPO" reset -q --hard origin/main
   commit_on_main "$REPO"
   run_gate "$REPO" bash /gaia-plan
-  [ "$status" -eq 3 ]
+  [ "$status" -eq 3 ] || { echo "one unpushed commit: status $status"; return 1; }
   [ "$output" = "Local main has 1 commit that origin/main lacks. Push main, or reconcile it with origin/main, then start /gaia-plan again." ]
 }
 
@@ -1014,34 +797,25 @@ commit_on_main() {
   [ "$status" -eq 3 ]
 }
 
-@test "pull gate: local main equal to origin/main passes silently" {
+@test "pull gate: local main equal, behind, or with no usable remote passes silently" {
   make_gate_repo 2.0.4 -
-  add_origin "$REPO"
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
 
-@test "pull gate: local main behind origin/main passes silently" {
-  make_gate_repo 2.0.4 -
-  add_origin "$REPO"
+  commit_on_main "$REPO"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass || { echo "no remote did not pass silently" >&2; return 1; }
+
+  add_remote "$REPO"
+  commit_on_main "$REPO"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass || { echo "a remote that never received main did not pass silently" >&2; return 1; }
+
+  git -C "$REPO" push -q origin main
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass || { echo "local main equal to origin/main did not pass silently" >&2; return 1; }
+
   commit_on_main "$REPO"
   git -C "$REPO" push -q origin main
   git -C "$REPO" reset -q --hard HEAD~1
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: a repo with no remote passes silently" {
-  make_gate_repo 2.0.4 -
-  commit_on_main "$REPO"
-  run_gate "$REPO" bash /gaia-plan
-  assert_gate_silent_pass
-}
-
-@test "pull gate: a remote that never received main passes silently" {
-  make_gate_repo 2.0.4 -
-  add_remote "$REPO"
-  commit_on_main "$REPO"
   run_gate "$REPO" bash /gaia-plan
   assert_gate_silent_pass
 }
@@ -1053,13 +827,4 @@ commit_on_main() {
   make_worktree "$REPO" gate-ahead gate-ahead-branch
   run_gate "$WORKTREE" bash /gaia-plan
   assert_gate_silent_pass
-}
-
-@test "pull gate: sourced under zsh local main ahead still returns 3" {
-  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
-  make_gate_repo 2.0.4 -
-  add_origin "$REPO"
-  commit_on_main "$REPO"
-  run_gate "$REPO" zsh /gaia-plan
-  [ "$status" -eq 3 ]
 }

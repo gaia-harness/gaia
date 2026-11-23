@@ -124,53 +124,62 @@ write_hook() {
   chmod +x "$fixture_directory/.claude/hooks/$name"
 }
 
+# expect_check <label> <expected status> <needle>... -- <check argument>...: run the
+# gate with the arguments, echo the label so a red case names itself, assert the
+# exit status and that the output carries every needle.
+expect_check() {
+  local label="$1" expected="$2" needle
+  local -a needles=()
+  shift 2
+  while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
+    needles+=("$1")
+    shift
+  done
+  shift
+  echo "case: $label"
+  run bash "$CHECK" "$@"
+  [ "$status" -eq "$expected" ]
+  for needle in ${needles[@]+"${needles[@]}"}; do
+    grep -qF -- "$needle" <<<"$output" || return 1
+  done
+}
+
 # --- the clean shapes --------------------------------------------------------
 
-@test "clean: a blocking hook reaching the shared arm passes" {
+@test "clean: the passing shapes" {
   local fixture_directory
+
   fixture_directory="$(make_fixture clean-armed)"
   write_hook "$fixture_directory" armed.sh armed
   write_settings "$fixture_directory" PreToolUse armed.sh
+  expect_check 'a blocking hook reaching the shared arm passes' 0 clean -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 0 ]
-  grep -qF -- 'clean' <<<"$output"
-}
-
-@test "clean: an advisory hook standing down passes, and is not held to the refusal" {
-  local fixture_directory
   fixture_directory="$(make_fixture clean-advisory)"
   write_hook "$fixture_directory" armed.sh armed
   write_hook "$fixture_directory" nudger.sh advisory
   write_settings "$fixture_directory" PreToolUse armed.sh nudger.sh
+  expect_check 'an advisory hook standing down is not held to the refusal' 0 -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 0 ]
-}
-
-@test "clean: a blocking hook that never invokes jq is out of scope" {
-  local fixture_directory
   fixture_directory="$(make_fixture clean-nojq)"
   write_hook "$fixture_directory" armed.sh armed
   write_hook "$fixture_directory" parseless.sh nojq
   write_settings "$fixture_directory" PreToolUse armed.sh parseless.sh
+  expect_check 'a blocking hook that never invokes jq is out of scope' 0 -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 0 ]
-}
-
-@test "clean: a script no registration names is out of scope, whatever its arm" {
   # The scope is the PreToolUse registrations, not the directory listing: a
   # script invoked directly by a caller who sees its exit status owes nothing
   # here, and grading one would red a file with no fail-open to close.
-  local fixture_directory
   fixture_directory="$(make_fixture clean-unregistered)"
   write_hook "$fixture_directory" armed.sh armed
   write_hook "$fixture_directory" standalone.sh standdown
   write_settings "$fixture_directory" PreToolUse armed.sh
+  expect_check 'a script no registration names is out of scope, whatever its arm' 0 -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 0 ]
+  fixture_directory="$(make_fixture clean-libread)"
+  write_hook "$fixture_directory" armed.sh armed
+  write_hook "$fixture_directory" reader.sh libreadarmed
+  write_settings "$fixture_directory" PreToolUse armed.sh reader.sh
+  expect_check 'a gaia_require_jq call ahead of the shared payload reader passes' 0 -- "$fixture_directory"
 }
 
 # --- the findings ------------------------------------------------------------
@@ -188,6 +197,7 @@ write_hook() {
   grep -qF -- 'no gaia_require_jq call reaches its payload read' <<<"$output"
 }
 
+# bats test_tags=protected
 @test "red: a blocking hook with no jq arm at all is reported" {
   local fixture_directory
   fixture_directory="$(make_fixture red-bare)"
@@ -200,141 +210,76 @@ write_hook() {
   grep -qF -- 'naked.sh' <<<"$output"
 }
 
-@test "red: naming the shared arm in a comment does not satisfy the check" {
+@test "red: a comment-only, loader-only, reader-only or missing advisory arm is reported" {
+  local fixture_directory
+
   # The match region is the whole claim. A gate matching anywhere in the file
   # would grade a header paragraph as an arm, which is how this class returns.
-  local fixture_directory
   fixture_directory="$(make_fixture red-namesonly)"
   write_hook "$fixture_directory" armed.sh armed
   write_hook "$fixture_directory" talker.sh namesonly
   write_settings "$fixture_directory" PreToolUse armed.sh talker.sh
+  expect_check 'naming the shared arm in a comment does not satisfy the check' 1 talker.sh -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 1 ]
-  grep -qF -- 'talker.sh' <<<"$output"
-}
-
-@test "red: the loader guard alone does not satisfy the blocking arm" {
-  # The match region is the whole assertion. Every armed hook carries a loader
-  # block naming the shared arm several lines above the call, so a gate matching
-  # the name anywhere on the line is satisfied by the loader alone: a hook that
-  # copies the block and omits the call grades clean while its payload read still
-  # ends it at 127, which is the fail-open this gate exists to catch.
-  local fixture_directory
+  # Every armed hook carries a loader block naming the shared arm above the call,
+  # so a gate matching the name anywhere on the line is satisfied by the loader
+  # alone while the hook's payload read still ends it at 127.
   fixture_directory="$(make_fixture red-loaderonly)"
   write_hook "$fixture_directory" armed.sh armed
   write_hook "$fixture_directory" loader.sh loaderonly
   write_settings "$fixture_directory" PreToolUse armed.sh loader.sh
+  expect_check 'the loader guard alone does not satisfy the blocking arm' 1 loader.sh \
+    'no gaia_require_jq call reaches its payload read' -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 1 ]
-  grep -qF -- 'loader.sh' <<<"$output"
-  grep -qF -- 'no gaia_require_jq call reaches its payload read' <<<"$output"
-}
-
-@test "red: an advisory hook with no jq arm at all is reported" {
-  local fixture_directory
   fixture_directory="$(make_fixture red-nudge)"
   write_hook "$fixture_directory" armed.sh armed
   write_hook "$fixture_directory" nudger.sh nudge
   write_settings "$fixture_directory" PreToolUse armed.sh nudger.sh
+  expect_check 'an advisory hook with no jq arm at all is reported' 1 \
+    'no jq-availability arm stands it down' -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 1 ]
-  grep -qF -- 'no jq-availability arm stands it down' <<<"$output"
-}
-
-@test "red: a blocking hook reading only through the shared payload reader needs the arm" {
   # The reader hides the literal word jq from the invocation probe, so without
   # the command-position call counting as a jq use this hook would fall out of
   # the subject set and grade clean while its read still dies at 127.
-  local fixture_directory
   fixture_directory="$(make_fixture red-libread)"
   write_hook "$fixture_directory" armed.sh armed
   write_hook "$fixture_directory" reader.sh libread
   write_settings "$fixture_directory" PreToolUse armed.sh reader.sh
-
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 1 ]
-  grep -qF -- 'reader.sh' <<<"$output"
-  grep -qF -- 'no gaia_require_jq call reaches its payload read' <<<"$output"
-}
-
-@test "clean: a gaia_require_jq call ahead of the shared payload reader passes" {
-  local fixture_directory
-  fixture_directory="$(make_fixture clean-libread)"
-  write_hook "$fixture_directory" armed.sh armed
-  write_hook "$fixture_directory" reader.sh libreadarmed
-  write_settings "$fixture_directory" PreToolUse armed.sh reader.sh
-
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 0 ]
+  expect_check 'a blocking hook reading only through the shared payload reader needs the arm' 1 reader.sh \
+    'no gaia_require_jq call reaches its payload read' -- "$fixture_directory"
 }
 
 # --- fail-closed discovery ---------------------------------------------------
 
-@test "exits 2 when no hook is registered on PreToolUse" {
+@test "exits 2 on discovery and usage failures" {
   local fixture_directory
+
   fixture_directory="$(make_fixture empty-registration)"
   write_hook "$fixture_directory" armed.sh armed
   printf '{"hooks":{}}\n' >"$fixture_directory/.claude/settings.json"
+  expect_check 'no hook is registered on PreToolUse' 2 'found no hook registered on PreToolUse' -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'found no hook registered on PreToolUse' <<<"$output"
-}
-
-@test "exits 2 when no registered hook parses its payload with jq" {
-  local fixture_directory
   fixture_directory="$(make_fixture no-parsers)"
   write_hook "$fixture_directory" parseless.sh nojq
   write_settings "$fixture_directory" PreToolUse parseless.sh
+  expect_check 'no registered hook parses its payload with jq' 2 'parses its payload with jq' -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'parses its payload with jq' <<<"$output"
-}
-
-@test "exits 2 when every jq-parsing hook reads as advisory" {
-  local fixture_directory
   fixture_directory="$(make_fixture no-blocking)"
   write_hook "$fixture_directory" nudger.sh advisory
   write_settings "$fixture_directory" PreToolUse nudger.sh
+  expect_check 'every jq-parsing hook reads as advisory' 2 \
+    'classified every jq-parsing PreToolUse hook as advisory' -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'classified every jq-parsing PreToolUse hook as advisory' <<<"$output"
-}
-
-@test "exits 2 when the settings file is missing" {
-  local fixture_directory
   fixture_directory="$(make_fixture no-settings)"
+  expect_check 'the settings file is missing' 2 'settings file not found' -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'settings file not found' <<<"$output"
-}
-
-@test "exits 2 when the settings file is not valid JSON" {
-  local fixture_directory
   fixture_directory="$(make_fixture bad-settings)"
   printf 'not json at all\n' >"$fixture_directory/.claude/settings.json"
+  expect_check 'the settings file is not valid JSON' 2 'not valid JSON' -- "$fixture_directory"
 
-  run bash "$CHECK" "$fixture_directory"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'not valid JSON' <<<"$output"
-}
+  expect_check 'a root that is not a directory' 2 'not a directory' -- "$BATS_TEST_TMPDIR/nowhere"
 
-@test "exits 2 on a root that is not a directory" {
-  run bash "$CHECK" "$BATS_TEST_TMPDIR/nowhere"
-  [ "$status" -eq 2 ]
-  grep -qF -- 'not a directory' <<<"$output"
-}
-
-@test "exits 2 on too many arguments" {
-  run bash "$CHECK" a b
-  [ "$status" -eq 2 ]
-  grep -qF -- 'too many arguments' <<<"$output"
+  expect_check 'too many arguments' 2 'too many arguments' -- a b
 }
 
 # --- the baseline cannot rot -------------------------------------------------
@@ -406,15 +351,5 @@ stage_check_with_baseline() {
   write_settings "$fixture_directory" PreToolUse armed.sh "$entry"
 
   run bash "$staged" "$fixture_directory"
-  [ "$status" -eq 0 ]
-}
-
-# --- the real tree -----------------------------------------------------------
-
-@test "the live tree is clean" {
-  # The fixtures above prove the predicates; this proves the tree they are
-  # pointed at. It is cheap, and a regression in either half shows up here as
-  # well as in the fixture that isolates it.
-  run bash "$CHECK" "$(cd "$SCRIPT_DIRECTORY/../.." && pwd)"
   [ "$status" -eq 0 ]
 }

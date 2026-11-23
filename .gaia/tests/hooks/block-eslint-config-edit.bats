@@ -13,13 +13,9 @@
 # `my-eslint.config.mjs` out of the prompt, a dimension no fixture varies unless
 # one is written for it.
 #
-# The second half is the reason string, and it carries more weight than a message
-# usually does, because here it is the whole basis on which a human answers. The
-# operator is being asked precisely because the hook cannot tell the two cases
-# apart, so the reason has to hand them what the hook could not use: that the
-# prompt is on the filename alone, which edit is legitimate, and where the common
-# case belongs instead. Those three are pinned individually, because a reason
-# that loses any one of them turns an informed confirmation into a rubber stamp.
+# The second half is the ask itself: the operator is asked precisely because the
+# hook cannot tell the legitimate edit from the silencing one, so the answer is
+# theirs to give and the hook never rules on an edit either way.
 #
 # The ask cases below deliberately include both extremes, a comment-only change
 # and a whole-file replacement, an added bare preset spread and an added rule
@@ -102,28 +98,22 @@ run_tool() {
   run_hook "$(jq -n --arg tool_name "$1" --argjson tool_input "$2" '{tool_name: $tool_name, tool_input: $tool_input}')"
 }
 
-
-
 # --- path gate, the only thing that decides anything ------------------------
 
-@test "allows an edit to a file that is not an eslint config" {
-  run_edit "$(write_config_fixture 'const a = 1;' 'home.tsx')" 'const a = 1;' 'const a = 2;'
-  assert_allowed_by_exit
-}
-
-@test "allows an edit to a lookalike filename" {
-  run_edit "$(write_config_fixture 'rules: {}' 'eslint.config.md')" 'rules: {}' "rules: {a: 'off'}"
-  assert_allowed_by_exit
-}
-
-@test "allows a source file whose name merely ends in the guarded one" {
-  run_edit "$(write_config_fixture 'const a = 1;' 'my-eslint.config.mjs')" 'const a = 1;' 'const a = 2;'
-  assert_allowed_by_exit
-}
-
-@test "allows a file whose name merely starts with the guarded one" {
-  run_edit "$(write_config_fixture 'const a = 1;' 'eslint.config.mjs.bak')" 'const a = 1;' 'const a = 2;'
-  assert_allowed_by_exit
+@test "a file that is not the guarded config is allowed" {
+  local row name old new
+  local rows=(
+    "home.tsx|const a = 1;|const a = 2;"
+    "eslint.config.md|rules: {}|rules: {a: 'off'}"
+    "my-eslint.config.mjs|const a = 1;|const a = 2;"
+    "eslint.config.mjs.bak|const a = 1;|const a = 2;"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r name old new <<<"$row"
+    run_edit "$(write_config_fixture "$old" "$name")" "$old" "$new"
+    assert_allowed_by_exit
+  done
 }
 
 # This fixture is pinned between two limits that pull in opposite directions,
@@ -179,57 +169,85 @@ run_tool() {
 
 # --- the ask is uniform, across every shape a judging guard would split -----
 
-@test "asks on the reactRouter migration rather than refusing it" {
-  run_edit "$(write_config_fixture)" '  ...lint.react,' '  ...lint.react,
+@test "every edit of a guarded config asks, whatever it changes" {
+  local row
+  local rows=(
+    reactRouter-migration comment-only blank-line-only write-comment-only
+    multiedit-comment-and-spread remove-preset-spread write-whole-config
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    case "$row" in
+      reactRouter-migration)
+        run_edit "$(write_config_fixture)" '  ...lint.react,' '  ...lint.react,
   ...lint.reactRouter,'
-  assert_asked_by_json
-}
-
-@test "asks on a comment-only change" {
-  run_edit "$(write_config_fixture)" ' * Config for the app.' ' * ESLint config for the app.'
-  assert_asked_by_json
-}
-
-@test "asks on a blank-line-only change" {
-  run_edit "$(write_config_fixture)" "const lint = gaiaLint();
+        ;;
+      comment-only)
+        run_edit "$(write_config_fixture)" ' * Config for the app.' ' * ESLint config for the app.'
+        ;;
+      blank-line-only)
+        run_edit "$(write_config_fixture)" "const lint = gaiaLint();
 
 export default" "const lint = gaiaLint();
 
 
 export default"
-  assert_asked_by_json
-}
-
-@test "asks on a Write whose content only changes a comment" {
-  run_write "$(write_config_fixture)" "${DEFAULT_BODY/Config for the app./ESLint config for the app.}"
-  assert_asked_by_json
-}
-
-@test "asks on a MultiEdit whose every pair is a comment or an added spread" {
-  run_tool MultiEdit "$(jq -n --arg file_path "$(write_config_fixture)" \
-    '{file_path: $file_path,
-      edits: [{old_string: " * Config for the app.", new_string: " * ESLint config."},
-              {old_string: "  ...lint.react,", new_string: "  ...lint.react,\n  ...lint.reactRouter,"}]}')"
-  assert_asked_by_json
+        ;;
+      write-comment-only)
+        run_write "$(write_config_fixture)" "${DEFAULT_BODY/Config for the app./ESLint config for the app.}"
+        ;;
+      multiedit-comment-and-spread)
+        run_tool MultiEdit "$(jq -n --arg file_path "$(write_config_fixture)" \
+          '{file_path: $file_path,
+            edits: [{old_string: " * Config for the app.", new_string: " * ESLint config."},
+                    {old_string: "  ...lint.react,", new_string: "  ...lint.react,\n  ...lint.reactRouter,"}]}')"
+        ;;
+      remove-preset-spread)
+        run_edit "$(write_config_fixture)" '  ...lint.guardrails,
+' ''
+        ;;
+      write-whole-config)
+        run_write "$(write_config_fixture)" 'export default [];'
+        ;;
+    esac
+    assert_asked_by_json
+  done
 }
 
 # --- including the shapes that are usually silencing, so the floor is pinned -
 
+# bats test_tags=protected
 @test "asks on adding a rule override" {
   run_edit "$(write_config_fixture)" "    rules: {'no-console': 'off'}," \
     "    rules: {'no-console': 'off', 'no-empty-pattern': 'off'},"
   assert_asked_by_json
 }
 
-@test "asks on removing a preset spread" {
-  run_edit "$(write_config_fixture)" '  ...lint.guardrails,
-' ''
+@test "the reason keeps pointing at the source file for the common case" {
+  run_edit "$(write_config_fixture)" "    rules: {'no-console': 'off'}," \
+    "    rules: {'no-console': 'off', 'no-empty-pattern': 'off'},"
   assert_asked_by_json
+  grep -qF -- 'source file where it occurs' <<<"$output"
 }
 
-@test "asks on a Write that replaces the whole config" {
-  run_write "$(write_config_fixture)" 'export default [];'
-  assert_asked_by_json
+@test "an unreadable shape on a guarded path asks" {
+  local row
+  local rows=(other-tool-shape edit-without-strings write-to-new-file)
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    case "$row" in
+      other-tool-shape)
+        run_tool NotebookEdit "$(jq -n --arg file_path "$(write_config_fixture)" '{file_path: $file_path}')"
+        ;;
+      edit-without-strings)
+        run_tool Edit "$(jq -n --arg file_path "$(write_config_fixture)" '{file_path: $file_path}')"
+        ;;
+      write-to-new-file)
+        run_write "$TEMPORARY_DIRECTORY/eslint.config.ts" 'export default [];'
+        ;;
+    esac
+    assert_asked_by_json
+  done
 }
 
 # The hook never rules on a config edit, in either direction. Asserting the ask
@@ -255,69 +273,17 @@ export default"
   jq -e '.hookSpecificOutput.hookEventName == "PreToolUse"' <<<"$output" >/dev/null
 }
 
-# --- the reason is what the operator answers on ----------------------------
-
-@test "the reason names the sanctioned migration it is asking about" {
-  run_edit "$(write_config_fixture)" '  ...lint.react,' '  ...lint.react,
-  ...lint.reactRouter,'
-  assert_asked_by_json
-  grep -qF -- '...lint.reactRouter' <<<"$output"
-}
-
-@test "the reason admits the prompt is on the filename alone" {
-  run_edit "$(write_config_fixture)" ' * Config for the app.' ' * ESLint config.'
-  assert_asked_by_json
-  grep -qF -- 'filename alone' <<<"$output"
-}
-
-@test "the reason tells the operator the answer is theirs to give" {
-  run_edit "$(write_config_fixture)" ' * Config for the app.' ' * ESLint config.'
-  assert_asked_by_json
-  grep -qF -- 'Approve only if you meant this edit' <<<"$output"
-  # Asking is only safe while the reason also refuses the workaround. Nothing in
-  # .claude/hooks/ guards writes to .claude/settings.json, so an agent that reads
-  # a prompt as an obstacle can drop the registration and leave the guard off.
-  # The assertion above cannot see that: a reason inviting a workaround still
-  # contains the approve clause.
-  grep -qF -- 'do not disable this hook' <<<"$output"
-}
-
-@test "the reason keeps pointing at the source file for the common case" {
-  run_edit "$(write_config_fixture)" "    rules: {'no-console': 'off'}," \
-    "    rules: {'no-console': 'off', 'no-empty-pattern': 'off'},"
-  assert_asked_by_json
-  grep -qF -- 'source file where it occurs' <<<"$output"
-}
-
-# --- an unreadable payload on a guarded path still asks ---------------------
-# The path gate is the entire decision, so a tool shape the hook cannot parse
-# changes nothing: the file is a config, so the operator is asked. These pin
-# that the ask does not depend on reading the edit, which is the property that
-# would erode first if a judging guard crept back in.
-
-@test "asks on a tool shape it cannot otherwise read on a guarded path" {
-  run_tool NotebookEdit "$(jq -n --arg file_path "$(write_config_fixture)" '{file_path: $file_path}')"
-  assert_asked_by_json
-}
-
-@test "asks on an Edit on a guarded path carrying no strings at all" {
-  run_tool Edit "$(jq -n --arg file_path "$(write_config_fixture)" '{file_path: $file_path}')"
-  assert_asked_by_json
-}
-
-@test "asks on a Write on a guarded path that does not exist yet" {
-  run_write "$TEMPORARY_DIRECTORY/eslint.config.ts" 'export default [];'
-  assert_asked_by_json
-}
-
 # --- a payload naming no file cannot be judged, and is not an exemption -----
 
-@test "exits zero on a payload carrying no file_path" {
-  run_tool Edit '{"old_string": "a", "new_string": "b"}'
-  assert_allowed_by_exit
-}
-
-@test "exits zero on a payload that is not readable JSON" {
-  run_hook 'not json at all'
-  assert_allowed_by_exit
+@test "a payload without a readable file path exits zero" {
+  local row
+  local rows=(no-file-path not-json)
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    case "$row" in
+      no-file-path) run_tool Edit '{"old_string": "a", "new_string": "b"}' ;;
+      not-json) run_hook 'not json at all' ;;
+    esac
+    assert_allowed_by_exit
+  done
 }

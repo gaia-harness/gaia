@@ -8,7 +8,12 @@ import {
   recommend,
   triplesWithDeferred,
 } from './field-verdict.js';
-import type {Presence, Triple, VerdictItem} from './field-verdict.js';
+import type {
+  Presence,
+  Recommendation,
+  Triple,
+  VerdictItem,
+} from './field-verdict.js';
 
 const presence = (value: number | undefined): Presence =>
   value === undefined ? absent : {has: true, value};
@@ -80,67 +85,70 @@ describe('classifyTriples verdict table', () => {
   });
 });
 
-describe('recommend', () => {
-  test('a higher GAIA range recommends higher/gaia', () => {
-    expect(
-      recommend(conflictItem({adopter: '^5.1.0', latest: '^5.2.0'}))
-    ).toMatchObject({
-      option: 'higher',
-      side: 'gaia',
-      value: '^5.2.0',
-    });
-  });
+const NON_SEMVER_SPECS = [
+  'workspace:*',
+  'catalog:',
+  'npm:foo@1',
+  'git+https://example.com/a.git',
+];
 
-  test('a higher adopter range recommends higher/adopter', () => {
-    expect(
-      recommend(conflictItem({adopter: '~6.0.0', latest: '^5.9.0'}))
-    ).toMatchObject({
-      option: 'higher',
-      side: 'adopter',
-      value: '~6.0.0',
-    });
-  });
-
-  test('equal lower bounds recommend keep', () => {
-    expect(
-      recommend(conflictItem({adopter: '^5.1.0', latest: '~5.1.0'})).option
-    ).toBe('keep');
-  });
-
-  test.each([
-    'workspace:*',
-    'catalog:',
-    'npm:foo@1',
-    'git+https://example.com/a.git',
-  ])('a non-semver spec %s on either side recommends keep', (spec) => {
-    expect(
-      recommend(conflictItem({adopter: spec, latest: '^1.0.0'})).option
-    ).toBe('keep');
-    expect(
-      recommend(conflictItem({adopter: '^1.0.0', latest: spec})).option
-    ).toBe('keep');
-  });
-
-  test('packageManager compares the version after @ with the hash stripped', () => {
-    expect(
-      recommend({
+const RECOMMEND_ROWS: {
+  expected: Partial<Recommendation>;
+  items: VerdictItem[];
+  name: string;
+}[] = [
+  {
+    expected: {option: 'higher', side: 'gaia', value: '^5.2.0'},
+    items: [conflictItem({adopter: '^5.1.0', latest: '^5.2.0'})],
+    name: 'a higher GAIA range recommends higher/gaia',
+  },
+  {
+    expected: {option: 'higher', side: 'adopter', value: '~6.0.0'},
+    items: [conflictItem({adopter: '~6.0.0', latest: '^5.9.0'})],
+    name: 'a higher adopter range recommends higher/adopter',
+  },
+  {
+    expected: {option: 'keep'},
+    items: [conflictItem({adopter: '^5.1.0', latest: '~5.1.0'})],
+    name: 'equal lower bounds recommend keep',
+  },
+  ...NON_SEMVER_SPECS.map((spec) => ({
+    expected: {option: 'keep' as const},
+    items: [
+      conflictItem({adopter: spec, latest: '^1.0.0'}),
+      conflictItem({adopter: '^1.0.0', latest: spec}),
+    ],
+    name: `a non-semver spec ${spec} on either side recommends keep`,
+  })),
+  {
+    expected: {option: 'higher', side: 'gaia', value: 'pnpm@11.3.0'},
+    items: [
+      {
         adopter: 'pnpm@11.2.0+sha512.abc',
         key: 'packageManager',
         kind: 'key',
         latest: 'pnpm@11.3.0',
         versionValued: true,
-      })
-    ).toMatchObject({option: 'higher', side: 'gaia', value: 'pnpm@11.3.0'});
-  });
+      },
+    ],
+    name: 'packageManager compares the version after @ with the hash stripped',
+  },
+  {
+    expected: {option: 'keep', reason: expect.stringMatching(/\S/u)},
+    items: [conflictItem({adopter: 'a', latest: 'b', versionValued: false})],
+    name: 'a non-version conflict recommends keep with a reason',
+  },
+];
 
-  test('a non-version conflict recommends keep with a reason', () => {
-    const recommendation = recommend(
-      conflictItem({adopter: 'a', latest: 'b', versionValued: false})
-    );
-
-    expect(recommendation.option).toBe('keep');
-    expect(recommendation.reason).not.toBe('');
-  });
+describe('recommend', () => {
+  test.each(RECOMMEND_ROWS.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {expected, items}) => {
+      for (const item of items) {
+        expect(recommend(item)).toMatchObject(expected);
+      }
+    }
+  );
 });
 
 describe('extractDeferredBaselines', () => {
@@ -160,14 +168,13 @@ describe('extractDeferredBaselines', () => {
     });
   });
 
-  test.each([['nofile'], ['=file'], ['key=']])('rejects %s', (pair) => {
-    expect(extractDeferredBaselines(['--deferred-baseline', pair]).ok).toBe(
-      false
-    );
-  });
-
-  test('rejects a flag with no value', () => {
-    expect(extractDeferredBaselines(['--deferred-baseline']).ok).toBe(false);
+  test.each([
+    ['rejects nofile', ['--deferred-baseline', 'nofile']],
+    ['rejects =file', ['--deferred-baseline', '=file']],
+    ['rejects key=', ['--deferred-baseline', 'key=']],
+    ['rejects a flag with no value', ['--deferred-baseline']],
+  ])('%s', (_name, argv) => {
+    expect(extractDeferredBaselines(argv).ok).toBe(false);
   });
 });
 

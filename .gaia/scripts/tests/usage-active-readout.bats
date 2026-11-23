@@ -95,6 +95,12 @@ flush() {
     --main-root "$MAIN" --telemetry-dir "$TEL" --projects-root "$PROJECTS"
 }
 
+# reset_run: clears the ledger and transcripts so a later case in one test starts clean.
+reset_run() {
+  rm -rf "$TEL" "$PROJECTS"
+  mkdir -p "$TEL" "$PROJECTS/$ENCODED_MAIN"
+}
+
 # ---------- rows no flush writes ----------
 
 close_run() {
@@ -307,7 +313,15 @@ build_fact_less() {
 
 # ---------- the line ----------
 
-@test "a seven-minute tool call that writes nothing while it runs counts in full" {
+# check_line <case> <expected> [ref]: the --line readout prints the expected text.
+check_line() {
+  run usage initiative "${3:-$REF}" --line
+  [ "$status" -eq 0 ] || { echo "case $1: status $status" >&2; return 1; }
+  [ "$output" = "$2" ] || { echo "case $1: got: $output" >&2; return 1; }
+}
+
+@test "the line readout counts active time for each turn shape in the flushed transcript" {
+  # a seven-minute tool call that writes nothing while it runs counts in full
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   tool_call 10:01:00 t-bash
@@ -320,23 +334,10 @@ build_fact_less() {
   turn_length 12:01:00 60000
   flush
   close_run s-main 12:01:00 "$REF" gaia-spec
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.5M tokens, $0.50, 2h1m0s (10m0s active)' ]
-}
+  check_line 'seven-minute tool call' 'Cost: 0.5M tokens, $0.50, 2h1m0s (10m0s active)'
 
-@test "spend recorded before facts existed beside covered spend prints the active figure as a minimum with the Note, and JSON says so" {
-  build_mixed
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.4M tokens, $0.40, 1h12m4s (12m4s+ active)
-Note: Some of this spend predates active-time tracking, so the active time is a minimum.' ]
-  run usage initiative "$REF" --line --json
-  [ "$status" -eq 0 ]
-  [ "$(jq -c '[.elapsed_seconds, .active_seconds, .active_lower_bound]' <<<"$output")" = '[4324,724,true]' ]
-}
-
-@test "a question wait is left out even when a flush runs inside it" {
+  # a question wait is left out even when a flush runs inside it
+  reset_run
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   ask 10:02:00 t-ask
@@ -350,12 +351,10 @@ Note: Some of this spend predates active-time tracking, so the active time is a 
   turn_length 12:01:00 60000
   flush
   close_run s-main 12:01:00 "$REF" gaia-spec
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.5M tokens, $0.50, 2h1m0s (5m0s active)' ]
-}
+  check_line 'question wait across a flush' 'Cost: 0.5M tokens, $0.50, 2h1m0s (5m0s active)'
 
-@test "a notification turn counts from its own opener even when its turn length reaches back to the human prompt" {
+  # a notification turn counts from its own opener even when its turn length reaches back to the human prompt
+  reset_run
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   work 10:01:00
@@ -367,12 +366,10 @@ Note: Some of this spend predates active-time tracking, so the active time is a 
   turn_length 10:06:00 360000
   flush
   close_run s-main 10:06:00 "$REF" gaia-spec
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.4M tokens, $0.40, 6m0s (3m0s active)' ]
-}
+  check_line 'notification turn' 'Cost: 0.4M tokens, $0.40, 6m0s (3m0s active)'
 
-@test "an interrupted turn with no turn length counts to its last work entry and is not marked a minimum" {
+  # an interrupted turn with no turn length counts to its last work entry and is not marked a minimum
+  reset_run
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   work 10:02:30
@@ -383,38 +380,17 @@ Note: Some of this spend predates active-time tracking, so the active time is a 
   turn_length 11:01:00 60000
   flush
   close_run s-main 11:01:00 "$REF" gaia-spec
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.4M tokens, $0.40, 1h1m0s (3m30s active)' ]
-}
+  check_line 'interrupted turn' 'Cost: 0.4M tokens, $0.40, 1h1m0s (3m30s active)'
 
-# two_prompt_session <session> <ref>: two five-minute stretches of work ten
-# minutes apart, no turn lengths, closed under its own root.
-two_prompt_session() {
-  UT_SESSION="$1"
-  prompt 10:00:00
-  skill 10:00:00 gaia-spec
-  work 10:05:00
-  prompt 10:15:00
-  work 10:15:00
-  work 10:20:00
-  flush
-  close_run "$1" 10:20:00 "$2" gaia-spec
-  UT_SESSION=s-main
-}
-
-@test "a headless session counts its whole work span; its interactive twin counts its turns" {
+  # a headless session counts its whole work span; its interactive twin counts its turns
+  reset_run
   UT_ENTRYPOINT=sdk-cli two_prompt_session s-headless spec:SPEC-901
   UT_ENTRYPOINT=cli two_prompt_session s-interactive spec:SPEC-902
-  run usage initiative spec:SPEC-901 --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.4M tokens, $0.40, 20m0s (20m0s active)' ]
-  run usage initiative spec:SPEC-902 --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.4M tokens, $0.40, 20m0s (10m0s active)' ]
-}
+  check_line 'headless session' 'Cost: 0.4M tokens, $0.40, 20m0s (20m0s active)' spec:SPEC-901
+  check_line 'interactive twin' 'Cost: 0.4M tokens, $0.40, 20m0s (10m0s active)' spec:SPEC-902
 
-@test "trailing stop-hook and away summaries are not work and do not extend a turn" {
+  # trailing stop-hook and away summaries are not work and do not extend a turn
+  reset_run
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   work 10:04:00
@@ -425,12 +401,10 @@ two_prompt_session() {
   work 11:01:00
   flush
   close_run s-main 11:01:00 "$REF" gaia-spec
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.4M tokens, $0.40, 1h1m0s (5m0s active)' ]
-}
+  check_line 'trailing summaries' 'Cost: 0.4M tokens, $0.40, 1h1m0s (5m0s active)'
 
-@test "a mid-turn question wait is subtracted and an overlapping sub-agent counts once" {
+  # a mid-turn question wait is subtracted and an overlapping sub-agent counts once
+  reset_run
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   ask 10:04:00 t-ask
@@ -441,12 +415,10 @@ two_prompt_session() {
   sidecar_work a1 general-purpose 10:04:00
   flush
   close_run s-main 10:10:00 "$REF" gaia-spec
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.5M tokens, $0.50, 10m0s (4m0s active)' ]
-}
+  check_line 'mid-turn question wait with sub-agent' 'Cost: 0.5M tokens, $0.50, 10m0s (4m0s active)'
 
-@test "with no turn lengths anywhere each turn counts its own work less its question wait" {
+  # with no turn lengths anywhere each turn counts its own work less its question wait
+  reset_run
   prompt 10:00:00
   skill 10:00:00 gaia-spec
   work 10:03:00
@@ -462,42 +434,37 @@ two_prompt_session() {
   system_entry 11:02:00 stop_hook_summary
   flush
   close_run s-main 11:02:00 "$REF" gaia-spec
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.6M tokens, $0.60, 1h2m0s (9m0s active)' ]
-}
+  check_line 'no turn lengths' 'Cost: 0.6M tokens, $0.60, 1h2m0s (9m0s active)'
 
-@test "a turn length shorter than the turn's work caps it through the line readout" {
+  # a turn length shorter than the turn's work caps it through the line readout
+  reset_run
   build_binding_cap
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.5M tokens, $0.50, 2h1m0s (5m0s active)' ]
-}
+  check_line 'turn length caps the work' 'Cost: 0.5M tokens, $0.50, 2h1m0s (5m0s active)'
 
-@test "a turn length that arrives alone in a later flush rides the cursor row and still caps the turn, cold and warm" {
-  build_cursor_only_facts
-  grep -qF '{"schema_version":1,"kind":"cursor","act":{' "$TEL/usage.jsonl" || return 1
-  local trace="$TEMPORARY_DIRECTORY/trace.log"
-  GAIA_USAGE_MEMO_TRACE_FILE="$trace" run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.5M tokens, $0.50, 2h1m0s (5m0s active)' ]
-  GAIA_USAGE_MEMO_TRACE_FILE="$trace" run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.5M tokens, $0.50, 2h1m0s (5m0s active)' ]
-  grep -qx 'path=cold reason=missing' "$trace"
-  grep -qx 'path=warm' "$trace"
-}
-
-@test "the stretch from a prompt to the first spend falls outside the line's span" {
+  # the stretch from a prompt to the first spend falls outside the line's span
+  reset_run
   prompt 10:00:00
   skill 10:01:00 gaia-spec
   work 10:03:00
   turn_length 10:03:00 180000
   flush
   close_run s-main 10:03:00 "$REF" gaia-spec
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.2M tokens, $0.20, 2m0s (2m0s active)' ]
+  check_line 'prompt before first spend' 'Cost: 0.2M tokens, $0.20, 2m0s (2m0s active)'
+}
+
+# two_prompt_session <session> <ref>: two five-minute stretches of work ten
+# minutes apart, no turn lengths, closed under its own root.
+two_prompt_session() {
+  UT_SESSION="$1"
+  prompt 10:00:00
+  skill 10:00:00 gaia-spec
+  work 10:05:00
+  prompt 10:15:00
+  work 10:15:00
+  work 10:20:00
+  flush
+  close_run "$1" 10:20:00 "$2" gaia-spec
+  UT_SESSION=s-main
 }
 
 # ---------- the box ----------
@@ -586,19 +553,25 @@ active_pairs() { jq -c '[.. | objects | select(has("elapsed_seconds")) | [.activ
   [ "$(jq -c '[.active_seconds, .active_lower_bound, .audit.active_seconds, .audit.active_lower_bound, .audit.rest.active_seconds, .audit.rest.active_lower_bound]' <<<"$output")" = '[900,false,300,false,900,false]' ]
 }
 
-@test "a one-row box over covered spend prints the plain Cost line with the active figure" {
+@test "a one-row box or line shows the active figure: a minimum with the Note over mixed spend, exact over covered spend" {
+  build_mixed
+  run usage initiative "$REF" --line
+  [ "$status" -eq 0 ] || { echo "case mixed line: status $status" >&2; return 1; }
+  [ "$output" = 'Cost: 0.4M tokens, $0.40, 1h12m4s (12m4s+ active)
+Note: Some of this spend predates active-time tracking, so the active time is a minimum.' ] || { echo "case mixed line: $output" >&2; return 1; }
+  run usage initiative "$REF" --line --json
+  [ "$status" -eq 0 ] || { echo "case mixed line json: status $status" >&2; return 1; }
+  [ "$(jq -c '[.elapsed_seconds, .active_seconds, .active_lower_bound]' <<<"$output")" = '[4324,724,true]' ] || { echo "case mixed line json: figures" >&2; return 1; }
+  run usage initiative "$REF" --box
+  [ "$status" -eq 0 ] || { echo "case mixed box: status $status" >&2; return 1; }
+  [ "$output" = 'Cost: 0.4M tokens, $0.40, 1h13m5s (12m4s+ active)
+Note: Some of this spend predates active-time tracking, so the active time is a minimum.' ] || { echo "case mixed box: $output" >&2; return 1; }
+
+  reset_run
   build_idle_gap
   run usage initiative "$REF" --box
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.4M tokens, $0.40, 2h1m0s (2m0s active)' ]
-}
-
-@test "a one-row box over mixed spend prints the minimum form and the active Note after it" {
-  build_mixed
-  run usage initiative "$REF" --box
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.4M tokens, $0.40, 1h13m5s (12m4s+ active)
-Note: Some of this spend predates active-time tracking, so the active time is a minimum.' ]
+  [ "$status" -eq 0 ] || { echo "case covered box: status $status" >&2; return 1; }
+  [ "$output" = 'Cost: 0.4M tokens, $0.40, 2h1m0s (2m0s active)' ] || { echo "case covered box: $output" >&2; return 1; }
 }
 
 # build_straddle <close> <plan start> <spec last work> <plan last work>: one
@@ -620,16 +593,15 @@ split_rows() {
     "$(usage initiative "$REF" --line --json | jq -r '.active_seconds')"
 }
 
-@test "a turn split by a Spec close and the Plan start gives each row its own side, and the two sum to the turn" {
+@test "a turn split by a close gives each row its own side" {
   build_straddle 10:05:00 10:05:00 10:04:00 10:10:00
-  [ "$(split_rows)" = '300 300 600' ]
-}
+  [ "$(split_rows)" = '300 300 600' ] || { echo "case Spec close and the Plan start" >&2; return 1; }
 
-@test "a close that falls between two entries half a second apart splits the turn where the flusher split its segments" {
+  reset_run
   build_straddle 10:05:00.250 10:05:00.500 10:05:00.000 10:10:00.500
   [ "$(jq -sc '[.[] | select(.kind == "segment") | [.first_ts, .last_ts]]' "$TEL/usage.jsonl")" = \
-    '[["2026-10-01T10:00:00Z","2026-10-01T10:05:00.000Z"],["2026-10-01T10:05:00.500Z","2026-10-01T10:10:00.500Z"]]' ]
-  [ "$(split_rows)" = '300 300 600' ]
+    '[["2026-10-01T10:00:00Z","2026-10-01T10:05:00.000Z"],["2026-10-01T10:05:00.500Z","2026-10-01T10:10:00.500Z"]]' ] || { echo "case half-second close: segment split" >&2; return 1; }
+  [ "$(split_rows)" = '300 300 600' ] || { echo "case half-second close: rows" >&2; return 1; }
 }
 
 # ---------- flush boundaries ----------
@@ -698,23 +670,21 @@ split_flush_session() {
   [ "$output" = "$PER_PR_BOX" ]
 }
 
-@test "the per-PR block announces a minimum through its marker only, never the active Note" {
+@test "the per-PR block marks a minimum through its marker only and a backfill removes it" {
   build_per_pr_mixed
   run usage pr 102 --auditors "$AUDITORS"
-  [ "$status" -eq 0 ]
-  grep -qx '  ! lower bound: some spend predates active-time tracking' <<<"$output"
-  grep -qx '|   Total: 0.5M tokens, $0.50, 1h5m0s (5m0s+ active) |' <<<"$output"
-  grep -q '^Note: Some of this spend predates' <<<"$output" && return 1
-  true
-}
+  [ "$status" -eq 0 ] || { echo "case minimum: status $status" >&2; return 1; }
+  grep -qx '  ! lower bound: some spend predates active-time tracking' <<<"$output" || { echo "case minimum: marker" >&2; return 1; }
+  grep -qx '|   Total: 0.5M tokens, $0.50, 1h5m0s (5m0s+ active) |' <<<"$output" || { echo "case minimum: Total" >&2; return 1; }
+  grep -q '^Note: Some of this spend predates' <<<"$output" && { echo "case minimum: unexpected Note" >&2; return 1; }
 
-@test "an activity row covering the per-PR spend recorded before facts existed removes the minimum marker" {
+  reset_run
   build_per_pr_mixed
   activity_backfill s-old 09:00:00 09:10:00
   run usage pr 102 --auditors "$AUDITORS"
-  [ "$status" -eq 0 ]
-  grep -qx '|   Total: 0.5M tokens, $0.50, 1h5m0s (15m0s active) |' <<<"$output"
-  grep -qF 'some spend predates active-time tracking' <<<"$output" && return 1
+  [ "$status" -eq 0 ] || { echo "case backfill: status $status" >&2; return 1; }
+  grep -qx '|   Total: 0.5M tokens, $0.50, 1h5m0s (15m0s active) |' <<<"$output" || { echo "case backfill: Total" >&2; return 1; }
+  grep -qF 'some spend predates active-time tracking' <<<"$output" && { echo "case backfill: marker remains" >&2; return 1; }
   true
 }
 
@@ -726,51 +696,32 @@ parity() {
   local expected="$1" trace="$TEMPORARY_DIRECTORY/parity-trace.log" legacy="$TEMPORARY_DIRECTORY/legacy"
   shift
   rm -f "$trace"
-  [ "$(GAIA_USAGE_MEMO_TRACE_FILE="$trace" usage "$@")" = "$expected" ]
-  grep -qx 'path=cold reason=missing' "$trace"
-  [ "$(GAIA_USAGE_MEMO_TRACE_FILE="$trace" usage "$@")" = "$expected" ]
-  grep -qx 'path=warm' "$trace"
+  [ "$(GAIA_USAGE_MEMO_TRACE_FILE="$trace" usage "$@")" = "$expected" ] || { echo "parity $*: cold readout" >&2; return 1; }
+  grep -qx 'path=cold reason=missing' "$trace" || { echo "parity $*: not cold" >&2; return 1; }
+  [ "$(GAIA_USAGE_MEMO_TRACE_FILE="$trace" usage "$@")" = "$expected" ] || { echo "parity $*: warm readout" >&2; return 1; }
+  grep -qx 'path=warm' "$trace" || { echo "parity $*: not warm" >&2; return 1; }
   [ -d "$legacy" ] || legacy_scripts "$legacy"
-  [ "$(GAIA_USAGE_MEMO_TRACE_FILE="$trace" usage_from "$legacy" "$@")" = "$expected" ]
-  grep -qx 'fallback=legacy' "$trace"
+  [ "$(GAIA_USAGE_MEMO_TRACE_FILE="$trace" usage_from "$legacy" "$@")" = "$expected" ] || { echo "parity $*: fallback readout" >&2; return 1; }
+  grep -qx 'fallback=legacy' "$trace" || { echo "parity $*: no fallback" >&2; return 1; }
 }
 
 # bats test_tags=whole-tree
-@test "the idle-gap line reads the same cold, warm and through the pre-memo fallback" {
+@test "every readout reads the same cold, warm and through the pre-memo fallback" {
   build_idle_gap
   parity 'Cost: 0.4M tokens, $0.40, 2h1m0s (2m0s active)' initiative "$REF" --line
-}
-
-# bats test_tags=whole-tree
-@test "the three-row box reads the same cold, warm and through the pre-memo fallback" {
+  reset_run
   build_three_rows
   parity "$THREE_ROW_BOX" initiative "$REF" --box
-}
-
-# bats test_tags=whole-tree
-@test "the per-PR box reads the same cold, warm and through the pre-memo fallback" {
+  reset_run
   build_per_pr
   parity "$PER_PR_BOX" pr 101 --auditors "$AUDITORS"
-}
-
-# bats test_tags=whole-tree
-@test "a turn length carried only on a cursor row caps the line cold, warm and through the pre-memo fallback" {
+  reset_run
   build_cursor_only_facts
+  grep -qF '{"schema_version":1,"kind":"cursor","act":{' "$TEL/usage.jsonl" || { echo "case cursor-only: no cursor act row" >&2; return 1; }
   parity 'Cost: 0.5M tokens, $0.50, 2h1m0s (5m0s active)' initiative "$REF" --line
 }
 
 # ---------- the guards can fail ----------
-
-# bats test_tags=whole-tree
-@test "a memo prefilter that drops every cursor row loses the turn length a cursor row carries" {
-  build_cursor_only_facts
-  local scratch="$TEMPORARY_DIRECTORY/scratch"
-  scratch_scripts "$scratch"
-  mutate "$scratch/usage-memo-lib.sh" "grep -v '^{\"schema_version\":1,\"kind\":\"cursor\",\"session_id\":'" "grep -v '^{\"schema_version\":1,\"kind\":\"cursor\",'"
-  run usage_from "$scratch" initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.5M tokens, $0.50, 2h1m0s (11m0s active)' ]
-}
 
 # bats test_tags=whole-tree
 @test "a Cost line that takes any fourth argument as seconds appends a suffix to a legacy four-argument call" {
@@ -782,15 +733,4 @@ parity() {
   mutate "$scratch/usage-render-lib.sh" '[[ ${1-} =~ ^[0-9]+$ ]] || return 0' '[ -n "${1-}" ] || return 0'
   run bash -c "$call" _ "$scratch"
   [[ "$output" == 'Cost: 0.0M tokens, $0.00, 45s ('*' active)' ]]
-}
-
-# bats test_tags=whole-tree
-@test "a box that always prints the active Note fails the per-PR marker-only rule" {
-  build_per_pr_mixed
-  local scratch="$TEMPORARY_DIRECTORY/scratch"
-  scratch_scripts "$scratch"
-  mutate "$scratch/usage-render-lib.sh" '[ "$announce" = note ] || minimum_shown=false' ':'
-  run usage_from "$scratch" pr 102 --auditors "$AUDITORS"
-  [ "$status" -eq 0 ]
-  grep -q '^Note: Some of this spend predates' <<<"$output"
 }

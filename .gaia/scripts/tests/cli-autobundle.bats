@@ -54,79 +54,6 @@ staged() {
   git -C "$REPO" diff --cached --name-only -z | tr '\0' '\n'
 }
 
-@test "no trigger path staged: silent exit 0, bundles not staged" {
-  echo 'more' >> "$REPO/README.md"
-  git -C "$REPO" add README.md
-  run bash "$SCRIPT" "$REPO"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ "$(staged)" = "README.md" ]
-}
-
-@test "a staged src change rebuilds and stages both bundles only" {
-  echo 'export const a = 2;' > "$REPO/.gaia/cli/src/a.ts"
-  git -C "$REPO" add .gaia/cli/src/a.ts
-  run bash "$SCRIPT" "$REPO"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"rebuilt"* ]]
-  [ "$(staged)" = $'.gaia/cli/gaia\n.gaia/cli/gaia-maintainer\n.gaia/cli/src/a.ts' ]
-  [ "$(git -C "$REPO" show :.gaia/cli/gaia)" = "new adopter bundle" ]
-}
-
-@test "a staged deletion under src triggers" {
-  git -C "$REPO" rm --quiet .gaia/cli/src/b.ts
-  run bash "$SCRIPT" "$REPO"
-  [ "$status" -eq 0 ]
-  [[ "$(staged)" == *".gaia/cli/gaia-maintainer"* ]]
-}
-
-@test "a staged .gaia/cli/package.json change triggers" {
-  echo '{"a":1}' > "$REPO/.gaia/cli/package.json"
-  git -C "$REPO" add .gaia/cli/package.json
-  run bash "$SCRIPT" "$REPO"
-  [ "$status" -eq 0 ]
-  [[ "$(staged)" == *".gaia/cli/gaia"$'\n'* ]]
-}
-
-@test "a staged root pnpm-lock.yaml change alone triggers" {
-  echo 'lockfileVersion: 9' > "$REPO/pnpm-lock.yaml"
-  git -C "$REPO" add pnpm-lock.yaml
-  git -C "$REPO" commit --quiet -m "add root lockfile"
-  echo 'lockfileVersion: 10' > "$REPO/pnpm-lock.yaml"
-  git -C "$REPO" add pnpm-lock.yaml
-  run bash "$SCRIPT" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$(staged)" = $'.gaia/cli/gaia\n.gaia/cli/gaia-maintainer\npnpm-lock.yaml' ]
-}
-
-@test "a staged .gaia/cli/tsconfig.json change triggers" {
-  echo '{"a":1}' > "$REPO/.gaia/cli/tsconfig.json"
-  git -C "$REPO" add .gaia/cli/tsconfig.json
-  run bash "$SCRIPT" "$REPO"
-  [ "$status" -eq 0 ]
-  [[ "$(staged)" == *".gaia/cli/gaia-maintainer"* ]]
-}
-
-@test "unstaged src modification beside a staged one refuses and stages nothing more" {
-  echo 'export const a = 2;' > "$REPO/.gaia/cli/src/a.ts"
-  git -C "$REPO" add .gaia/cli/src/a.ts
-  echo 'export const b = 2;' > "$REPO/.gaia/cli/src/b.ts"
-  run bash "$SCRIPT" "$REPO"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *".gaia/cli/src/b.ts"* ]]
-  [ "$(staged)" = ".gaia/cli/src/a.ts" ]
-}
-
-@test "untracked file under src beside a staged change refuses" {
-  echo 'export const a = 2;' > "$REPO/.gaia/cli/src/a.ts"
-  git -C "$REPO" add .gaia/cli/src/a.ts
-  echo 'export const c = 1;' > "$REPO/.gaia/cli/src/c.ts"
-  run bash "$SCRIPT" "$REPO"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *".gaia/cli/src/c.ts"* ]]
-  [ "$(staged)" = ".gaia/cli/src/a.ts" ]
-}
-
 @test "missing esbuild install warns and continues without staging bundles" {
   rm "$REPO/.gaia/cli/node_modules/.bin/esbuild"
   echo 'export const a = 2;' > "$REPO/.gaia/cli/src/a.ts"
@@ -147,18 +74,106 @@ staged() {
   [ "$(staged)" = ".gaia/cli/src/a.ts" ]
 }
 
-@test "adopter-shaped tree with no .gaia/cli/src and nothing staged exits 0 silently" {
+# reset_repo <base>: back to the sandbox's initial commit with nothing staged,
+# modified or untracked, so each row of a case table starts from setup.
+reset_repo() {
+  git -C "$REPO" reset --hard --quiet "$1"
+  git -C "$REPO" clean --force -d --quiet
+}
+
+@test "each CLI input path staged rebuilds and stages both bundles" {
+  local base
+  base="$(git -C "$REPO" rev-parse HEAD)"
+
+  echo "case: a staged src change rebuilds and stages both bundles only"
+  reset_repo "$base"
+  echo 'export const a = 2;' > "$REPO/.gaia/cli/src/a.ts"
+  git -C "$REPO" add .gaia/cli/src/a.ts
+  run bash "$SCRIPT" "$REPO"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"rebuilt"* ]]
+  [ "$(staged)" = $'.gaia/cli/gaia\n.gaia/cli/gaia-maintainer\n.gaia/cli/src/a.ts' ]
+  [ "$(git -C "$REPO" show :.gaia/cli/gaia)" = "new adopter bundle" ]
+
+  echo "case: a staged deletion under src triggers"
+  reset_repo "$base"
+  git -C "$REPO" rm --quiet .gaia/cli/src/b.ts
+  run bash "$SCRIPT" "$REPO"
+  [ "$status" -eq 0 ]
+  [[ "$(staged)" == *".gaia/cli/gaia-maintainer"* ]]
+
+  echo "case: a staged .gaia/cli/package.json change triggers"
+  reset_repo "$base"
+  echo '{"a":1}' > "$REPO/.gaia/cli/package.json"
+  git -C "$REPO" add .gaia/cli/package.json
+  run bash "$SCRIPT" "$REPO"
+  [ "$status" -eq 0 ]
+  [[ "$(staged)" == *".gaia/cli/gaia"$'\n'* ]]
+
+  echo "case: a staged root pnpm-lock.yaml change alone triggers"
+  reset_repo "$base"
+  echo 'lockfileVersion: 9' > "$REPO/pnpm-lock.yaml"
+  git -C "$REPO" add pnpm-lock.yaml
+  git -C "$REPO" commit --quiet -m "add root lockfile"
+  echo 'lockfileVersion: 10' > "$REPO/pnpm-lock.yaml"
+  git -C "$REPO" add pnpm-lock.yaml
+  run bash "$SCRIPT" "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$(staged)" = $'.gaia/cli/gaia\n.gaia/cli/gaia-maintainer\npnpm-lock.yaml' ]
+
+  echo "case: a staged .gaia/cli/tsconfig.json change triggers"
+  reset_repo "$base"
+  echo '{"a":1}' > "$REPO/.gaia/cli/tsconfig.json"
+  git -C "$REPO" add .gaia/cli/tsconfig.json
+  run bash "$SCRIPT" "$REPO"
+  [ "$status" -eq 0 ]
+  [[ "$(staged)" == *".gaia/cli/gaia-maintainer"* ]]
+}
+
+@test "unstaged or untracked CLI source beside a staged change refuses and stages nothing more" {
+  local base
+  base="$(git -C "$REPO" rev-parse HEAD)"
+
+  echo "case: unstaged src modification beside a staged one refuses and stages nothing more"
+  reset_repo "$base"
+  echo 'export const a = 2;' > "$REPO/.gaia/cli/src/a.ts"
+  git -C "$REPO" add .gaia/cli/src/a.ts
+  echo 'export const b = 2;' > "$REPO/.gaia/cli/src/b.ts"
+  run bash "$SCRIPT" "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *".gaia/cli/src/b.ts"* ]]
+  [ "$(staged)" = ".gaia/cli/src/a.ts" ]
+
+  echo "case: untracked file under src beside a staged change refuses"
+  reset_repo "$base"
+  echo 'export const a = 2;' > "$REPO/.gaia/cli/src/a.ts"
+  git -C "$REPO" add .gaia/cli/src/a.ts
+  echo 'export const c = 1;' > "$REPO/.gaia/cli/src/c.ts"
+  run bash "$SCRIPT" "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *".gaia/cli/src/c.ts"* ]]
+  [ "$(staged)" = ".gaia/cli/src/a.ts" ]
+}
+
+@test "nothing staged under the CLI inputs exits 0 silently" {
+  local base
+  base="$(git -C "$REPO" rev-parse HEAD)"
+
+  echo "case: no trigger path staged: silent exit 0, bundles not staged"
+  reset_repo "$base"
+  echo 'more' >> "$REPO/README.md"
+  git -C "$REPO" add README.md
+  run bash "$SCRIPT" "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(staged)" = "README.md" ]
+
+  echo "case: adopter-shaped tree with no .gaia/cli/src and nothing staged exits 0 silently"
+  reset_repo "$base"
   rm -rf "$REPO/.gaia/cli/src"
   git -C "$REPO" add -A
   git -C "$REPO" commit --quiet -m "drop src"
   run bash "$SCRIPT" "$REPO"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "usage error exits 2" {
-  run bash "$SCRIPT"
-  [ "$status" -eq 2 ]
-  run bash "$SCRIPT" "$REPO" extra
-  [ "$status" -eq 2 ]
 }

@@ -38,23 +38,31 @@ describe('ensureDir', () => {
     sandbox.cleanup();
   });
 
-  test('creates a deep directory chain when absent', () => {
-    const target = path.join(sandbox.dir, 'a', 'b', 'c');
+  describe('ensureDir creates or keeps a directory', () => {
+    test.each([
+      {
+        name: 'creates a deep directory chain when absent',
+        priorCalls: 0,
+        segments: ['a', 'b', 'c'],
+      },
+      {
+        name: 'is a no-op when the directory already exists',
+        priorCalls: 1,
+        segments: ['already'],
+      },
+    ])('$name', ({priorCalls, segments}) => {
+      const target = path.join(sandbox.dir, ...segments);
 
-    ensureDir(target);
+      for (let call = 0; call < priorCalls; call += 1) {
+        ensureDir(target);
+      }
 
-    expect(existsSync(target)).toBe(true);
-    expect(statSync(target).isDirectory()).toBe(true);
-  });
-
-  test('is a no-op when the directory already exists', () => {
-    const target = path.join(sandbox.dir, 'already');
-    ensureDir(target);
-
-    expect(() => {
-      ensureDir(target);
-    }).not.toThrow();
-    expect(existsSync(target)).toBe(true);
+      expect(() => {
+        ensureDir(target);
+      }).not.toThrow();
+      expect(existsSync(target)).toBe(true);
+      expect(statSync(target).isDirectory()).toBe(true);
+    });
   });
 });
 

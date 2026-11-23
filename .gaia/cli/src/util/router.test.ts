@@ -71,18 +71,18 @@ describe('createSubcommandRouter', () => {
     handler.mockReset();
   });
 
-  test.each(['--help', '-h', 'help'])(
-    '%s prints the help text and returns OK',
-    async (token) => {
-      await expect(route([token])).resolves.toBe(EXIT_CODES.OK);
-      expect(stdio.outputs.join('')).toBe(HELP_TEXT);
-      expect(stdio.errors).toHaveLength(0);
-    }
-  );
-
-  test('no argument prints the help text and returns OK', async () => {
-    await expect(route([])).resolves.toBe(EXIT_CODES.OK);
+  test.each(
+    [
+      ...['--help', '-h', 'help'].map((token) => ({
+        argv: [token],
+        name: `${token} prints the help text and returns OK`,
+      })),
+      {argv: [], name: 'no argument prints the help text and returns OK'},
+    ].map((row) => [row.name, row] as const)
+  )('%s', async (_name, {argv}) => {
+    await expect(route(argv)).resolves.toBe(EXIT_CODES.OK);
     expect(stdio.outputs.join('')).toBe(HELP_TEXT);
+    expect(stdio.errors).toHaveLength(0);
   });
 
   test('a known subcommand receives the rest of argv and its result propagates', async () => {
@@ -96,24 +96,26 @@ describe('createSubcommandRouter', () => {
     await expect(route(['silent'])).resolves.toBe(EXIT_CODES.OK);
   });
 
-  test('an unknown subcommand is refused with a structured error', async () => {
-    await expect(route(['bogus'])).resolves.toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
+  test.each(
+    [
+      {
+        name: 'an unknown subcommand is refused with a structured error',
+        subcommand: 'bogus',
+      },
+      ...['toString', 'constructor', '__proto__'].map((subcommand) => ({
+        name: `the inherited key ${subcommand} is an unknown subcommand`,
+        subcommand,
+      })),
+    ].map((row) => [row.name, row] as const)
+  )('%s', async (_name, {subcommand}) => {
+    await expect(route([subcommand])).resolves.toBe(
+      EXIT_CODES.UNKNOWN_SUBCOMMAND
+    );
     expect(readStderrPayload()).toMatchObject({
       code: 'unknown_subcommand',
-      subcommand: 'bogus',
+      subcommand,
     });
   });
-
-  test.each(['toString', 'constructor', '__proto__'])(
-    'the inherited key %s is an unknown subcommand',
-    async (key) => {
-      await expect(route([key])).resolves.toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-      expect(readStderrPayload()).toMatchObject({
-        code: 'unknown_subcommand',
-        subcommand: key,
-      });
-    }
-  );
 });
 
 describe('runWhenInvokedDirectly', () => {

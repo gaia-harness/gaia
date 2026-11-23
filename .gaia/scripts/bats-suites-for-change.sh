@@ -7,12 +7,14 @@
 # audit round. In branch mode the runner subtracts this output from the
 # whole-tree-marked suites and runs it in full; round mode runs it alone.
 #
-# A suite is selected when it contains a changed file's match text as a fixed
-# string, or when it is itself a changed suite that still exists. The match
-# text is the basename, because a suite names the file it tests through a
-# directory variable and the bare name (`"$SCRIPTS/usage-lib.sh"`), with two
-# exceptions where the bare name is mostly fixture data (a staged path, a hook
-# command) and selecting on it runs suites the change cannot affect:
+# A suite is selected when it is itself a changed suite that still exists, or
+# when it contains a changed file's match text as a fixed string at an
+# occurrence that may be the changed file (bats-selector-reach-lib.sh decides
+# which). The match text is the basename, because a suite names the file it
+# tests through a directory variable and the bare name
+# (`"$SCRIPTS/usage-lib.sh"`), with two exceptions where the bare name is
+# mostly fixture data (a staged path, a hook command) and selecting on it runs
+# suites the change cannot affect:
 #
 #   - A root-level file matches as `/<name>`. A suite that reads one reads it
 #     through a root (`"$REPO_ROOT/CHANGELOG.md"`).
@@ -32,6 +34,11 @@
 # `"$(cd "$SCRIPTS/../cli" && pwd)/gaia"`). A suite reaching a file by a
 # spelling the match text is not part of is missed here; the push-to-main full
 # run backstops it.
+#
+# A suite is also selected when a test helper it loads or runs by path, directly
+# or through another helper, names a changed file's match text at an occurrence
+# that may be the changed file, or copies it by a glob. bats-selector-helper-lib.sh
+# owns what counts as a helper and its limit.
 #
 # Changed paths are read NUL-delimited. The hand-rolled spelling,
 # `for f in $(git diff --name-only ...)`, word-splits a path holding a space
@@ -100,7 +107,15 @@ tracked_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list"; die_input "ca
 suite_tree_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list"; die_input "cannot create a temporary file"; }
 directory_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list"; die_input "cannot create a temporary file"; }
 pattern_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list"; die_input "cannot create a temporary file"; }
-trap 'rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list"' EXIT
+name_match_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list"; die_input "cannot create a temporary file"; }
+pair_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list" "$name_match_list"; die_input "cannot create a temporary file"; }
+top_level_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list" "$name_match_list" "$pair_list"; die_input "cannot create a temporary file"; }
+trap 'rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list" "$name_match_list" "$pair_list" "$top_level_list"' EXIT
+
+# shellcheck source=bats-selector-reach-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/bats-selector-reach-lib.sh"
+# shellcheck source=bats-selector-helper-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/bats-selector-helper-lib.sh"
 
 # -z keeps a non-ASCII path unquoted, so it compares equal to the diff's path.
 git -C "$repository_root" ls-files -z | tr '\0' '\n' > "$tracked_list" \
@@ -200,10 +215,23 @@ tr '\0' '\n' < "$changed_list" | match_texts_for > "$pattern_list" \
 # pattern instead and lists every tracked file of any kind holding that text.
 if [ -s "$pattern_list" ]; then
   # git grep exits 1 on no match; only a status above 1 is a failure.
-  git -C "$repository_root" grep -l -F -f "$pattern_list" -- '*.bats' >> "$suite_list" || {
+  git -C "$repository_root" grep -l -F -f "$pattern_list" -- '*.bats' >> "$name_match_list" || {
     grep_status=$?
     [ "$grep_status" -eq 1 ] || die_input "git grep over the changed paths failed"
   }
+fi
+
+if [ -s "$pattern_list" ]; then
+  tr '\0' '\n' < "$changed_list" | paste - "$pattern_list" > "$pair_list" \
+    || die_input "pairing the changed paths with their match texts failed"
+  awk -F/ '{ print $1 }' "$tracked_list" | sort -u > "$top_level_list" \
+    || die_input "listing the tracked top-level names failed"
+  if [ -s "$name_match_list" ]; then
+    bats_selector_reaching_suites "$repository_root" "$pair_list" "$top_level_list" "$name_match_list" >> "$suite_list" \
+      || die_input "reading the occurrences in the name-matched suites failed"
+  fi
+  bats_selector_helper_suites "$repository_root" "$tracked_list" "$pair_list" "$top_level_list" "$pattern_list" >> "$suite_list" \
+    || die_input "reading the files the suites load failed"
 fi
 
 sort -u "$suite_list"

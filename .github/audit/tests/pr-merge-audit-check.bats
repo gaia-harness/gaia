@@ -191,32 +191,37 @@ restack_on_release() {
   git -C "$SANDBOX" commit --quiet -m "docs: note"
 }
 
-@test "merge hook: the out-of-scope bypass scopes the diff to the PR's own base branch" {
+# decision_of: the hook's permission decision, "allow" for an allow (silence).
+decision_of() {
+  if [ -z "$output" ]; then
+    printf 'allow\n'
+  else
+    printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision'
+  fi
+}
+
+# bats test_tags=protected
+@test "out-of-scope bypass scopes the diff to the PR's own base: own base allows, unresolvable base and bare local branch deny" {
   install_gh_array_mock '[]'
   restack_on_release
+
+  echo "case: merge hook: the out-of-scope bypass scopes the diff to the PR's own base branch"
   set_pr_base_reference release
-
   run run_hook
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || return 1
   # Allowing is silence: the hook prints a deny JSON and nothing else.
-  [ -z "$output" ]
-}
+  [ -z "$output" ] || return 1
 
-@test "merge hook: an unresolvable PR base falls back to the default branch and still denies" {
-  install_gh_array_mock '[]'
-  restack_on_release
-  # No base ref declared: the diff widens back to the default branch, which
-  # carries the in-scope app/ change, so the marker stays mandatory.
-
+  echo "case: merge hook: an unresolvable PR base falls back to the default branch and still denies"
+  # No base ref beyond the default: the diff widens back to the default branch,
+  # which carries the in-scope app/ change, so the marker stays mandatory.
+  set_pr_base_reference main
   run run_hook
-  [ "$status" -eq 0 ]
-  decision=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')
-  [ "$decision" = "deny" ]
-}
+  [ "$status" -eq 0 ] || return 1
+  [ "$(decision_of)" = "deny" ] || return 1
 
-@test "merge hook: a bare local branch matching the PR's base ref does not scope the diff" {
-  install_gh_array_mock '[]'
-  restack_on_release
+  # Last, because it replaces the remote-tracking release ref.
+  echo "case: merge hook: a bare local branch matching the PR's base ref does not scope the diff"
   # The record names `release`, but only a LOCAL branch of that name exists,
   # and it sits on the in-scope commit. Honouring it would put the merge base
   # above the app/ change, so the diff would never walk it and this PR would
@@ -225,82 +230,36 @@ restack_on_release() {
   git -C "$SANDBOX" update-ref -d refs/remotes/origin/release
   git -C "$SANDBOX" branch release "$(git -C "$SANDBOX" rev-parse HEAD^)"
   set_pr_base_reference release
-
   run run_hook
-  [ "$status" -eq 0 ]
-  decision=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')
-  [ "$decision" = "deny" ]
+  [ "$status" -eq 0 ] || return 1
+  [ "$(decision_of)" = "deny" ]
 }
 
-@test "merge hook: pending GAIA-Audit status with matching version+digest denies gh pr merge" {
+# GitHub's list endpoint returns statuses newest first, and the hook takes the
+# newest GAIA-Audit entry whatever its state. Each case: label, the statuses
+# array (DIGEST and TREE stand for the current values), the expected decision.
+STATUS_CASES='merge hook: pending GAIA-Audit status with matching version+digest denies gh pr merge|[{"context":"GAIA-Audit","state":"pending","description":"1.2.3 DIGEST TREE"}]|deny
+merge hook: success GAIA-Audit status with matching version+digest allows gh pr merge|[{"context":"GAIA-Audit","state":"success","description":"1.2.3 DIGEST TREE"}]|allow
+merge hook: no signal at all denies gh pr merge|[]|deny
+merge hook: newest GAIA-Audit failure shadows an older matching success, denies gh pr merge|[{"context":"GAIA-Audit","state":"failure","description":"1.2.3 DIGEST TREE"},{"context":"GAIA-Audit","state":"success","description":"1.2.3 DIGEST TREE"}]|deny
+merge hook: newest GAIA-Audit success over an older entry allows gh pr merge|[{"context":"GAIA-Audit","state":"success","description":"1.2.3 DIGEST TREE"},{"context":"GAIA-Audit","state":"failure","description":"1.2.3 DIGEST TREE"}]|allow'
+
+# bats test_tags=protected
+@test "GAIA-Audit status fallback: pending, failure-shadowing and absent status deny; success and newest-first success allow" {
+  local tree digest cases=0
   tree=$(current_tree)
   digest=$(current_frontend_digest)
-  install_gh_array_mock \
-    "[{\"context\":\"GAIA-Audit\",\"state\":\"pending\",\"description\":\"1.2.3 ${digest} ${tree}\"}]"
+  [ -n "$digest" ] || return 1
+  install_gh_array_mock '[]'
 
-  run run_hook
-  [ "$status" -eq 0 ]
-  # The hook emits a deny JSON; assert the permission decision is deny.
-  decision=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')
-  [ "$decision" = "deny" ]
-}
-
-@test "merge hook: success GAIA-Audit status with matching version+digest allows gh pr merge" {
-  tree=$(current_tree)
-  digest=$(current_frontend_digest)
-  install_gh_array_mock \
-    "[{\"context\":\"GAIA-Audit\",\"state\":\"success\",\"description\":\"1.2.3 ${digest} ${tree}\"}]"
-
-  run run_hook
-  [ "$status" -eq 0 ]
-  # Allow path: the hook exits 0 with no output (no deny JSON).
-  [ -z "$output" ]
-}
-
-@test "merge hook: no signal at all denies gh pr merge" {
-  # Empty statuses array: no GAIA-Audit status. The sandbox has no marker and
-  # no status, and the in-scope app/ change keeps the marker mandatory.
-  install_gh_array_mock "[]"
-
-  run run_hook
-  [ "$status" -eq 0 ]
-  decision=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')
-  [ "$decision" = "deny" ]
-}
-
-@test "merge hook: newest GAIA-Audit failure shadows an older matching success, denies gh pr merge" {
-  # GitHub's list endpoint returns statuses newest first. The newest
-  # GAIA-Audit entry is a failure; an older entry is a matching success. Under
-  # the pre-fix jq (select success, then first) the older success would still
-  # clear; the latest-per-context fix takes the newest entry regardless of
-  # state, so the failure shadows it and the gate denies.
-  tree=$(current_tree)
-  digest=$(current_frontend_digest)
-  install_gh_array_mock \
-    "[{\"context\":\"GAIA-Audit\",\"state\":\"failure\",\"description\":\"1.2.3 ${digest} ${tree}\"},{\"context\":\"GAIA-Audit\",\"state\":\"success\",\"description\":\"1.2.3 ${digest} ${tree}\"}]"
-
-  run run_hook
-  [ "$status" -eq 0 ]
-  decision=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.permissionDecision')
-  [ "$decision" = "deny" ]
-}
-
-# -----------------------------------------------------------------------------
-# 5. Newest-first list: a matching success is the newest entry, over an older
-#    non-matching entry → allow (happy path preserved)
-# -----------------------------------------------------------------------------
-
-@test "merge hook: newest GAIA-Audit success over an older entry allows gh pr merge" {
-  # The newest entry is the matching success, with an older non-matching entry
-  # behind it. Confirms latest-per-context does not
-  # regress the happy path when the statuses list has more than one entry.
-  tree=$(current_tree)
-  digest=$(current_frontend_digest)
-  install_gh_array_mock \
-    "[{\"context\":\"GAIA-Audit\",\"state\":\"success\",\"description\":\"1.2.3 ${digest} ${tree}\"},{\"context\":\"GAIA-Audit\",\"state\":\"failure\",\"description\":\"1.2.3 ${digest} ${tree}\"}]"
-
-  run run_hook
-  [ "$status" -eq 0 ]
-  # Allow path: the hook exits 0 with no output (no deny JSON).
-  [ -z "$output" ]
+  while IFS='|' read -r label statuses expected; do
+    echo "case: $label"
+    cases=$((cases + 1))
+    statuses="${statuses//DIGEST/$digest}"
+    printf '%s' "${statuses//TREE/$tree}" > "$BATS_TEST_TMPDIR/gh-statuses.json"
+    run run_hook
+    [ "$status" -eq 0 ] || return 1
+    [ "$(decision_of)" = "$expected" ] || return 1
+  done <<<"$STATUS_CASES"
+  [ "$cases" -eq 5 ]
 }

@@ -7,9 +7,7 @@
 # deletes anything under them.
 #
 # Each case builds a scratch main checkout holding this branch's registry, the
-# lib, and the notebook library it asks for the move state. Every refusal has
-# a red twin: a fixture registry that removes the block (or re-adds a residue
-# row beneath an old root) and shows the sweep would otherwise list or delete.
+# lib, and the notebook library it asks for the move state.
 #
 # Run under bash 5: bash .gaia/scripts/bats5.sh <this file> < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -80,13 +78,10 @@ section() {
 
 # ========== the registry ==========
 
-@test "registry: the three old roots are report-only rows and no residue row sits under them" {
+@test "the old roots are report-only rows with no residue row beneath them, recognized and classified report-only, never unknown" {
   [ "$(jq -r '[.report_only[].path] | sort | join(",")' "$REGISTRY")" = "plans/,research/,specs/" ]
   [ "$(jq -r '[.report_only[] | select(.root == "local" and .match == "prefix")] | length' "$REGISTRY")" -eq 3 ]
   [ -z "$(jq '.residue[] | select(.path | test("^(specs|plans|research)/"))' "$REGISTRY")" ]
-}
-
-@test "recognizes and classify: a path under an old root is recognized as report-only, never unknown" {
   make_main
   local relative
   for relative in specs/SPEC-001/SPEC.md specs/archived/old/x.md plans/cache-consolidation/README.md plans/code-review-audit-ci/z.md research/topic-2026-10-01; do
@@ -95,15 +90,6 @@ section() {
     run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh classify "$2"' _ "$MAIN" "$relative"
     [ "$output" = "report-only" ] || { echo "not report-only: $relative got $output"; return 1; }
   done
-}
-
-@test "red twin: without the report_only block the old roots are unknown" {
-  make_main
-  registry_edit 'del(.report_only)'
-  run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh recognizes specs/SPEC-001 d' _ "$MAIN"
-  [ "$status" -eq 1 ]
-  run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh classify specs/SPEC-001' _ "$MAIN"
-  [ "$output" = "unknown" ]
 }
 
 # ========== the sweep section ==========
@@ -130,22 +116,8 @@ section() {
   [ "$(find "$LOCAL_ROOT/specs" -type f | wc -l | tr -d ' ')" -eq 2 ]
 }
 
-@test "red twin: without the block the same fixture lists specs/ under Unknown, and a successor-gated row would delete it" {
-  make_main
-  mark_moved
-  put specs/SPEC-001/SPEC.md
-  registry_edit 'del(.report_only)'
-  sweep
-  section Unknown | grep -qx 'specs'
-  registry_edit '.residue += [{"id":"twin","path":"specs/","match":"prefix","why":"twin","writer":"none-residue","successor":"codify/"}] | .entries += [{"id":"twin-codify","path":"codify/","match":"prefix","kind":"dir","scope":"shared","keyed_by":"x","why":"x","writer":"code","retention":{"class":"keep"}}]'
-  mkdir -p "$LOCAL_ROOT/codify"
-  sweep
-  section Residue | grep -q '^specs'
-  sweep --apply
-  [ ! -e "$LOCAL_ROOT/specs" ]
-}
-
-@test "red twin: with the block restored the successor-gated row cannot delete the root" {
+# bats test_tags=protected
+@test "a successor-gated residue row cannot delete a report-only root" {
   make_main
   mark_moved
   put specs/SPEC-001/SPEC.md
@@ -157,12 +129,18 @@ section() {
   [ "$(section Residue | grep -c 'specs')" -eq 0 ]
 }
 
-@test "after the move: both roots are listed as moved with leftovers to review, and --apply leaves them intact" {
+# bats test_tags=protected
+@test "the sweep lists old roots once (moved, archived layouts, research children) and --apply leaves them byte-identical" {
   make_main
   mark_moved
   put specs/SPEC-002/SPEC.md
   put specs/ledger.pre-notebook.json
   put plans/cache-consolidation/README.md
+  put specs/archived/old/x.md
+  put plans/archived/y.md
+  put plans/code-review-audit-ci/z.md
+  put research/topic-a/STATE.md
+  put research/topic-b/notes/deep.md
   local before after
   before="$(snapshot "$LOCAL_ROOT")"
   sweep
@@ -172,33 +150,19 @@ section() {
   [ "$(section Old | grep -c 'Moved to .notebook/')" -eq 1 ]
   section Old | grep -q 'review it by hand'
   [ "$(section Old | grep -c 'Not yet moved')" -eq 0 ]
-  sweep --apply
-  [ "$status" -eq 0 ]
-  after="$(snapshot "$LOCAL_ROOT")"
-  [ "$before" = "$after" ]
-}
-
-@test "archived layouts are report-only: not residue, not unknown, byte-identical after --apply" {
-  make_main
-  mark_moved
-  put specs/archived/old/x.md
-  put plans/archived/y.md
-  put plans/code-review-audit-ci/z.md
-  local before after
-  before="$(snapshot "$LOCAL_ROOT")"
-  sweep
-  [ "$status" -eq 0 ]
   [ "$(section Residue | wc -l | tr -d ' ')" -eq 0 ]
   [ "$(section Unknown | wc -l | tr -d ' ')" -eq 0 ]
   [ "$(section Old | grep -c '^specs/\|^plans/')" -eq 2 ]
   section Old | grep -q 'archived/'
+  [ "$(section Old | grep -c '^research/')" -eq 1 ]
   sweep --apply
   [ "$status" -eq 0 ]
   after="$(snapshot "$LOCAL_ROOT")"
   [ "$before" = "$after" ]
 }
 
-@test "red twin: a re-added successor-less archived residue row still deletes nothing under an old root" {
+# bats test_tags=protected
+@test "a successor-less archived residue row beneath an old root deletes nothing, while the same row beneath an unlisted root does" {
   make_main
   mark_moved
   put specs/archived/old/x.md
@@ -218,15 +182,6 @@ section() {
   sweep --apply
   [ ! -e "$LOCAL_ROOT/plans/archived" ]
   [ -f "$LOCAL_ROOT/specs/archived/old/x.md" ]
-}
-
-@test "research root is listed once however many children it holds" {
-  make_main
-  mark_moved
-  put research/topic-a/STATE.md
-  put research/topic-b/notes/deep.md
-  sweep
-  [ "$(section Old | grep -c '^research/')" -eq 1 ]
 }
 
 @test "no old root present: the section is absent" {

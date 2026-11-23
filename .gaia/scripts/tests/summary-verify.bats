@@ -55,95 +55,37 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-# --- 3. absent file -----------------------------------------------------------
+# --- 3. a SUMMARY.md missing any required part -------------------------------
 
-@test "absent file exits 1" {
-  run bash "$SCRIPT" "$BATS_TEST_TMPDIR/does-not-exist.md"
-  [ "$status" -eq 1 ]
-}
-
-# --- 4. empty file -------------------------------------------------------------
-
-@test "empty file exits 1" {
-  : > "$FIXTURE"
-  run bash "$SCRIPT" "$FIXTURE"
-  [ "$status" -eq 1 ]
-}
-
-# --- 5. missing frontmatter block ----------------------------------------------
-
-@test "missing frontmatter block exits 1" {
-  cat > "$FIXTURE" <<'EOF'
-# A title with no frontmatter at all
-
-Some body text.
-EOF
-  run bash "$SCRIPT" "$FIXTURE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "frontmatter" <<<"$output"
-}
-
-# --- 6. frontmatter missing wiki_promote_default -------------------------------
-
-@test "frontmatter missing wiki_promote_default exits 1" {
-  cat > "$FIXTURE" <<'EOF'
----
-wiki_promote_targets: [decisions]
----
-# A title
-
-Some body text.
-EOF
-  run bash "$SCRIPT" "$FIXTURE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "wiki_promote_default" <<<"$output"
-}
-
-# --- 7. frontmatter missing wiki_promote_targets -------------------------------
-
-@test "frontmatter missing wiki_promote_targets exits 1" {
-  cat > "$FIXTURE" <<'EOF'
----
-wiki_promote_default: ask
----
-# A title
-
-Some body text.
-EOF
-  run bash "$SCRIPT" "$FIXTURE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "wiki_promote_targets" <<<"$output"
-}
-
-# --- 8. missing H1 ---------------------------------------------------------------
-
-@test "missing H1 exits 1" {
-  cat > "$FIXTURE" <<'EOF'
----
-wiki_promote_default: ask
-wiki_promote_targets: [decisions]
----
-Some body text with no H1 title at all.
-EOF
-  run bash "$SCRIPT" "$FIXTURE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "H1" <<<"$output"
-}
-
-# --- 9. H1 present but empty body -------------------------------------------------
-
-@test "H1 present but empty body exits 1" {
-  cat > "$FIXTURE" <<'EOF'
----
-wiki_promote_default: ask
-wiki_promote_targets: [decisions]
----
-# A title with nothing after it
-
-EOF
-  run bash "$SCRIPT" "$FIXTURE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "empty body" <<<"$output"
+@test "a SUMMARY.md missing any required part exits 1 (absent, empty, and each part-missing case names the part: no frontmatter, no default key, no targets key, no H1, empty body)" {
+  local case_name expected_message
+  for case_name in absent empty no-frontmatter no-default no-targets no-h1 empty-body; do
+    expected_message=""
+    case "$case_name" in
+      absent) rm -f "$FIXTURE" ;;
+      empty) : > "$FIXTURE" ;;
+      no-frontmatter)
+        expected_message="frontmatter"
+        printf '# A title with no frontmatter at all\n\nSome body text.\n' > "$FIXTURE" ;;
+      no-default)
+        expected_message="wiki_promote_default"
+        printf -- '---\nwiki_promote_targets: [decisions]\n---\n# A title\n\nSome body text.\n' > "$FIXTURE" ;;
+      no-targets)
+        expected_message="wiki_promote_targets"
+        printf -- '---\nwiki_promote_default: ask\n---\n# A title\n\nSome body text.\n' > "$FIXTURE" ;;
+      no-h1)
+        expected_message="H1"
+        printf -- '---\nwiki_promote_default: ask\nwiki_promote_targets: [decisions]\n---\nSome body text with no H1 title at all.\n' > "$FIXTURE" ;;
+      empty-body)
+        expected_message="empty body"
+        printf -- '---\nwiki_promote_default: ask\nwiki_promote_targets: [decisions]\n---\n# A title with nothing after it\n\n' > "$FIXTURE" ;;
+    esac
+    run bash "$SCRIPT" "$FIXTURE"
+    [ "$status" -eq 1 ] || { echo "case $case_name: status $status"; return 1; }
+    if [ -n "$expected_message" ]; then
+      grep -qF -- "$expected_message" <<<"$output" || { echo "case $case_name: message $output"; return 1; }
+    fi
+  done
 }
 
 # --- 10. wiki_promote_default vocabulary ------------------------------------------
@@ -160,20 +102,13 @@ _write_with_default() {
   done
 }
 
-@test "wiki_promote_default outside the vocabulary exits 1 naming the value" {
-  for value in maybe True 1 YES true false "'false'" '"yes' "yes'"; do
+@test "wiki_promote_default outside yes/ask/no (including empty) exits 1 naming the value" {
+  for value in maybe True 1 YES true false "'false'" '"yes' "yes'" ""; do
     _write_with_default "$value"
     run bash "$SCRIPT" "$FIXTURE"
     [ "$status" -eq 1 ] || { echo "accepted: $value"; return 1; }
     grep -qF -- "wiki_promote_default must be yes, ask or no (got '$value')" <<<"$output" || { echo "message: $output"; return 1; }
   done
-}
-
-@test "an empty wiki_promote_default value exits 1" {
-  _write_with_default ""
-  run bash "$SCRIPT" "$FIXTURE"
-  [ "$status" -eq 1 ]
-  grep -qF -- "wiki_promote_default must be yes, ask or no (got '')" <<<"$output"
 }
 
 @test "only the first wiki_promote_default line is judged" {

@@ -9,139 +9,95 @@ setup() {
   [ -x "$SCRIPT" ]
 }
 
-# --- exit-code contract ----------------------------------------------------
+# expect_scope <label> <expected-json> <path>...
+# Prints the case label, runs the script and fails naming the case when the
+# exit status is not 0 or the report differs from the expected JSON.
+expect_scope() {
+  local label=$1 expected=$2
+  shift 2
+  echo "case: $label"
+  run "$SCRIPT" "$@"
+  [ "$status" -eq 0 ] || { printf 'case %s: status %s\n' "$label" "$status" >&2; return 1; }
+  [ "$output" = "$expected" ] || {
+    printf 'case %s: unexpected output: %s\n' "$label" "$output" >&2
+    return 1
+  }
+}
 
-@test "exit code is always 0 (consumer reads ok from JSON)" {
+# expect_allow <label> <path>: the path is allowed on its own.
+expect_allow() {
+  expect_scope "$1" "{\"ok\":true,\"allowed\":[\"$2\"],\"denied\":[]}" "$2"
+}
+
+# expect_deny <label> <path> <reason>: the path is denied with that reason.
+expect_deny() {
+  expect_scope "$1" "{\"ok\":false,\"allowed\":[],\"denied\":[{\"path\":\"$2\",\"reason\":\"$3\"}]}" "$2"
+}
+
+# expect_reject <label> <glob> <path>...: exit 0 and the report matches the
+# glob. The glob holds no bracket, so it never reads as a character class.
+expect_reject() {
+  local label=$1 pattern=$2
+  shift 2
+  echo "case: $label"
+  run "$SCRIPT" "$@"
+  [ "$status" -eq 0 ] || { printf 'case %s: status %s\n' "$label" "$status" >&2; return 1; }
+  # shellcheck disable=SC2254 # the pattern is a deliberate glob
+  case $output in
+    $pattern) ;;
+    *) printf 'case %s: unexpected output: %s\n' "$label" "$output" >&2; return 1 ;;
+  esac
+}
+
+# --- exit-code and zero-input contract ----------------------------------------
+
+@test "exit code is always 0 and no args gives an empty ok report (case table)" {
+  echo "case: exit code is always 0 (consumer reads ok from JSON)"
   run "$SCRIPT" apps/web/app/foo.ts
   [ "$status" -eq 0 ]
   run "$SCRIPT" .gaia/cli/foo.sh
   [ "$status" -eq 0 ]
   run "$SCRIPT"
   [ "$status" -eq 0 ]
+  expect_scope "no args: ok:true with empty arrays" '{"ok":true,"allowed":[],"denied":[]}'
 }
 
 # --- allowlist hits --------------------------------------------------------
 
-@test "allowlist: .gaia/cli/" {
-  run "$SCRIPT" .gaia/cli/foo.sh
-  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/foo.sh"],"denied":[]}' ]
-}
-
-@test "allowlist: .claude/skills/" {
-  run "$SCRIPT" .claude/skills/foo/SKILL.md
-  [ "$output" = '{"ok":true,"allowed":[".claude/skills/foo/SKILL.md"],"denied":[]}' ]
-}
-
-@test "allowlist: .claude/commands/" {
-  run "$SCRIPT" .claude/commands/gaia.md
-  [ "$output" = '{"ok":true,"allowed":[".claude/commands/gaia.md"],"denied":[]}' ]
-}
-
-@test "allowlist: .claude/agents/" {
-  run "$SCRIPT" .claude/agents/code-review-audit.md
-  [ "$output" = '{"ok":true,"allowed":[".claude/agents/code-review-audit.md"],"denied":[]}' ]
-}
-
-@test "allowlist: .gaia/scripts/spec/" {
-  run "$SCRIPT" .gaia/scripts/spec/foo.sh
-  [ "$output" = '{"ok":true,"allowed":[".gaia/scripts/spec/foo.sh"],"denied":[]}' ]
-}
-
-@test "allowlist: .gaia/manifest.json (exact file)" {
-  run "$SCRIPT" .gaia/manifest.json
-  [ "$output" = '{"ok":true,"allowed":[".gaia/manifest.json"],"denied":[]}' ]
+@test "allowlist: each allowed prefix and exact file is allowed (case table)" {
+  expect_allow "allowlist: .gaia/cli/" .gaia/cli/foo.sh
+  expect_allow "allowlist: .claude/skills/" .claude/skills/foo/SKILL.md
+  expect_allow "allowlist: .claude/commands/" .claude/commands/gaia.md
+  expect_allow "allowlist: .claude/agents/" .claude/agents/code-review-audit.md
+  expect_allow "allowlist: .gaia/scripts/spec/" .gaia/scripts/spec/foo.sh
+  expect_allow "allowlist: .gaia/manifest.json (exact file)" .gaia/manifest.json
+  expect_allow "allowlist: .gaia/cli/src/ stays editable beside the denied bundles" .gaia/cli/src/index.ts
 }
 
 # --- denylist hits ---------------------------------------------------------
-
-@test "denylist: apps/web/app/" {
-  run "$SCRIPT" apps/web/app/foo.ts
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"apps/web/app/foo.ts","reason":"denylist"}]}' ]
-}
-
-@test "retired root app/ is no longer denylisted (default-deny, not allowed)" {
-  run "$SCRIPT" app/foo.ts
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"app/foo.ts","reason":"default-deny-unenumerated"}]}' ]
-}
-
-@test "denylist: wiki/" {
-  run "$SCRIPT" wiki/index.md
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"wiki/index.md","reason":"denylist"}]}' ]
-}
-
-@test "denylist: studio/" {
-  run "$SCRIPT" studio/branding/IDENTITY.md
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"studio/branding/IDENTITY.md","reason":"denylist"}]}' ]
-}
-
-@test "denylist: website/" {
-  run "$SCRIPT" website/src/sections/Hero.tsx
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"website/src/sections/Hero.tsx","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .notebook/ specs" {
-  run "$SCRIPT" .notebook/specs/SPEC-002/SPEC.md
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".notebook/specs/SPEC-002/SPEC.md","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .notebook/ research" {
-  run "$SCRIPT" .notebook/research/x/README.md
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".notebook/research/x/README.md","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .github/workflows/" {
-  run "$SCRIPT" .github/workflows/forensics-triage.yml
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".github/workflows/forensics-triage.yml","reason":"denylist"}]}' ]
-}
-
-# --- auto-executing harness paths ------------------------------------------
 # Claude Code hooks, the statusline, git hooks and the CLI bundles they call
 # run on their own once a branch is checked out locally, so a bot-authored
-# branch must never carry an edit to them.
+# branch must never carry an edit to them. A file-level deny under an allowed
+# prefix overrides the parent allowlist (UAT-007).
 
-@test "denylist: .claude/hooks/ (Claude Code runs these on every tool call)" {
-  run "$SCRIPT" .claude/hooks/post-commit.sh
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/hooks/post-commit.sh","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .claude/hooks/lib/ (sourced by the hooks)" {
-  run "$SCRIPT" .claude/hooks/lib/cross-repo-refusal.sh
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/hooks/lib/cross-repo-refusal.sh","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .gaia/statusline/ (refreshed by the statusline on a timer)" {
-  run "$SCRIPT" .gaia/statusline/gaia-statusline.sh
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/statusline/gaia-statusline.sh","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .githooks/ (git runs these on commit and push)" {
-  run "$SCRIPT" .githooks/pre-commit
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".githooks/pre-commit","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .claude/settings.json (registers the hooks and statusline)" {
-  run "$SCRIPT" .claude/settings.json
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/settings.json","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .claude/settings.local.json" {
-  run "$SCRIPT" .claude/settings.local.json
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/settings.local.json","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .gaia/cli/gaia bundle overrides the .gaia/cli/ allowlist" {
-  run "$SCRIPT" .gaia/cli/gaia
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/gaia","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .gaia/cli/gaia-maintainer bundle overrides the .gaia/cli/ allowlist" {
-  run "$SCRIPT" .gaia/cli/gaia-maintainer
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/gaia-maintainer","reason":"denylist"}]}' ]
-}
-
-@test "allowlist: .gaia/cli/src/ stays editable beside the denied bundles" {
-  run "$SCRIPT" .gaia/cli/src/index.ts
-  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/src/index.ts"],"denied":[]}' ]
+# bats test_tags=protected
+@test "denylist: each denied directory, file and bundle is denied, including the file-level override of an allowed prefix (case table)" {
+  expect_deny "denylist: apps/web/app/" apps/web/app/foo.ts denylist
+  expect_deny "denylist: wiki/" wiki/index.md denylist
+  expect_deny "denylist: studio/" studio/branding/IDENTITY.md denylist
+  expect_deny "denylist: website/" website/src/sections/Hero.tsx denylist
+  expect_deny "denylist: .notebook/ specs" .notebook/specs/SPEC-002/SPEC.md denylist
+  expect_deny "denylist: .notebook/ research" .notebook/research/x/README.md denylist
+  expect_deny "denylist: .github/workflows/" .github/workflows/forensics-triage.yml denylist
+  expect_deny "denylist: .claude/hooks/ (Claude Code runs these on every tool call)" .claude/hooks/post-commit.sh denylist
+  expect_deny "denylist: .claude/hooks/lib/ (sourced by the hooks)" .claude/hooks/lib/cross-repo-refusal.sh denylist
+  expect_deny "denylist: .gaia/statusline/ (refreshed by the statusline on a timer)" .gaia/statusline/gaia-statusline.sh denylist
+  expect_deny "denylist: .githooks/ (git runs these on commit and push)" .githooks/pre-commit denylist
+  expect_deny "denylist: .claude/settings.json (registers the hooks and statusline)" .claude/settings.json denylist
+  expect_deny "denylist: .claude/settings.local.json" .claude/settings.local.json denylist
+  expect_deny "denylist: .gaia/cli/gaia bundle overrides the .gaia/cli/ allowlist" .gaia/cli/gaia denylist
+  expect_deny "denylist: .gaia/cli/gaia-maintainer bundle overrides the .gaia/cli/ allowlist" .gaia/cli/gaia-maintainer denylist
+  expect_deny "subtraction: a file-level deny under .claude/skills/ overrides the parent allowlist" .claude/skills/gaia/references/spec/spec-template.md denylist
 }
 
 # --- install-time manifests -------------------------------------------------
@@ -149,11 +105,19 @@ setup() {
 # reads hooks and settings from the workspace and pnpmfile, so these deny by
 # file name at any depth, under any allowlisted prefix.
 
-@test "manifest: .gaia/cli/package.json is denied under the .gaia/cli/ allowlist" {
-  run "$SCRIPT" .gaia/cli/package.json
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/package.json","reason":"denylist"}]}' ]
+# bats test_tags=protected
+@test "manifest names are denied at any depth under any prefix, a name merely ending in package.json stays allowed (case table)" {
+  expect_deny "manifest: .gaia/cli/package.json is denied under the .gaia/cli/ allowlist" .gaia/cli/package.json denylist
+  expect_deny "manifest: a package.json nested under an allowlisted prefix is denied" .claude/skills/foo/package.json denylist
+  for name in pnpm-workspace.yaml pnpm-lock.yaml .npmrc .pnpmfile.cjs .pnpmfile.mjs; do
+    expect_deny "manifest: pnpm workspace, lockfile, npmrc and pnpmfile names are denied at any depth ($name)" "$name" denylist
+    expect_deny "manifest: pnpm workspace, lockfile, npmrc and pnpmfile names are denied at any depth (.gaia/cli/$name)" ".gaia/cli/$name" denylist
+  done
+  expect_allow "manifest: a file name that only ends in package.json stays allowed" .gaia/cli/src/not-package.json
+  expect_deny "manifest: root package.json is denylisted" package.json denylist
 }
 
+# bats test_tags=protected
 @test "manifest: every pnpm workspace member's package.json is denied" {
   # Derived from pnpm-workspace.yaml, so a new member is covered without an
   # edit here; the root manifest is listed beside them.
@@ -170,80 +134,33 @@ setup() {
   done
 }
 
-@test "manifest: a package.json nested under an allowlisted prefix is denied" {
-  run "$SCRIPT" .claude/skills/foo/package.json
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/skills/foo/package.json","reason":"denylist"}]}' ]
-}
-
-@test "manifest: pnpm workspace, lockfile, npmrc and pnpmfile names are denied at any depth" {
-  for name in pnpm-workspace.yaml pnpm-lock.yaml .npmrc .pnpmfile.cjs .pnpmfile.mjs; do
-    run "$SCRIPT" "$name"
-    [ "$output" = "{\"ok\":false,\"allowed\":[],\"denied\":[{\"path\":\"$name\",\"reason\":\"denylist\"}]}" ]
-    run "$SCRIPT" ".gaia/cli/$name"
-    [ "$output" = "{\"ok\":false,\"allowed\":[],\"denied\":[{\"path\":\".gaia/cli/$name\",\"reason\":\"denylist\"}]}" ]
-  done
-}
-
-@test "manifest: a file name that only ends in package.json stays allowed" {
-  run "$SCRIPT" .gaia/cli/src/not-package.json
-  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/src/not-package.json"],"denied":[]}' ]
-}
-
-# --- allowlist subtraction (UAT-007 edge case) -----------------------------
-
-@test "subtraction: a file-level deny under .claude/skills/ overrides the parent allowlist" {
-  run "$SCRIPT" .claude/skills/gaia/references/spec/spec-template.md
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/skills/gaia/references/spec/spec-template.md","reason":"denylist"}]}' ]
-}
-
 # --- default-deny (UAT-014) ------------------------------------------------
 
-@test "manifest: root package.json is denylisted" {
-  run "$SCRIPT" package.json
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"package.json","reason":"denylist"}]}' ]
-}
-
-@test "default-deny: eslint.config.ts" {
-  run "$SCRIPT" eslint.config.ts
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"eslint.config.ts","reason":"default-deny-unenumerated"}]}' ]
-}
-
-@test "default-deny: sibling of an allowlist prefix does not match" {
+# bats test_tags=protected
+@test "default-deny: an unenumerated path is denied (case table)" {
+  expect_deny "retired root app/ is no longer denylisted (default-deny, not allowed)" app/foo.ts default-deny-unenumerated
+  expect_deny "default-deny: eslint.config.ts" eslint.config.ts default-deny-unenumerated
   # `.gaia/cliques/` is NOT `.gaia/cli/`; trailing-slash discipline prevents
   # bleed.
-  run "$SCRIPT" .gaia/cliques/foo.sh
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cliques/foo.sh","reason":"default-deny-unenumerated"}]}' ]
-}
-
-@test "default-deny: bare directory name without trailing path" {
+  expect_deny "default-deny: sibling of an allowlist prefix does not match" .gaia/cliques/foo.sh default-deny-unenumerated
   # Defensive: git diff names files, never bare directories. A bare
   # ".gaia/cli" does not match the ".gaia/cli/" prefix.
-  run "$SCRIPT" .gaia/cli
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli","reason":"default-deny-unenumerated"}]}' ]
+  expect_deny "default-deny: bare directory name without trailing path" .gaia/cli default-deny-unenumerated
 }
 
 # --- multi-path partitioning -----------------------------------------------
 
-@test "multi: all-allow → ok:true" {
-  run "$SCRIPT" .gaia/cli/foo.sh .claude/skills/bar/SKILL.md .gaia/manifest.json
-  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/foo.sh",".claude/skills/bar/SKILL.md",".gaia/manifest.json"],"denied":[]}' ]
-}
-
-@test "multi: any-deny flips ok:false; allowed/denied partition the input" {
-  run "$SCRIPT" .gaia/cli/foo.sh apps/web/app/bar.ts eslint.config.ts
-  [ "$output" = '{"ok":false,"allowed":[".gaia/cli/foo.sh"],"denied":[{"path":"apps/web/app/bar.ts","reason":"denylist"},{"path":"eslint.config.ts","reason":"default-deny-unenumerated"}]}' ]
-}
-
-@test "multi: deny reasons are recorded per-path (mixed denylist + default-deny)" {
-  run "$SCRIPT" wiki/foo.md eslint.config.ts
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"wiki/foo.md","reason":"denylist"},{"path":"eslint.config.ts","reason":"default-deny-unenumerated"}]}' ]
-}
-
-# --- zero-input contract ---------------------------------------------------
-
-@test "no args: ok:true with empty arrays" {
-  run "$SCRIPT"
-  [ "$output" = '{"ok":true,"allowed":[],"denied":[]}' ]
+# bats test_tags=protected
+@test "multi-path input is partitioned into allowed and denied with per-path reasons (case table)" {
+  expect_scope "multi: all-allow → ok:true" \
+    '{"ok":true,"allowed":[".gaia/cli/foo.sh",".claude/skills/bar/SKILL.md",".gaia/manifest.json"],"denied":[]}' \
+    .gaia/cli/foo.sh .claude/skills/bar/SKILL.md .gaia/manifest.json
+  expect_scope "multi: any-deny flips ok:false; allowed/denied partition the input" \
+    '{"ok":false,"allowed":[".gaia/cli/foo.sh"],"denied":[{"path":"apps/web/app/bar.ts","reason":"denylist"},{"path":"eslint.config.ts","reason":"default-deny-unenumerated"}]}' \
+    .gaia/cli/foo.sh apps/web/app/bar.ts eslint.config.ts
+  expect_scope "multi: deny reasons are recorded per-path (mixed denylist + default-deny)" \
+    '{"ok":false,"allowed":[],"denied":[{"path":"wiki/foo.md","reason":"denylist"},{"path":"eslint.config.ts","reason":"default-deny-unenumerated"}]}' \
+    wiki/foo.md eslint.config.ts
 }
 
 # --- control-byte rejection (UAT-009) --------------------------------------
@@ -255,63 +172,24 @@ setup() {
 # inputs (misbehaving callers, future test harnesses) and surfaces them
 # as an explicit upstream signal.
 
-@test "control-byte: tab (0x09) → reject with reason naming hex+position" {
-  path=$(printf 'app/foo\tbar.ts')
-  run "$SCRIPT" "$path"
-  [ "$status" -eq 0 ]
-  case $output in
-    *'"ok":false'*'"reason":"control-byte:0x09-at-position-7"'*) ;;
-    *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
-  esac
-}
-
-@test "control-byte: newline (0x0a) → reject with reason naming hex+position" {
-  path=$(printf 'wiki/index\nmd')
-  run "$SCRIPT" "$path"
-  [ "$status" -eq 0 ]
-  case $output in
-    *'"ok":false'*'"reason":"control-byte:0x0a-at-position-10"'*) ;;
-    *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
-  esac
-}
-
-@test "control-byte: carriage-return (0x0d) → reject" {
-  path=$(printf 'a\rb')
-  run "$SCRIPT" "$path"
-  [ "$status" -eq 0 ]
-  case $output in
-    *'"reason":"control-byte:0x0d-at-position-1"'*) ;;
-    *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
-  esac
-}
-
-@test "control-byte: U+0001 (SOH, 0x01) → reject" {
-  path=$(printf 'foo\001bar')
-  run "$SCRIPT" "$path"
-  [ "$status" -eq 0 ]
-  case $output in
-    *'"reason":"control-byte:0x01-at-position-3"'*) ;;
-    *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
-  esac
-}
-
-@test "control-byte: rejection envelope shape, ok:false, allowed:[], single denied entry" {
-  path=$(printf 'x\ty')
-  run "$SCRIPT" "$path"
-  [ "$status" -eq 0 ]
+# bats test_tags=protected
+@test "a control byte denies the whole invocation with a structured envelope (case table)" {
+  expect_reject "control-byte: tab (0x09) → reject with reason naming hex+position" \
+    '*"ok":false*"reason":"control-byte:0x09-at-position-7"*' "$(printf 'app/foo\tbar.ts')"
+  expect_reject "control-byte: newline (0x0a) → reject with reason naming hex+position" \
+    '*"ok":false*"reason":"control-byte:0x0a-at-position-10"*' "$(printf 'wiki/index\nmd')"
+  expect_reject "control-byte: carriage-return (0x0d) → reject" \
+    '*"reason":"control-byte:0x0d-at-position-1"*' "$(printf 'a\rb')"
+  expect_reject "control-byte: U+0001 (SOH, 0x01) → reject" \
+    '*"reason":"control-byte:0x01-at-position-3"*' "$(printf 'foo\001bar')"
   # Whole envelope: allowed must be empty and denied must hold exactly the one entry.
-  case $output in
-    '{"ok":false,"allowed":[],"denied":[{"path":"x?y","reason":"control-byte:0x09-at-position-1"}]}') ;;
-    *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
-  esac
-}
+  expect_scope "control-byte: rejection envelope shape, ok:false, allowed:[], single denied entry" \
+    '{"ok":false,"allowed":[],"denied":[{"path":"x?y","reason":"control-byte:0x09-at-position-1"}]}' "$(printf 'x\ty')"
 
-@test "control-byte: short-circuits before classifying remaining paths" {
-  # First arg has a control byte; remaining args (allow + deny) must NOT
-  # appear in the output, the rejection envelope replaces the normal
-  # classification result.
-  bad=$(printf 'bad\tpath')
-  run "$SCRIPT" "$bad" .gaia/cli/foo.sh app/bar.ts
+  # The remaining args (allow + deny) must not appear in the output: the
+  # rejection envelope replaces the normal classification result.
+  echo "case: control-byte: short-circuits before classifying remaining paths"
+  run "$SCRIPT" "$(printf 'bad\tpath')" .gaia/cli/foo.sh app/bar.ts
   [ "$status" -eq 0 ]
   case $output in
     *'.gaia/cli/foo.sh'*) printf 'allowlisted path leaked: %s\n' "$output" >&2; return 1 ;;
@@ -319,16 +197,6 @@ setup() {
     *'"reason":"control-byte:0x09-at-position-3"'*) ;;
     *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
   esac
-}
-
-@test "control-byte: rejection JSON parses with jq" {
-  if ! command -v jq >/dev/null 2>&1; then
-    skip "jq not available"
-  fi
-  path=$(printf 'a\tb')
-  run "$SCRIPT" "$path"
-  [ "$status" -eq 0 ]
-  printf '%s' "$output" | jq . >/dev/null
 }
 
 # --- path-traversal rejection (RT-05) --------------------------------------
@@ -341,44 +209,25 @@ setup() {
 # path segment (e.g. `foo..bar`) is NOT a traversal and must classify
 # normally.
 
-@test "traversal: .. segment escapes allowlist prefix → reject" {
-  run "$SCRIPT" '.claude/skills/../../.github/workflows/x.yml'
-  [ "$status" -eq 0 ]
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/skills/../../.github/workflows/x.yml","reason":"path-traversal:contains-..-segment"}]}' ]
-}
-
-@test "traversal: .. segment mid-path → reject" {
-  run "$SCRIPT" '.gaia/cli/../manifest.json'
-  [ "$status" -eq 0 ]
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/../manifest.json","reason":"path-traversal:contains-..-segment"}]}' ]
-}
-
-@test "traversal: leading ../ → reject" {
-  run "$SCRIPT" '../etc/passwd'
-  [ "$status" -eq 0 ]
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"../etc/passwd","reason":"path-traversal:contains-..-segment"}]}' ]
-}
-
-@test "traversal: trailing /.. → reject" {
-  run "$SCRIPT" '.gaia/cli/..'
-  [ "$status" -eq 0 ]
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/..","reason":"path-traversal:contains-..-segment"}]}' ]
-}
-
-@test "traversal: dotted filename without .. segment is unaffected" {
+# bats test_tags=protected
+@test "a .. path segment denies the whole invocation, a mere .. substring does not (case table)" {
+  traversal='path-traversal:contains-..-segment'
+  for case_path in '.claude/skills/../../.github/workflows/x.yml' '.gaia/cli/../manifest.json' '../etc/passwd' '.gaia/cli/..'; do
+    case $case_path in
+      .claude/skills/*) label="traversal: .. segment escapes allowlist prefix → reject" ;;
+      .gaia/cli/../*) label="traversal: .. segment mid-path → reject" ;;
+      ../*) label="traversal: leading ../ → reject" ;;
+      *) label="traversal: trailing /.. → reject" ;;
+    esac
+    expect_scope "$label" "{\"ok\":false,\"allowed\":[],\"denied\":[{\"path\":\"$case_path\",\"reason\":\"$traversal\"}]}" "$case_path"
+  done
   # `.gaia/cli/foo.d.ts` has dots but no `..` path segment; classifies as allow.
-  run "$SCRIPT" '.gaia/cli/foo.d.ts'
-  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/foo.d.ts"],"denied":[]}' ]
-}
-
-@test "traversal: .. substring that is not a path segment is unaffected" {
+  expect_allow "traversal: dotted filename without .. segment is unaffected" '.gaia/cli/foo.d.ts'
   # `foo..bar.ts` contains the `..` substring but not as a bounded segment;
   # the guard must not false-positive on it.
-  run "$SCRIPT" '.gaia/cli/foo..bar.ts'
-  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/foo..bar.ts"],"denied":[]}' ]
-}
+  expect_allow "traversal: .. substring that is not a path segment is unaffected" '.gaia/cli/foo..bar.ts'
 
-@test "traversal: first offending path denies the whole invocation" {
+  echo "case: traversal: first offending path denies the whole invocation"
   run "$SCRIPT" '.gaia/cli/../x' .gaia/cli/foo.sh app/bar.ts
   [ "$status" -eq 0 ]
   case $output in
@@ -391,19 +240,17 @@ setup() {
 
 # --- case-variant deny (case-insensitive checkouts) ------------------------
 
-@test "denylist: case variant of a denied file under an allowed prefix (.gaia/cli/GAIA)" {
-  run "$SCRIPT" .gaia/cli/GAIA
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/GAIA","reason":"denylist"}]}' ]
-}
-
-@test "denylist: case variant of a denied name under an allowed prefix (.gaia/cli/Package.json)" {
-  run "$SCRIPT" .gaia/cli/Package.json
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/Package.json","reason":"denylist"}]}' ]
+# bats test_tags=protected
+@test "a case variant of a denied name is denied (case table)" {
+  expect_deny "denylist: case variant of a denied file under an allowed prefix (.gaia/cli/GAIA)" .gaia/cli/GAIA denylist
+  expect_deny "denylist: case variant of a denied name under an allowed prefix (.gaia/cli/Package.json)" .gaia/cli/Package.json denylist
 }
 
 # --- non-ASCII lookalikes ---------------------------------------------------
 
-@test "non-ascii: a Kelvin-sign lookalike of a denied name is denied under LC_ALL=C" {
+# bats test_tags=protected
+@test "a non-ASCII byte in a path is denied (case table)" {
+  echo "case: non-ascii: a Kelvin-sign lookalike of a denied name is denied under LC_ALL=C"
   path=$(printf '.gaia/cli/pac\xe2\x84\xaage.json')
   LC_ALL=C run "$SCRIPT" "$path"
   [ "$status" -eq 0 ]
@@ -411,16 +258,8 @@ setup() {
     *'"ok":false'*'"reason":"non-ascii-path"'*) ;;
     *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
   esac
-}
-
-@test "non-ascii: an otherwise allowed path with a non-ASCII byte is denied" {
-  path=$(printf '.claude/skills/caf\xc3\xa9.md')
-  run "$SCRIPT" "$path"
-  [ "$status" -eq 0 ]
-  case $output in
-    *'"ok":false'*'"reason":"non-ascii-path"'*) ;;
-    *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
-  esac
+  expect_reject "non-ascii: an otherwise allowed path with a non-ASCII byte is denied" \
+    '*"ok":false*"reason":"non-ascii-path"*' "$(printf '.claude/skills/caf\xc3\xa9.md')"
 }
 
 # --- rename-aware scope re-checks -------------------------------------------

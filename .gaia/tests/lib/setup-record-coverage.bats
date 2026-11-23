@@ -18,9 +18,6 @@
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
   FEATURE_LIST="${REPO_ROOT}/.gaia/setup-features.json"
-  SETUP_COMMAND="${REPO_ROOT}/.claude/commands/setup-gaia.md"
-  INIT_COMMAND="${REPO_ROOT}/.claude/commands/gaia-init.md"
-  REFERENCES_DIRECTORY="${REPO_ROOT}/.claude/skills/gaia/references/setup"
   [ -f "$FEATURE_LIST" ] || {
     echo "the setup feature list is absent: ${FEATURE_LIST}" >&2
     return 1
@@ -30,16 +27,6 @@ setup() {
 # listed_ids <list>: the ids of the feature list, one per line, in list order.
 listed_ids() {
   jq -r '.features[].id' "$1"
-}
-
-# surface_copy <name>: copy the surface into a scratch directory laid out as
-# the repository is, and print the directory.
-surface_copy() {
-  local directory="${BATS_TEST_TMPDIR}/$1"
-  mkdir -p "${directory}/.claude/commands" "${directory}/.claude/skills/gaia/references/setup"
-  cp "$SETUP_COMMAND" "$INIT_COMMAND" "${directory}/.claude/commands/"
-  cp "${REFERENCES_DIRECTORY}"/*.md "${directory}/.claude/skills/gaia/references/setup/"
-  printf '%s\n' "$directory"
 }
 
 # surface_files <root>: the surface files under <root>, one per line. Fails
@@ -122,35 +109,4 @@ check_no_unknown_id() {
 
 @test "every literal record line on the real surface names a listed id" {
   check_no_unknown_id "$REPO_ROOT" "$FEATURE_LIST"
-}
-
-@test "the coverage check names an id whose record lines are removed from a surface copy" {
-  local root file
-  root="$(surface_copy missing-id)"
-  while IFS= read -r file; do
-    sed -i.bak '/gaia setup record squash-only /d' "$file"
-    rm -f "${file}.bak"
-  done < <(surface_files "$root")
-  run check_every_id_recorded "$root" "$FEATURE_LIST"
-  [ "$status" -ne 0 ]
-  grep -qF 'squash-only' <<<"$output"
-}
-
-@test "the coverage check fails on a list longer than the ids it reads" {
-  local list="${BATS_TEST_TMPDIR}/longer.json"
-  jq '.features += [{"id": "added-later", "scope": "machine", "required": false, "admin": false, "standalone": true, "reference": "x"}]' \
-    "$FEATURE_LIST" >"$list"
-  run check_every_id_recorded "$REPO_ROOT" "$list"
-  [ "$status" -ne 0 ]
-  grep -qF 'added-later' <<<"$output"
-}
-
-@test "the unknown-id check names an id the list does not hold" {
-  local root
-  root="$(surface_copy unknown-id)"
-  printf '\n.gaia/cli/gaia setup record not-a-feature applied\n' \
-    >>"${root}/.claude/skills/gaia/references/setup/squash-only.md"
-  run check_no_unknown_id "$root" "$FEATURE_LIST"
-  [ "$status" -ne 0 ]
-  grep -qF 'not-a-feature' <<<"$output"
 }

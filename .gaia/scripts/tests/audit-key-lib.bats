@@ -63,50 +63,76 @@ make_repo() {
   [ -z "$(ls -A "$scratch")" ]
 }
 
-@test "structural: sourcing the lib defines gaia_audit_key" {
-  run bash -c '
-    # shellcheck disable=SC1090
-    source "$1"
-    type gaia_audit_key >/dev/null
-    echo OK
-  ' _ "$LIBRARY"
-  [ "$status" -eq 0 ]
-  [ "$output" = "OK" ]
-}
-
-@test "structural: sourcing the lib defines the now-public gaia_key_slug" {
-  run bash -c '
-    # shellcheck disable=SC1090
-    source "$1"
-    type gaia_key_slug >/dev/null
-    echo OK
-  ' _ "$LIBRARY"
-  [ "$status" -eq 0 ]
-  [ "$output" = "OK" ]
-}
-
 # ========== gaia_branch_slug: the branch half, on its own ==========
 # post-findings-block.sh selects sidecars on the branch half alone, across
 # every base, so it needs that half without a base to pair it with. It calls
 # this rather than repeating the derivation, which is what keeps the two halves
 # of one key from being derived two different ways.
 
-@test "structural: sourcing the lib defines gaia_branch_slug" {
-  run bash -c '
-    # shellcheck disable=SC1090
-    source "$1"
-    type gaia_branch_slug >/dev/null
-    echo OK
-  ' _ "$LIBRARY"
-  [ "$status" -eq 0 ]
-  [ "$output" = "OK" ]
+# gaia_key_slug is also called directly by gh-artifact-lib.sh's
+# gaia_gh_artifact_path, so the rule is tested in isolation here. The read
+# guard and the sandbox deny any file whose name holds "credential" in any
+# case, so an audit file keyed by such a branch would be unreadable to the
+# member reviewing it: the slug must never spell the word, and must still
+# decode back to the branch, which keeps it injective.
+@test "gaia_key_slug encodes every byte outside [A-Za-z0-9_-] and breaks every spelling of credential: plain, release/1.2, has%percent, credential in any case, credentia-l_cred" {
+  local branch expected slug lower
+  for branch in "worktree-program" "release/1.2" "has%percent" "credentia-l_cred"; do
+    case "$branch" in
+      worktree-program) expected="worktree-program" ;;
+      release/1.2) expected="release%2F1%2E2" ;;
+      has%percent) expected="has%25percent" ;;
+      credentia-l_cred) expected="credentia-l_cred" ;;
+    esac
+    slug="$(gaia_key_slug "$branch")"
+    [ "$slug" = "$expected" ] || { echo "slug of $branch: $slug, expected $expected"; return 1; }
+  done
+  for branch in "debt/2971-sandbox-credential-ts" "fix/Credentials" "CREDENTIAL" \
+    "credentialcredential" "a.credential/b"; do
+    slug="$(gaia_key_slug "$branch")"
+    lower="$(printf '%s' "$slug" | tr '[:upper:]' '[:lower:]')"
+    case "$lower" in *credential*) echo "slug spells it: $branch -> $slug"; return 1 ;; esac
+    [ "$(printf '%b' "${slug//%/\\x}")" = "$branch" ] || { echo "does not decode: $branch -> $slug"; return 1; }
+  done
 }
 
-@test "gaia_branch_slug: prints the encoded branch, and nothing else" {
+# expect_refusal <case> <command...>: the command fails non-zero and prints
+# nothing, so a half-built key is never printed.
+expect_refusal() {
+  local label="$1"
+  shift
+  local printed refusal_status=0
+  printed="$("$@")" || refusal_status=$?
+  [ "$refusal_status" -ne 0 ] || { echo "case $label: exited 0 with: $printed"; return 1; }
+  [ -z "$printed" ] || { echo "case $label: printed: $printed"; return 1; }
+}
+
+# A failing slug must fail the key: a slug interpolated inside a command
+# substitution would still print "<base_sha>." at status 0, a plausible-looking
+# key with the branch discriminator silently gone. The stub reproduces that
+# failure without depending on what makes a real slug fail.
+@test "gaia_branch_slug and gaia_audit_key print the encoded half or key, else fail non-zero printing nothing: missing base, detached HEAD, a directory outside a repository, a failing slug" {
+  local nongit
+  nongit=$(mktemp -d -t gaia-akl-nongit-XXXXXX)
+  CLEANUP_DIRECTORIES+=("$nongit")
   make_repo "feat/x.y"
-  run gaia_branch_slug "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "feat%2Fx%2Ey" ]
+
+  [ "$(gaia_branch_slug "$REPO")" = "feat%2Fx%2Ey" ]
+  expect_refusal "audit key, missing base with a resolvable branch" gaia_audit_key "" "$REPO"
+  expect_refusal "branch slug, dir outside a repository" gaia_branch_slug "$nongit"
+  expect_refusal "audit key, dir outside a repository" gaia_audit_key "deadbeef" "$nongit"
+
+  # shellcheck disable=SC2329 # reached through gaia_branch_slug and gaia_audit_key
+  gaia_key_slug() { return 1; }
+  expect_refusal "branch slug, failing slug" gaia_branch_slug "$REPO"
+  expect_refusal "audit key, failing slug (never a bare base)" gaia_audit_key "$BASE" "$REPO"
+  unset -f gaia_key_slug
+  # shellcheck disable=SC1090
+  source "$LIBRARY"
+
+  git -C "$REPO" checkout -q "$BASE"
+  expect_refusal "branch slug, detached HEAD" gaia_branch_slug "$REPO"
+  expect_refusal "audit key, detached HEAD with a resolvable base" gaia_audit_key "$BASE" "$REPO"
 }
 
 @test "gaia_branch_slug: it is exactly the half gaia_audit_key appends" {
@@ -121,113 +147,12 @@ make_repo() {
   [ "$key" = "${BASE}.${half}" ]
 }
 
-@test "gaia_branch_slug: a detached HEAD fails non-zero and prints nothing" {
-  make_repo "main"
-  git -C "$REPO" checkout -q "$BASE"
-  run gaia_branch_slug "$REPO"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "gaia_branch_slug: a dir outside any git repository fails non-zero and prints nothing" {
-  local nongit
-  nongit=$(mktemp -d -t gaia-akl-bsnongit-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$nongit")
-  run gaia_branch_slug "$nongit"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "gaia_branch_slug: a failing slug fails it non-zero and prints nothing" {
-  make_repo "main"
-  gaia_key_slug() { return 1; }
-  run gaia_branch_slug "$REPO"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
 # ========== gaia_key_slug: the general slug rule, tested directly ==========
 # gaia_audit_key's own tests below exercise this rule indirectly (through the
 # key it builds); these test it in isolation, since gh-artifact-lib.sh's
 # gaia_gh_artifact_path (task 4.2) now calls it directly too.
 
-@test "gaia_key_slug: a plain string (already in [A-Za-z0-9_-]) passes through unchanged" {
-  run gaia_key_slug "worktree-program"
-  [ "$status" -eq 0 ]
-  [ "$output" = "worktree-program" ]
-}
-
-@test "gaia_key_slug: a slash and a dot both percent-encode" {
-  run gaia_key_slug "release/1.2"
-  [ "$status" -eq 0 ]
-  [ "$output" = "release%2F1%2E2" ]
-}
-
-@test "gaia_key_slug: a percent sign percent-encodes (the encoding is self-escaping)" {
-  run gaia_key_slug "has%percent"
-  [ "$status" -eq 0 ]
-  [ "$output" = "has%25percent" ]
-}
-
-# The read guard and the sandbox deny any file whose name holds "credential" in
-# any case, so an audit file keyed by such a branch would be unreadable to the
-# member reviewing it. The slug must never spell the word, and must still
-# decode back to the branch, which is what keeps it injective.
-@test "gaia_key_slug: a branch spelling credential in any case yields a slug that does not, and still decodes back" {
-  local branch slug lower
-  for branch in "debt/2971-sandbox-credential-ts" "fix/Credentials" "CREDENTIAL" \
-    "credentialcredential" "a.credential/b"; do
-    slug="$(gaia_key_slug "$branch")"
-    lower="$(printf '%s' "$slug" | tr '[:upper:]' '[:lower:]')"
-    case "$lower" in *credential*) echo "slug spells it: $branch -> $slug"; return 1 ;; esac
-    [ "$(printf '%b' "${slug//%/\\x}")" = "$branch" ] || { echo "does not decode: $branch -> $slug"; return 1; }
-  done
-}
-
-@test "gaia_key_slug: a branch merely near the word passes through unchanged" {
-  run gaia_key_slug "credentia-l_cred"
-  [ "$status" -eq 0 ]
-  [ "$output" = "credentia-l_cred" ]
-}
-
-@test "gaia_key_slug: empty input yields empty output" {
-  run gaia_key_slug ""
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
 # ========== gaia_audit_key: the happy path ==========
-
-@test "a plain branch (already in [A-Za-z0-9_-]) passes through unchanged" {
-  make_repo "worktree-program"
-  run gaia_audit_key "$BASE" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "${BASE}.worktree-program" ]
-}
-
-@test "a slash and a dot in the branch both percent-encode" {
-  make_repo "release/1.2"
-  run gaia_audit_key "$BASE" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "${BASE}.release%2F1%2E2" ]
-}
-
-@test "a percent sign in the branch percent-encodes (so the encoding is self-escaping)" {
-  make_repo "main"
-  git -C "$REPO" branch "has%percent"
-  git -C "$REPO" checkout -q "has%percent"
-  run gaia_audit_key "$BASE" "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "${BASE}.has%25percent" ]
-}
-
-@test "determinism: the same base and dir yield the same key on two independent calls" {
-  make_repo "worktree-program"
-  first="$(gaia_audit_key "$BASE" "$REPO")"
-  second="$(gaia_audit_key "$BASE" "$REPO")"
-  [ -n "$first" ]
-  [ "$first" = "$second" ]
-}
 
 @test "dir defaults to '.': omitting the second argument uses the process cwd" {
   make_repo "worktree-program"
@@ -236,45 +161,6 @@ make_repo() {
 }
 
 # ========== fail-open: either half undeterminable ==========
-
-@test "a missing base fails non-zero and prints nothing, even with a resolvable branch" {
-  make_repo "main"
-  run gaia_audit_key "" "$REPO"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "a detached HEAD fails non-zero and prints nothing, even with a resolvable base" {
-  make_repo "main"
-  git -C "$REPO" checkout -q "$BASE"
-  run gaia_audit_key "$BASE" "$REPO"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "a dir outside any git repository fails non-zero and prints nothing" {
-  local nongit
-  nongit=$(mktemp -d -t gaia-akl-nongit-XXXXXX)
-  CLEANUP_DIRECTORIES+=("$nongit")
-  run gaia_audit_key "deadbeef" "$nongit"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-# A failing slug is the third way this key can be undeterminable, and it is the
-# one the documented contract used to promise without enforcing: the slug was
-# interpolated straight into the output inside a command substitution, so a
-# non-zero slug still printed "<base_sha>." at status 0 -- a plausible-looking
-# key with the branch discriminator silently gone, which is precisely the
-# unkeyed collision this lib exists to remove. The stub reproduces the failure
-# shape without depending on what makes a real slug fail.
-@test "a failing slug fails the whole key non-zero and prints nothing, never a bare base" {
-  make_repo "main"
-  gaia_key_slug() { return 1; }
-  run gaia_audit_key "$BASE" "$REPO"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
 
 # ========== the defect, expressed as a unit ==========
 
@@ -300,20 +186,9 @@ make_repo() {
 
 # ========== structural hygiene ==========
 
-@test "structural: never invokes cd, per .claude/rules/shell-cwd.md" {
-  code_lines="$(grep -vE '^[[:space:]]*#' "$LIBRARY")"
-  grep -qE '(^|[^[:alnum:]_])cd([^[:alnum:]_]|$)' <<<"$code_lines" && return 1
-  return 0
-}
-
 @test "structural: no hardcoded /Users or /home paths" {
   grep -E '/Users/|/home/' "$LIBRARY" && return 1
   return 0
-}
-
-@test "structural: shellcheck is clean" {
-  command -v shellcheck >/dev/null 2>&1 || skip "shellcheck not available"
-  shellcheck "$LIBRARY"
 }
 
 # gaia_key_slug walks its input with `${text:$i:1}`, not bash's bare

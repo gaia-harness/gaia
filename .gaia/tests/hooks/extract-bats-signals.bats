@@ -63,19 +63,6 @@ BATS
   [ "$edited_signal" != "$first_signal" ]
 }
 
-@test "a single-quoted title is read" {
-  cat >"$FIXTURE" <<BATS
-${AT}test 'prints a quoted greeting' {
-  run echo hello
-  [ "\$status" -eq 0 ]
-}
-BATS
-  run --separate-stderr node "$EXTRACTOR" "$FIXTURE"
-  [ "$status" -eq 0 ]
-  [ -z "$stderr" ]
-  [ "$(printf '%s\n' "$output" | jq -r .fullName)" = "prints a quoted greeting" ]
-}
-
 @test "an unterminated test block exits 6 with one stderr line and nothing on stdout" {
   cat >"$FIXTURE" <<BATS
 ${AT}test "never closes" {
@@ -102,42 +89,64 @@ BATS
   [ "$(printf '%s\n' "$output" | sed -n 1p | jq -r .fullName)" = "prints a greeting" ]
 }
 
-@test "a one-line test is its own block and a miss on an @test line refuses instead of dropping it" {
-  cat >"$FIXTURE" <<BATS
+# Each row writes one block shape; the expected names and ranges are compact
+# JSON over every emitted line, so a dropped or extra block fails the row.
+write_block_shape_fixture() {
+  case "$1" in
+    single-quoted)
+      cat >"$FIXTURE" <<BATS
+${AT}test 'prints a quoted greeting' {
+  run echo hello
+  [ "\$status" -eq 0 ]
+}
+BATS
+      ;;
+    one-line)
+      cat >"$FIXTURE" <<BATS
 ${AT}test "one line" { run echo hello; }
 ${AT}test "after" {
   run echo goodbye
 }
 BATS
-  run --separate-stderr node "$EXTRACTOR" "$FIXTURE"
-  [ "$status" -eq 0 ]
-  [ -z "$stderr" ]
-  [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 2 ]
-  [ "$(printf '%s\n' "$output" | sed -n 1p | jq -r .fullName)" = "one line" ]
-  [ "$(printf '%s\n' "$output" | sed -n 1p | jq -c .ranges)" = "[[1,1]]" ]
-  [ "$(printf '%s\n' "$output" | sed -n 2p | jq -c .ranges)" = "[[2,4]]" ]
-
-  cat >"$FIXTURE" <<BATS
-${AT}test "dangling title"
-  run echo hello
-BATS
-  run --separate-stderr node "$EXTRACTOR" "$FIXTURE"
-  [ "$status" -eq 6 ]
-  [ -z "$output" ]
-  [ "$(printf '%s\n' "$stderr" | wc -l | tr -d ' ')" -eq 1 ]
-}
-
-@test "a trailing comment after the opening brace still opens a block" {
-  cat >"$FIXTURE" <<BATS
+      ;;
+    trailing-comment)
+      cat >"$FIXTURE" <<BATS
 ${AT}test "noted" { # why this exists
   run echo hello
 }
 BATS
-  run --separate-stderr node "$EXTRACTOR" "$FIXTURE"
-  [ "$status" -eq 0 ]
-  [ -z "$stderr" ]
-  [ "$(printf '%s\n' "$output" | jq -r .fullName)" = "noted" ]
-  [ "$(printf '%s\n' "$output" | jq -c .ranges)" = "[[1,3]]" ]
+      ;;
+    dangling-title)
+      cat >"$FIXTURE" <<BATS
+${AT}test "dangling title"
+  run echo hello
+BATS
+      ;;
+  esac
+}
+
+@test "bats block shapes: a single-quoted title, a one-line test, a trailing comment after the brace, a dangling title refused" {
+  local row label expected_status expected_names expected_ranges
+  for row in \
+    'single-quoted|0|["prints a quoted greeting"]|-' \
+    'one-line|0|["one line","after"]|[[[1,1]],[[2,4]]]' \
+    'trailing-comment|0|["noted"]|[[[1,3]]]' \
+    'dangling-title|6|-|-'; do
+    IFS='|' read -r label expected_status expected_names expected_ranges <<<"$row"
+    write_block_shape_fixture "$label"
+    run --separate-stderr node "$EXTRACTOR" "$FIXTURE"
+    [ "$status" -eq "$expected_status" ] || { echo "case $label: status=$status stderr=$stderr"; return 1; }
+    if [ "$expected_status" -eq 6 ]; then
+      [ -z "$output" ] || { echo "case $label: stdout not empty: $output"; return 1; }
+      [ "$(printf '%s\n' "$stderr" | wc -l | tr -d ' ')" -eq 1 ] || { echo "case $label: stderr not one line: $stderr"; return 1; }
+      continue
+    fi
+    [ -z "$stderr" ] || { echo "case $label: stderr=$stderr"; return 1; }
+    [ "$(printf '%s\n' "$output" | jq -sc '[.[].fullName]')" = "$expected_names" ] || { echo "case $label: names=$output"; return 1; }
+    if [ "$expected_ranges" != "-" ]; then
+      [ "$(printf '%s\n' "$output" | jq -sc '[.[].ranges]')" = "$expected_ranges" ] || { echo "case $label: ranges=$output"; return 1; }
+    fi
+  done
 }
 
 write_heredoc_fixture() {

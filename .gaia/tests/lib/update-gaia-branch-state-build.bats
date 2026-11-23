@@ -73,7 +73,25 @@ classify_release() {
   run_script_in "$MAIN" classify --tag v2.2.0 --latest "$1"
 }
 
-@test "local run: a same-version branch still holding the previous build resumes, a recorded one is committed" {
+
+# Saves main as setup() built it, so each case of a table restarts from it
+# with fresh_main instead of a new init and baseline commit.
+snapshot_main() {
+  PRISTINE="$BATS_TEST_TMPDIR/pristine"
+  cp -R "$MAIN" "$PRISTINE"
+}
+
+fresh_main() {
+  rm -rf "$MAIN"
+  cp -R "$PRISTINE" "$MAIN"
+  HOLDER=''
+}
+
+@test "classify with a build record: local run, release run, and no-build-file projects" {
+  snapshot_main
+
+  echo "case: local run, a same-version branch still holding the previous build resumes, a recorded one is committed"
+  fresh_main
   make_branch "$DEV_BRANCH" "$VERSION" keep 1700000100
   classify_local
   [ "$status" -eq 0 ]
@@ -83,9 +101,9 @@ classify_release() {
   commit_in "$HOLDER" 'record the build' 1700000200
   classify_local
   [ "$output" = "COMMITTED $DEV_BRANCH $HOLDER" ]
-}
 
-@test "local run: the target build written but uncommitted in the holder is APPLIED_UNCOMMITTED" {
+  echo "case: local run, the target build written but uncommitted in the holder is APPLIED_UNCOMMITTED"
+  fresh_main
   make_branch "$DEV_BRANCH" "$VERSION" keep 1700000100
   printf '%s\n' "$TARGET_BUILD" > "$HOLDER/.gaia/VERSION-dev"
   classify_local
@@ -95,9 +113,9 @@ classify_release() {
   printf '%s\n' "$PREVIOUS_BUILD" > "$HOLDER/.gaia/VERSION-dev"
   classify_local
   [ "$output" = "RESUME_IN_WORKTREE $DEV_BRANCH $HOLDER" ]
-}
 
-@test "local run: a committed record is COMMITTED with the holder path, or - without one" {
+  echo "case: local run, a committed record is COMMITTED with the holder path, or - without one"
+  fresh_main
   make_branch "$DEV_BRANCH" "$VERSION" "$TARGET_BUILD" 1700000100
   classify_local
   [ "$status" -eq 0 ]
@@ -105,22 +123,22 @@ classify_release() {
   git -C "$MAIN" worktree remove --force "$HOLDER"
   classify_local
   [ "$output" = "COMMITTED $DEV_BRANCH -" ]
-}
 
-@test "local run: no holder and the previous build still recorded is RESUME_ADD_WORKTREE" {
+  echo "case: local run, no holder and the previous build still recorded is RESUME_ADD_WORKTREE"
+  fresh_main
   make_branch "$DEV_BRANCH" "$VERSION" keep 1700000100 free
   classify_local
   [ "$status" -eq 0 ]
   [ "$output" = "RESUME_ADD_WORKTREE $DEV_BRANCH" ]
-}
 
-@test "local run: the right version with no build file is not recorded" {
+  echo "case: local run, the right version with no build file is not recorded"
+  fresh_main
   make_branch "$DEV_BRANCH" "$VERSION" none 1700000100
   classify_local
   [ "$output" = "RESUME_IN_WORKTREE $DEV_BRANCH $HOLDER" ]
-}
 
-@test "release run after a local sync at the same version: recorded means the build file is gone" {
+  echo "case: release run after a local sync at the same version, recorded means the build file is gone"
+  fresh_main
   make_branch "$RELEASE_BRANCH" "$VERSION" keep 1700000100
   classify_release "$VERSION"
   [ "$status" -eq 0 ]
@@ -131,9 +149,9 @@ classify_release() {
   commit_in "$HOLDER" 'remove the build record' 1700000200
   classify_release "$VERSION"
   [ "$output" = "COMMITTED $RELEASE_BRANCH $HOLDER" ]
-}
 
-@test "release run with a newer version interrupted before the build file removal resumes" {
+  echo "case: release run with a newer version interrupted before the build file removal resumes"
+  fresh_main
   make_branch "$RELEASE_BRANCH" "$VERSION" keep 1700000100
   printf '%s\n' '2.3.0' > "$HOLDER/.gaia/VERSION"
   classify_release '2.3.0'
@@ -142,9 +160,9 @@ classify_release() {
   rm "$HOLDER/.gaia/VERSION-dev"
   classify_release '2.3.0'
   [ "$output" = "APPLIED_UNCOMMITTED $RELEASE_BRANCH $HOLDER" ]
-}
 
-@test "a project that never had a build file classifies on the version alone" {
+  echo "case: a project that never had a build file classifies on the version alone"
+  fresh_main
   git -C "$MAIN" rm -q .gaia/VERSION-dev
   commit_in "$MAIN" 'drop the build record' 1700000050
   make_branch "$RELEASE_BRANCH" '2.1.0' keep 1700000100
@@ -158,10 +176,6 @@ classify_release() {
   [ "$output" = "COMMITTED $RELEASE_BRANCH $HOLDER" ]
 }
 
-@test "the existing branch-state suite is untouched" {
-  git -C "$REPO_ROOT" diff --quiet -- .gaia/tests/lib/update-gaia-branch-state.bats
-}
-
 @test "a malformed --build is a usage error" {
   run_script_in "$MAIN" classify --tag "$DEV_TAG" --latest "$VERSION" --build 'dev.bbbbbbbbbbbb/x'
   [ "$status" -eq 2 ]
@@ -171,16 +185,20 @@ classify_release() {
   [ "$status" -eq 2 ]
 }
 
-@test "release lookup skips a local-sync branch, the dev lookup still finds it" {
+@test "release lookup skips local-sync branches, dev lookup finds them" {
+  snapshot_main
+
+  echo "case: release lookup skips a local-sync branch, the dev lookup still finds it"
+  fresh_main
   make_branch "$DEV_BRANCH" "$VERSION" "$TARGET_BUILD" 1700000100
   classify_release "$VERSION"
   [ "$status" -eq 0 ]
   [ "$output" = 'NONE' ]
   classify_local
   [ "$output" = "COMMITTED $DEV_BRANCH $HOLDER" ]
-}
 
-@test "release lookup takes the release branch even beside a newer local-sync branch" {
+  echo "case: release lookup takes the release branch even beside a newer local-sync branch"
+  fresh_main
   make_branch "$RELEASE_BRANCH" '2.1.0' none 1700000100 free
   make_branch "$DEV_BRANCH" "$VERSION" "$TARGET_BUILD" 1700000900
   classify_release "$VERSION"

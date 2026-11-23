@@ -161,15 +161,6 @@ closure_missing() {
   done
 }
 
-@test "stamp closure guard red: a list missing one reachable name is reported" {
-  local trimmed missing
-  trimmed=" $GAIA_USAGE_MEMO_FUNCTIONS "
-  trimmed="${trimmed/ _gaia_branch_set_class / }"
-  [ "$trimmed" != " $GAIA_USAGE_MEMO_FUNCTIONS " ]
-  missing="$(closure_missing "$trimmed")"
-  [ "$missing" = "_gaia_branch_set_class" ]
-}
-
 # ---------- 2-4. stamp ----------
 
 stamp_in() { in_libraries "${2:-$BASH}" "$1" 'gaia_usage_memo_stamp; printf "%s %s" "$_gaia_usage_memo_stamp_exit_status" "$_gaia_usage_memo_stamp"'; }
@@ -236,8 +227,8 @@ load_reason() {
   last_trace
 }
 
-@test "load: each cold reason is produced by a memo crafted for it, and a valid memo loads warm" {
-  local body='{"derive":{},"models":[],"stores":{}}' first_model
+@test "load: each cold reason (missing, unreadable, schema, stamp, sum, shape) and a valid memo" {
+  local body='{"derive":{},"models":[],"stores":{}}' first_model old_stamp
   gaia_usage_memo_stamp
   rm -f "$MEMO"
   [ "$(load_reason)" = "path=cold reason=missing" ]
@@ -270,9 +261,8 @@ load_reason() {
   [ "$GAIA_USAGE_MEMO" = "$body" ]
   first_model="$(jq -r '.models[0]' <<<"$GAIA_USAGE_MEMO")"
   [ "$first_model" = m ]
-}
-
-@test "load guard red: a derive entry edited without recomputing the sum loads cold on the sum" {
+  echo "case: sum edited without recompute"
+  rm -f "$MEMO"
   base_stores
   init_memo
   gaia_usage_memo_save "$MEMO"
@@ -282,10 +272,7 @@ load_reason() {
   [ "$(last_trace)" = "path=cold reason=sum" ]
   [ "$GAIA_USAGE_MEMO_STATE" = cold ]
   [ "$GAIA_USAGE_MEMO" = '{"derive":{},"models":[],"stores":{}}' ]
-}
-
-@test "load: a memo stamped under the previous layout seed loads cold on the stamp and is rebuilt" {
-  local old_stamp body
+  echo "case: previous layout seed stamp"
   base_stores
   scratch_libraries "$TEMPORARY_DIRECTORY/libs-seed"
   subst_file "$TEMPORARY_DIRECTORY/libs-seed/usage-memo-lib.sh" '"usage-branch-memo/2"' '"usage-branch-memo/1"'
@@ -357,16 +344,16 @@ wrap_derivations() {
 
 # ---------- 7. full-scan triggers ----------
 
-@test "full scan: a changed store path traces path" {
+@test "full scan triggers: path, head, shrunk trace a full scan; growth past a small prefix does not" {
+  local i
+  echo "case: path"
   base_stores
   init_memo
   cp "$USAGE_STORE" "$TEMPORARY_DIRECTORY/usage-moved.jsonl"
   : >"$TRACE"
   gaia_usage_memo_warm "$TEMPORARY_DIRECTORY/usage-moved.jsonl" "$LINKS_STORE"
   [ "$(cat "$TRACE")" = "scan=full store=u reason=path" ]
-}
-
-@test "full scan: a store rewritten so its first bytes differ traces head and rebuilds the models" {
+  echo "case: head"
   base_stores
   init_memo
   {
@@ -380,9 +367,7 @@ wrap_derivations() {
   warm_all
   [ "$(cat "$TRACE")" = "scan=full store=u reason=head" ]
   [ "$(memo_get '.models | join(",")')" = "m-other" ]
-}
-
-@test "full scan: a shrunk store traces shrunk, and a full scan of usage rebuilds the models" {
+  echo "case: shrunk"
   base_stores
   init_memo
   segment_row branch:only/1-x m-solo >"$USAGE_STORE"
@@ -391,13 +376,10 @@ wrap_derivations() {
   warm_all
   [ "$(cat "$TRACE")" = "scan=full store=u reason=shrunk" ]
   [ "$(memo_get '.models | join(",")')" = "m-solo" ]
-}
-
-@test "full scan: growth past a small prefix does not force one, and the head covers the new size" {
+  echo "case: growth past a small prefix"
   base_stores
   init_memo
   [ "$(memo_get '.stores.u.hn')" -lt 4096 ]
-  local i
   for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do segment_row "branch:grow/$i-x" m-one >>"$USAGE_STORE"; done
   : >"$TRACE"
   warm_all

@@ -12,7 +12,7 @@ export type PackageTarget =
  * Falls back to `cwd` when git cannot answer, because scaffolding must not
  * require a repository (an adopter may scaffold before `git init`).
  */
-const resolveTreeRoot = (cwd: string): string => {
+export const resolveTreeRoot = (cwd: string): string => {
   try {
     return resolveRepoRoot(cwd);
   } catch {

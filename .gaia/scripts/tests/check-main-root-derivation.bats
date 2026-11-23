@@ -93,137 +93,124 @@ commit_fixture() {
   grep -qF "worktree list --porcelain piped to a first-record reader: 0" <<<"$output" || return 1
 }
 
+# write_case_file <repo> <case>: replaces the repo's tracked files with the one
+# file the named case plants, and commits it.
+write_case_file() {
+  local repo="$1"
+  find "$repo" -mindepth 1 -maxdepth 1 -not -name .git -exec rm -rf {} +
+  case "$2" in
+    common-dir)
+      {
+        printf '#!/usr/bin/env bash\n'
+        printf 'common="$(git rev-parse --git-common-dir)"\n'
+        printf 'main_root="$(dirname "$common")"\n'
+      } >"$repo/consumer.sh"
+      ;;
+    worktrees-surgery)
+      {
+        printf '#!/usr/bin/env bash\n'
+        printf 'common="/repo/.claude/worktrees/foo/.git"\n'
+        printf 'main_root="${common%%/.git/worktrees/*}"\n'
+      } >"$repo/consumer.sh"
+      ;;
+    porcelain-head)
+      {
+        printf '#!/usr/bin/env bash\n'
+        printf 'main_root=$(git worktree list --porcelain | head -1 | cut -d" " -f2)\n'
+      } >"$repo/consumer.sh"
+      ;;
+    porcelain-sed)
+      {
+        printf '#!/usr/bin/env bash\n'
+        printf "git worktree list --porcelain \\\\\n"
+        printf "  | sed -n '1p'\n"
+      } >"$repo/consumer.sh"
+      ;;
+    comment-common-dir)
+      {
+        printf '#!/usr/bin/env bash\n'
+        printf '# this used to call git rev-parse --git-common-dir by hand\n'
+        printf 'echo hi\n'
+      } >"$repo/consumer.sh"
+      ;;
+    markdown-common-dir)
+      printf 'Resolves main via `git rev-parse --git-common-dir`.\n' >"$repo/NOTES.md"
+      ;;
+    test-fixture-common-dir)
+      printf "execFileSync('git', ['rev-parse', '--git-common-dir']);\n" >"$repo/consumer.test.ts"
+      ;;
+    porcelain-full-awk)
+      {
+        printf '#!/usr/bin/env bash\n'
+        printf "git -C \"\$main\" worktree list --porcelain | awk '\n"
+        printf '  $1=="worktree"{ p=substr($0,10) }\n'
+        printf "  \$1==\"\"{ if(p!=\"\") print p; p=\"\" }\n"
+        printf "'\n"
+      } >"$repo/consumer.sh"
+      ;;
+    bats-fixture)
+      {
+        printf '#!/usr/bin/env bats\n'
+        printf '@test "plants the defect" {\n'
+        printf '  common="$(git rev-parse --git-common-dir)"\n'
+        printf '}\n'
+      } >"$repo/plant.bats"
+      ;;
+    clean) printf '#!/usr/bin/env bash\necho hi\n' >"$repo/consumer.sh" ;;
+    *)
+      echo "write_case_file: unknown case $2" >&2
+      return 1
+      ;;
+  esac
+  commit_fixture "$repo"
+}
+
+# bats test_tags=protected
 @test "fixture: a bare --git-common-dir derivation in a consumer fails" {
+  local repo row case_name expected_line
+  repo="$(make_fixture_repo bad-derivations)"
+  for row in \
+    'common-dir|hand-rolled --git-common-dir uses outside the resolver: 1' \
+    'worktrees-surgery|worktrees parameter-expansion string surgery found: 1' \
+    'porcelain-head|worktree list --porcelain piped to a first-record reader: 1' \
+    'porcelain-sed|worktree list --porcelain piped to a first-record reader: 1'; do
+    IFS='|' read -r case_name expected_line <<<"$row"
+    write_case_file "$repo" "$case_name"
+    run gaia_check_main_root_derivation "$repo"
+    [ "$status" -eq 1 ] || { echo "case $case_name: status $status"; return 1; }
+    grep -qF "$expected_line" <<<"$output" || { echo "case $case_name: missing '$expected_line'"; return 1; }
+    grep -qF "consumer.sh" <<<"$output" || { echo "case $case_name: consumer.sh not named"; return 1; }
+  done
+}
+
+@test "fixture: a mention in a comment, markdown, test, bats fixture or full parse does not fail" {
+  local repo case_name
+  repo="$(make_fixture_repo benign-mentions)"
+  for case_name in comment-common-dir markdown-common-dir test-fixture-common-dir porcelain-full-awk bats-fixture clean; do
+    write_case_file "$repo" "$case_name"
+    run gaia_check_main_root_derivation "$repo"
+    [ "$status" -eq 0 ] || { echo "case $case_name: status $status"; return 1; }
+    grep -qF "hand-rolled --git-common-dir uses outside the resolver: 0" <<<"$output" || { echo "case $case_name: common-dir count not 0"; return 1; }
+    grep -qF "worktrees parameter-expansion string surgery found: 0" <<<"$output" || { echo "case $case_name: surgery count not 0"; return 1; }
+    grep -qF "worktree list --porcelain piped to a first-record reader: 0" <<<"$output" || { echo "case $case_name: porcelain count not 0"; return 1; }
+  done
+}
+
+@test "fixture: the fast lib is exempt, and the same line in a sibling scripts file fails" {
   local repo
-  repo="$(make_fixture_repo bad-common-dir)"
-  {
-    printf '#!/usr/bin/env bash\n'
-    printf 'common="$(git rev-parse --git-common-dir)"\n'
-    printf 'main_root="$(dirname "$common")"\n'
-  } >"$repo/consumer.sh"
+  repo="$(make_fixture_repo companion-exemption)"
+  mkdir -p "$repo/.gaia/scripts"
+  printf 'raw="$(git rev-parse --git-common-dir)"\n' >"$repo/.gaia/scripts/rate-limit-main-root-probe-lib.sh"
+  commit_fixture "$repo"
+  run gaia_check_main_root_derivation "$repo"
+  [ "$status" -eq 0 ]
+  grep -qF "hand-rolled --git-common-dir uses outside the resolver: 0" <<<"$output" || return 1
+
+  printf 'raw="$(git rev-parse --git-common-dir)"\n' >"$repo/.gaia/scripts/tree-root-helper.sh"
   commit_fixture "$repo"
   run gaia_check_main_root_derivation "$repo"
   [ "$status" -eq 1 ]
   grep -qF "hand-rolled --git-common-dir uses outside the resolver: 1" <<<"$output" || return 1
-  grep -qF "consumer.sh" <<<"$output" || return 1
+  grep -qF ".gaia/scripts/tree-root-helper.sh" <<<"$output" || return 1
 }
 
-@test "fixture: --git-common-dir mentioned only in a comment does not fail" {
-  local repo
-  repo="$(make_fixture_repo comment-common-dir)"
-  {
-    printf '#!/usr/bin/env bash\n'
-    printf '# this used to call git rev-parse --git-common-dir by hand\n'
-    printf 'echo hi\n'
-  } >"$repo/consumer.sh"
-  commit_fixture "$repo"
-  run gaia_check_main_root_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "hand-rolled --git-common-dir uses outside the resolver: 0" <<<"$output" || return 1
-}
-
-@test "fixture: --git-common-dir mentioned only in a markdown file does not fail" {
-  local repo
-  repo="$(make_fixture_repo md-common-dir)"
-  printf 'Resolves main via `git rev-parse --git-common-dir`.\n' >"$repo/NOTES.md"
-  commit_fixture "$repo"
-  run gaia_check_main_root_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "hand-rolled --git-common-dir uses outside the resolver: 0" <<<"$output" || return 1
-}
-
-@test "fixture: --git-common-dir in a *.test.ts fixture does not fail" {
-  local repo
-  repo="$(make_fixture_repo test-common-dir)"
-  printf "execFileSync('git', ['rev-parse', '--git-common-dir']);\n" >"$repo/consumer.test.ts"
-  commit_fixture "$repo"
-  run gaia_check_main_root_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "hand-rolled --git-common-dir uses outside the resolver: 0" <<<"$output" || return 1
-}
-
-@test "fixture: a worktrees parameter-expansion trim fails" {
-  local repo
-  repo="$(make_fixture_repo worktrees-surgery)"
-  {
-    printf '#!/usr/bin/env bash\n'
-    printf 'common="/repo/.claude/worktrees/foo/.git"\n'
-    printf 'main_root="${common%%/.git/worktrees/*}"\n'
-  } >"$repo/consumer.sh"
-  commit_fixture "$repo"
-  run gaia_check_main_root_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "worktrees parameter-expansion string surgery found: 1" <<<"$output" || return 1
-  grep -qF "consumer.sh" <<<"$output" || return 1
-}
-
-@test "fixture: worktree list --porcelain piped to head -1 fails" {
-  local repo
-  repo="$(make_fixture_repo porcelain-head)"
-  {
-    printf '#!/usr/bin/env bash\n'
-    printf 'main_root=$(git worktree list --porcelain | head -1 | cut -d" " -f2)\n'
-  } >"$repo/consumer.sh"
-  commit_fixture "$repo"
-  run gaia_check_main_root_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "worktree list --porcelain piped to a first-record reader: 1" <<<"$output" || return 1
-  grep -qF "consumer.sh" <<<"$output" || return 1
-}
-
-@test "fixture: worktree list --porcelain piped to sed -n '1p' fails" {
-  local repo
-  repo="$(make_fixture_repo porcelain-sed)"
-  {
-    printf '#!/usr/bin/env bash\n'
-    printf "git worktree list --porcelain \\\\\n"
-    printf "  | sed -n '1p'\n"
-  } >"$repo/consumer.sh"
-  commit_fixture "$repo"
-  run gaia_check_main_root_derivation "$repo"
-  [ "$status" -eq 1 ]
-  grep -qF "worktree list --porcelain piped to a first-record reader: 1" <<<"$output" || return 1
-}
-
-@test "fixture: worktree list --porcelain piped to a full awk parse does not fail" {
-  local repo
-  repo="$(make_fixture_repo porcelain-full-awk)"
-  {
-    printf '#!/usr/bin/env bash\n'
-    printf "git -C \"\$main\" worktree list --porcelain | awk '\n"
-    printf '  $1=="worktree"{ p=substr($0,10) }\n'
-    printf "  \$1==\"\"{ if(p!=\"\") print p; p=\"\" }\n"
-    printf "'\n"
-  } >"$repo/consumer.sh"
-  commit_fixture "$repo"
-  run gaia_check_main_root_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "worktree list --porcelain piped to a first-record reader: 0" <<<"$output" || return 1
-}
-
-@test "fixture: a bad derivation inside a *.bats fixture does not fail" {
-  local repo
-  repo="$(make_fixture_repo bats-fixture)"
-  {
-    printf '#!/usr/bin/env bats\n'
-    printf '@test "plants the defect" {\n'
-    printf '  common="$(git rev-parse --git-common-dir)"\n'
-    printf '}\n'
-  } >"$repo/plant.bats"
-  commit_fixture "$repo"
-  run gaia_check_main_root_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "hand-rolled --git-common-dir uses outside the resolver: 0" <<<"$output" || return 1
-}
-
-@test "fixture: a clean repo with no derivation passes with all-zero counts" {
-  local repo
-  repo="$(make_fixture_repo clean)"
-  printf '#!/usr/bin/env bash\necho hi\n' >"$repo/consumer.sh"
-  commit_fixture "$repo"
-  run gaia_check_main_root_derivation "$repo"
-  [ "$status" -eq 0 ]
-  grep -qF "hand-rolled --git-common-dir uses outside the resolver: 0" <<<"$output" || return 1
-  grep -qF "worktrees parameter-expansion string surgery found: 0" <<<"$output" || return 1
-  grep -qF "worktree list --porcelain piped to a first-record reader: 0" <<<"$output" || return 1
-}

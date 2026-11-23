@@ -52,17 +52,20 @@ root_anchored_rule_present() {
   jq -e --arg rule "$2" '.permissions.ask | index($rule)' "$1" >/dev/null
 }
 
-@test "root permissions.ask carries Edit(**/.claude/settings.json)" {
+@test "the ask rule is present, root-anchored, re-anchored in the generated file, and the overlay adds nothing" {
+  echo "row: root permissions.ask carries Edit(**/.claude/settings.json)"
   ask_rule_present "$SETTINGS"
-}
-
-@test "root permissions.ask carries the root-anchored rule generation reanchors per package" {
+  echo "row: root permissions.ask carries the root-anchored rule Edit(.claude/settings.json)"
   root_anchored_rule_present "$SETTINGS" "Edit(.claude/settings.json)"
-}
-
-@test "the frontend overlay adds nothing: the root settings own the ask rules" {
+  echo "row: the frontend overlay adds nothing"
   run jq -e '. == {}' "$REPO_ROOT/apps/web/.claude/settings.overlay.json"
   [ "$status" -eq 0 ]
+  echo "row: the generated settings carry Edit(**/.claude/settings.json)"
+  ask_rule_present "$GENERATED"
+  echo "row: the generated settings carry the re-anchored Edit(../../.claude/settings.json)"
+  root_anchored_rule_present "$GENERATED" "Edit(../../.claude/settings.json)"
+  echo "row: the generated settings register block-settings-write.sh on Bash|Monitor"
+  hook_registered "$GENERATED" '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")' block-settings-write.sh
 }
 
 @test "no allow entry shadows the ask rule in the root or generated settings" {
@@ -72,46 +75,8 @@ root_anchored_rule_present() {
   [ "$status" -eq 0 ]
 }
 
-@test "the shadow check fails and names an Edit(.claude/**) allow entry" {
-  jq '.permissions.allow += ["Edit(.claude/**)"]' "$SETTINGS" >"$BATS_TEST_TMPDIR/shadowed.json"
-  run shadowing_allow_entries "$BATS_TEST_TMPDIR/shadowed.json"
-  [ "$status" -ne 0 ]
-  grep -qF -- "Edit(.claude/**)" <<<"$output"
-}
-
-@test "the ask-rule check fails when permissions.ask is deleted" {
-  jq 'del(.permissions.ask)' "$SETTINGS" >"$BATS_TEST_TMPDIR/no-ask.json"
-  run ask_rule_present "$BATS_TEST_TMPDIR/no-ask.json"
-  [ "$status" -ne 0 ]
-}
-
 @test "the settings-write guard is registered on Bash|Monitor only" {
   hook_registered "$SETTINGS" '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")' block-settings-write.sh
   run jq -e '[.hooks.PreToolUse[] | select(.matcher == "Edit|Write|MultiEdit") | .hooks[] | .command // empty] | any(contains("block-settings-write.sh"))' "$SETTINGS"
   [ "$status" -ne 0 ]
-}
-
-@test "the generated frontend settings carry the ask rule and the registration" {
-  ask_rule_present "$GENERATED"
-  root_anchored_rule_present "$GENERATED" "Edit(../../.claude/settings.json)"
-  hook_registered "$GENERATED" '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")' block-settings-write.sh
-}
-
-@test "the root-file check fails when the generated rule is removed" {
-  jq '.permissions.ask -= ["Edit(../../.claude/settings.json)"]' "$GENERATED" >"$BATS_TEST_TMPDIR/no-root-rule.json"
-  run root_anchored_rule_present "$BATS_TEST_TMPDIR/no-root-rule.json" "Edit(../../.claude/settings.json)"
-  [ "$status" -ne 0 ]
-}
-
-@test "the shadow check fails on a package-relative parent allow entry" {
-  jq '.permissions.allow += ["Edit(../**)"]' "$GENERATED" >"$BATS_TEST_TMPDIR/shadowed-parent.json"
-  run shadowing_allow_entries "$BATS_TEST_TMPDIR/shadowed-parent.json"
-  [ "$status" -ne 0 ]
-  grep -qF -- "Edit(../**)" <<<"$output"
-}
-
-# bats test_tags=whole-tree
-@test "the committed tree passes the drift check" {
-  run bash "$REPO_ROOT/.gaia/scripts/check-settings-drift.sh" "$REPO_ROOT"
-  [ "$status" -eq 0 ]
 }

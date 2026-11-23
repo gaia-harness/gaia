@@ -64,60 +64,78 @@ remote_has_branch() {
 
 NOTE='pre-push: no branch update in this push, nothing to verify'
 
-@test "a tag-only push passes with one note line and never reaches the runner" {
-  git -C "$REPO" tag spec/001
-  run git -C "$REPO" push origin refs/tags/spec/001
-  [ "$status" -eq 0 ]
-  [ "$(grep -c '^pre-push:' <<<"$output")" -eq 1 ]
-  grep -qxF -- "$NOTE" <<<"$output"
-  [ ! -s "$RUNNER_LOG" ]
-  git -C "$REMOTE" rev-parse --verify --quiet refs/tags/spec/001 > /dev/null
+# The rows share one repository and remote; each pushes refs of its own.
+@test "a tag-only push or a branch deletion passes with one note line and never reaches the runner" {
+  local label
+  for label in "tag-only push" "branch deletion"; do
+    case "$label" in
+      "tag-only push")
+        git -C "$REPO" tag spec/001
+        : > "$RUNNER_LOG"
+        run git -C "$REPO" push origin refs/tags/spec/001
+        ;;
+      "branch deletion")
+        commit_on_branch doomed > /dev/null
+        git -C "$REPO" push --quiet origin doomed
+        : > "$RUNNER_LOG"
+        printf '1\n' > "$RUNNER_STATUS"
+        run git -C "$REPO" push origin --delete doomed
+        ;;
+    esac
+    [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+    [ "$(grep -c '^pre-push:' <<<"$output")" -eq 1 ] || { echo "case $label: not one pre-push line: $output"; return 1; }
+    grep -qxF -- "$NOTE" <<<"$output" || { echo "case $label: no note line: $output"; return 1; }
+    [ ! -s "$RUNNER_LOG" ] || { echo "case $label: the runner ran: $(cat "$RUNNER_LOG")"; return 1; }
+    case "$label" in
+      "tag-only push")
+        git -C "$REMOTE" rev-parse --verify --quiet refs/tags/spec/001 > /dev/null || { echo "case $label: the tag did not reach the remote"; return 1; }
+        ;;
+      "branch deletion")
+        remote_has_branch doomed && { echo "case $label: the branch is still on the remote"; return 1; }
+        ;;
+    esac
+  done
+  true
 }
 
-@test "a branch deletion passes with one note line and never reaches the runner" {
-  commit_on_branch doomed > /dev/null
-  git -C "$REPO" push --quiet origin doomed
-  : > "$RUNNER_LOG"
-  printf '1\n' > "$RUNNER_STATUS"
-
-  run git -C "$REPO" push origin --delete doomed
-  [ "$status" -eq 0 ]
-  [ "$(grep -c '^pre-push:' <<<"$output")" -eq 1 ]
-  grep -qxF -- "$NOTE" <<<"$output"
-  [ ! -s "$RUNNER_LOG" ]
-  if remote_has_branch doomed; then return 1; fi
+# The rows share one repository and remote; each pushes branches of its own.
+@test "the runner is handed each pushed branch sha once: a tag beside a branch, two branches, two branches at one commit" {
+  local label branch_sha first_sha second_sha
+  for label in "tag beside a branch" "two branches" "two branches at one commit"; do
+    : > "$RUNNER_LOG"
+    case "$label" in
+      "tag beside a branch")
+        branch_sha="$(commit_on_branch feat-one)"
+        git -C "$REPO" tag spec/002
+        run git -C "$REPO" push origin feat-one refs/tags/spec/002
+        [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+        [ "$(cat "$RUNNER_LOG")" = "push $branch_sha" ] || { echo "case $label: runner got [$(cat "$RUNNER_LOG")]"; return 1; }
+        remote_has_branch feat-one || { echo "case $label: feat-one did not reach the remote"; return 1; }
+        ;;
+      "two branches")
+        first_sha="$(commit_on_branch feat-a)"
+        second_sha="$(commit_on_branch feat-b)"
+        [ "$first_sha" != "$second_sha" ] || { echo "case $label: the branches share a sha"; return 1; }
+        run git -C "$REPO" push origin feat-a feat-b
+        [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+        [ "$(wc -l < "$RUNNER_LOG" | tr -d ' ')" -eq 1 ] || { echo "case $label: runner ran more than once: $(cat "$RUNNER_LOG")"; return 1; }
+        grep -qF -- "$first_sha" "$RUNNER_LOG" || { echo "case $label: first sha missing: $(cat "$RUNNER_LOG")"; return 1; }
+        grep -qF -- "$second_sha" "$RUNNER_LOG" || { echo "case $label: second sha missing: $(cat "$RUNNER_LOG")"; return 1; }
+        grep -qE -- "^push [0-9a-f]{40} [0-9a-f]{40}$" "$RUNNER_LOG" || { echo "case $label: not push and two shas: $(cat "$RUNNER_LOG")"; return 1; }
+        ;;
+      "two branches at one commit")
+        branch_sha="$(commit_on_branch feat-same)"
+        git -C "$REPO" branch feat-twin
+        run git -C "$REPO" push origin feat-same feat-twin
+        [ "$status" -eq 0 ] || { echo "case $label: status=$status output=$output"; return 1; }
+        [ "$(cat "$RUNNER_LOG")" = "push $branch_sha" ] || { echo "case $label: runner got [$(cat "$RUNNER_LOG")]"; return 1; }
+        remote_has_branch feat-twin || { echo "case $label: feat-twin did not reach the remote"; return 1; }
+        ;;
+    esac
+  done
 }
 
-@test "a push carrying a tag and a branch hands the runner exactly the branch sha" {
-  branch_sha="$(commit_on_branch feat-one)"
-  git -C "$REPO" tag spec/002
-  run git -C "$REPO" push origin feat-one refs/tags/spec/002
-  [ "$status" -eq 0 ]
-  [ "$(cat "$RUNNER_LOG")" = "push $branch_sha" ]
-  remote_has_branch feat-one
-}
-
-@test "two branches pushed at once hand the runner both distinct shas" {
-  first_sha="$(commit_on_branch feat-a)"
-  second_sha="$(commit_on_branch feat-b)"
-  [ "$first_sha" != "$second_sha" ]
-  run git -C "$REPO" push origin feat-a feat-b
-  [ "$status" -eq 0 ]
-  [ "$(wc -l < "$RUNNER_LOG" | tr -d ' ')" -eq 1 ]
-  grep -qF -- "$first_sha" "$RUNNER_LOG"
-  grep -qF -- "$second_sha" "$RUNNER_LOG"
-  grep -qE -- "^push [0-9a-f]{40} [0-9a-f]{40}$" "$RUNNER_LOG"
-}
-
-@test "two branches at the same commit hand the runner that sha once" {
-  branch_sha="$(commit_on_branch feat-same)"
-  git -C "$REPO" branch feat-twin
-  run git -C "$REPO" push origin feat-same feat-twin
-  [ "$status" -eq 0 ]
-  [ "$(cat "$RUNNER_LOG")" = "push $branch_sha" ]
-  remote_has_branch feat-twin
-}
-
+# bats test_tags=protected
 @test "a runner refusal refuses the push and the ref never reaches the remote" {
   commit_on_branch feat-red > /dev/null
   printf '1\n' > "$RUNNER_STATUS"

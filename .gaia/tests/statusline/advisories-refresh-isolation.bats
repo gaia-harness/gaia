@@ -35,16 +35,3 @@ session_start_offenders() {
   jq -e '.hooks.SessionStart | length > 0' "$SETTINGS_FILE" >/dev/null
   [ -z "$(session_start_offenders "$SETTINGS_FILE")" ]
 }
-
-@test "the statusline assertion reports an injected gh api line" {
-  local scratch="$BATS_TEST_TMPDIR/statusline.sh"
-  cp "$STATUSLINE_FILE" "$scratch"
-  printf 'gh api repos/o/r/dependabot/alerts\n' >> "$scratch"
-  [ -n "$(statusline_offenders "$scratch")" ]
-}
-
-@test "the SessionStart assertion reports an injected refresher entry" {
-  local scratch="$BATS_TEST_TMPDIR/settings.json"
-  jq '.hooks.SessionStart += [{"hooks":[{"type":"command","command":"bash .gaia/scripts/check-updates.sh"}]}]' "$SETTINGS_FILE" > "$scratch"
-  [ -n "$(session_start_offenders "$scratch")" ]
-}

@@ -39,47 +39,37 @@ make_fixture() {
   [ "$status" -eq 0 ]
 }
 
-@test "a changed byte fails and names the file as MODIFIED" {
-  make_fixture
-  printf 'top levem\n' >"$FIXTURE/$TARGET_RELATIVE/SKILL.md"
-  run "$SCRIPT" --root "$FIXTURE"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"MODIFIED $TARGET_RELATIVE/SKILL.md"* ]]
+# bats test_tags=protected
+@test "drift of a vendored file is named by kind: MODIFIED, UNEXPECTED, MISSING" {
+  local kind
+  for kind in MODIFIED UNEXPECTED MISSING; do
+    rm -rf "$FIXTURE"
+    make_fixture
+    case "$kind" in
+      MODIFIED) printf 'top levem\n' >"$FIXTURE/$TARGET_RELATIVE/SKILL.md"; named="SKILL.md" ;;
+      UNEXPECTED) printf 'stray\n' >"$FIXTURE/$TARGET_RELATIVE/references/extra.md"; named="references/extra.md" ;;
+      MISSING) rm "$FIXTURE/$TARGET_RELATIVE/references/one.md"; named="references/one.md" ;;
+    esac
+    run "$SCRIPT" --root "$FIXTURE"
+    [ "$status" -eq 1 ] || { echo "case $kind: expected exit 1, got $status"; return 1; }
+    [[ "$output" == *"$kind $TARGET_RELATIVE/$named"* ]] || { echo "case $kind: not named: $output"; return 1; }
+  done
 }
 
-@test "an added file fails and names the file as UNEXPECTED" {
-  make_fixture
-  printf 'stray\n' >"$FIXTURE/$TARGET_RELATIVE/references/extra.md"
-  run "$SCRIPT" --root "$FIXTURE"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"UNEXPECTED $TARGET_RELATIVE/references/extra.md"* ]]
-}
-
-@test "a removed file fails and names the file as MISSING" {
-  make_fixture
-  rm "$FIXTURE/$TARGET_RELATIVE/references/one.md"
-  run "$SCRIPT" --root "$FIXTURE"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"MISSING $TARGET_RELATIVE/references/one.md"* ]]
-}
-
-@test "an empty marker set exits 2 rather than reporting clean" {
+@test "usage errors exit 2 rather than reporting clean: empty marker set, missing jq, unknown argument" {
   mkdir -p "$FIXTURE/.gaia/vendor"
   run "$SCRIPT" --root "$FIXTURE"
-  [ "$status" -eq 2 ]
-}
+  [ "$status" -eq 2 ] || { echo "case empty marker set: got $status"; return 1; }
 
-@test "a missing jq exits 2 naming jq" {
+  rm -rf "$FIXTURE"
   make_fixture
   mkdir -p "$BATS_TEST_TMPDIR/empty-path"
   PATH="$BATS_TEST_TMPDIR/empty-path" run "$BASH" "$SCRIPT" --root "$FIXTURE"
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"jq"* ]]
-}
+  [ "$status" -eq 2 ] || { echo "case missing jq: got $status"; return 1; }
+  [[ "$output" == *"jq"* ]] || { echo "case missing jq: jq not named"; return 1; }
 
-@test "an unknown argument exits 2" {
   run "$SCRIPT" --bogus
-  [ "$status" -eq 2 ]
+  [ "$status" -eq 2 ] || { echo "case unknown argument: got $status"; return 1; }
 }
 
 # bats test_tags=whole-tree

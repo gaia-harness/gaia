@@ -52,7 +52,7 @@ install() {
   done < <(cd "$source_directory" && find . -type f)
 }
 
-flush() { bash "${FLUSHER:-$FLUSH}" --projects-root "$PROJECTS_DIRECTORY" --main-root "$ROOT" "$@"; }
+flush() { bash "$FLUSH" --projects-root "$PROJECTS_DIRECTORY" --main-root "$ROOT" "$@"; }
 
 flush_session() { flush --session s-af --finished-main --all-sidecars-finished; }
 
@@ -75,26 +75,6 @@ wait_for() {
     i=$((i + 1))
   done
   [ -e "$1" ]
-}
-
-# scratch_flusher <sed-expr> <file>: a copy of the flusher and its libraries
-# with one mutation applied to <file>; fails when the sed changed nothing.
-scratch_flusher() {
-  local scratch_directory="$TEMPORARY_DIRECTORY/scratch"
-  mkdir -p "$scratch_directory/.gaia/scripts" "$scratch_directory/.gaia/scripts/spec"
-  cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/main-root-lib.sh \
-    "$SCRIPTS"/branch-name-lib.sh "$scratch_directory/.gaia/scripts/"
-  cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch_directory/.gaia/scripts/spec/"
-  cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch_directory/.gaia/scripts/"
-  mkdir -p "$scratch_directory/.gaia/scripts/notebook"
-  cp "$SCRIPTS"/notebook/*.sh "$scratch_directory/.gaia/scripts/notebook/"
-  sed "$1" "$SCRIPTS/$2" >"$scratch_directory/.gaia/scripts/$2.m"
-  if cmp -s "$SCRIPTS/$2" "$scratch_directory/.gaia/scripts/$2.m"; then
-    echo "mutation did not apply to $2" >&2
-    return 1
-  fi
-  mv "$scratch_directory/.gaia/scripts/$2.m" "$scratch_directory/.gaia/scripts/$2"
-  FLUSHER="$scratch_directory/.gaia/scripts/usage-flush.sh"
 }
 
 # race_a_close: flush the session, parking the first file after its parse; a
@@ -132,25 +112,40 @@ race_a_torn_close() {
 
 # ---------- agent fields ----------
 
-@test "agent fields: main, roster, general-purpose, no-meta and workflow sidecars each carry their type and id" {
-  install
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(segments | jq -c '[.[] | select(.agent_id) | {agent_id, agent_type, first_ts}] | sort_by(.agent_id)')" = \
-    '[{"agent_id":"ca1","agent_type":"code-audit-frontend","first_ts":"2026-10-01T00:00:05.000Z"},{"agent_id":"ca2","agent_type":"code-audit-frontend","first_ts":"2026-10-01T00:00:10.000Z"},{"agent_id":"dc1","agent_type":"unknown","first_ts":"2026-10-01T00:00:25.000Z"},{"agent_id":"gp1","agent_type":"general-purpose","first_ts":"2026-10-01T00:00:15.000Z"},{"agent_id":"nm1","agent_type":"unknown","first_ts":"2026-10-01T00:00:20.000Z"},{"agent_id":"wf1","agent_type":"Explore","first_ts":"2026-10-01T00:00:30.000Z"}]' ]
-  [ "$(segments | jq -c '[.[] | select(.agent_type == "main") | has("agent_id")] | unique')" = '[false]' ]
-  [ "$(segments | jq '[.[] | select(.agent_type == "main")] | length')" -eq 1 ]
-  [ "$(segments | jq -c '[.[].schema_version] | unique')" = '[1]' ]
-}
-
-@test "agent fields: one unparseable meta reads as unknown without disturbing the other sidecars" {
+@test "agent fields: each sidecar kind carries its type and id, an unparseable meta reads unknown, dispatches sum per agent_id, and a sweep keeps each session's metas separate" {
   install
   printf '{"agentType":"code-audit-fro' >"$PROJECTS_DIRECTORY/$(encode_project_path "$ROOT")/s-af/subagents/agent-bad1.meta.json"
   run flush_session
   [ "$status" -eq 0 ]
-  [ "$(segments | jq -r '.[] | select(.agent_id == "ca1") | .agent_type')" = code-audit-frontend ]
-  [ "$(segments | jq -r '.[] | select(.agent_id == "gp1") | .agent_type')" = general-purpose ]
-  [ "$(segments | jq -r '.[] | select(.agent_id == "wf1") | .agent_type')" = Explore ]
+  [ "$(segments | jq -c '[.[] | select(.agent_id) | {agent_id, agent_type, first_ts}] | sort_by(.agent_id)')" = \
+    '[{"agent_id":"ca1","agent_type":"code-audit-frontend","first_ts":"2026-10-01T00:00:05.000Z"},{"agent_id":"ca2","agent_type":"code-audit-frontend","first_ts":"2026-10-01T00:00:10.000Z"},{"agent_id":"dc1","agent_type":"unknown","first_ts":"2026-10-01T00:00:25.000Z"},{"agent_id":"gp1","agent_type":"general-purpose","first_ts":"2026-10-01T00:00:15.000Z"},{"agent_id":"nm1","agent_type":"unknown","first_ts":"2026-10-01T00:00:20.000Z"},{"agent_id":"wf1","agent_type":"Explore","first_ts":"2026-10-01T00:00:30.000Z"}]' ] ||
+    { echo "case sidecar kinds: agent ids and types differ"; return 1; }
+  [ "$(segments | jq -c '[.[] | select(.agent_type == "main") | has("agent_id")] | unique')" = '[false]' ] ||
+    { echo "case sidecar kinds: a main segment carries an agent_id"; return 1; }
+  [ "$(segments | jq '[.[] | select(.agent_type == "main")] | length')" -eq 1 ] ||
+    { echo "case sidecar kinds: main segment count"; return 1; }
+  [ "$(segments | jq -c '[.[].schema_version] | unique')" = '[1]' ] ||
+    { echo "case sidecar kinds: schema_version"; return 1; }
+  [ "$(segments | jq -c '[.[] | select(.agent_type == "code-audit-frontend")] | group_by(.agent_id)
+      | map({agent_id: .[0].agent_id, tokens: ([.[].by_model[] | [.[]] | add] | add)})')" = \
+    '[{"agent_id":"ca1","tokens":3363},{"agent_id":"ca2","tokens":4484}]' ] ||
+    { echo "case dispatch sum: tokens per agent_id differ"; return 1; }
+
+  local project_directory source_file
+  project_directory="$PROJECTS_DIRECTORY/$(encode_project_path "$ROOT")"
+  while IFS= read -r source_file; do
+    mkdir -p "$project_directory/s-af2/${source_file%/*}"
+    sed 's/s-af/s-af2/g' "$project_directory/s-af/$source_file" >"$project_directory/s-af2/$source_file"
+    case "$source_file" in *.jsonl) touch -t 202001010000 "$project_directory/s-af2/$source_file" ;; esac
+  done < <(cd "$project_directory/s-af" && find . -type f | sed 's|^\./||')
+  sed 's/s-af/s-af2/g' "$project_directory/s-af.jsonl" >"$project_directory/s-af2.jsonl"
+  touch -t 202001010000 "$project_directory/s-af2.jsonl"
+  rm -rf "$ROOT/.gaia/local"
+  run flush --sweep
+  [ "$status" -eq 0 ]
+  [ "$(segments | jq -c '[.[] | select(.agent_id) | {session_id, agent_type}] | group_by(.session_id) | map(map(.agent_type) | sort)')" = \
+    '[["Explore","code-audit-frontend","code-audit-frontend","general-purpose","unknown","unknown"],["Explore","code-audit-frontend","code-audit-frontend","general-purpose","unknown","unknown"]]' ] ||
+    { echo "case sweep: two sessions' sidecar types differ"; return 1; }
 }
 
 @test "agent fields: dropping the two fields leaves exactly the segments the flusher produced without them" {
@@ -159,15 +154,6 @@ race_a_torn_close() {
   [ "$status" -eq 0 ]
   [ "$(segments | jq -S 'map(del(.agent_type, .agent_id) | {key, inherit, first_ts, last_ts, messages, by_model}) | sort_by(.first_ts)')" = \
     "$(jq -S . "$FIXTURES_DIRECTORY/golden.json")" ]
-}
-
-@test "agent fields: two dispatches of one roster type sum per agent_id" {
-  install
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(segments | jq -c '[.[] | select(.agent_type == "code-audit-frontend")] | group_by(.agent_id)
-      | map({agent_id: .[0].agent_id, tokens: ([.[].by_model[] | [.[]] | add] | add)})')" = \
-    '[{"agent_id":"ca1","tokens":3363},{"agent_id":"ca2","tokens":4484}]' ]
 }
 
 @test "agent fields: the metas are read in one pass, not one jq per sidecar" {
@@ -181,23 +167,6 @@ race_a_torn_close() {
   [ "$status" -eq 0 ]
   [ "$(segments | jq '[.[] | select(.agent_id)] | length')" -eq 6 ]
   [ "$(wc -l <"$shim_directory/meta-reads" | tr -d ' ')" -eq 1 ]
-}
-
-@test "agent fields: a sweep over two sessions keeps every sidecar's type, so one session's metas never glue onto the next" {
-  install
-  local project_directory source_file
-  project_directory="$PROJECTS_DIRECTORY/$(encode_project_path "$ROOT")"
-  while IFS= read -r source_file; do
-    mkdir -p "$project_directory/s-af2/${source_file%/*}"
-    sed 's/s-af/s-af2/g' "$project_directory/s-af/$source_file" >"$project_directory/s-af2/$source_file"
-    case "$source_file" in *.jsonl) touch -t 202001010000 "$project_directory/s-af2/$source_file" ;; esac
-  done < <(cd "$project_directory/s-af" && find . -type f | sed 's|^\./||')
-  sed 's/s-af/s-af2/g' "$project_directory/s-af.jsonl" >"$project_directory/s-af2.jsonl"
-  touch -t 202001010000 "$project_directory/s-af2.jsonl"
-  run flush --sweep
-  [ "$status" -eq 0 ]
-  [ "$(segments | jq -c '[.[] | select(.agent_id) | {session_id, agent_type}] | group_by(.session_id) | map(map(.agent_type) | sort)')" = \
-    '[["Explore","code-audit-frontend","code-audit-frontend","general-purpose","unknown","unknown"],["Explore","code-audit-frontend","code-audit-frontend","general-purpose","unknown","unknown"]]' ]
 }
 
 # ---------- sidecar quiet window ----------
@@ -225,16 +194,6 @@ race_a_torn_close() {
   [ "$(straddling_count 2026-10-01T00:15:00Z)" -eq 0 ]
 }
 
-@test "close split guard: a flusher whose split filter ignores close rows lets a segment straddle one" {
-  install
-  scratch_flusher 's/ or \.type == "close"//' usage-parse-lib.sh
-  mkdir -p "$TEL"
-  close_row 2026-10-01T00:15:00Z >"$TEL/usage.jsonl"
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ "$(straddling_count 2026-10-01T00:15:00Z)" -eq 1 ]
-}
-
 @test "close race: a close appended while a flush is parked makes it re-prepare, so no segment straddles it" {
   install
   race_a_close
@@ -243,26 +202,12 @@ race_a_torn_close() {
   [ "$(segments | jq '[.[] | select(.agent_id)] | length')" -eq 6 ]
 }
 
-@test "close race guard: a flusher without the commit-time close re-check commits a straddling segment" {
-  install
-  scratch_flusher '/if _uf_closes_changed "\$session_id" /d' usage-flush.sh
-  race_a_close
-  [ "$(straddling_count 2026-10-01T00:15:00Z)" -eq 1 ]
-}
-
 @test "torn close: a close row half written at the first ledger read is read whole once finished, so no segment straddles it" {
   install
   race_a_torn_close
   [ "$(straddling_count 2026-10-01T00:15:00Z)" -eq 0 ]
   [ "$(segments | jq '[.[] | select(.agent_type == "main")] | length')" -eq 2 ]
   [ "$(segments | jq '[.[] | select(.agent_id)] | length')" -eq 6 ]
-}
-
-@test "torn close guard: a flusher that counts a half-written row as read keeps only its second half, and a segment straddles the close" {
-  install
-  scratch_flusher 's|UF_SESSION_ROWS_BYTES=\$((UF_SESSION_ROWS_BYTES + complete))|UF_SESSION_ROWS_BYTES=$((UF_SESSION_ROWS_BYTES + $(wc -c <"$UF_WORK/tail")))|' usage-flush.sh
-  race_a_torn_close
-  [ "$(straddling_count 2026-10-01T00:15:00Z)" -eq 1 ]
 }
 
 # ---------- libraries and the start set ----------

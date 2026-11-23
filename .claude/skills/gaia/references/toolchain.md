@@ -4,7 +4,7 @@ The one statement of how a new project or clone gets pnpm and Chromium, and of h
 
 ## Below a floor
 
-The caller's `toolchain-check.sh` call exited 1. Bring each short tool up to its latest release in this run, rather than stopping. For each `BELOW` or `MISSING` line, show the tool, its installed version and its floor with its `GUIDE` line verbatim, then act on that tool's `ROUTE` line by its class:
+The caller's `toolchain-check.sh` call exited 1. Bring each short tool up to its latest release (node: the floor's major) in this run, rather than stopping. For each `BELOW` or `MISSING` line, show the tool, its installed version and its floor with its `GUIDE` line verbatim, then act on that tool's `ROUTE` line by its class:
 
 - **pnpm**, whatever its class: run `## pnpm` below instead.
 - **`run`:** ask once with `AskUserQuestion`, naming the tool, the installed version, the floor and the exact command, with options `Install it (Recommended)` and `Stop`. On `Install it`, run the command.

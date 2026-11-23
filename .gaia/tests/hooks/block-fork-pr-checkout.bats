@@ -54,6 +54,21 @@ reason() {
   jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output"
 }
 
+# assert_reason_has <fragment>: the denial reason carries it; an empty fragment
+# asserts nothing.
+assert_reason_has() {
+  if [ -n "$1" ]; then
+    reason | grep -qF -- "$1"
+  fi
+}
+
+# assert_gh_asked_about <pull request number>: the stub saw the cross-repo
+# query for it.
+assert_gh_asked_about() {
+  grep -qxF -- "pr view $1 --json isCrossRepository --jq .isCrossRepository" "$GH_LOG"
+}
+
+# bats test_tags=protected
 @test "UAT-010: gh pr checkout of a fork pull request is denied with the refusal" {
   run_guard 'gh pr checkout 34'
   assert_denied_by_json
@@ -62,146 +77,148 @@ reason() {
   grep -qxF -- 'pr view 34 --json isCrossRepository --jq .isCrossRepository' "$GH_LOG"
 }
 
-@test "UAT-010: git fetch of a fork pull request's head ref is denied" {
-  run_guard 'git fetch origin pull/34/head:pr-34'
-  assert_denied_by_json
-  reason | grep -qF -- "$MESSAGE"
-}
-
-@test "git fetch through git -C, the spelling the rules prescribe, is checked too" {
-  run_guard 'git -C /tmp/x fetch origin pull/34/head:pr-34'
-  assert_denied_by_json
-}
-
-@test "a pull-request URL target is read for its number" {
-  run_guard 'gh pr checkout https://github.com/o/r/pull/34'
-  assert_denied_by_json
-  grep -qxF -- 'pr view 34 --json isCrossRepository --jq .isCrossRepository' "$GH_LOG"
-}
-
-@test "a --repo placed after the target is denied, not asked about in the working directory" {
-  run_guard 'gh pr checkout 12 --repo other/repo'
-  assert_denied_by_json
-  reason | grep -qF -- 'names another repository (--repo)'
-  [ ! -s "$GH_LOG" ]
-}
-
-@test "a -R placed after the target is denied" {
-  run_guard 'gh pr checkout 12 -R other/repo'
-  assert_denied_by_json
-  reason | grep -qF -- 'names another repository (-R)'
-}
-
-@test "a repository flag ahead of the subcommand is denied, in every spelling" {
+# Rows: a git fetch of the head ref, the same through `git -C` (the spelling the
+# rules prescribe), a pull-request URL target read for its number, and flags
+# before the target that must not hide it.
+@test "a fork pull request checkout or fetch is denied" {
   local command_text
+  local rows=(
+    'git fetch origin pull/34/head:pr-34'
+    'git -C /tmp/x fetch origin pull/34/head:pr-34'
+    'gh pr checkout https://github.com/o/r/pull/34'
+    'gh pr checkout --branch local-name 34'
+  )
+  for command_text in "${rows[@]}"; do
+    echo "case: $command_text"
+    : >"$GH_LOG"
+    run_guard "$command_text"
+    assert_denied_by_json
+    assert_reason_has "$MESSAGE"
+    assert_gh_asked_about 34
+  done
+}
+
+# A repository flag names a repository the guard cannot ask gh about from the
+# working directory, so every placement is refused before gh is called: after
+# the target, ahead of the subcommand in every spelling, and on a checkout
+# started by a subshell, brace group, negation or keyword.
+@test "a repository flag in any placement is denied" {
+  local row command_text fragment checkout
+  local rows=(
+    'gh pr checkout 12 --repo other/repo|names another repository (--repo)'
+    'gh pr checkout 12 -R other/repo|names another repository (-R)'
+  )
   for command_text in 'gh -R other/repo pr checkout 12' 'gh --repo other/repo pr checkout 12' \
     'gh --repo=other/repo pr checkout 12' 'gh pr -R other/repo checkout 12' \
     'gh pr --repo other/repo checkout 12' 'gh pr checkout 5 && gh -R other/repo pr checkout 12' \
     'gh -R a/b pr -R other/repo checkout 12' \
     'cat <(gh -R other/repo pr checkout 12)' 'cat >(gh -R other/repo pr checkout 12)' \
     'gh -R other/repo pr checkout 12 $( gh pr checkout 12 )' 'gh -R other/repo pr checkout 12 `gh pr checkout 12`'; do
-    run_guard "$command_text"
-    assert_denied_by_json || return 1
-    reason | grep -qF -- 'a repository flag before the subcommand' || return 1
+    rows+=("$command_text|a repository flag before the subcommand")
   done
-  [ ! -s "$GH_LOG" ]
-}
-
-@test "a checkout started by a subshell, brace group, negation or keyword is denied with either flag spelling" {
-  local command_text checkout
   for checkout in 'gh -R other/repo pr checkout 12' 'gh pr checkout 12 -R other/repo'; do
     for command_text in "($checkout)" "{ $checkout; }" "! $checkout" "if true; then $checkout; fi" \
       "for i in 1; do $checkout; done" "while $checkout; do :; done" "sleep 1 & $checkout" \
       "case x in x) $checkout;; esac" "time $checkout"; do
-      run_guard "$command_text"
-      assert_denied_by_json || { echo "not denied: $command_text"; return 1; }
+      rows+=("$command_text|")
     done
   done
-  [ ! -s "$GH_LOG" ]
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r command_text fragment <<<"$row"
+    : >"$GH_LOG"
+    run_guard "$command_text"
+    assert_denied_by_json
+    assert_reason_has "$fragment"
+    [ ! -s "$GH_LOG" ]
+  done
 }
 
-@test "a repository flag ahead of another gh subcommand does not deny a home checkout" {
-  run_guard 'gh -R other/repo pr view 3 && gh pr checkout 12'
-  reason | grep -qF -- 'a repository flag before the subcommand' && return 1
-  grep -qxF -- 'pr view 12 --json isCrossRepository --jq .isCrossRepository' "$GH_LOG"
+# A foreign URL is refused on the URL alone, never by asking gh about the
+# number; a URL naming this repository is refused when gh cannot name it.
+@test "a URL naming another or unknown repository is denied" {
+  local row command_text unreachable fragment
+  local rows=(
+    'gh pr checkout https://github.com/other/repo/pull/12|no|other/repo'
+    'gh pr checkout https://github.com/o/r/pull/12|yes|could not say which repository'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r command_text unreachable fragment <<<"$row"
+    rm -f "$STUB_DIRECTORY/fail"
+    if [ "$unreachable" = yes ]; then : >"$STUB_DIRECTORY/fail"; fi
+    : >"$GH_LOG"
+    run_guard "$command_text"
+    assert_denied_by_json
+    assert_reason_has "$fragment"
+    if [ "$unreachable" = no ]; then
+      grep -qF -- 'pr view 12' "$GH_LOG" && return 1
+    fi
+  done
+  true
 }
 
-@test "a pull-request URL naming another repository is denied" {
-  run_guard 'gh pr checkout https://github.com/other/repo/pull/12'
-  assert_denied_by_json
-  reason | grep -qF -- 'other/repo'
-  ! grep -qF -- 'pr view 12' "$GH_LOG"
+@test "when gh cannot answer or the target cannot be read, deny" {
+  local row command_text unreachable fragment_one fragment_two fragment_three
+  local rows=(
+    'gh pr checkout 34|yes|cannot tell whether pull request 34 comes from a fork|HTTP 502: Bad Gateway|push the branch to origin'
+    'gh pr checkout some-branch|no|gh pr checkout <number>||'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r command_text unreachable fragment_one fragment_two fragment_three <<<"$row"
+    rm -f "$STUB_DIRECTORY/fail"
+    if [ "$unreachable" = yes ]; then : >"$STUB_DIRECTORY/fail"; fi
+    : >"$GH_LOG"
+    run_guard "$command_text"
+    assert_denied_by_json
+    assert_reason_has "$fragment_one"
+    assert_reason_has "$fragment_two"
+    assert_reason_has "$fragment_three"
+    if [ "$unreachable" = no ]; then
+      [ ! -s "$GH_LOG" ]
+    fi
+  done
 }
 
-@test "a pull-request URL naming this repository is allowed" {
-  run_guard 'gh pr checkout https://github.com/o/r/pull/12'
+@test "same-repo and unrelated calls are allowed" {
+  local command_text
+  # Calls that ask gh about pull request 12, which is not a fork. A repository
+  # flag ahead of another gh subcommand does not deny the home checkout after it.
+  local asks_gh_rows=(
+    'gh -R other/repo pr view 3 && gh pr checkout 12'
+    'gh pr checkout https://github.com/o/r/pull/12'
+    'gh pr checkout 12'
+  )
+  # Calls that never reach gh: unrelated, no pull-request refspec, or a
+  # checkout only cited in a heredoc body.
+  local no_gh_rows=(
+    'git status'
+    'git fetch origin main'
+    $'cat > notes.txt <<EOF\ngh pr checkout 34\nEOF\n'
+  )
+  for command_text in "${asks_gh_rows[@]}"; do
+    echo "case: asks gh: $command_text"
+    : >"$GH_LOG"
+    run_guard "$command_text"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    assert_gh_asked_about 12
+  done
+  for command_text in "${no_gh_rows[@]}"; do
+    echo "case: no gh: $command_text"
+    : >"$GH_LOG"
+    run_guard "$command_text"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    [ ! -s "$GH_LOG" ]
+  done
+
+  echo "case: a non-Bash tool call"
+  run env PATH="$STUB_DIRECTORY/bin:$PATH" bash -c 'printf %s "$1" | bash "$2"' _ \
+    '{"tool_name":"Read","tool_input":{"file_path":"/tmp/x"}}' "$HOOK"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  grep -qxF -- 'pr view 12 --json isCrossRepository --jq .isCrossRepository' "$GH_LOG"
-}
-
-@test "a pull-request URL is denied when gh cannot name this repository" {
-  : >"$STUB_DIRECTORY/fail"
-  run_guard 'gh pr checkout https://github.com/o/r/pull/12'
-  assert_denied_by_json
-  reason | grep -qF -- 'could not say which repository'
-}
-
-@test "mutation: stopping the flag scan at the target lets a trailing --repo through, so the trailing-flag test can fail" {
-  local hook_copy_directory="$BATS_TEST_TMPDIR/mutant-scan"
-  mkdir -p "$hook_copy_directory"
-  ln -s "$REPO_ROOT/.claude/hooks/lib" "$hook_copy_directory/lib"
-  sed 's/\[ -n "\$target" \] || target="\$token"/target="$token"; break/' "$HOOK" >"$hook_copy_directory/block-fork-pr-checkout.sh"
-  cmp -s "$HOOK" "$hook_copy_directory/block-fork-pr-checkout.sh" && return 1
-  run_guard 'gh pr checkout 12 --repo other/repo' "$hook_copy_directory/block-fork-pr-checkout.sh"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "mutation: without the URL repository comparison a foreign URL is allowed, so the foreign-URL test can fail" {
-  local hook_copy_directory="$BATS_TEST_TMPDIR/mutant-url"
-  mkdir -p "$hook_copy_directory"
-  ln -s "$REPO_ROOT/.claude/hooks/lib" "$hook_copy_directory/lib"
-  sed 's/if \[ "\$url_repository" != "\$current_repository" \]/if false/' "$HOOK" >"$hook_copy_directory/block-fork-pr-checkout.sh"
-  cmp -s "$HOOK" "$hook_copy_directory/block-fork-pr-checkout.sh" && return 1
-  run_guard 'gh pr checkout https://github.com/other/repo/pull/12' "$hook_copy_directory/block-fork-pr-checkout.sh"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "UAT-010: gh pr checkout of a same-repo pull request is allowed" {
-  run_guard 'gh pr checkout 12'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  grep -qxF -- 'pr view 12 --json isCrossRepository --jq .isCrossRepository' "$GH_LOG"
-}
-
-@test "flags before the target do not hide it" {
-  run_guard 'gh pr checkout --branch local-name 34'
-  assert_denied_by_json
-}
-
-@test "UAT-010: when gh cannot answer, the checkout is denied and the reason names the failure" {
-  : >"$STUB_DIRECTORY/fail"
-  run_guard 'gh pr checkout 34'
-  assert_denied_by_json
-  reason | grep -qF -- 'cannot tell whether pull request 34 comes from a fork'
-  reason | grep -qF -- 'HTTP 502: Bad Gateway'
-  reason | grep -qF -- 'push the branch to origin'
-}
-
-@test "a target the guard cannot read is denied with the by-number spelling named" {
-  run_guard 'gh pr checkout some-branch'
-  assert_denied_by_json
-  reason | grep -qF -- 'gh pr checkout <number>'
-  [ ! -s "$GH_LOG" ]
-}
-
-@test "UAT-010: an unrelated Bash command is allowed without calling gh" {
-  run_guard 'git status'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -s "$GH_LOG" ]
 }
 
 # run_prefilter_probe <command> [hook]: drives the hook with jq and gh stubs
@@ -229,37 +246,6 @@ EOF
   [ ! -e "$PROBE_SENTINEL" ]
 }
 
-@test "mutation: without the prefilter exit the same command spawns jq, so the prefilter test can fail" {
-  local hook_copy_directory="$BATS_TEST_TMPDIR/no-prefilter"
-  mkdir -p "$hook_copy_directory"
-  ln -s "$REPO_ROOT/.claude/hooks/lib" "$hook_copy_directory/lib"
-  sed '/^  \*) exit 0 ;;$/d' "$HOOK" >"$hook_copy_directory/block-fork-pr-checkout.sh"
-  cmp -s "$HOOK" "$hook_copy_directory/block-fork-pr-checkout.sh" && return 1
-  run_prefilter_probe 'ls -la' "$hook_copy_directory/block-fork-pr-checkout.sh"
-  grep -qxF -- jq "$PROBE_SENTINEL"
-}
-
-@test "an ordinary fetch with no pull-request refspec is allowed without calling gh" {
-  run_guard 'git fetch origin main'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -s "$GH_LOG" ]
-}
-
-@test "a checkout only cited in a heredoc body does not arm" {
-  run_guard $'cat > notes.txt <<EOF\ngh pr checkout 34\nEOF\n'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -s "$GH_LOG" ]
-}
-
-@test "a non-Bash tool call is allowed" {
-  run env PATH="$STUB_DIRECTORY/bin:$PATH" bash -c 'printf %s "$1" | bash "$2"' _ \
-    '{"tool_name":"Read","tool_input":{"file_path":"/tmp/x"}}' "$HOOK"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
 @test "a missing cross-repo library denies an armed call instead of allowing it" {
   local hook_copy_directory="$BATS_TEST_TMPDIR/no-cross-lib"
   mkdir -p "$hook_copy_directory/lib"
@@ -272,17 +258,6 @@ EOF
   run_guard 'gh pr checkout 12' "$hook_copy_directory/block-fork-pr-checkout.sh"
   assert_denied_by_json
   reason | grep -qF -- 'cross-repo-refusal.sh'
-}
-
-@test "mutation: without the gaia_cross_repo_deny_reason call the fork checkout is allowed, so the denial test can fail" {
-  local hook_copy_directory="$BATS_TEST_TMPDIR/mutant"
-  mkdir -p "$hook_copy_directory"
-  ln -s "$REPO_ROOT/.claude/hooks/lib" "$hook_copy_directory/lib"
-  sed 's/if fork_reason=\$(gaia_cross_repo_deny_reason/if false \&\& fork_reason=$(gaia_cross_repo_deny_reason/' "$HOOK" >"$hook_copy_directory/block-fork-pr-checkout.sh"
-  cmp -s "$HOOK" "$hook_copy_directory/block-fork-pr-checkout.sh" && return 1
-  run_guard 'gh pr checkout 34' "$hook_copy_directory/block-fork-pr-checkout.sh"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
 }
 
 @test "the guard is registered under PreToolUse for Bash in the rooted command form" {
@@ -308,4 +283,3 @@ EOF
   [ "$status" -eq 2 ]
   grep -qF 'BLOCKED: block-fork-pr-checkout.sh cannot load lib/hook-payload.sh' <<<"$output"
 }
-

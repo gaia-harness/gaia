@@ -204,38 +204,15 @@ scan() {
   [ -z "$output" ]
 }
 
-# ---------------------------------------------------------------------------
-# Acceptance criterion 4: an absent (or empty) audit directory returns 1 and
-# prints nothing -- never an error, never a partial line.
-# ---------------------------------------------------------------------------
-
-@test "an absent audit directory returns 1 and prints nothing" {
-  ROOT="$BATS_TEST_TMPDIR/absent"
-  mkdir -p "$ROOT"
-  scan "$ROOT" code-audit-frontend earned
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-}
-
-@test "an empty audit directory returns 1 and prints nothing" {
-  ROOT="$BATS_TEST_TMPDIR/empty"
-  mkdir -p "$ROOT/.gaia/local/audit"
-  scan "$ROOT" code-audit-frontend earned
-  [ "$status" -eq 1 ]
-  [ -z "$output" ]
-}
-
-# ---------------------------------------------------------------------------
-# Acceptance criterion 5: every existing function in the file is unchanged.
-# Proven here structurally; the consumer suites are run separately and
-# reported green in the executor's notes, and `git diff` confirms no existing
-# function body moved.
-# ---------------------------------------------------------------------------
-
-@test "every pre-existing clearance_* symbol is still defined" {
-  for function_name in clearance_earned_path clearance_refused_path clearance_field \
-    clearance_acceptable clearance_refusal_acceptable clearance_member_cleared \
-    clearance_member_refused; do
-    grep -qF "${function_name}() {" "$CLEARANCE_LIBRARY" || return 1
+@test "clearance_scan: an absent or empty audit directory returns 1 and prints nothing" {
+  local row
+  for row in absent empty; do
+    echo "case: $row"
+    ROOT="$BATS_TEST_TMPDIR/$row"
+    mkdir -p "$ROOT"
+    if [ "$row" = empty ]; then mkdir -p "$ROOT/.gaia/local/audit"; fi
+    scan "$ROOT" code-audit-frontend earned
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
   done
 }

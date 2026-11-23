@@ -38,8 +38,30 @@ setup() {
   fi
   FRONTEND=code-audit-frontend
   SHELL_MEMBER=code-audit-maintainer-shell
-  catchup_init "$BATS_TEST_TMPDIR/sandbox"
+  fresh_sandbox sandbox
+}
+
+setup_file() {
+  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
+  catchup_init "$BATS_FILE_TMPDIR/template"
   install_machinery
+}
+
+# fresh_sandbox <name>: a copy of the file's sandbox, repointed at the copy.
+fresh_sandbox() {
+  local directory="$BATS_TEST_TMPDIR/$1"
+  cp -R "$BATS_FILE_TMPDIR/template" "$directory"
+  CATCHUP_ORIGIN="$directory/origin.git"
+  CATCHUP_ROOT="$directory/repository"
+  # The catch-up fixture's functions read it, which shellcheck cannot see.
+  # shellcheck disable=SC2034
+  CATCHUP_BASE_BRANCH=main
+  CATCHUP_BRANCH=feat/catchup
+  CATCHUP_BASE_WORKTREE="$CATCHUP_ROOT.catchup-base"
+  catchup_git remote set-url origin "$CATCHUP_ORIGIN"
+  catchup_git worktree repair "$CATCHUP_BASE_WORKTREE"
+  _catchup_set_head
 }
 
 # install_machinery: the scope helper, the resolver and every library they load,
@@ -393,57 +415,42 @@ call_precedes_guard() {
   [ -n "$call_line" ] && [ -n "$guard_line" ] && [ "$call_line" -lt "$guard_line" ]
 }
 
-@test "a merge resolution that moves a branch-added guard below its call rotates the covering member and shows the move" {
-  supports_remerge
-  seed_base apps/web/app/p.ts 40
-  catchup_base_commit apps/web/app/p.ts "$(lines_file p-seed 40 20='call();')"
-  catchup_merge_base
-  seed_base .githooks/hook.sh 10
-  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='call();' 19+='guard();')"
-  anchor="$CATCHUP_HEAD"
-  before="$(digests)"
-  no_context="$(mutate no-context 's/-U3/-U0/')"
-  before_no_context="$(digests "$no_context")"
+@test "moving a branch-added guard below its call rotates the covering member and shows the move, in a branch commit and in a merge resolution" {
+  local route
+  for route in commit merge; do
+    # the merge case needs a git with --remerge-diff; the commit case has run by then
+    fresh_sandbox "route-$route"
+    [ "$route" = commit ] || supports_remerge
+    seed_base apps/web/app/p.ts 40
+    catchup_base_commit apps/web/app/p.ts "$(lines_file p-seed 40 20='call();')"
+    catchup_merge_base
+    seed_base .githooks/hook.sh 10
+    catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='call();' 19+='guard();')"
+    anchor="$CATCHUP_HEAD"
+    before="$(digests)"
+    no_context="$(mutate no-context 's/-U3/-U0/')"
+    before_no_context="$(digests "$no_context")"
 
-  catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 19='base nineteen' 20='call();')"
-  catchup_merge_base --no-commit
-  [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
-  lines_file p-resolved 40 19='base nineteen' 20='call();' 20+='guard();' >/dev/null
-  cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/apps/web/app/p.ts"
-  catchup_commit_merge
+    if [ "$route" = commit ]; then
+      catchup_branch_commit apps/web/app/p.ts "$(lines_file p-moved 40 20='call();' 20+='guard();')"
+    else
+      catchup_base_commit apps/web/app/p.ts "$(lines_file p-base 40 19='base nineteen' 20='call();')"
+      catchup_merge_base --no-commit
+      [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
+      lines_file p-resolved 40 19='base nineteen' 20='call();' 20+='guard();' >/dev/null
+      cp "$BATS_TEST_TMPDIR/p-resolved" "$CATCHUP_ROOT/apps/web/app/p.ts"
+      catchup_commit_merge
+    fi
 
-  [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
-  [ "$CHANGED_PATHS" = "apps/web/app/p.ts" ]
-  call_precedes_guard
-  scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
-  [ -z "$CHANGED_PATHS" ]
-
-  # Disabled: without context lines the moved guard is the same one-line hunk.
-  [ -z "$(members_that_changed "$before_no_context" "$(digests "$no_context")")" ]
-}
-
-@test "an ordinary branch commit that moves a guard below its call rotates the covering member and shows the move" {
-  seed_base apps/web/app/p.ts 40
-  catchup_base_commit apps/web/app/p.ts "$(lines_file p-seed 40 20='call();')"
-  catchup_merge_base
-  seed_base .githooks/hook.sh 10
-  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-branch 40 20='call();' 19+='guard();')"
-  anchor="$CATCHUP_HEAD"
-  before="$(digests)"
-  no_context="$(mutate no-context 's/-U3/-U0/')"
-  before_no_context="$(digests "$no_context")"
-
-  catchup_branch_commit apps/web/app/p.ts "$(lines_file p-moved 40 20='call();' 20+='guard();')"
-
-  [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
-  [ "$CHANGED_PATHS" = "apps/web/app/p.ts" ]
-  call_precedes_guard
-  scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
-  [ -z "$CHANGED_PATHS" ]
-
-  [ -z "$(members_that_changed "$before_no_context" "$(digests "$no_context")")" ]
+    [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ] || { echo "$route: wrong members rotated"; return 1; }
+    scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+    [ "$CHANGED_PATHS" = "apps/web/app/p.ts" ]
+    call_precedes_guard
+    scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
+    [ -z "$CHANGED_PATHS" ]
+    # Disabled: without context lines the moved guard is the same one-line hunk.
+    [ -z "$(members_that_changed "$before_no_context" "$(digests "$no_context")")" ]
+  done
 }
 
 # ---------------------------------------------------------------------------
@@ -607,50 +614,39 @@ call_precedes_guard() {
   diff_has 'rename from'
 }
 
-@test "a base deletion under the branch's edit, resolved by keeping the file, shows the file as content the branch adds" {
-  seed_base apps/web/app/f.ts 40
-  seed_base .githooks/hook.sh 10
-  catchup_branch_commit apps/web/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
-  anchor="$CATCHUP_HEAD"
-  before="$(digests)"
+@test "a base deletion under the branch's edit rotates the file's owner whether the resolution keeps the file as content the branch adds or accepts the deletion" {
+  local resolution
+  for resolution in keep accept; do
+    fresh_sandbox "deletion-$resolution"
+    seed_base apps/web/app/f.ts 40
+    seed_base .githooks/hook.sh 10
+    catchup_branch_commit apps/web/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
+    anchor="$CATCHUP_HEAD"
+    before="$(digests)"
 
-  catchup_delete_on_base apps/web/app/f.ts
-  catchup_merge_base --no-commit
-  [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
-  catchup_commit_merge
-  catchup_git show HEAD:apps/web/app/f.ts | grep -qx 'branch twenty'
+    catchup_delete_on_base apps/web/app/f.ts
+    catchup_merge_base --no-commit
+    [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
+    [ "$resolution" = keep ] || catchup_git rm -q -- apps/web/app/f.ts
+    catchup_commit_merge
 
-  [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
-  [ "$CHANGED_PATHS" = "apps/web/app/f.ts" ]
-  diff_has 'new file mode'
-  grep -qxF -- '+line 1' "$REVIEW_DIFF_FILE"
-  grep -qxF -- '+branch twenty' "$REVIEW_DIFF_FILE"
-}
-
-@test "a base deletion under the branch's edit, resolved by accepting the deletion, still rotates the file's owner" {
-  seed_base apps/web/app/f.ts 40
-  seed_base .githooks/hook.sh 10
-  catchup_branch_commit apps/web/app/f.ts "$(lines_file f-branch 40 20='branch twenty')"
-  anchor="$CATCHUP_HEAD"
-  before="$(digests)"
-
-  catchup_delete_on_base apps/web/app/f.ts
-  catchup_merge_base --no-commit
-  [ -n "$(catchup_git diff --name-only --diff-filter=U)" ]
-  catchup_git rm -q -- apps/web/app/f.ts
-  catchup_commit_merge
-  [ ! -e "$CATCHUP_ROOT/apps/web/app/f.ts" ]
-
-  [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ]
-  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
-  [ "$CHANGED_PATHS" = "apps/web/app/f.ts" ]
-  scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
-  [ -z "$CHANGED_PATHS" ]
-
-  # Disabled: a path only the anchor's patch held falls out of a narrowed list
-  # when the pathspec is applied to the target's side alone.
-  mutate_scope_script 's/for side_commit in HEAD \${anchor_commit:+"\$anchor_commit"}; do/for side_commit in HEAD; do/'
-  scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
-  [ -z "$CHANGED_PATHS" ]
+    [ "$(members_that_changed "$before" "$(digests)")" = "$FRONTEND" ] || { echo "$resolution: wrong members rotated"; return 1; }
+    scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+    [ "$CHANGED_PATHS" = "apps/web/app/f.ts" ]
+    if [ "$resolution" = keep ]; then
+      catchup_git show HEAD:apps/web/app/f.ts | grep -qx 'branch twenty'
+      diff_has 'new file mode'
+      grep -qxF -- '+line 1' "$REVIEW_DIFF_FILE"
+      grep -qxF -- '+branch twenty' "$REVIEW_DIFF_FILE"
+    else
+      [ ! -e "$CATCHUP_ROOT/apps/web/app/f.ts" ]
+      scope_for "$SHELL_MEMBER" "$anchor" '.githooks/*'
+      [ -z "$CHANGED_PATHS" ]
+      # Disabled: a path only the anchor's patch held falls out of a narrowed list
+      # when the pathspec is applied to the target's side alone.
+      mutate_scope_script 's/for side_commit in HEAD \${anchor_commit:+"\$anchor_commit"}; do/for side_commit in HEAD; do/'
+      scope_for "$FRONTEND" "$anchor" 'apps/web/app/*'
+      [ -z "$CHANGED_PATHS" ]
+    fi
+  done
 }

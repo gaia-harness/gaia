@@ -90,9 +90,7 @@ setup() {
   # caller piping a live writer directly in never sees SIGPIPE.
   run bash -c "set -o pipefail; seq 1 5000 | bash '$PREDICATE' 'fix: x' >/dev/null"
   [ "$status" -eq 0 ]
-}
 
-@test "closed stdin (not just empty) prints false and exits 0" {
   run bash -c "bash '$PREDICATE' 'chore(deps): x' <&-"
   [ "$status" -eq 0 ]
   [ "$output" = "false" ]
@@ -195,40 +193,6 @@ commit_file() {
   commit_file package.json '{}'
   result="$(run_step_capture "$body" PR_TITLE="chore(deps): bump x" "PR_BASE_SHA=$base" "EVENT_NAME=workflow_dispatch")"
   [ "$(field "$result" skip)" = "false" ]
-}
-
-@test "tests.yml 'Check chore-deps title': a manifest-only diff that changes the msw entry does not skip" {
-  body="$(extract_step_body "$REPO_ROOT/.github/workflows/tests.yml" "Check chore-deps title")"
-  [ -n "$body" ]
-  setup_sandbox_repo
-  commit_file package.json '{"devDependencies":{
-  "msw": "3.0.1"
-}}'
-  base="$(git -C "$SANDBOX" rev-parse HEAD)"
-  commit_file package.json '{"devDependencies":{
-  "msw": "3.0.2"
-}}'
-  result="$(run_step_capture "$body" PR_TITLE="chore(deps): bump msw" "PR_BASE_SHA=$base" "EVENT_NAME=pull_request")"
-  [ "$(field "$result" exit_status)" -eq 0 ]
-  [ "$(field "$result" skip)" = "false" ]
-}
-
-@test "tests.yml 'Check chore-deps title': a manifest-only diff that changes another package still skips" {
-  body="$(extract_step_body "$REPO_ROOT/.github/workflows/tests.yml" "Check chore-deps title")"
-  [ -n "$body" ]
-  setup_sandbox_repo
-  commit_file package.json '{"devDependencies":{
-  "msw": "3.0.2",
-  "zod": "4.0.0"
-}}'
-  base="$(git -C "$SANDBOX" rev-parse HEAD)"
-  commit_file package.json '{"devDependencies":{
-  "msw": "3.0.2",
-  "zod": "4.0.1"
-}}'
-  result="$(run_step_capture "$body" PR_TITLE="chore(deps): bump zod" "PR_BASE_SHA=$base" "EVENT_NAME=pull_request")"
-  [ "$(field "$result" exit_status)" -eq 0 ]
-  [ "$(field "$result" skip)" = "true" ]
 }
 
 # chromatic.yml reads a subject off HEAD directly and needs a real remote
@@ -350,75 +314,69 @@ sandbox_predicate() {
   [ "$status" -eq 0 ]
 }
 
-@test "package manifests: a lockfile plus apps/web/package.json is dependency-only" {
-  use_frontend_registry
-  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json'
-  [ "$output" = "true" ]
+# expect_decision <label> <expected> <subject> <changed paths>: one row of a case
+# table. The label is echoed first, so a red row names itself in the bats output.
+expect_decision() {
+  echo "case: $1"
+  sandbox_predicate "$3" "$4"
+  [ "$output" = "$2" ]
 }
 
-@test "package manifests: the same paths under a feat subject are not" {
+@test "package manifests: dependency-only decision per registered package manifest layout" {
   use_frontend_registry
-  sandbox_predicate 'feat: x' $'pnpm-lock.yaml\napps/web/package.json'
-  [ "$output" = "false" ]
-}
+  expect_decision "a lockfile plus apps/web/package.json is dependency-only" true \
+    'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json'
+  expect_decision "the same paths under a feat subject are not" false \
+    'feat: x' $'pnpm-lock.yaml\napps/web/package.json'
+  expect_decision "a frontend source file beside the manifests is not dependency-only" false \
+    'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json\napps/web/app/a.ts'
+  expect_decision "a nested package.json under the package is not a manifest" false \
+    'chore(deps): bump x' 'apps/web/app/foo/package.json'
+  expect_decision "package.json under an unregistered directory is not a manifest" false \
+    'chore(deps): bump x' 'x/package.json'
+  expect_decision "a root source path beside the lockfile is not dependency-only" false \
+    'chore(deps): bump x' $'pnpm-lock.yaml\napp/a.ts'
+  expect_decision "security resolutions: an override plus the lockfile under a chore(deps) subject is dependency-only" true \
+    'chore(deps): resolve 1 security advisory (cookie)' $'pnpm-workspace.yaml\npnpm-lock.yaml'
 
-@test "package manifests: a frontend source file beside the manifests is not dependency-only" {
-  use_frontend_registry
-  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json\napps/web/app/a.ts'
-  [ "$output" = "false" ]
-}
-
-@test "package manifests: a nested package.json under the package is not a manifest" {
-  use_frontend_registry
-  sandbox_predicate 'chore(deps): bump x' 'apps/web/app/foo/package.json'
-  [ "$output" = "false" ]
-}
-
-@test "package manifests: package.json under an unregistered directory is not a manifest" {
-  use_frontend_registry
-  sandbox_predicate 'chore(deps): bump x' 'x/package.json'
-  [ "$output" = "false" ]
-}
-
-@test "package manifests: a root source path beside the lockfile is not dependency-only" {
-  use_frontend_registry
-  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\napp/a.ts'
-  [ "$output" = "false" ]
-}
-
-@test "package manifests: a registered package manifest is not accepted when the registry omits it" {
+  echo "case: a registered package manifest is not accepted when the registry omits it"
   make_sandbox
   printf '[{"name":"web","path":"apps/web"}]\n' > "$SANDBOX/.gaia/packages.json"
   write_package apps/web
   printf '[]\n' > "$SANDBOX/.gaia/packages.json"
   sandbox_predicate 'chore(deps): bump x' 'apps/web/package.json'
   [ "$output" = "false" ]
-}
 
-@test "package manifests: with no registry the built-in frontend package is used" {
+  echo "case: with no registry the built-in frontend package is used"
   make_sandbox
+  rm -rf "$SANDBOX/.gaia/packages.json" "$SANDBOX/apps"
   write_builtin_descriptor "$SANDBOX"
   sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json'
   [ "$output" = "true" ]
+
+  use_root_registry
+  expect_decision "path-dot layout: root package.json plus the lockfile is dependency-only" true \
+    'chore(deps): bump x' $'package.json\npnpm-lock.yaml'
+  expect_decision "path-dot layout: an app/ source file beside the lockfile is not" false \
+    'chore(deps): bump x' $'pnpm-lock.yaml\napp/a.ts'
 }
 
-@test "package manifests: an unparseable registry prints false and the reason on stderr" {
+@test "package manifests: an unreadable registry, a missing descriptor or a missing registry reader prints false with a gaia-packages reason" {
+  echo "case: an unparseable registry prints false and the reason on stderr"
   use_frontend_registry
   printf 'not json {\n' > "$SANDBOX/.gaia/packages.json"
   sandbox_predicate_split 'chore(deps): bump x' $'pnpm-lock.yaml\napps/web/package.json'
   [ "$STDOUT_TEXT" = "false" ]
   grep -qF -- "gaia-packages: " <<<"$STDERR_TEXT"
-}
 
-@test "package manifests: a missing descriptor prints false, even for root manifests only" {
+  echo "case: a missing descriptor prints false, even for root manifests only"
   use_frontend_registry
   rm "$SANDBOX/apps/web/gaia.package.json"
   sandbox_predicate_split 'chore(deps): bump x' $'pnpm-lock.yaml\npackage.json'
   [ "$STDOUT_TEXT" = "false" ]
   grep -qF -- "gaia-packages: " <<<"$STDERR_TEXT"
-}
 
-@test "package manifests: a missing registry reader prints false" {
+  echo "case: a missing registry reader prints false"
   use_frontend_registry
   rm "$SANDBOX/.claude/hooks/lib/gaia-packages.sh"
   sandbox_predicate_split 'chore(deps): bump x' 'package.json'
@@ -426,20 +384,36 @@ sandbox_predicate() {
   grep -qF -- "gaia-packages: " <<<"$STDERR_TEXT"
 }
 
-@test "security resolutions: an override plus the lockfile under a chore(deps) subject is dependency-only" {
-  use_frontend_registry
-  sandbox_predicate 'chore(deps): resolve 1 security advisory (cookie)' $'pnpm-workspace.yaml\npnpm-lock.yaml'
-  [ "$output" = "true" ]
-}
+@test "tests.yml 'Check chore-deps title': a manifest-only diff skips unless it changes the msw entry" {
+  body="$(extract_step_body "$REPO_ROOT/.github/workflows/tests.yml" "Check chore-deps title")"
+  [ -n "$body" ]
 
-@test "path-dot layout: root package.json plus the lockfile is dependency-only" {
-  use_root_registry
-  sandbox_predicate 'chore(deps): bump x' $'package.json\npnpm-lock.yaml'
-  [ "$output" = "true" ]
-}
+  echo "case: a manifest-only diff that changes the msw entry does not skip"
+  setup_sandbox_repo
+  commit_file package.json '{"devDependencies":{
+  "msw": "3.0.1"
+}}'
+  base="$(git -C "$SANDBOX" rev-parse HEAD)"
+  commit_file package.json '{"devDependencies":{
+  "msw": "3.0.2"
+}}'
+  result="$(run_step_capture "$body" PR_TITLE="chore(deps): bump msw" "PR_BASE_SHA=$base" "EVENT_NAME=pull_request")"
+  [ "$(field "$result" exit_status)" -eq 0 ]
+  [ "$(field "$result" skip)" = "false" ]
 
-@test "path-dot layout: an app/ source file beside the lockfile is not" {
-  use_root_registry
-  sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\napp/a.ts'
-  [ "$output" = "false" ]
+  echo "case: a manifest-only diff that changes another package still skips"
+  rm -rf "$SANDBOX"
+  setup_sandbox_repo
+  commit_file package.json '{"devDependencies":{
+  "msw": "3.0.2",
+  "zod": "4.0.0"
+}}'
+  base="$(git -C "$SANDBOX" rev-parse HEAD)"
+  commit_file package.json '{"devDependencies":{
+  "msw": "3.0.2",
+  "zod": "4.0.1"
+}}'
+  result="$(run_step_capture "$body" PR_TITLE="chore(deps): bump zod" "PR_BASE_SHA=$base" "EVENT_NAME=pull_request")"
+  [ "$(field "$result" exit_status)" -eq 0 ]
+  [ "$(field "$result" skip)" = "true" ]
 }

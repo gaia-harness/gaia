@@ -12,6 +12,12 @@ const block = (payload: string): string =>
     '<!-- gaia-codify:findings:end -->',
   ].join('\n');
 
+const severityEntry = (severity: string): unknown => ({
+  area_tags: ['app'],
+  finding_class: 'holistic/missing-auth-check',
+  severity,
+});
+
 describe('parseFindingsBlock', () => {
   test('extracts findings from the HTML-comment payload between the sentinels', () => {
     const body = block(
@@ -101,44 +107,53 @@ describe('parseFindingsBlock', () => {
     });
   });
 
-  test('fires onReject naming the unaccepted severity token, UAT-036', () => {
-    const body = block(
-      JSON.stringify({
-        findings: [
-          {
-            area_tags: ['app'],
-            finding_class: 'holistic/missing-auth-check',
-            severity: 'Critical',
-          },
-        ],
-        pr_number: 1,
-        schema: 1,
-      })
-    );
-    const onReject = vi.fn();
+  const rejectCases: {
+    entry: unknown;
+    name: string;
+    reason: RejectReason;
+    token: string;
+  }[] = [
+    {
+      entry: severityEntry('Critical'),
+      name: 'fires onReject naming the unaccepted severity token, UAT-036',
+      reason: 'severity',
+      token: 'Critical',
+    },
+    ...['error', 'warning', 'suggestion'].map((retiredToken) => ({
+      entry: severityEntry(retiredToken),
+      name: `drops a finding carrying the retired severity token "${retiredToken}"`,
+      reason: 'severity' as const,
+      token: retiredToken,
+    })),
+    {
+      entry: {area_tags: [], severity: 'major'},
+      name: 'fires onReject for a missing finding_class',
+      reason: 'finding_class',
+      token: 'undefined',
+    },
+    {
+      entry: {
+        area_tags: [1, 2],
+        finding_class: 'knip/exports',
+        severity: 'major',
+      },
+      name: 'fires onReject for malformed area_tags',
+      reason: 'area_tags',
+      token: '[1,2]',
+    },
+    {
+      entry: 'not-an-object',
+      name: 'fires onReject for a non-object entry',
+      reason: 'shape',
+      token: 'not-an-object',
+    },
+  ];
 
-    expect(parseFindingsBlock(body, onReject)).toEqual({
-      auditor: '',
-      findings: [],
-    });
-    expect(onReject).toHaveBeenCalledExactlyOnceWith('severity', 'Critical');
-  });
-
-  test.each(['error', 'warning', 'suggestion'])(
-    'drops a finding carrying the retired severity token "%s"',
-    (retiredToken) => {
+  test.each(rejectCases.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {entry, reason, token}) => {
       const body = block(
-        JSON.stringify({
-          findings: [
-            {
-              area_tags: ['app'],
-              finding_class: 'holistic/missing-auth-check',
-              severity: retiredToken,
-            },
-          ],
-          pr_number: 1,
-          schema: 1,
-        })
+        JSON.stringify({findings: [entry], pr_number: 1, schema: 1})
       );
       const onReject = vi.fn();
 
@@ -146,68 +161,9 @@ describe('parseFindingsBlock', () => {
         auditor: '',
         findings: [],
       });
-      expect(onReject).toHaveBeenCalledExactlyOnceWith(
-        'severity',
-        retiredToken
-      );
+      expect(onReject).toHaveBeenCalledExactlyOnceWith(reason, token);
     }
   );
-
-  test('fires onReject for a missing finding_class', () => {
-    const body = block(
-      JSON.stringify({
-        findings: [{area_tags: [], severity: 'major'}],
-        pr_number: 1,
-        schema: 1,
-      })
-    );
-    const onReject = vi.fn();
-
-    expect(parseFindingsBlock(body, onReject)).toEqual({
-      auditor: '',
-      findings: [],
-    });
-    expect(onReject).toHaveBeenCalledExactlyOnceWith(
-      'finding_class',
-      'undefined'
-    );
-  });
-
-  test('fires onReject for malformed area_tags', () => {
-    const body = block(
-      JSON.stringify({
-        findings: [
-          {
-            area_tags: [1, 2],
-            finding_class: 'knip/exports',
-            severity: 'major',
-          },
-        ],
-        pr_number: 1,
-        schema: 1,
-      })
-    );
-    const onReject = vi.fn();
-
-    expect(parseFindingsBlock(body, onReject)).toEqual({
-      auditor: '',
-      findings: [],
-    });
-    expect(onReject).toHaveBeenCalledExactlyOnceWith('area_tags', '[1,2]');
-  });
-
-  test('fires onReject for a non-object entry', () => {
-    const body = block(
-      JSON.stringify({findings: ['not-an-object'], pr_number: 1, schema: 1})
-    );
-    const onReject = vi.fn();
-
-    expect(parseFindingsBlock(body, onReject)).toEqual({
-      auditor: '',
-      findings: [],
-    });
-    expect(onReject).toHaveBeenCalledExactlyOnceWith('shape', 'not-an-object');
-  });
 
   test('never fires onReject on a null return (no parseable block)', () => {
     const onReject = vi.fn();
@@ -226,111 +182,60 @@ describe('parseFindingsBlock', () => {
     expect(onReject).not.toHaveBeenCalled();
   });
 
-  test('normalizes a missing auditor field to the "" bucket', () => {
-    const body = block(JSON.stringify({findings: [], pr_number: 1, schema: 1}));
-    expect(parseFindingsBlock(body)).toEqual({auditor: '', findings: []});
-  });
-
-  test('normalizes an empty-string auditor to the "" bucket', () => {
+  test.each([
+    ['missing', {}],
+    ['empty-string', {auditor: ''}],
+    ['non-string', {auditor: 7}],
+  ])('normalizes a %s auditor to the "" bucket', (_kind, auditorField) => {
     const body = block(
-      JSON.stringify({auditor: '', findings: [], pr_number: 1, schema: 1})
+      JSON.stringify({...auditorField, findings: [], pr_number: 1, schema: 1})
     );
     expect(parseFindingsBlock(body)).toEqual({auditor: '', findings: []});
   });
 
-  test('normalizes a non-string auditor to the "" bucket', () => {
-    const body = block(
-      JSON.stringify({auditor: 7, findings: [], pr_number: 1, schema: 1})
-    );
-    expect(parseFindingsBlock(body)).toEqual({auditor: '', findings: []});
-  });
+  test.each([
+    ['an additive review_bases key', 'member-clearance'],
+    ['a member-refusal review_bases reason', 'member-refusal'],
+  ])(
+    'tolerates %s without altering the parsed result',
+    (_label, reviewBasesReason) => {
+      const findings = [
+        {
+          area_tags: ['app/components'],
+          finding_class: 'react-doctor/no-generic-handler-names',
+          severity: 'major',
+        },
+      ];
+      const withoutReviewBases = block(
+        JSON.stringify({auditor: 'local', findings, pr_number: 42, schema: 1})
+      );
+      const withReviewBases = block(
+        JSON.stringify({
+          auditor: 'local',
+          findings,
+          pr_number: 42,
+          review_bases: [
+            {
+              anchor_tree: 'abc123',
+              member: 'code-audit-frontend',
+              reason: reviewBasesReason,
+              sha: 'deadbeef',
+            },
+          ],
+          schema: 1,
+        })
+      );
 
-  test('tolerates an additive review_bases key without altering the parsed result', () => {
-    const findings = [
-      {
-        area_tags: ['app/components'],
-        finding_class: 'react-doctor/no-generic-handler-names',
-        severity: 'major',
-      },
-    ];
-    const withoutReviewBases = block(
-      JSON.stringify({auditor: 'local', findings, pr_number: 42, schema: 1})
-    );
-    const withReviewBases = block(
-      JSON.stringify({
+      // Pin the concrete shape as well as the relation: an equality alone stays
+      // green if a regression makes both sides null, which asserts nothing about
+      // additive-key tolerance.
+      expect(parseFindingsBlock(withReviewBases)).toEqual({
         auditor: 'local',
         findings,
-        pr_number: 42,
-        review_bases: [
-          {
-            anchor_tree: 'abc123',
-            member: 'code-audit-frontend',
-            reason: 'member-clearance',
-            sha: 'deadbeef',
-          },
-        ],
-        schema: 1,
-      })
-    );
-
-    // Pin the concrete shape as well as the relation: an equality alone stays
-    // green if a regression makes both sides null, which asserts nothing about
-    // additive-key tolerance.
-    expect(parseFindingsBlock(withReviewBases)).toEqual({
-      auditor: 'local',
-      findings,
-    });
-    expect(parseFindingsBlock(withReviewBases)).toEqual(
-      parseFindingsBlock(withoutReviewBases)
-    );
-  });
-
-  test('tolerates a member-refusal review_bases reason without altering the parsed result', () => {
-    const findings = [
-      {
-        area_tags: ['app/components'],
-        finding_class: 'react-doctor/no-generic-handler-names',
-        severity: 'major',
-      },
-    ];
-    const withoutReviewBases = block(
-      JSON.stringify({auditor: 'local', findings, pr_number: 42, schema: 1})
-    );
-    const withRefusalReviewBase = block(
-      JSON.stringify({
-        auditor: 'local',
-        findings,
-        pr_number: 42,
-        review_bases: [
-          {
-            anchor_tree: 'abc123',
-            member: 'code-audit-frontend',
-            reason: 'member-refusal',
-            sha: 'deadbeef',
-          },
-        ],
-        schema: 1,
-      })
-    );
-
-    expect(parseFindingsBlock(withRefusalReviewBase)).toEqual({
-      auditor: 'local',
-      findings,
-    });
-    expect(parseFindingsBlock(withRefusalReviewBase)).toEqual(
-      parseFindingsBlock(withoutReviewBases)
-    );
-  });
-
-  test('accepts every declared reject reason', () => {
-    // Type-level assertion: RejectReason is exactly the four drop paths.
-    const reasons: RejectReason[] = [
-      'area_tags',
-      'finding_class',
-      'severity',
-      'shape',
-    ];
-
-    expect(reasons).toHaveLength(4);
-  });
+      });
+      expect(parseFindingsBlock(withReviewBases)).toEqual(
+        parseFindingsBlock(withoutReviewBases)
+      );
+    }
+  );
 });

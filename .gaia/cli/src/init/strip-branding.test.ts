@@ -186,23 +186,24 @@ describe('init strip-branding', () => {
     expect(stripCount).toBe(1);
   });
 
-  test('exit 1 when --title missing', () => {
-    sandbox = setupSandbox();
-    const exit = run([], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--title is required');
-  });
-
   test.each([
-    ['a line feed', 'Hello\nWorld'],
-    ['a carriage return', 'Hello\rWorld'],
-  ])('exit 1 when --title carries %s', (_label, title) => {
+    ['a missing --title', [], '--title is required'],
+    [
+      'a --title carrying a line feed',
+      ['--title', 'Hello\nWorld'],
+      '--title must not contain a line ending',
+    ],
+    [
+      'a --title carrying a carriage return',
+      ['--title', 'Hello\rWorld'],
+      '--title must not contain a line ending',
+    ],
+    ['an unknown flag', ['--bogus'], 'unknown flag'],
+  ])('flag validation exits 1: %s', (_name, args, message) => {
     sandbox = setupSandbox();
-    const exit = run(['--title', title], {cwd: sandbox.root});
+    const exit = run(args, {cwd: sandbox.root});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain(
-      '--title must not contain a line ending'
-    );
+    expect(stdio.errors.join('')).toContain(message);
   });
 
   // A title carrying a quote, a backslash or a `$` is an ordinary title and is
@@ -247,12 +248,5 @@ describe('init strip-branding', () => {
     expect(readState(sandbox.root).completed_steps).not.toContain(
       'strip-branding'
     );
-  });
-
-  test('rejects unknown flags', () => {
-    sandbox = setupSandbox();
-    const exit = run(['--bogus'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown flag');
   });
 });

@@ -76,55 +76,53 @@ describe('prompt rules', () => {
     expect(models[UNPINNED_SKILL]).toBe('unresolved');
   });
 
-  test('the project settings model resolves a file that pins none', () => {
-    const report = checkProject({
-      files: {[UNPINNED_SKILL]: `${frontmatter(undefined)}Think carefully.\n`},
-      settingsJson: {model: 'opus'},
-    });
-
-    expect(promptIds(report.findings, UNPINNED_SKILL)).toEqual([
-      'prompt.no-think-carefully',
-    ]);
+  test.each([
+    [
+      'the project settings model resolves a file that pins none',
+      {
+        files: {
+          [UNPINNED_SKILL]: `${frontmatter(undefined)}Think carefully.\n`,
+        },
+        settingsJson: {model: 'opus'},
+      },
+      UNPINNED_SKILL,
+      ['prompt.no-think-carefully'],
+    ],
+    [
+      'an unresolved file runs only the rules that apply to any model',
+      {
+        files: {
+          [UNPINNED_SKILL]: `${frontmatter(undefined)}Show your reasoning. Do not think. Think carefully.\n`,
+        },
+      },
+      UNPINNED_SKILL,
+      [],
+    ],
+    [
+      'a haiku file runs only the rules that apply to any model',
+      {
+        files: {
+          [SONNET_SKILL]: `${frontmatter('haiku')}Think carefully.\n${UNBALANCED}`,
+        },
+      },
+      SONNET_SKILL,
+      ['prompt.xml-tag-balance'],
+    ],
+  ])('%s', (_name, project, file, expected) => {
+    expect(promptIds(checkProject(project).findings, file)).toEqual(expected);
   });
 
-  test('an unresolved file runs only the rules that apply to any model', () => {
-    const report = checkProject({
-      files: {
-        [UNPINNED_SKILL]: `${frontmatter(undefined)}Show your reasoning. Do not think. Think carefully.\n`,
-      },
-    });
-
-    expect(promptIds(report.findings, UNPINNED_SKILL)).toEqual([]);
-  });
-
-  test('a haiku file runs only the rules that apply to any model', () => {
-    const report = checkProject({
-      files: {
-        [SONNET_SKILL]: `${frontmatter('haiku')}Think carefully.\n${UNBALANCED}`,
-      },
-    });
-
-    expect(promptIds(report.findings, SONNET_SKILL)).toEqual([
-      'prompt.xml-tag-balance',
-    ]);
-  });
-
-  test('a quoted negative example does not fire', () => {
-    const report = checkProject({
-      files: {
-        [OPUS_AGENT]: `${frontmatter('opus')}Avoid writing "think carefully".\nBad example: think hard.\n`,
-      },
-    });
-
-    expect(promptIds(report.findings, OPUS_AGENT)).toEqual([]);
-  });
-
-  test('a phrase inside fenced or inline code does not fire', () => {
-    const report = checkProject({
-      files: {
-        [OPUS_AGENT]: `${frontmatter('opus')}\`\`\`\nthink carefully\n\`\`\`\n\nUse \`think hard\` here.\n`,
-      },
-    });
+  test.each([
+    [
+      'a quoted negative example does not fire',
+      `${frontmatter('opus')}Avoid writing "think carefully".\nBad example: think hard.\n`,
+    ],
+    [
+      'a phrase inside fenced or inline code does not fire',
+      `${frontmatter('opus')}\`\`\`\nthink carefully\n\`\`\`\n\nUse \`think hard\` here.\n`,
+    ],
+  ])('%s', (_name, content) => {
+    const report = checkProject({files: {[OPUS_AGENT]: content}});
 
     expect(promptIds(report.findings, OPUS_AGENT)).toEqual([]);
   });

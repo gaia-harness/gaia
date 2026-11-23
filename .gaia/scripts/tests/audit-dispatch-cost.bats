@@ -1,16 +1,38 @@
 #!/usr/bin/env bats
 # Tests for .gaia/scripts/audit-dispatch-cost.sh `record` on a dispatch that
-# ran: the member and light reviewer events, call dedup, unpriced and mixed
-# models, the missing, unparsed and unlinked states, the bounded finish wait,
-# the worktree project folders and the newest-match rule. The not-dispatched,
-# adopter-gate, lookup-scope, never-block, parity, delegation and registration
-# cases are in audit-dispatch-cost-states.bats.
+# ran: the member and light reviewer events, the missing state, the bounded
+# finish wait and finish states, the worktree project folders and the
+# newest-match rule. The figure rules (dedup, unpriced and mixed models,
+# unparsed and unlinked states) are owned by audit-dispatch-cost-lib.bats; the
+# not-dispatched, argument-refusal, adopter-gate, lookup-scope, never-block,
+# delegation, usage and registration cases are in audit-dispatch-cost-states.bats.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
+# The sandbox repository is built once per file and copied per test, with its
+# bare origin beside it as catchup_add_origin lays it out.
+setup_file() {
+  local repo_root template
+  repo_root="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  . "$repo_root/.gaia/tests/helpers/audit-roster.sh"
+  . "$repo_root/.gaia/tests/helpers/catchup-fixture.sh"
+  template="$BATS_FILE_TMPDIR/template-root"
+  mkdir -p "$template/.gaia" "$template/.claude/rules/maintainers"
+  printf '1.6.1\n' > "$template/.gaia/VERSION"
+  git -C "$template" init --quiet --initial-branch=main
+  git -C "$template" config user.email "test@example.com"
+  git -C "$template" config user.name "Test"
+  git -C "$template" config commit.gpgsign false
+  echo "# readme" > "$template/README.md"
+  seed_audit_roster "$template"
+  git -C "$template" add .gaia/audit-ci.yml .gaia/VERSION README.md
+  git -C "$template" commit --quiet -m "init"
+  git -C "$template" remote add origin "$BATS_FILE_TMPDIR/placeholder-origin.git"
+  catchup_add_origin "$template" main --feature feat/dispatch-cost
+}
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  . "$REPO_ROOT/.gaia/tests/helpers/audit-roster.sh"
   SCRIPT="$REPO_ROOT/.gaia/scripts/audit-dispatch-cost.sh"
   TELEMETRY_SCRIPT="$REPO_ROOT/.gaia/scripts/audit-light-telemetry.sh"
   FIXTURE="$REPO_ROOT/.gaia/tests/audit-cost/fixtures/dispatch-cost"
@@ -22,19 +44,9 @@ setup() {
   LIGHT_ID=a0000000000000008
   SESSION_ID=11111111-2222-3333-4444-555555555555
   ROOT="$BATS_TEST_TMPDIR/root"
-  mkdir -p "$ROOT/.gaia" "$ROOT/.claude/rules/maintainers"
-  printf '1.6.1\n' > "$ROOT/.gaia/VERSION"
-  git -C "$ROOT" init --quiet --initial-branch=main
-  git -C "$ROOT" config user.email "test@example.com"
-  git -C "$ROOT" config user.name "Test"
-  git -C "$ROOT" config commit.gpgsign false
-  echo "# readme" > "$ROOT/README.md"
-  seed_audit_roster "$ROOT"
-  git -C "$ROOT" add .gaia/audit-ci.yml .gaia/VERSION README.md
-  git -C "$ROOT" commit --quiet -m "init"
-  . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
-  git -C "$ROOT" remote add origin "$BATS_TEST_TMPDIR/placeholder-origin.git"
-  catchup_add_origin "$ROOT" main --feature feat/dispatch-cost
+  cp -R "$BATS_FILE_TMPDIR/template-root" "$ROOT"
+  cp -R "$BATS_FILE_TMPDIR/template-root.catchup-origin.git" "$ROOT.catchup-origin.git"
+  git -C "$ROOT" remote set-url origin "$ROOT.catchup-origin.git"
   printf '# maintainer rule\n' > "$ROOT/.claude/rules/maintainers/harness-triage-threshold.md"
   LOG="$ROOT/.gaia/local/telemetry/audit-light-routing.jsonl"
 
@@ -155,27 +167,6 @@ requested_sleep_seconds() {
   [ "$(field "$EVENT" '.children' | jq -S -c .)" = "$expected_children" ]
 }
 
-@test "dedup: the event counts a repeated call once with its last block" {
-  record_member
-  expect_one_event
-  [ "$(field "$EVENT" '.own.calls')" = 4 ]
-  [ "$(field "$EVENT" '.own.output_tokens')" = 652 ]
-}
-
-@test "unpriced: an unrated model keeps every figure and nulls own dollars" {
-  scratch_fixture
-  sed 's/claude-opus-5-5/claude-unrated-9/g' "$SCRATCH/session/subagents/agent-$MEMBER_ID.jsonl" >"$SCRATCH/member.new"
-  mv "$SCRATCH/member.new" "$SCRATCH/session/subagents/agent-$MEMBER_ID.jsonl"
-  install_session "$ENCODED" "$SCRATCH"
-  record_member
-  expect_one_event
-  [ "$(field "$EVENT" '.state')" = ok ]
-  [ "$(field "$EVENT" '.own.calls')" = 4 ]
-  [ "$(field "$EVENT" '.own.output_tokens')" = 652 ]
-  [ "$(field "$EVENT" '.own.dollars')" = null ]
-  [ "$(field "$EVENT" '.own.unpriced | join(",")')" = claude-unrated-9 ]
-}
-
 @test "missing: no transcript is transcript_missing with the keys set and no wait" {
   local started finished
   unset GAIA_DISPATCH_COST_FINISH_WAIT_SECONDS
@@ -189,38 +180,10 @@ requested_sleep_seconds() {
   [ "$(field "$EVENT" '[.agent_type, .incomplete, .finish, .claude_code_version, .own, .children_state, .children, .children_dollars] | map(. == null) | all')" = true ]
 }
 
-@test "finish wait: finished false waits the bound and records an incomplete timeout" {
-  install_logging_sleep
-  set_meta "$MEMBER_ID" '{"agentType":"code-audit-frontend","finished":false}'
-  record_member
-  expect_one_event
-  [ "$(requested_sleep_seconds)" = 1 ]
-  [ "$(field "$EVENT" '.state')" = ok ]
-  [ "$(field "$EVENT" '.own.calls')" = 4 ]
-  [ "$(field "$EVENT" '.incomplete')" = true ]
-  [ "$(field "$EVENT" '.finish')" = timeout ]
-
-  rm -f "$LOG"
-  set_meta "$MEMBER_ID" '{"agentType":"code-audit-frontend"}'
-  record_member
-  expect_one_event
-  [ "$(field "$EVENT" '.own.calls')" = 4 ]
-  [ "$(field "$EVENT" '.incomplete')" = true ]
-  [ "$(field "$EVENT" '.finish')" = timeout ]
-}
-
-@test "finish wait: the default bound is ten seconds" {
-  install_logging_sleep
-  unset GAIA_DISPATCH_COST_FINISH_WAIT_SECONDS
-  set_meta "$MEMBER_ID" '{"agentType":"code-audit-frontend","finished":false}'
-  record_member
-  expect_one_event
-  [ "$(requested_sleep_seconds)" = 10 ]
-  [ "$(field "$EVENT" '.finish')" = timeout ]
-}
-
-@test "finish wait: a meta that flips to finished ends the wait early" {
+@test "finish state: finished ends the wait early when the meta flips, a meta not finished waits the bound (one second override, ten by default) and records an incomplete timeout, an absent meta is meta_missing, a torn meta is meta_unparsed" {
   local started finished
+
+  # a meta that flips to finished mid-wait ends the wait early (real sleep)
   export GAIA_DISPATCH_COST_FINISH_WAIT_SECONDS=5
   set_meta "$MEMBER_ID" '{"agentType":"code-audit-frontend","finished":false}'
   (
@@ -236,16 +199,52 @@ requested_sleep_seconds() {
   [ "$((finished - started))" -le 2 ]
   [ "$(field "$EVENT" '.incomplete')" = false ]
   [ "$(field "$EVENT" '.finish')" = finished ]
-}
 
-@test "finish: an absent meta is meta_missing and a torn one is meta_unparsed" {
-  rm -f "$SUBAGENTS/agent-$MEMBER_ID.meta.json"
+  # the remaining cases time the wait by the intervals it asks for
+  install_logging_sleep
+  export GAIA_DISPATCH_COST_FINISH_WAIT_SECONDS=1
+
+  # finished false waits the bound
+  rm -f "$LOG"
+  : >"$SLEEP_LOG"
+  set_meta "$MEMBER_ID" '{"agentType":"code-audit-frontend","finished":false}'
+  record_member
+  expect_one_event
+  [ "$(requested_sleep_seconds)" = 1 ]
+  [ "$(field "$EVENT" '.state')" = ok ]
+  [ "$(field "$EVENT" '.own.calls')" = 4 ]
+  [ "$(field "$EVENT" '.incomplete')" = true ]
+  [ "$(field "$EVENT" '.finish')" = timeout ]
+
+  # no finished key at all
+  rm -f "$LOG"
+  set_meta "$MEMBER_ID" '{"agentType":"code-audit-frontend"}'
+  record_member
+  expect_one_event
+  [ "$(field "$EVENT" '.own.calls')" = 4 ]
+  [ "$(field "$EVENT" '.incomplete')" = true ]
+  [ "$(field "$EVENT" '.finish')" = timeout ]
+
+  # the default bound is ten seconds
+  rm -f "$LOG"
+  : >"$SLEEP_LOG"
+  unset GAIA_DISPATCH_COST_FINISH_WAIT_SECONDS
+  set_meta "$MEMBER_ID" '{"agentType":"code-audit-frontend","finished":false}'
+  record_member
+  expect_one_event
+  [ "$(requested_sleep_seconds)" = 10 ]
+  [ "$(field "$EVENT" '.finish')" = timeout ]
+
+  # an absent meta
+  export GAIA_DISPATCH_COST_FINISH_WAIT_SECONDS=1
+  rm -f "$LOG" "$SUBAGENTS/agent-$MEMBER_ID.meta.json"
   record_member
   expect_one_event
   [ "$(field "$EVENT" '.finish')" = meta_missing ]
   [ "$(field "$EVENT" '.incomplete')" = true ]
   [ "$(field "$EVENT" '.own.calls')" = 4 ]
 
+  # a torn meta
   rm -f "$LOG"
   printf '{"agentType": "code-au\n' >"$SUBAGENTS/agent-$MEMBER_ID.meta.json"
   record_member
@@ -266,34 +265,6 @@ requested_sleep_seconds() {
   [ "$(field "$EVENT" '.children')" = "{}" ]
 }
 
-@test "unparsed: a wholly non-JSON transcript is transcript_unparsed with null figures" {
-  scratch_fixture
-  printf 'not json\nstill not json\n' >"$SCRATCH/session/subagents/agent-$MEMBER_ID.jsonl"
-  install_session "$ENCODED" "$SCRATCH"
-  record_member
-  expect_one_event
-  [ "$(field "$EVENT" '.state')" = transcript_unparsed ]
-  [ "$(field "$EVENT" '.finish')" = finished ]
-  [ "$(field "$EVENT" '[.own, .children_state, .children, .children_dollars] | map(. == null) | all')" = true ]
-  [ "$(field "$EVENT" '.member')" = "$MEMBER" ]
-}
-
-@test "mixed models: one unrated specialist nulls its role dollars only" {
-  scratch_fixture
-  sed 's/claude-sonnet-5-5/claude-unrated-9/g' "$SCRATCH/session/subagents/agent-a0000000000000002.jsonl" >"$SCRATCH/specialist.new"
-  mv "$SCRATCH/specialist.new" "$SCRATCH/session/subagents/agent-a0000000000000002.jsonl"
-  install_session "$ENCODED" "$SCRATCH"
-  record_member
-  expect_one_event
-  [ "$(field "$EVENT" '.children.specialist.models | join(",")')" = "claude-sonnet-5-5,claude-unrated-9" ]
-  [ "$(field "$EVENT" '.children.specialist.dollars')" = null ]
-  [ "$(field "$EVENT" '.children.specialist.unpriced | join(",")')" = claude-unrated-9 ]
-  [ "$(field "$EVENT" '.children_dollars')" = null ]
-  [ "$(field "$EVENT" '.own.dollars | type')" = number ]
-  [ "$(field "$EVENT" '.children.refuter.dollars | type')" = number ]
-  [ "$(field "$EVENT" '.children.other.dollars | type')" = number ]
-}
-
 @test "worktree folder: a session under a worktree project folder is found" {
   rm -rf "$PROJECTS"
   install_session "$ENCODED--claude-worktrees-feat-x" "$FIXTURE"
@@ -301,21 +272,6 @@ requested_sleep_seconds() {
   expect_one_event
   [ "$(field "$EVENT" '.state')" = ok ]
   [ "$(field "$EVENT" '.own.calls')" = 4 ]
-}
-
-@test "linkage: metas without a parent leave own figures and unparsed children" {
-  local name
-  for name in a0000000000000002 a0000000000000003; do
-    jq -c 'del(.parentAgentId)' "$SUBAGENTS/agent-$name.meta.json" >"$SUBAGENTS/meta.new"
-    mv "$SUBAGENTS/meta.new" "$SUBAGENTS/agent-$name.meta.json"
-  done
-  record_member
-  expect_one_event
-  [ "$(field "$EVENT" '.state')" = ok ]
-  [ "$(field "$EVENT" '.own.calls')" = 4 ]
-  [ "$(field "$EVENT" '.children_state')" = unparsed ]
-  [ "$(field "$EVENT" '.children')" = null ]
-  [ "$(field "$EVENT" '.children_dollars')" = null ]
 }
 
 @test "newest match: the same agent id under two folders takes the newer file's figures" {

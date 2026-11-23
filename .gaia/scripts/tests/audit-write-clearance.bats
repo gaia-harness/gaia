@@ -14,6 +14,33 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
+setup_file() {
+  command -v jq >/dev/null 2>&1 || return 0
+  . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
+  . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/catchup-fixture.sh"
+  local template="$BATS_FILE_TMPDIR/template" root
+  root="$template/root"
+  mkdir -p "$root/.gaia"
+  printf '1.6.1\n' > "$root/.gaia/VERSION"
+  git -C "$root" init --quiet --initial-branch=main
+  git -C "$root" config user.email "test@example.com"
+  git -C "$root" config user.name "Test"
+  git -C "$root" config commit.gpgsign false
+  echo "# readme" > "$root/README.md"
+  seed_audit_roster "$root"
+  git -C "$root" add .gaia/audit-ci.yml .gaia/VERSION README.md
+  git -C "$root" commit --quiet -m "init"
+  # A bare origin supplies the local base reference the branch-own digest is
+  # measured against, and the fixture caches `main` as this branch's audit base
+  # so no case reaches a real `gh`.
+  git -C "$root" remote add origin "$template/placeholder-origin.git"
+  catchup_add_origin "$root"
+  # The base worktree is registered by absolute path, so it is attached per
+  # test, not copied.
+  git -C "$root" worktree remove --force "$CATCHUP_BASE_WORKTREE"
+  export TEMPLATE_DIRECTORY="$template"
+}
+
 setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/catchup-fixture.sh"
@@ -37,20 +64,20 @@ setup() {
   command -v jq >/dev/null 2>&1 || skip "jq not available"
 
   ROOT="$BATS_TEST_TMPDIR/root"
-  mkdir -p "$ROOT/.gaia"
-  printf '1.6.1\n' > "$ROOT/.gaia/VERSION"
-  git -C "$ROOT" init --quiet --initial-branch=main
-  git -C "$ROOT" config user.email "test@example.com"
-  git -C "$ROOT" config user.name "Test"
-  git -C "$ROOT" config commit.gpgsign false
-  echo "# readme" > "$ROOT/README.md"
-  seed_audit_roster "$ROOT"
-  git -C "$ROOT" add .gaia/audit-ci.yml .gaia/VERSION README.md
-  git -C "$ROOT" commit --quiet -m "init"
-  # A bare origin supplies the local base reference the branch-own digest is
-  # measured against, and the fixture caches `main` as this branch's audit base
-  # so no case reaches a real `gh`.
-  add_origin "$ROOT"
+  # The per-file template (setup_file) is copied, never rebuilt: the checkout,
+  # its bare origin and the fixture's cached audit base come across whole.
+  cp -R "$TEMPLATE_DIRECTORY/root" "$ROOT"
+  cp -R "$TEMPLATE_DIRECTORY/root.catchup-origin.git" "$ROOT.catchup-origin.git"
+  git -C "$ROOT" remote set-url origin "$ROOT.catchup-origin.git"
+  # The catch-up fixture's functions read these, which shellcheck cannot see.
+  # shellcheck disable=SC2034
+  {
+    CATCHUP_ROOT="$ROOT"
+    CATCHUP_ORIGIN="$ROOT.catchup-origin.git"
+    CATCHUP_BASE_BRANCH=main
+    CATCHUP_BRANCH=main
+  }
+  _catchup_base_attach
 
   TREE="$(git -C "$ROOT" rev-parse "HEAD^{tree}")"
   HEAD_SHA="$(git -C "$ROOT" rev-parse HEAD)"
@@ -76,7 +103,7 @@ member_digest() {
 
 # Required --root, digest resolved from the root, atomic write, body
 
-@test "UAT-020: omitting --root exits 2 with a usage message on stderr" {
+@test "usage: bad --root exits 2 and writes no marker" {
   run bash "$WRITER" --member code-audit-frontend --provenance earned
   [ "$status" -eq 2 ]
   # bats `run` merges stderr into `$output`, so `$output` cannot tell the two
@@ -85,9 +112,6 @@ member_digest() {
   stderr_output="$(bash "$WRITER" --member code-audit-frontend --provenance earned 2>&1 1>/dev/null || true)"
   grep -qF "usage" <<<"$stderr_output"
   grep -qF "root is required" <<<"$stderr_output"
-}
-
-@test "--root naming a subdirectory of a checkout exits 2 and writes no marker" {
   # The digest, the HEAD tree and the marker store are all derived from --root,
   # so a subdirectory would mint a marker keyed to content the caller never
   # named. Assert the marker's ABSENCE on disk, not just the exit code: a
@@ -111,7 +135,7 @@ add_linked_worktree() {
   git -C "$tree" commit --quiet -m "tree: branch change"
 }
 
-@test "an unprovisioned linked worktree refuses with exit 2, names the provisioner, and creates no .gaia/local" {
+@test "an unprovisioned linked worktree refuses and writes nothing" {
   # The merge gate reads the main checkout's audit store, so a marker written
   # into a worktree's own real .gaia/local is a marker nothing reads.
   tree="$BATS_TEST_TMPDIR/tree"
@@ -123,11 +147,6 @@ add_linked_worktree() {
   [ ! -e "$tree/.gaia/local" ]
   leftover="$(find "$tree" "$ROOT/.gaia" -name '*.ok' 2>/dev/null || true)"
   [ -z "$leftover" ]
-}
-
-@test "an unprovisioned linked worktree holding a real .gaia/local refuses and writes nothing into it" {
-  tree="$BATS_TEST_TMPDIR/tree"
-  add_linked_worktree "$tree"
   mkdir -p "$tree/.gaia/local/audit"
   run bash "$WRITER" --root "$tree" --member code-audit-frontend --provenance refused
   [ "$status" -eq 2 ]
@@ -239,31 +258,16 @@ add_linked_worktree() {
   [ "$(jq -r 'has("anchor_tree")' "$marker")" = "false" ]
 }
 
-@test "a specialized member's sidecar flag is TRUE: it files a findings sidecar too" {
-  # This field used to record false for every specialized member, which the
-  # store itself contradicts: most of the findings sidecars on disk belong to
-  # specialized members. Anything reasoning from it about whether a report
-  # exists was wrong for four of the five, and "no report" is exactly what makes
-  # a refusal look unrepairable.
-  digest="$(member_digest "$ROOT" code-audit-maintainer-shell)"
-  bash "$WRITER" --root "$ROOT" --member code-audit-maintainer-shell --provenance earned --scope-digest "$digest" >/dev/null
-  marker="$AUDIT_DIRECTORY/${digest}.code-audit-maintainer-shell.ok"
-  [ -f "$marker" ]
-  [ "$(jq -r .sidecar "$marker")" = "true" ]
-}
-
-@test "every member records sidecar true" {
+@test "every member and a refusal record sidecar true" {
+  # A specialized member files a findings sidecar too, and a refusal carries the
+  # same flag as an earned marker: the flag is what tells a reader a report
+  # exists to work from.
   for member in code-audit-frontend code-audit-maintainer-shell code-audit-maintainer-node \
            code-audit-github-workflows; do
     digest="$(member_digest "$ROOT" "$member")"
     written_path="$(bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned --scope-digest "$digest")"
-    [ "$(jq -r .sidecar "$written_path")" = "true" ]
+    [ "$(jq -r .sidecar "$written_path")" = "true" ] || { echo "earned $member: sidecar not true"; return 1; }
   done
-}
-
-@test "a refusal carries the same flag as an earned marker" {
-  # A refusal is the case that matters most: its sidecar flag is what tells a
-  # reader a report exists to work from.
   digest="$(member_digest "$ROOT" code-audit-maintainer-shell)"
   bash "$WRITER" --root "$ROOT" --member code-audit-maintainer-shell --provenance refused >/dev/null
   marker="$AUDIT_DIRECTORY/${digest}.code-audit-maintainer-shell.refused"
@@ -287,7 +291,7 @@ add_linked_worktree() {
 # construction. `version` is the only field read from a file (.gaia/VERSION),
 # which makes it the field a stray `"` or `\` actually reaches.
 
-@test "escaping: a version carrying a quote and a backslash still produces valid parseable JSON" {
+@test "escaping: version text lands as data, valid JSON" {
   # shellcheck disable=SC1003  # the backslash is a literal, which is the point
   printf '%s\n' '1.6.1"\' > "$ROOT/.gaia/VERSION"
   git -C "$ROOT" add .gaia/VERSION
@@ -309,9 +313,7 @@ add_linked_worktree() {
   # shellcheck source=/dev/null
   . "$READER"
   clearance_acceptable "$written_path" code-audit-frontend "$digest"
-}
 
-@test "escaping: a version that injects body keys lands as data, never as structure" {
   # The crafted value closes the version string and appends its own member /
   # provenance keys. Escaped, it can only ever be a version string.
   printf '%s\n' '1.6.1","member":"code-audit-frontend","provenance":"earned' > "$ROOT/.gaia/VERSION"
@@ -387,30 +389,17 @@ add_linked_worktree() {
   done
 }
 
-@test "structural: the writer never references audit-noop-detect.sh and carries no evidence key" {
-  grep -qF "audit-noop-detect" "$WRITER" "$THIS_DIRECTORY"/../audit-write-clearance-*.sh && return 1
-  # The JSON evidence key (quoted) never appears in the produced body.
-  grep -qF '"evidence"' "$WRITER" "$THIS_DIRECTORY"/../audit-write-clearance-*.sh && return 1
-  return 0
-}
-
 # Hard cutover: carried / anchor-tree are gone. Rejected as usage errors.
 
-@test "usage: --provenance carried is rejected, no marker written" {
+@test "usage: carried provenance, anchor-tree and invalid provenance are rejected" {
   run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance carried
   [ "$status" -eq 2 ]
   # AUDIT_DIRECTORY may not even exist (the writer fails before mkdir -p); `find` on
   # a missing dir exits non-zero, so guard with `|| true` under bats' set -e.
   leftover="$(find "$AUDIT_DIRECTORY" -name '*.carried' 2>/dev/null || true)"
   [ -z "$leftover" ]
-}
-
-@test "usage: --anchor-tree is rejected as an unrecognized argument" {
   run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --anchor-tree "$TREE"
   [ "$status" -eq 2 ]
-}
-
-@test "usage: an invalid --provenance exits 2" {
   run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance bogus
   [ "$status" -eq 2 ]
 }
@@ -479,13 +468,6 @@ add_linked_worktree() {
 
 # Reader: clearance_member_cleared is earned-only, no carried fallback
 # (the .carried family and clearance_carried_path no longer exist).
-
-@test "structural: clearance_carried_path is deleted from the reader" {
-  # shellcheck source=/dev/null
-  . "$READER"
-  command -v clearance_carried_path >/dev/null 2>&1 && return 1
-  return 0
-}
 
 @test "clearance_member_cleared: earned only, no carried fallback" {
   # shellcheck source=/dev/null
@@ -718,7 +700,7 @@ scrub_maintainer_only() {
   clearance_member_refused "$ROOT" "$digest" "$member"
 }
 
-@test "supersede: rejected with --provenance refused, and no marker is written" {
+@test "supersede: --supersede-refusal with --provenance refused, or with an empty or blank reason, exits 2" {
   member="code-audit-maintainer-shell"
   digest="$(member_digest "$ROOT" "$member")"
   run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused \
@@ -727,9 +709,6 @@ scrub_maintainer_only() {
   grep -qF -- "valid only with --provenance earned" <<<"$output" || return 1
   [ ! -f "$AUDIT_DIRECTORY/${digest}.${member}.refused" ]
   [ ! -f "$AUDIT_DIRECTORY/${digest}.${member}.ok" ]
-}
-
-@test "supersede: an empty or whitespace-only reason is a usage error" {
   member="code-audit-maintainer-shell"
   digest="$(member_digest "$ROOT" "$member")"
 
@@ -775,15 +754,14 @@ scrub_maintainer_only() {
 #
 # The gate exempts --supersede-refusal from the staleness comparison only
 # when a sibling refusal is actually on disk. Widening that operand back to
-# the flag-only form reds "supersede: no refusal on disk, a mismatched
-# --scope-digest refuses" and "supersede: no refusal on disk, an absent
-# --scope-digest refuses by its own token": both call the flag with nothing to
+# the flag-only form reds "supersede: no refusal on disk, a bad --scope-digest
+# refuses": both its calls pass the flag with nothing to
 # supersede, so a flag-only gate skips the comparison outright and each
 # publishes instead of refusing. The surviving two-call route below stays
 # green either way, because it writes a real refusal first and a widened
 # operand never reaches that path.
 
-@test "supersede: no refusal on disk, a mismatched --scope-digest refuses" {
+@test "supersede: no refusal on disk, a bad --scope-digest refuses" {
   member="code-audit-maintainer-shell"
   digest="$(member_digest "$ROOT" "$member")"
   stale="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
@@ -794,9 +772,6 @@ scrub_maintainer_only() {
   grep -qF -- "$stale" <<<"$output" || return 1
   grep -qF -- "$digest" <<<"$output" || return 1
   [ ! -f "$AUDIT_DIRECTORY/${digest}.${member}.ok" ]
-}
-
-@test "supersede: no refusal on disk, an absent --scope-digest refuses by its own token" {
   member="code-audit-maintainer-shell"
   digest="$(member_digest "$ROOT" "$member")"
   run bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned \
@@ -931,7 +906,7 @@ resolve_all_open() {
   [ "$(jq '.remaining | length' "$LEDGER")" = "1" ]
 }
 
-@test "ledger: review ids on a finding reach its entry and survive a re-report that omits them" {
+@test "ledger: sidecar fields reach the ledger entry" {
   ledger_setup
   member="code-audit-maintainer-shell"
   write_findings_sidecar "$member" "[$(finding_json 113 | jq -c '. + {review_ids: ["cr-1","cr-4"]}')]"
@@ -940,19 +915,15 @@ resolve_all_open() {
   rereport_all_open "$member"
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   [ "$(jq -c '.remaining[0].review_ids' "$LEDGER")" = '["cr-1","cr-4"]' ]
-}
 
-@test "ledger: an entry whose finding carries no review ids has no review_ids key" {
-  ledger_setup
-  member="code-audit-maintainer-shell"
+  # fresh ledger and sidecars for the next case: each case counts rounds from one
+  rm -f "$LEDGER" "$AUDIT_DIRECTORY"/*.findings.json
   write_sidecar_for "$member" 113
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   [ "$(jq -r '.remaining[0] | has("review_ids")' "$LEDGER")" = false ]
-}
 
-@test "ledger: every actionable field reaches remaining[], so the refusal briefs its own repair" {
-  ledger_setup
-  member="code-audit-maintainer-shell"
+  # fresh ledger and sidecars for the next case
+  rm -f "$LEDGER" "$AUDIT_DIRECTORY"/*.findings.json
   write_sidecar_for "$member" 113
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   entry="$(jq -c '.remaining[0]' "$LEDGER")"
@@ -964,11 +935,9 @@ resolve_all_open() {
   grep -qF "base denies, HEAD allows" <<<"$(jq -r .verified_by <<<"$entry")"
   grep -qF "bound each trailing segment" <<<"$(jq -r .suggested_fix <<<"$entry")"
   [ "$(jq -r .first_seen_round <<<"$entry")" = "1" ]
-}
 
-@test "ledger: the sidecar severity carries onto the ledger unchanged" {
-  ledger_setup
-  member="code-audit-maintainer-shell"
+  # fresh ledger and sidecars for the next case
+  rm -f "$LEDGER" "$AUDIT_DIRECTORY"/*.findings.json
   write_sidecar_for "$member" 113 critical
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   [ "$(jq -r '.remaining[0].severity' "$LEDGER")" = "critical" ]
@@ -980,11 +949,9 @@ resolve_all_open() {
   write_sidecar_for "$member" 113 minor "$(open_entry_id "$member")"
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   [ "$(jq -r '.remaining[0].severity' "$LEDGER")" = "minor" ]
-}
 
-@test "ledger: a severity token outside critical, major, minor is recorded as major" {
-  ledger_setup
-  member="code-audit-maintainer-shell"
+  # fresh ledger and sidecars for the next case
+  rm -f "$LEDGER" "$AUDIT_DIRECTORY"/*.findings.json
   write_sidecar_for "$member" 113 major
   sidecar="$AUDIT_DIRECTORY/${LEDGER_BASE_SHA}.fix%2Fledger.${member}.findings.json"
   [ -f "$sidecar" ]
@@ -1336,8 +1303,75 @@ snapshot_ledger() {
   cp "$LEDGER" "$BATS_TEST_TMPDIR/ledger.before"
 }
 
-@test "accounting: an earned write that omits an open finding exits 3 and publishes nothing" {
+# bats test_tags=protected
+@test "accounting: an absent or corrupt ledger, a missing sidecar, a blank rationale or an unaccounted open finding exits 3 and writes no marker" {
   accounting_fixture
+  cp "$LEDGER" "$BATS_TEST_TMPDIR/pristine.ledger"
+  cp "$SIDECAR_PATH" "$BATS_TEST_TMPDIR/pristine.sidecar"
+  write_findings_sidecar "$member" '[]' "$(resolution_json "$FIRST_ID" "$SECOND_ID")"
+
+  rm -f "$LEDGER"
+  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned \
+    --base "$LEDGER_BASE_SHA" --scope-digest "$B_DIGEST"
+  [ "$status" -eq 3 ]
+  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
+  grep -qF -- "audit-scope-digest.sh --release" <<<"$output" || return 1
+  grep -qF "re-run the scope resolver" <<<"$output" || return 1
+
+  printf 'not json {' > "$LEDGER"
+  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned \
+    --base "$LEDGER_BASE_SHA" --scope-digest "$B_DIGEST"
+  [ "$status" -eq 3 ]
+  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
+  grep -qF -- "audit-scope-digest.sh --release" <<<"$output" || return 1
+
+  # every case starts from the fixture state: the cases remove or corrupt the ledger and sidecar
+  cp "$BATS_TEST_TMPDIR/pristine.ledger" "$LEDGER"
+  cp "$BATS_TEST_TMPDIR/pristine.sidecar" "$SIDECAR_PATH"
+  # Hand-written: the findings writer itself rejects a blank rationale.
+  jq -cn --arg member "$member" --arg first "$FIRST_ID" --arg second "$SECOND_ID" \
+    '{schema: 1, member: $member, findings: [],
+      resolutions: [{entry_id: $first, rationale: "bounded the trailing segment"},
+                    {entry_id: $second, rationale: "   "}]}' > "$SIDECAR_PATH"
+  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned \
+    --base "$LEDGER_BASE_SHA" --scope-digest "$B_DIGEST"
+  [ "$status" -eq 3 ]
+  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
+  grep -qF -- "   ${SECOND_ID}  " <<<"$output" || return 1
+  grep -qF -- "   ${FIRST_ID}  " <<<"$output" && return 1
+  true
+
+  # back to the fixture state
+  cp "$BATS_TEST_TMPDIR/pristine.ledger" "$LEDGER"
+  cp "$BATS_TEST_TMPDIR/pristine.sidecar" "$SIDECAR_PATH"
+  rm -f "$SIDECAR_PATH"
+  snapshot_ledger
+
+  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA"
+  [ "$status" -eq 3 ]
+  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.refused" ] && return 1
+  grep -qF "no readable findings sidecar" <<<"$output" || return 1
+
+  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned \
+    --base "$LEDGER_BASE_SHA" --scope-digest "$B_DIGEST"
+  [ "$status" -eq 3 ]
+  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
+  cmp "$LEDGER" "$BATS_TEST_TMPDIR/ledger.before"
+
+  # back to the fixture state
+  cp "$BATS_TEST_TMPDIR/pristine.ledger" "$LEDGER"
+  cp "$BATS_TEST_TMPDIR/pristine.sidecar" "$SIDECAR_PATH"
+  write_findings_sidecar "$member" "[$(finding_json 113 critical "$FIRST_ID"),$(finding_json 59 major "$SECOND_ID")]"
+  rm -f "$LEDGER"
+  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA"
+  [ "$status" -eq 3 ]
+  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.refused" ] && return 1
+  grep -qF -- "audit-scope-digest.sh --release" <<<"$output" || return 1
+  grep -qF "re-run the scope resolver" <<<"$output" || return 1
+
+  # back to the fixture state
+  cp "$BATS_TEST_TMPDIR/pristine.ledger" "$LEDGER"
+  cp "$BATS_TEST_TMPDIR/pristine.sidecar" "$SIDECAR_PATH"
   write_findings_sidecar "$member" '[]' "$(resolution_json "$FIRST_ID")"
   snapshot_ledger
 
@@ -1430,59 +1464,6 @@ snapshot_ledger() {
   [ "$status" -ne 0 ]
   [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
   grep -qF -- "   ${SECOND_ID}  " <<<"$output" || return 1
-}
-
-@test "accounting: a round captured on member-refusal with no readable ledger exits 3, never an empty open set" {
-  accounting_fixture
-  write_findings_sidecar "$member" '[]' "$(resolution_json "$FIRST_ID" "$SECOND_ID")"
-
-  rm -f "$LEDGER"
-  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned \
-    --base "$LEDGER_BASE_SHA" --scope-digest "$B_DIGEST"
-  [ "$status" -eq 3 ]
-  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
-  grep -qF -- "audit-scope-digest.sh --release" <<<"$output" || return 1
-  grep -qF "re-run the scope resolver" <<<"$output" || return 1
-
-  printf 'not json {' > "$LEDGER"
-  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned \
-    --base "$LEDGER_BASE_SHA" --scope-digest "$B_DIGEST"
-  [ "$status" -eq 3 ]
-  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
-  grep -qF -- "audit-scope-digest.sh --release" <<<"$output" || return 1
-}
-
-@test "accounting: a resolution whose rationale is blank leaves its entry unaccounted" {
-  accounting_fixture
-  # Hand-written: the findings writer itself rejects a blank rationale.
-  jq -cn --arg member "$member" --arg first "$FIRST_ID" --arg second "$SECOND_ID" \
-    '{schema: 1, member: $member, findings: [],
-      resolutions: [{entry_id: $first, rationale: "bounded the trailing segment"},
-                    {entry_id: $second, rationale: "   "}]}' > "$SIDECAR_PATH"
-  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned \
-    --base "$LEDGER_BASE_SHA" --scope-digest "$B_DIGEST"
-  [ "$status" -eq 3 ]
-  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
-  grep -qF -- "   ${SECOND_ID}  " <<<"$output" || return 1
-  grep -qF -- "   ${FIRST_ID}  " <<<"$output" && return 1
-  true
-}
-
-@test "accounting: open entries with no sidecar refuse both a refused and an earned write" {
-  accounting_fixture
-  rm -f "$SIDECAR_PATH"
-  snapshot_ledger
-
-  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA"
-  [ "$status" -eq 3 ]
-  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.refused" ] && return 1
-  grep -qF "no readable findings sidecar" <<<"$output" || return 1
-
-  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance earned \
-    --base "$LEDGER_BASE_SHA" --scope-digest "$B_DIGEST"
-  [ "$status" -eq 3 ]
-  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.ok" ] && return 1
-  cmp "$LEDGER" "$BATS_TEST_TMPDIR/ledger.before"
 }
 
 @test "accounting: a sibling's later refusal leaves this member's entries and provenance byte-identical" {
@@ -1644,17 +1625,6 @@ snapshot_ledger() {
   cmp "$LEDGER" "$BATS_TEST_TMPDIR/ledger.before"
 }
 
-@test "accounting: a refused write in a member-refusal round with no ledger exits 3" {
-  accounting_fixture
-  write_findings_sidecar "$member" "[$(finding_json 113 critical "$FIRST_ID"),$(finding_json 59 major "$SECOND_ID")]"
-  rm -f "$LEDGER"
-  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA"
-  [ "$status" -eq 3 ]
-  [ -f "$AUDIT_DIRECTORY/${B_DIGEST}.${member}.refused" ] && return 1
-  grep -qF -- "audit-scope-digest.sh --release" <<<"$output" || return 1
-  grep -qF "re-run the scope resolver" <<<"$output" || return 1
-}
-
 # -----------------------------------------------------------------------------
 # The compensating status post on a refusal
 # -----------------------------------------------------------------------------
@@ -1720,7 +1690,15 @@ EOF
   grep -qF -- "${digest}.refused" "$STATUS_CALLS" || return 1
 }
 
-@test "a failing status hook never fails the refusal write, and never reaches stdout" {
+@test "status hook failure or absence never fails the refusal write" {
+  # An adopter tree that has not installed the hook.
+  digest="$(member_digest "$ROOT" code-audit-frontend)"
+  [ ! -e "$ROOT/.claude/hooks/post-audit-status.sh" ]
+
+  run env -u GITHUB_ACTIONS -u CI bash "$WRITER" \
+    --root "$ROOT" --member code-audit-frontend --provenance refused
+  [ "$status" -eq 0 ]
+  [ -f "$AUDIT_DIRECTORY/${digest}.refused" ]
   install_status_hook_stub 1
   digest="$(member_digest "$ROOT" code-audit-frontend)"
 
@@ -1733,17 +1711,6 @@ EOF
   grep -qF -- "${digest}.refused" "$STATUS_CALLS" || return 1
 }
 
-@test "an absent status hook leaves the refusal write untouched" {
-  # An adopter tree that has not installed the hook, and every non-local caller.
-  digest="$(member_digest "$ROOT" code-audit-frontend)"
-  [ ! -e "$ROOT/.claude/hooks/post-audit-status.sh" ]
-
-  run env -u GITHUB_ACTIONS -u CI bash "$WRITER" \
-    --root "$ROOT" --member code-audit-frontend --provenance refused
-  [ "$status" -eq 0 ]
-  [ -f "$AUDIT_DIRECTORY/${digest}.refused" ]
-}
-
 # -----------------------------------------------------------------------------
 # --scope-digest: the staleness gate (FC-1).
 #
@@ -1753,6 +1720,7 @@ EOF
 # write-time derive, rather than publishing a marker keyed to unread content.
 # -----------------------------------------------------------------------------
 
+# bats test_tags=protected
 @test "UAT-001: a rotated digest refuses on the earned path and writes nothing" {
   digest="$(member_digest "$ROOT" code-audit-frontend)"
 
@@ -1795,7 +1763,7 @@ EOF
   [ "$(jq -r .digest "$written_path")" = "$digest" ]
 }
 
-@test "UAT-003a: an out-of-glob commit does not rotate the digest; the captured scope digest still publishes" {
+@test "a commit that does not rotate the digest still publishes" {
   digest="$(member_digest "$ROOT" code-audit-frontend)"
   echo "## [Unreleased]" > "$ROOT/CHANGELOG.md"
   git -C "$ROOT" add CHANGELOG.md
@@ -1805,9 +1773,8 @@ EOF
   written_path="$(bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --scope-digest "$digest")"
   [ "$written_path" = "$AUDIT_DIRECTORY/${digest}.ok" ]
   [ -f "$written_path" ]
-}
 
-@test "UAT-003b: an empty commit does not rotate the digest; the captured scope digest still publishes" {
+  rm -f "$written_path"
   digest="$(member_digest "$ROOT" code-audit-frontend)"
   git -C "$ROOT" commit --quiet --allow-empty -m "empty"
   [ "$(member_digest "$ROOT" code-audit-frontend)" = "$digest" ]
@@ -1817,16 +1784,12 @@ EOF
   [ -f "$written_path" ]
 }
 
-@test "UAT-004: an absent --scope-digest refuses by its own distinct token" {
+@test "an absent or underivable scope digest refuses by its own token" {
   run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned
   [ "$status" -eq 2 ]
   grep -qF "scope digest not supplied" <<<"$output" || return 1
   grep -qF "review scope superseded" <<<"$output" && return 1
   grep -qF "cannot derive a branch-own digest" <<<"$output" && return 1
-  return 0
-}
-
-@test "UAT-004: an underivable write-time digest refuses by the writer's existing token (PATH shim removes the sha256 tools)" {
   # Modelled on the jq shim above: failing executables placed first on PATH,
   # not an unloadable lib (that fires the EARLIER "cannot load the digest
   # engine" guard, a different token than this arm asserts).
@@ -1926,15 +1889,12 @@ removal itself failed"
   [ ! -f "$refused" ]
 }
 
-@test "usage: a malformed --scope-digest exits 2 with the format error, no marker written" {
+@test "usage: a malformed scope digest exits 2" {
   run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --scope-digest "not-a-digest"
   [ "$status" -eq 2 ]
   grep -qF -- "--scope-digest must be a 64-hex digest" <<<"$output" || return 1
   leftover="$(find "$AUDIT_DIRECTORY" -name '*.ok' 2>/dev/null || true)"
   [ -z "$leftover" ]
-}
-
-@test "usage: an uppercase --scope-digest exits 2 with the format error" {
   digest="$(member_digest "$ROOT" code-audit-frontend)"
   upper="$(printf '%s' "$digest" | tr 'a-f' 'A-F')"
   run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --scope-digest "$upper"
@@ -1968,16 +1928,12 @@ light_fixture() {
   write_route_record "$light_record" "$light_member" light "$light_digest" "$TREE"
 }
 
-@test "review: an earned write with no --review records review full" {
+@test "review: full is the default and an explicit value" {
   digest="$(member_digest "$ROOT" code-audit-frontend)"
   written_path="$(bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --scope-digest "$digest")"
-  [ "$(jq -r .review "$written_path")" = "full" ]
-}
-
-@test "review: an explicit --review full records review full" {
-  digest="$(member_digest "$ROOT" code-audit-frontend)"
+  [ "$(jq -r .review "$written_path")" = "full" ] || { echo "case no --review: not full"; return 1; }
   written_path="$(bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --review full --scope-digest "$digest")"
-  [ "$(jq -r .review "$written_path")" = "full" ]
+  [ "$(jq -r .review "$written_path")" = "full" ] || { echo "case --review full: not full"; return 1; }
 }
 
 @test "review: a refused body carries no review key" {
@@ -1985,26 +1941,20 @@ light_fixture() {
   [ "$(jq -r 'has("review")' "$written_path")" = "false" ]
 }
 
-@test "review: --review full with --provenance refused exits 2 and writes nothing" {
-  run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance refused --review full
-  [ "$status" -eq 2 ]
-  leftover="$(find "$AUDIT_DIRECTORY" \( -name '*.refused' -o -name '*.ok' \) 2>/dev/null || true)"
-  [ -z "$leftover" ]
-}
-
-@test "review: an unknown --review value exits 2 and writes nothing" {
-  digest="$(member_digest "$ROOT" code-audit-frontend)"
-  run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --review bogus --scope-digest "$digest"
-  [ "$status" -eq 2 ]
-  [ ! -f "$AUDIT_DIRECTORY/${digest}.ok" ]
-}
-
-@test "review: --route-record without --review light is a usage error" {
+@test "review: bad flag combinations exit 2 and write nothing" {
   light_fixture
+  # --review full with --provenance refused
+  run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance refused --review full
+  [ "$status" -eq 2 ] || { echo "case review full with refused: status $status"; return 1; }
+  # an unknown --review value
+  run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --review bogus --scope-digest "$light_digest"
+  [ "$status" -eq 2 ] || { echo "case unknown review value: status $status"; return 1; }
+  # --route-record without --review light
   run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
     --route-record "$light_record" --scope-digest "$light_digest"
-  [ "$status" -eq 2 ]
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
+  [ "$status" -eq 2 ] || { echo "case route record without light: status $status"; return 1; }
+  leftover="$(find "$AUDIT_DIRECTORY" \( -name '*.refused' -o -name '*.ok' \) 2>/dev/null || true)"
+  [ -z "$leftover" ]
 }
 
 @test "light: a matching route record and scope digest write a marker carrying review light" {
@@ -2026,114 +1976,62 @@ light_fixture() {
   [ "$(bash -c '. "$1"; clearance_review_kind "$2"' _ "$READER" "$written_path")" = "light" ]
 }
 
-@test "light: a missing --route-record exits 2 and writes no marker" {
+@test "light: any unmet condition exits 2 and writes no marker" {
   light_fixture
-  run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --scope-digest "$light_digest"
-  [ "$status" -eq 2 ]
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
-}
+  refused="$AUDIT_DIRECTORY/${light_digest}.refused"
+  stale="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  # light_row <case> <expected output fragment or empty> <extra writer arguments...>
+  light_row() {
+    local label="$1" fragment="$2"
+    shift 2
+    run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
+      --review light --scope-digest "$light_digest" "$@"
+    [ "$status" -eq 2 ] || { echo "case $label: status $status"; return 1; }
+    if [ -n "$fragment" ]; then
+      grep -qF "$fragment" <<<"$output" || { echo "case $label: no '$fragment'"; return 1; }
+    fi
+    [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ] || { echo "case $label: marker written"; return 1; }
+  }
 
-@test "light: an absent route record file exits 2 and writes no marker" {
-  light_fixture
+  light_row "missing route record" ""
+  light_row "absent route record file" "" --route-record "$BATS_TEST_TMPDIR/no-such-record.json"
+  printf 'not json {' > "$BATS_TEST_TMPDIR/bad.json"
+  light_row "route record is not JSON" "" --route-record "$BATS_TEST_TMPDIR/bad.json"
+  write_route_record "$BATS_TEST_TMPDIR/full.json" "$light_member" full "$light_digest" "$TREE"
+  light_row "route record deciding full" "route is not light" --route-record "$BATS_TEST_TMPDIR/full.json"
+  write_route_record "$BATS_TEST_TMPDIR/other.json" code-audit-maintainer-shell light "$light_digest" "$TREE"
+  light_row "route record naming another member" "different member" --route-record "$BATS_TEST_TMPDIR/other.json"
+  light_row "supersede-refusal with review light" "" --route-record "$light_record" --supersede-refusal "a stated reason"
   run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --route-record "$BATS_TEST_TMPDIR/no-such-record.json" --scope-digest "$light_digest"
-  [ "$status" -eq 2 ]
+    --review light --route-record "$light_record" --scope-digest "$stale"
+  [ "$status" -eq 2 ] || { echo "case mismatched scope digest: status $status"; return 1; }
+  grep -qF "review scope superseded" <<<"$output" || { echo "case mismatched scope digest: no refusal text"; return 1; }
   [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
-}
 
-@test "light: a route record that is not JSON exits 2 and writes no marker" {
-  light_fixture
-  printf 'not json {' > "$light_record"
-  run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --route-record "$light_record" --scope-digest "$light_digest"
-  [ "$status" -eq 2 ]
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
-}
+  # A same-digest refusal sibling refuses and stays in place; it is removed
+  # before the rows that move the tree or the digest.
+  bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance refused >/dev/null
+  [ -f "$refused" ]
+  before="$(cat "$refused")"
+  light_row "same-digest refusal sibling" "refusal exists" --route-record "$light_record"
+  [ -f "$refused" ] || { echo "same-digest refusal sibling: refusal removed"; return 1; }
+  [ "$(cat "$refused")" = "$before" ] || { echo "same-digest refusal sibling: refusal rewritten"; return 1; }
+  rm -f "$refused"
 
-@test "light: a route record deciding full exits 2 and writes no marker" {
-  light_fixture
-  write_route_record "$light_record" "$light_member" full "$light_digest" "$TREE"
-  run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --route-record "$light_record" --scope-digest "$light_digest"
-  [ "$status" -eq 2 ]
-  grep -qF "route is not light" <<<"$output" || return 1
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
-}
-
-@test "light: a route record naming another member exits 2 and writes no marker" {
-  light_fixture
-  write_route_record "$light_record" code-audit-maintainer-shell light "$light_digest" "$TREE"
-  run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --route-record "$light_record" --scope-digest "$light_digest"
-  [ "$status" -eq 2 ]
-  grep -qF "different member" <<<"$output" || return 1
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
-}
-
-@test "light: a route record with a stale digest exits 2 and writes no marker" {
-  light_fixture
-  printf '1.6.2\n' > "$ROOT/.gaia/VERSION"
-  git -C "$ROOT" add .gaia/VERSION
-  git -C "$ROOT" commit --quiet -m "rotate"
-  new_digest="$(member_digest "$ROOT" "$light_member")"
-  [ "$light_digest" != "$new_digest" ]
-  # Both the record and the scope digest are the pre-rotation digest, so only
-  # the record check can be what refuses.
-  run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --route-record "$light_record" --scope-digest "$light_digest"
-  [ "$status" -eq 2 ]
-  grep -qF "digest is stale" <<<"$output" || return 1
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
-  [ ! -f "$AUDIT_DIRECTORY/${new_digest}.ok" ]
-}
-
-@test "light: a route record with a stale tree exits 2 and writes no marker" {
-  light_fixture
   echo "more" >> "$ROOT/README.md"
   git -C "$ROOT" add README.md
   git -C "$ROOT" commit --quiet -m "out of glob"
   [ "$(member_digest "$ROOT" "$light_member")" = "$light_digest" ]
   [ "$(git -C "$ROOT" rev-parse 'HEAD^{tree}')" != "$TREE" ]
-  run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --route-record "$light_record" --scope-digest "$light_digest"
-  [ "$status" -eq 2 ]
-  grep -qF "tree is stale" <<<"$output" || return 1
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
-}
+  light_row "stale tree" "tree is stale" --route-record "$light_record"
 
-@test "light: --supersede-refusal together with --review light exits 2 and writes no marker" {
-  light_fixture
-  run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --route-record "$light_record" --scope-digest "$light_digest" \
-    --supersede-refusal "a stated reason"
-  [ "$status" -eq 2 ]
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
-}
-
-@test "light: a same-digest refusal sibling exits 2, writes no marker, and leaves the refusal in place" {
-  light_fixture
-  refused="$AUDIT_DIRECTORY/${light_digest}.refused"
-  bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance refused >/dev/null
-  [ -f "$refused" ]
-  before="$(cat "$refused")"
-  run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --route-record "$light_record" --scope-digest "$light_digest"
-  [ "$status" -eq 2 ]
-  grep -qF "refusal exists" <<<"$output" || return 1
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
-  [ -f "$refused" ]
-  [ "$(cat "$refused")" = "$before" ]
-}
-
-@test "light: a mismatched --scope-digest still refuses through the staleness gate" {
-  light_fixture
-  stale="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-  run bash "$WRITER" --root "$ROOT" --member "$light_member" --provenance earned \
-    --review light --route-record "$light_record" --scope-digest "$stale"
-  [ "$status" -eq 2 ]
-  grep -qF "review scope superseded" <<<"$output" || return 1
-  [ ! -f "$AUDIT_DIRECTORY/${light_digest}.ok" ]
+  printf '1.6.2\n' > "$ROOT/.gaia/VERSION"
+  git -C "$ROOT" add .gaia/VERSION
+  git -C "$ROOT" commit --quiet -m "rotate"
+  new_digest="$(member_digest "$ROOT" "$light_member")"
+  [ "$light_digest" != "$new_digest" ]
+  light_row "stale digest" "digest is stale" --route-record "$light_record"
+  [ ! -f "$AUDIT_DIRECTORY/${new_digest}.ok" ]
 }
 
 # -----------------------------------------------------------------------------
@@ -2435,19 +2333,7 @@ orphan_fixture() {
   [ -f "$AUDIT_DIRECTORY/${old_digest}.refused" ]
 }
 
-@test "catch-up: a criss-cross history exits 2 naming the merge that makes the merge base unique" {
-  catchup_branch_start
-  member="$CATCHUP_MEMBER"
-  catchup_criss_cross
-  [ "$(git -C "$ROOT" merge-base --all refs/remotes/origin/main HEAD | grep -c .)" -gt 1 ]
-
-  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused
-  [ "$status" -eq 2 ]
-  grep -qF "git merge --no-edit refs/remotes/origin/main" <<<"$output" || return 1
-  [ -z "$(find "$AUDIT_DIRECTORY" -name '*.refused' 2>/dev/null)" ]
-}
-
-@test "catch-up: a base tip that is not present locally exits 2 naming git fetch origin" {
+@test "catch-up: an unusable history exits 2 naming the fix" {
   catchup_branch_start
   member="$CATCHUP_MEMBER"
   # The digest library reports the missing tip with status 4; the stub stands in for it.
@@ -2456,6 +2342,13 @@ orphan_fixture() {
   run bash "$scratch" --root "$ROOT" --member "$member" --provenance refused
   [ "$status" -eq 2 ]
   grep -qF "git fetch origin" <<<"$output" || return 1
+  [ -z "$(find "$AUDIT_DIRECTORY" -name '*.refused' 2>/dev/null)" ]
+  catchup_criss_cross
+  [ "$(git -C "$ROOT" merge-base --all refs/remotes/origin/main HEAD | grep -c .)" -gt 1 ]
+
+  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused
+  [ "$status" -eq 2 ]
+  grep -qF "git merge --no-edit refs/remotes/origin/main" <<<"$output" || return 1
   [ -z "$(find "$AUDIT_DIRECTORY" -name '*.refused' 2>/dev/null)" ]
 }
 

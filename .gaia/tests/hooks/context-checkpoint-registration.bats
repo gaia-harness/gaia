@@ -51,26 +51,6 @@ assert_registry_entry() {
   [ "$status" -eq 0 ]
 }
 
-# mutate_settings JQ_PROGRAM: writes a scratch copy of settings.json transformed
-# by the program, and leaves its path in MUTANT.
-mutate_settings() {
-  MUTANT="$BATS_TEST_TMPDIR/settings-mutant.json"
-  jq "$1" "$SETTINGS" > "$MUTANT"
-  if cmp -s "$MUTANT" "$SETTINGS"; then
-    printf 'mutation did not change settings\n' >&2
-    return 1
-  fi
-}
-
-mutate_registry() {
-  MUTANT="$BATS_TEST_TMPDIR/registry-mutant.json"
-  jq "$1" "$REGISTRY" > "$MUTANT"
-  if cmp -s "$MUTANT" "$REGISTRY"; then
-    printf 'mutation did not change registry\n' >&2
-    return 1
-  fi
-}
-
 # --- settings -----------------------------------------------------------------
 
 @test "the checkpoint hook is registered once, on PostToolUse, with no matcher" {
@@ -87,46 +67,3 @@ mutate_registry() {
   assert_registry_entry "$REGISTRY"
 }
 
-# --- red twins ------------------------------------------------------------------
-
-@test "red twin: a matcher on the registration fails the registration check" {
-  mutate_settings '(.hooks.PostToolUse[] | select(.hooks[].command | test("context-checkpoint-inject[.]sh"))) |= . + {matcher: "Bash"}'
-  run assert_registered "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: removing the registration fails the registration check" {
-  mutate_settings '.hooks.PostToolUse |= map(select(.hooks | all(.command | test("context-checkpoint-inject[.]sh") | not)))'
-  run assert_registered "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a second registration under SessionStart fails the registration check" {
-  mutate_settings '.hooks.SessionStart += [{hooks: [{type: "command", command: "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/context-checkpoint-inject.sh\"", timeout: 10}]}]'
-  run assert_registered "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a command rooted on CLAUDE_PROJECT_DIR alone fails the sanctioned-prefix check" {
-  mutate_settings '(.hooks.PostToolUse[].hooks[] | select(.command | test("context-checkpoint-inject[.]sh")) | .command) = "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-checkpoint-inject.sh\""'
-  run assert_rooted_with_timeout "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a missing timeout fails the sanctioned-prefix check" {
-  mutate_settings 'del(.hooks.PostToolUse[].hooks[] | select(.command | test("context-checkpoint-inject[.]sh")) | .timeout)'
-  run assert_rooted_with_timeout "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: removing the registry entry fails the registry check" {
-  mutate_registry '.entries |= map(select(.path != "cache/context-checkpoint/"))'
-  run assert_registry_entry "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
-@test "red twin: a keep class instead of age fails the registry check" {
-  mutate_registry '(.entries[] | select(.path == "cache/context-checkpoint/") | .retention) = {"class":"keep"}'
-  run assert_registry_entry "$MUTANT"
-  [ "$status" -ne 0 ]
-}

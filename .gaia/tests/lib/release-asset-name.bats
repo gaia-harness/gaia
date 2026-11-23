@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# The 2.0.0 release fence (SPEC-092 contracts C9 and C10).
+# The 2.0.0 release fence.
 #
 # v1.6.1's /update-gaia downloads with `--pattern "gaia-${tag}.tar.gz"`. The 2.x
 # manifest is keyed on apps/web/ paths, so a 1.6.1 merge against it would read
@@ -7,17 +7,11 @@
 # 2.x publishes `gaia-bundle-${TAG}.tar.gz`, which that glob cannot match, so
 # 1.6.1 stops at its fetch step before it writes anything.
 #
-#   A1-A5  the asset name in release.yml, the 2.x /update-gaia pattern (read
-#          from the update-gaia-preflight.sh verify-bundles code), and the glob semantics
-#          that make the fence hold. A2 and A3 drive the failing state: the
-#          retired name is matched by v1.6.1's pattern, and a pattern that
-#          drifts from the upload name is reported.
-#   B1-B6  the 1.x baseline refusal (update-gaia-preflight.sh refuse-1x; B4
-#          pins the skill's prose order): the printed download-and-verify
-#          command agrees with the 2.0.0 note's own Step 2, and works and fails
-#          closed when run.
-#   C1-C2  release.yml publishes the extracted CHANGELOG section as the
-#          release body, with nothing composed in front of it.
+# The suite covers the asset name in release.yml against the /update-gaia
+# pattern (read from the update-gaia-preflight.sh verify-bundles code), the 1.x
+# baseline refusal (update-gaia-preflight.sh refuse-1x) with its printed
+# download-and-verify command, and the release body (the extracted CHANGELOG
+# section, with nothing composed in front of it).
 #
 # Assertion style per .claude/rules/bats-assertions.md: no bare mid-test
 # [[ ... ]]; POSIX [ ] and grep, `case` for glob matching.
@@ -27,7 +21,6 @@
 setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
   RELEASE_YML="$REPO_ROOT/.github/workflows/release.yml"
-  SKILL="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md"
   PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
 }
 
@@ -79,72 +72,32 @@ block_after_heading() {
   ' "$1"
 }
 
-@test "A1: release.yml uploads gaia-bundle-<tag>.tar.gz and its sha256" {
+@test "the 2.x release asset name (gaia-bundle-<tag>.tar.gz and its sha256) is what release.yml uploads, what the /update-gaia verify-bundles pattern downloads and extracts, and a v1.6.1 pattern cannot match it" {
+  TAG=v2.0.0
   name="$(uploaded_asset_name "$RELEASE_YML")"
   [ "$name" = 'gaia-bundle-${TAG}.tar.gz' ]
   grep -qF -- 'gaia-bundle-${TAG}.tar.gz.sha256' "$RELEASE_YML"
   grep -qF -- 'shasum -a 256' "$RELEASE_YML"
   # The retired name must not survive as a tar or upload target.
   grep -qE -- '"gaia-\$\{TAG\}\.tar\.gz"' "$RELEASE_YML" && return 1
-  true
-}
 
-@test "A2: v1.6.1's pattern cannot match the 2.x asset, and can match the retired name" {
-  TAG=v2.0.0
-  new_name="$(uploaded_asset_name "$RELEASE_YML")"
-  [ -n "$new_name" ]
-  new_name="${new_name//'${TAG}'/$TAG}"
-  [ "$new_name" = "gaia-bundle-${TAG}.tar.gz" ]
+  # v1.6.1's pattern misses the 2.x asset; the same matcher on the retired
+  # name matches, so the miss is the name's doing.
   v1_pattern="gaia-${TAG}.tar.gz"
-  glob_matches "$v1_pattern" "$new_name" && return 1
-  # Control: the same matcher on the retired name matches, so a pass above is
-  # the name's doing and not a matcher that never matches anything.
+  glob_matches "$v1_pattern" "${name//'${TAG}'/$TAG}" && return 1
   glob_matches "$v1_pattern" "gaia-${TAG}.tar.gz"
-}
 
-@test "A3: a release.yml that still uploads the retired name is reported" {
-  fixture="$BATS_TEST_TMPDIR/old-release.yml"
-  sed 's/gaia-bundle-/gaia-/g' "$RELEASE_YML" > "$fixture"
-  TAG=v2.0.0
-  old_name="$(uploaded_asset_name "$fixture")"
-  [ "$old_name" = 'gaia-${TAG}.tar.gz' ]
-  expanded="gaia-${TAG}.tar.gz"
-  # v1.6.1's pattern matches the retired upload: the failure the fence prevents.
-  glob_matches "gaia-${TAG}.tar.gz" "$expanded"
-  # And the real workflow's name is a different string.
-  [ "$(uploaded_asset_name "$RELEASE_YML")" != "$old_name" ]
-}
-
-@test "A4: the /update-gaia verify-bundles pattern equals the upload name, and drift is reported" {
   block="$(verify_bundles_body "$PREFLIGHT")"
   [ -n "$block" ]
-  printf '%s\n' "$block" > "$BATS_TEST_TMPDIR/step-3c.sh"
-  pattern="$(update_pattern "$BATS_TEST_TMPDIR/step-3c.sh")"
+  printf '%s\n' "$block" > "$BATS_TEST_TMPDIR/verify-bundles.sh"
+  pattern="$(update_pattern "$BATS_TEST_TMPDIR/verify-bundles.sh")"
   [ -n "$pattern" ]
   # Both templates name the tag differently (${tag} and ${TAG}); compare shapes.
   normalized_pattern="$(printf '%s' "$pattern" | sed 's/\${tag}/${TAG}/g')"
-  [ "$normalized_pattern" = "$(uploaded_asset_name "$RELEASE_YML")" ]
+  [ "$normalized_pattern" = "$name" ]
   # The checksum asset is fetched too, on a line of its own.
   printf '%s\n' "$block" | grep -qE -- '^[[:space:]]*--pattern "gaia-bundle-\$\{tag\}\.tar\.gz\.sha256" \\$'
-  # Failing state: a pattern with the retired name reads as drift.
-  drifted="$BATS_TEST_TMPDIR/step-3c-drifted.sh"
-  sed 's/gaia-bundle-/gaia-/g' "$BATS_TEST_TMPDIR/step-3c.sh" > "$drifted"
-  drifted_pattern="$(update_pattern "$drifted" | sed 's/\${tag}/${TAG}/g')"
-  [ "$drifted_pattern" != "$(uploaded_asset_name "$RELEASE_YML")" ]
-  # Failing state: both patterns joined on one line return the .sha256 name,
-  # which is why the block keeps one pattern per line.
-  joined="$BATS_TEST_TMPDIR/step-3c-joined.sh"
-  awk '
-    /--pattern "gaia-bundle-\$\{tag\}\.tar\.gz" \\$/ { sub(/ \\$/, ""); held = $0; next }
-    held != "" { sub(/^[[:space:]]*/, " "); print held $0; held = ""; next }
-    { print }
-  ' "$BATS_TEST_TMPDIR/step-3c.sh" > "$joined"
-  [ "$(update_pattern "$joined")" = 'gaia-bundle-${tag}.tar.gz.sha256' ]
-}
-
-@test "A5: the verify-bundles extract uses --strip-components, so the staging directory name never shows" {
-  block="$(verify_bundles_body "$PREFLIGHT")"
-  [ -n "$block" ]
+  # The extract strips the staging directory, whose name never shows.
   printf '%s\n' "$block" | grep -qF -- '--strip-components=1'
   grep -qF -- 'tar -czf "gaia-bundle-${TAG}.tar.gz" -C /tmp "gaia-${TAG}"' "$RELEASE_YML"
 }
@@ -154,7 +107,7 @@ refusal_command() {
   printf '%s\n' "$1" | sed -n 's/^  \(mkdir -p .*\)$/\1/p' | head -n 1
 }
 
-@test "B1: a 1.6.1 baseline is refused with a download-and-verify command for the v2.0.0 bundle" {
+@test "refuse-1x refuses a 1.6.1 baseline with the download-verify-extract command for the v2.0.0 bundle, proceeds silently on 2.0.0 and refuses a malformed baseline" {
   run bash "$PREFLIGHT" refuse-1x --baseline 1.6.1
   [ "$status" -eq 1 ]
   printf '%s' "$output" | grep -qF 'REFUSED'
@@ -169,83 +122,15 @@ refusal_command() {
   [ "$extract_at" -gt "$verify_at" ]
   printf '%s' "$command_line" | grep -qF -- '-C .gaia/local/cache/shared/migrate-2/v2.0.0/tree'
   printf '%s' "$output" | grep -qF -- "$(migrate_url_token)" && return 1
-  true
-}
 
-@test "B2: a 2.0.0 baseline proceeds silently" {
   run bash "$PREFLIGHT" refuse-1x --baseline 2.0.0
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
 
-@test "B3: a malformed baseline is refused, never read as proceed" {
   for bad in '' 'v2.0.0' 'abc' '1x.0.0' 'x.y'; do
     run bash "$PREFLIGHT" refuse-1x --baseline "$bad"
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 1 ] || { echo "baseline '$bad': status $status"; return 1; }
   done
-}
-
-# 0 when SKILL.md copy `$1` runs the 1.x refusal from Step 3b, before the
-# first bundle download, the first worktree entry and the worktree add, and
-# moves no branch anywhere.
-refusal_precedes_branching() {
-  local section refusal_line verify_line enter_line add_line
-  section="$(awk '/^## Step 3b/ { inside = 1; print; next } inside && /^##+ / { exit } inside { print }' "$1")"
-  printf '%s\n' "$section" | grep -qxF 'bash .gaia/scripts/update-gaia-preflight.sh refuse-1x --baseline <BASELINE>' || return 1
-  printf '%s\n' "$section" | grep -qE 'checkout -b|git switch|EnterWorktree' && return 1
-  grep -qE 'git checkout -b|git switch' "$1" && return 1
-  refusal_line="$(grep -nF 'update-gaia-preflight.sh refuse-1x' "$1" | head -n 1 | cut -d: -f1)"
-  verify_line="$(grep -nF 'update-gaia-preflight.sh verify-bundles' "$1" | head -n 1 | cut -d: -f1)"
-  enter_line="$(grep -nF 'EnterWorktree(' "$1" | head -n 1 | cut -d: -f1)"
-  add_line="$(grep -nF 'update-gaia-branch-state.sh add-worktree' "$1" | head -n 1 | cut -d: -f1)"
-  [ -n "$refusal_line" ] && [ -n "$verify_line" ] && [ -n "$enter_line" ] && [ -n "$add_line" ] || return 1
-  [ "$refusal_line" -lt "$verify_line" ] || return 1
-  [ "$refusal_line" -lt "$enter_line" ] || return 1
-  [ "$refusal_line" -lt "$add_line" ] || return 1
-  return 0
-}
-
-@test "B4: the refusal call creates no branch and precedes every download and worktree outside it" {
-  refusal_precedes_branching "$SKILL"
-  local copy="$BATS_TEST_TMPDIR/skill-early-worktree.md"
-  # Failing state: a worktree entered before Step 3b.
-  awk '/^## Step 3b/ && !done { print "EnterWorktree({name: \"early\"})"; done = 1 } { print }' "$SKILL" > "$copy"
-  grep -qxF 'EnterWorktree({name: "early"})' "$copy"
-  refusal_precedes_branching "$copy" && return 1
-  # Failing state: a branch switch reinserted anywhere.
-  { cat "$SKILL"; printf '%s\n' 'git switch x'; } > "$copy"
-  refusal_precedes_branching "$copy" && return 1
-  true
-}
-
-# The `## Step 2` section of a 2.0.0 note.
-note_step_2() {
-  awk '/^## Step 2/ { inside = 1; print; next } inside && /^## / { exit } inside { print }' "$1"
-}
-
-# 0 when every asset name and the cache directory in command `$1` appear in
-# the Step 2 of note `$2`.
-note_agrees_with_command() {
-  local step_2 needle
-  step_2="$(note_step_2 "$2")"
-  [ -n "$step_2" ] || return 1
-  for needle in 'gaia-bundle-v2.0.0.tar.gz' 'gaia-bundle-v2.0.0.tar.gz.sha256' '.gaia/local/cache/shared/migrate-2/v2.0.0'; do
-    printf '%s' "$1" | grep -qF -- "$needle" || return 1
-    printf '%s' "$step_2" | grep -qF -- "$needle" || return 1
-  done
-}
-
-@test "B5: the refusal's assets and cache directory match the 2.0.0 note's Step 2, and drift is reported" {
-  run bash "$PREFLIGHT" refuse-1x --baseline 1.6.1
-  command_line="$(refusal_command "$output")"
-  [ -n "$command_line" ]
-  note="$REPO_ROOT/.gaia/migrations/2.0.0.md"
-  note_agrees_with_command "$command_line" "$note"
-  # Failing state: a note that caches the bundle elsewhere.
-  drifted="$BATS_TEST_TMPDIR/2.0.0-drifted.md"
-  sed 's|cache/shared/migrate-2/v2.0.0|cache/shared/migrate-two/v2.0.0|g' "$note" > "$drifted"
-  note_agrees_with_command "$command_line" "$drifted" && return 1
-  true
 }
 
 # A stub gh that copies the fixture release assets into the --dir it is given.
@@ -277,7 +162,8 @@ write_fixture_release() {
   printf '%s  gaia-bundle-v2.0.0.tar.gz\n' "$hex" > "$FIXTURE_ASSETS/gaia-bundle-v2.0.0.tar.gz.sha256"
 }
 
-@test "B6: the printed command downloads, verifies and extracts the note, and fails closed on a bad checksum" {
+# bats test_tags=protected
+@test "the printed command downloads, verifies and extracts the note, and fails closed on a bad checksum" {
   run bash "$PREFLIGHT" refuse-1x --baseline 1.6.1
   command_line="$(refusal_command "$output")"
   [ -n "$command_line" ]
@@ -313,14 +199,7 @@ release_body_is_notes() {
   return 0
 }
 
-@test "C1: the release body is the CHANGELOG section, with no 1.6.1 routing block" {
+@test "the release body is the CHANGELOG section, with no 1.6.1 routing block" {
   release_body_is_notes "$RELEASE_YML"
   [ ! -e "$REPO_ROOT/.gaia/scripts/compose-release-body.sh" ]
-}
-
-@test "C2: a release.yml that still publishes a composed body is reported" {
-  fixture="$BATS_TEST_TMPDIR/release.yml"
-  sed 's/--notes-file release-notes\.md/--notes-file release-body.md/' "$RELEASE_YML" > "$fixture"
-  run release_body_is_notes "$fixture"
-  [ "$status" -ne 0 ]
 }

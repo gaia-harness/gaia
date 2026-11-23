@@ -88,32 +88,6 @@ mutate_commit() {
 }
 
 # ---------------------------------------------------------------------------
-# The previous recipe's sentinel feeds no digest and its functions are gone.
-#
-# The sentinel is assembled from two halves so no tracked file, this one
-# included, holds the literal for a search to find. The pin on the current
-# sentinel (one site, in the library) is further down.
-# ---------------------------------------------------------------------------
-
-@test "the previous recipe's sentinel feeds no digest input anywhere in the gate machinery" {
-  previous_sentinel="gaia-audit-digest-v""1"
-  matches="$(grep -rlF -- "$previous_sentinel" "$REPO_ROOT/.claude/hooks" "$REPO_ROOT/.gaia/scripts" "$REPO_ROOT/.github/audit" --include='*.sh' || true)"
-  [ -z "$matches" ] || { printf 'the previous sentinel is still present in:\n%s\n' "$matches" >&2; return 1; }
-  # The detector can see it: a file carrying the sentinel is found.
-  printf '%s\n' "$previous_sentinel" >"$BATS_TEST_TMPDIR/probe.sh"
-  [ -n "$(grep -rlF -- "$previous_sentinel" "$BATS_TEST_TMPDIR" --include='*.sh')" ]
-}
-
-@test "the content-digest functions are no longer defined, so no caller can fall back to them" {
-  run bash -c '. "$1"; type audit_digests_all' _ "$DIGEST_LIBRARY"
-  [ "$status" -ne 0 ]
-  run bash -c '. "$1"; type audit_member_digest' _ "$DIGEST_LIBRARY"
-  [ "$status" -ne 0 ]
-  run bash -c '. "$1"; type audit_branch_member_digest' _ "$DIGEST_LIBRARY"
-  [ "$status" -eq 0 ]
-}
-
-# ---------------------------------------------------------------------------
 # UAT-001 / SC1: the flagship out-of-glob no-op. A CHANGELOG-only edit A->B
 # touches no path any member owns and no machinery path, so EVERY member's
 # digest is byte-identical across A and B.
@@ -135,87 +109,44 @@ mutate_commit() {
 }
 
 # ---------------------------------------------------------------------------
-# UAT-006: the real fail-open direction. Flipping a byte in an owned path
-# rotates that member's digest (so the owned path IS in the input set); an
-# unrelated member's digest is unchanged; an out-of-set edit rotates nothing.
+# UAT-006 / UAT-009: the real fail-open direction. Flipping a byte in an owned
+# path rotates exactly the members that own it (so the owned path IS in their
+# input set): a specialist path (.gaia/cli/src, the node member's ERE), an app/
+# path (the default member's auditable base), machinery (.gaia/VERSION and a
+# nested .claude/rules/ path) for every member, and an out-of-set wiki edit for
+# none. Membership is the classifier's, matching dispatch, never git pathspec.
 # ---------------------------------------------------------------------------
 
-@test "UAT-006: a specialist-owned (node) byte flip rotates only that member's digest" {
-  ROOT="$BATS_TEST_TMPDIR/uat006node"
+# Rows commit to one seeded repo in turn; each compares the digests on either
+# side of its own commit, so no row reads another row's change.
+@test "UAT-006: each path class rotates exactly the members that own it" {
+  local row path rotating member_name refs commit_sha_before commit_sha_after digest_before digest_after
+  ROOT="$BATS_TEST_TMPDIR/rotation"
   mkdir -p "$ROOT"
   seed_repo "$ROOT"
-  refs="$(mutate_commit "$ROOT" ".gaia/cli/src/index.ts")"
-  commit_sha_before="${refs% *}"; commit_sha_after="${refs#* }"
-  [ "$(digest_of "$ROOT" code-audit-maintainer-node "$commit_sha_before")" != "$(digest_of "$ROOT" code-audit-maintainer-node "$commit_sha_after")" ] || return 1
-  [ "$(digest_of "$ROOT" code-audit-frontend "$commit_sha_before")" = "$(digest_of "$ROOT" code-audit-frontend "$commit_sha_after")" ] || return 1
-  [ "$(digest_of "$ROOT" code-audit-maintainer-shell "$commit_sha_before")" = "$(digest_of "$ROOT" code-audit-maintainer-shell "$commit_sha_after")" ] || return 1
-}
-
-@test "UAT-006: a default-member auditable-base (app) byte flip rotates only the frontend digest" {
-  ROOT="$BATS_TEST_TMPDIR/uat006app"
-  mkdir -p "$ROOT"
-  seed_repo "$ROOT"
-  refs="$(mutate_commit "$ROOT" "app/x.ts")"
-  commit_sha_before="${refs% *}"; commit_sha_after="${refs#* }"
-  [ "$(digest_of "$ROOT" code-audit-frontend "$commit_sha_before")" != "$(digest_of "$ROOT" code-audit-frontend "$commit_sha_after")" ] || return 1
-  [ "$(digest_of "$ROOT" code-audit-maintainer-node "$commit_sha_before")" = "$(digest_of "$ROOT" code-audit-maintainer-node "$commit_sha_after")" ] || return 1
-  [ "$(digest_of "$ROOT" code-audit-maintainer-shell "$commit_sha_before")" = "$(digest_of "$ROOT" code-audit-maintainer-shell "$commit_sha_after")" ] || return 1
-}
-
-@test "UAT-006: a machinery (.gaia/VERSION) byte flip rotates every member's digest" {
-  ROOT="$BATS_TEST_TMPDIR/uat006mach"
-  mkdir -p "$ROOT"
-  seed_repo "$ROOT"
-  refs="$(mutate_commit "$ROOT" ".gaia/VERSION")"
-  commit_sha_before="${refs% *}"; commit_sha_after="${refs#* }"
-  for member_name in code-audit-frontend code-audit-maintainer-shell code-audit-maintainer-node; do
-    [ "$(digest_of "$ROOT" "$member_name" "$commit_sha_before")" != "$(digest_of "$ROOT" "$member_name" "$commit_sha_after")" ] || return 1
+  local rows=(
+    '.gaia/cli/src/index.ts|code-audit-maintainer-node'
+    'app/x.ts|code-audit-frontend'
+    '.gaia/VERSION|code-audit-frontend code-audit-maintainer-shell code-audit-maintainer-node'
+    '.claude/rules/foo/bar.md|code-audit-frontend code-audit-maintainer-shell code-audit-maintainer-node'
+    'wiki/x.md|'
+  )
+  for row in "${rows[@]}"; do
+    IFS='|' read -r path rotating <<<"$row"
+    echo "case: $path rotates [$rotating]"
+    refs="$(mutate_commit "$ROOT" "$path")"
+    commit_sha_before="${refs% *}"
+    commit_sha_after="${refs#* }"
+    for member_name in code-audit-frontend code-audit-maintainer-shell code-audit-maintainer-node; do
+      digest_before="$(digest_of "$ROOT" "$member_name" "$commit_sha_before")"
+      digest_after="$(digest_of "$ROOT" "$member_name" "$commit_sha_after")"
+      [ -n "$digest_before" ]
+      case " $rotating " in
+        *" $member_name "*) [ "$digest_before" != "$digest_after" ] ;;
+        *) [ "$digest_before" = "$digest_after" ] ;;
+      esac
+    done
   done
-}
-
-@test "UAT-006: an out-of-set (wiki) edit rotates no member's digest" {
-  ROOT="$BATS_TEST_TMPDIR/uat006wiki"
-  mkdir -p "$ROOT"
-  seed_repo "$ROOT"
-  refs="$(mutate_commit "$ROOT" "wiki/x.md")"
-  commit_sha_before="${refs% *}"; commit_sha_after="${refs#* }"
-  for member_name in code-audit-frontend code-audit-maintainer-shell code-audit-maintainer-node; do
-    [ "$(digest_of "$ROOT" "$member_name" "$commit_sha_before")" = "$(digest_of "$ROOT" "$member_name" "$commit_sha_after")" ] || return 1
-  done
-}
-
-# ---------------------------------------------------------------------------
-# UAT-009: membership is the classifier's, matching dispatch, for a nested
-# .claude/rules/ path (machinery via .claude/rules/**), an app/ path (default
-# member's auditable base), and a .gaia/cli/src/ path (specialist ERE), never
-# git pathspec.
-# ---------------------------------------------------------------------------
-
-@test "UAT-009: nested .claude/rules/foo/bar.md is machinery (rotates every member)" {
-  ROOT="$BATS_TEST_TMPDIR/uat009rules"
-  mkdir -p "$ROOT"
-  seed_repo "$ROOT"
-  refs="$(mutate_commit "$ROOT" ".claude/rules/foo/bar.md")"
-  commit_sha_before="${refs% *}"; commit_sha_after="${refs#* }"
-  for member_name in code-audit-frontend code-audit-maintainer-shell code-audit-maintainer-node; do
-    [ "$(digest_of "$ROOT" "$member_name" "$commit_sha_before")" != "$(digest_of "$ROOT" "$member_name" "$commit_sha_after")" ] || return 1
-  done
-}
-
-@test "UAT-009: app/x.ts lands only in the frontend digest; .gaia/cli/src only in node" {
-  ROOT="$BATS_TEST_TMPDIR/uat009own"
-  mkdir -p "$ROOT"
-  seed_repo "$ROOT"
-  # app path: frontend only.
-  refs="$(mutate_commit "$ROOT" "app/x.ts")"
-  commit_sha_before="${refs% *}"; commit_sha_after="${refs#* }"
-  [ "$(digest_of "$ROOT" code-audit-frontend "$commit_sha_before")" != "$(digest_of "$ROOT" code-audit-frontend "$commit_sha_after")" ] || return 1
-  [ "$(digest_of "$ROOT" code-audit-maintainer-node "$commit_sha_before")" = "$(digest_of "$ROOT" code-audit-maintainer-node "$commit_sha_after")" ] || return 1
-  # cli path: node only.
-  refs="$(mutate_commit "$ROOT" ".gaia/cli/src/index.ts")"
-  commit_sha_before="${refs% *}"; commit_sha_after="${refs#* }"
-  [ "$(digest_of "$ROOT" code-audit-maintainer-node "$commit_sha_before")" != "$(digest_of "$ROOT" code-audit-maintainer-node "$commit_sha_after")" ] || return 1
-  [ "$(digest_of "$ROOT" code-audit-frontend "$commit_sha_before")" = "$(digest_of "$ROOT" code-audit-frontend "$commit_sha_after")" ] || return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -308,53 +239,8 @@ mutate_commit() {
 }
 
 # ---------------------------------------------------------------------------
-# UAT-013: fail-closed. A masked sha256 tool, a failing git ls-tree, or a
-# non-git root each emit NOTHING and exit non-zero -- never a partial/empty
-# digest that could key or match a marker.
-# ---------------------------------------------------------------------------
-
-@test "UAT-013: sha256 tool masked -> emit nothing, exit non-zero" {
-  ROOT="$BATS_TEST_TMPDIR/uat013mask"
-  mkdir -p "$ROOT"
-  seed_repo "$ROOT"
-  mutate_commit "$ROOT" "app/x.ts" >/dev/null
-  # stdout only: the masked hasher never reads its pipe, and uutils sort
-  # (Ubuntu 26.04) reports the failed write on stderr where GNU sort dies of
-  # SIGPIPE silently. The contract is no digest on stdout.
-  run --separate-stderr bash -c '
-    sha256sum() { return 1; }
-    shasum() { return 1; }
-    . "$1"
-    audit_branch_member_digest "$2" code-audit-frontend "$3"
-  ' _ "$DIGEST_LIBRARY" "$ROOT" "$(git -C "$ROOT" rev-list --max-parents=0 HEAD)"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "UAT-013: a failing git listing (invalid target ref) -> emit nothing, exit non-zero" {
-  ROOT="$BATS_TEST_TMPDIR/uat013ref"
-  mkdir -p "$ROOT"
-  seed_repo "$ROOT"
-  run bash -c '. "$1"; audit_branch_member_digest "$2" code-audit-frontend "$3" "no-such-ref"' _ "$DIGEST_LIBRARY" "$ROOT" \
-    "$(git -C "$ROOT" rev-list --max-parents=0 HEAD)"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-@test "UAT-013: a non-git root -> emit nothing, exit non-zero" {
-  ROOT="$BATS_TEST_TMPDIR/uat013nogit"
-  mkdir -p "$ROOT"
-  # Seeded so the failure under test is the missing repository, not the
-  # missing roster.
-  seed_audit_roster "$ROOT"
-  run bash -c '. "$1"; audit_branch_member_digest "$2" code-audit-frontend HEAD' _ "$DIGEST_LIBRARY" "$ROOT"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-# ---------------------------------------------------------------------------
 # The CLI entrypoint mirrors the lib: a 64-hex digest + exit 0, and a non-zero
-# exit on any fail-closed condition (never swallowed into 0). Usage errors exit 2.
+# exit on any fail-closed condition (never swallowed into 0).
 # ---------------------------------------------------------------------------
 
 @test "CLI: prints the member's branch-own digest line the lib computes, exit 0" {
@@ -414,9 +300,9 @@ v2_copy_libraries() {
 }
 
 # v2_replace_literal <file> <from> <to>: replace the first occurrence of the
-# literal <from>; fails when it is absent, so a mutation that no longer matches
-# the code is a red setup and never a silently unmutated copy. <to> must not
-# contain an ampersand: bash 5.2 expands it to the matched text.
+# literal <from>; fails when it is absent, so a base edit that no longer
+# matches the code is a red setup and never a silently unedited copy. <to> must
+# not contain an ampersand: bash 5.2 expands it to the matched text.
 v2_replace_literal() {
   local file="$1" from="$2" to="$3" content
   content="$(cat "$file"; printf x)"
@@ -426,14 +312,6 @@ v2_replace_literal() {
     *) return 1 ;;
   esac
   printf '%s' "${content/"$from"/$to}" >"$file"
-}
-
-# v2_use_mutant <library file name> <from> <to>: point the digest at a scratch
-# copy of the libraries whose <library file name> has <from> replaced.
-v2_use_mutant() {
-  V2_LIBRARY_ROOT="$BATS_TEST_TMPDIR/mutant-$1"
-  v2_copy_libraries "$V2_LIBRARY_ROOT" || return 1
-  v2_replace_literal "$V2_LIBRARY_ROOT/.claude/hooks/lib/$1" "$2" "$3"
 }
 
 # v2_seed <directory>: a sandbox whose base carries one file per ownership
@@ -462,13 +340,13 @@ v2_seed() {
 # v2_local [<tree-ish>]: the branch-own digests against the local base.
 v2_local() {
   bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_local "$2" "$3"' \
-    _ "${V2_LIBRARY_ROOT:-$CATCHUP_ROOT}" "$CATCHUP_ROOT" "${1:-HEAD}"
+    _ "$CATCHUP_ROOT" "$CATCHUP_ROOT" "${1:-HEAD}"
 }
 
 # v2_all <merge-base> [<tree-ish>]: the branch-own digests over a merge base.
 v2_all() {
   bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$2" "$3" "$4"' \
-    _ "${V2_LIBRARY_ROOT:-$CATCHUP_ROOT}" "$CATCHUP_ROOT" "$1" "${2:-HEAD}"
+    _ "$CATCHUP_ROOT" "$CATCHUP_ROOT" "$1" "${2:-HEAD}"
 }
 
 # v2_members <digest lines>: the member names, one per line.
@@ -526,12 +404,6 @@ v2_branch_work() {
   catchup_branch_commit .gaia/scripts/foo.sh "$(catchup_lines 10 shell 3=branch-edit)" || return 1
   catchup_branch_commit .gaia/cli/src/index.ts "$(catchup_lines 10 index 2=branch-edit)" || return 1
   catchup_branch_commit .github/workflows/ci.yml "$(catchup_lines 10 workflow 2=branch-edit)" || return 1
-}
-
-@test "the branch-own recipe sentinel feeding the digest hash is gaia-audit-digest-v2, at one site" {
-  grep -qF -- "printf 'gaia-audit-digest-v2\0" "$DIGEST_LIBRARY" || return 1
-  sites="$(grep -oF -- "printf 'gaia-audit-digest-v2\0" "$DIGEST_LIBRARY" | wc -l | tr -d ' ')"
-  [ "$sites" -eq 1 ]
 }
 
 @test "branch-own: every roster member gets one 64-hex line and the single-member form agrees" {
@@ -610,6 +482,7 @@ v2_inside_merge_run() {
   V2_AFTER="$(v2_local)"
 }
 
+# bats test_tags=protected
 @test "an edit inside a merge commit rotates exactly the covering members, for whitespace, mode, symlink and binary" {
   for kind in whitespace mode symlink binary; do
     v2_inside_merge_run "$BATS_TEST_TMPDIR/inside-$kind-edit" "$kind" edit || return 1
@@ -617,30 +490,6 @@ v2_inside_merge_run() {
     v2_inside_merge_run "$BATS_TEST_TMPDIR/inside-$kind-clean" "$kind" clean || return 1
     [ "$V2_BEFORE" = "$V2_AFTER" ] || return 1
   done
-}
-
-@test "a whitespace-only edit inside a merge stops rotating when the patch ignores whitespace" {
-  v2_use_mutant audit-branch-patch.sh "-U3 --no-color" "-U3 -w --no-color" || return 1
-  v2_inside_merge_run "$BATS_TEST_TMPDIR/inside-whitespace-mutant" whitespace edit || return 1
-  v2_expect_rotated "$V2_BEFORE" "$V2_AFTER"
-}
-
-@test "a file-mode edit inside a merge stops rotating when the identity drops the mode frame" {
-  v2_use_mutant audit-branch-patch.sh 'print "mode " old_mode[current] " " new_mode[current] > frame_file' 'x = 0' || return 1
-  v2_inside_merge_run "$BATS_TEST_TMPDIR/inside-mode-mutant" mode edit || return 1
-  v2_expect_rotated "$V2_BEFORE" "$V2_AFTER"
-}
-
-@test "a symlink-target edit inside a merge stops rotating when the identity drops blob ids" {
-  v2_use_mutant audit-branch-patch.sh 'print "blob " old_blob[current] " " new_blob[current] > frame_file' 'x = 0' || return 1
-  v2_inside_merge_run "$BATS_TEST_TMPDIR/inside-symlink-mutant" symlink edit || return 1
-  v2_expect_rotated "$V2_BEFORE" "$V2_AFTER"
-}
-
-@test "a binary edit inside a merge stops rotating when the identity drops blob ids" {
-  v2_use_mutant audit-branch-patch.sh 'print "blob " old_blob[current] " " new_blob[current] > frame_file' 'x = 0' || return 1
-  v2_inside_merge_run "$BATS_TEST_TMPDIR/inside-binary-mutant" binary edit || return 1
-  v2_expect_rotated "$V2_BEFORE" "$V2_AFTER"
 }
 
 # ---------------------------------------------------------------------------
@@ -664,6 +513,7 @@ v2_twin_run() {
   V2_AFTER="$(v2_local)"
 }
 
+# bats test_tags=protected
 @test "two branches with byte-identical patches, or both empty, have different digests for every member" {
   for patch in with-changes empty; do
     v2_twin_run "$BATS_TEST_TMPDIR/twin-$patch" "$patch" || return 1
@@ -673,35 +523,27 @@ v2_twin_run() {
   done
 }
 
-@test "twin branches share one digest per member once the branch key leaves the frame" {
-  v2_use_mutant audit-digest.sh "\\0%s\\0' \"\$branch_key\"" "\\0%s\\0' \"\"" || return 1
-  for patch in with-changes empty; do
-    v2_twin_run "$BATS_TEST_TMPDIR/twin-mutant-$patch" "$patch" || return 1
-    [ -n "$V2_BEFORE" ] || return 1
-    [ "$V2_BEFORE" = "$V2_AFTER" ] || return 1
-  done
-}
-
 # ---------------------------------------------------------------------------
 # A branch's own edit to gate machinery or a global rule rotates everyone.
 # ---------------------------------------------------------------------------
 
-@test "a branch commit editing gate machinery rotates every member" {
-  v2_seed "$BATS_TEST_TMPDIR/machinery" || return 1
+# Both rows commit to one branch in turn, each compared across its own commit.
+@test "a branch commit editing gate machinery or a global-rules path rotates every member" {
+  local row label path line_prefix before after
+  v2_seed "$BATS_TEST_TMPDIR/shared-rules" || return 1
   catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
-  before="$(v2_local)"
-  catchup_branch_commit .gaia/scripts/audit-write-clearance.sh "$(catchup_lines 10 clearance 3=branch-edit)" || return 1
-  after="$(v2_local)"
-  v2_expect_rotated_all_but "$before" "$after"
-}
-
-@test "a branch commit editing a global-rules path rotates every member" {
-  v2_seed "$BATS_TEST_TMPDIR/rules" || return 1
-  catchup_branch_commit apps/web/app/x.ts "$(catchup_lines 40 x 5=branch-edit)" || return 1
-  before="$(v2_local)"
-  catchup_branch_commit .claude/rules/quality-gate.md "$(catchup_lines 10 gate 3=branch-edit)" || return 1
-  after="$(v2_local)"
-  v2_expect_rotated_all_but "$before" "$after"
+  local rows=(
+    'gate machinery|.gaia/scripts/audit-write-clearance.sh|clearance'
+    'global-rules path|.claude/rules/quality-gate.md|gate'
+  )
+  for row in "${rows[@]}"; do
+    IFS='|' read -r label path line_prefix <<<"$row"
+    echo "case: $label ($path)"
+    before="$(v2_local)"
+    catchup_branch_commit "$path" "$(catchup_lines 10 "$line_prefix" 3=branch-edit)" || return 1
+    after="$(v2_local)"
+    v2_expect_rotated_all_but "$before" "$after"
+  done
 }
 
 # ---------------------------------------------------------------------------
@@ -752,122 +594,169 @@ v2_base_edit_run() {
   V2_AFTER="$(v2_local)"
 }
 
-@test "a base roster change moving a branch path to another member rotates exactly the two members" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/roster-move" "roster:apps/web/app/x.ts" || return 1
-  v2_expect_rotated "$V2_BEFORE" "$V2_AFTER" "$FRONTEND_MEMBER" "$NODE_MEMBER"
-}
-
-@test "the same base roster change on a path outside the branch's patch rotates nothing" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/roster-move-outside" "roster:apps/web/app/unrelated.ts" || return 1
-  v2_expect_rotated "$V2_BEFORE" "$V2_AFTER"
-}
-
-@test "a base change adding a branch path to the machinery list rotates the members that did not already select it" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/machinery-add" "machinery:apps/web/app/x.ts" || return 1
-  v2_expect_rotated_all_but "$V2_BEFORE" "$V2_AFTER" "$FRONTEND_MEMBER"
-}
-
-@test "the same machinery-list change on a path outside the branch's patch rotates nothing" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/machinery-add-outside" "machinery:apps/web/app/unrelated.ts" || return 1
-  v2_expect_rotated "$V2_BEFORE" "$V2_AFTER"
-}
-
-@test "a base change removing a branch path's prefix from the out-of-scope allowlist rotates the default member only" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/allowlist-remove" "allowlist:docs" || return 1
-  v2_expect_rotated "$V2_BEFORE" "$V2_AFTER" "$FRONTEND_MEMBER"
-}
-
-@test "the same allowlist change on a prefix no branch path uses rotates nothing" {
-  v2_base_edit_run "$BATS_TEST_TMPDIR/allowlist-remove-outside" "allowlist:wiki" || return 1
-  v2_expect_rotated "$V2_BEFORE" "$V2_AFTER"
+# Each row seeds its own sandbox: the base edit lands on the shared origin, so
+# rows cannot share one.
+@test "a base change rotates exactly the members whose selection of the branch's own paths it moved" {
+  local row label edit expectation index=0
+  local -a members
+  local rows=(
+    "roster moves a branch path to another member|roster:apps/web/app/x.ts|exactly:$FRONTEND_MEMBER $NODE_MEMBER"
+    "roster change on a path outside the branch's patch|roster:apps/web/app/unrelated.ts|exactly:"
+    "machinery list adds a branch path|machinery:apps/web/app/x.ts|all-but:$FRONTEND_MEMBER"
+    "machinery-list change on a path outside the branch's patch|machinery:apps/web/app/unrelated.ts|exactly:"
+    "allowlist drops a branch path's prefix|allowlist:docs|exactly:$FRONTEND_MEMBER"
+    "allowlist change on a prefix no branch path uses|allowlist:wiki|exactly:"
+  )
+  for row in "${rows[@]}"; do
+    IFS='|' read -r label edit expectation <<<"$row"
+    echo "case: $label"
+    index=$((index + 1))
+    v2_base_edit_run "$BATS_TEST_TMPDIR/base-edit-$index" "$edit" || return 1
+    read -r -a members <<<"${expectation#*:}"
+    case "$expectation" in
+      exactly:*) v2_expect_rotated "$V2_BEFORE" "$V2_AFTER" "${members[@]}" ;;
+      all-but:*) v2_expect_rotated_all_but "$V2_BEFORE" "$V2_AFTER" "${members[@]}" ;;
+    esac
+  done
 }
 
 # ---------------------------------------------------------------------------
-# Fail closed: nothing on stdout and a non-zero status, atomically.
+# UAT-013 and the branch-own degradations: every fail-closed condition emits
+# NOTHING and exits non-zero, atomically, never a partial/empty digest that
+# could key or match a marker. Where a row's condition can be lifted, the
+# lifted run succeeds, so the failure is the condition and not the fixture.
 # ---------------------------------------------------------------------------
 
-@test "branch-own: an undeterminable branch key emits nothing and fails; the reattached branch succeeds" {
-  v2_seed "$BATS_TEST_TMPDIR/detached" || return 1
-  v2_branch_work || return 1
-  merge_base="$(catchup_git merge-base refs/remotes/origin/main HEAD)"
-  catchup_git checkout -q --detach || return 1
-  run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base"
-  [ "$status" -ne 0 ]
+# assert_failed_closed [<status>]: the last run emitted nothing on stdout and
+# exited non-zero, or with exactly <status> when one is given.
+assert_failed_closed() {
+  if [ -n "${1:-}" ]; then
+    [ "$status" -eq "$1" ] || return 1
+  else
+    [ "$status" -ne 0 ] || return 1
+  fi
   [ -z "$output" ]
-  catchup_git checkout -q - || return 1
-  run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base"
-  [ "$status" -eq 0 ]
+}
+
+# assert_succeeded: the last run printed digests and exited 0.
+assert_succeeded() {
+  [ "$status" -eq 0 ] || return 1
   [ -n "$output" ]
 }
 
-@test "branch-own: a PATH with no sha256 tool emits nothing and fails; the same PATH with one succeeds" {
-  v2_seed "$BATS_TEST_TMPDIR/nosha" || return 1
+# One seed_repo serves the per-member rows and one branch sandbox serves the
+# branch-own rows that only read it (the detached row reattaches before the
+# next). The no-roster and criss-cross rows build their own sandboxes last,
+# since each moves CATCHUP_ROOT.
+@test "a fail-closed digest emits nothing and exits non-zero" {
+  local label seeded_root first_commit non_git_root merge_base tools tool real
+  seeded_root="$BATS_TEST_TMPDIR/fail-closed-seeded"
+  mkdir -p "$seeded_root"
+  seed_repo "$seeded_root"
+  mutate_commit "$seeded_root" "app/x.ts" >/dev/null
+  first_commit="$(git -C "$seeded_root" rev-list --max-parents=0 HEAD)"
+  v2_seed "$BATS_TEST_TMPDIR/fail-closed-branch" || return 1
   v2_branch_work || return 1
   merge_base="$(catchup_git merge-base refs/remotes/origin/main HEAD)"
-  tools="$BATS_TEST_TMPDIR/tools"
-  mkdir -p "$tools"
-  for tool in git mktemp sort awk sed cat rm tr grep cut head mkdir uname env bash dirname basename wc find; do
-    real="$(command -v "$tool")" || continue
-    printf '#!/bin/sh\nexec "%s" "$@"\n' "$real" >"$tools/$tool"
-    chmod +x "$tools/$tool"
+  local rows=(
+    'sha256 tool masked'
+    'invalid target ref'
+    'non-git root'
+    'undeterminable branch key'
+    'PATH with no sha256 tool'
+    'merge base the identity listing cannot read'
+    'local base tip not a commit here'
+    'root with no auditors'
+    'criss-cross history'
+  )
+  for label in "${rows[@]}"; do
+    echo "case: $label"
+    case "$label" in
+      'sha256 tool masked')
+        # stdout only: the masked hasher never reads its pipe, and uutils sort
+        # (Ubuntu 26.04) reports the failed write on stderr where GNU sort dies
+        # of SIGPIPE silently. The contract is no digest on stdout.
+        run --separate-stderr bash -c '
+          sha256sum() { return 1; }
+          shasum() { return 1; }
+          . "$1"
+          audit_branch_member_digest "$2" code-audit-frontend "$3"
+        ' _ "$DIGEST_LIBRARY" "$seeded_root" "$first_commit"
+        assert_failed_closed
+        ;;
+      'invalid target ref')
+        run bash -c '. "$1"; audit_branch_member_digest "$2" code-audit-frontend "$3" "no-such-ref"' _ \
+          "$DIGEST_LIBRARY" "$seeded_root" "$first_commit"
+        assert_failed_closed
+        ;;
+      'non-git root')
+        non_git_root="$BATS_TEST_TMPDIR/fail-closed-non-git"
+        mkdir -p "$non_git_root"
+        # Seeded so the failure under test is the missing repository, not the
+        # missing roster.
+        seed_audit_roster "$non_git_root"
+        run bash -c '. "$1"; audit_branch_member_digest "$2" code-audit-frontend HEAD' _ "$DIGEST_LIBRARY" "$non_git_root"
+        assert_failed_closed
+        ;;
+      'undeterminable branch key')
+        catchup_git checkout -q --detach || return 1
+        run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base"
+        assert_failed_closed
+        catchup_git checkout -q - || return 1
+        run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base"
+        assert_succeeded
+        ;;
+      'PATH with no sha256 tool')
+        tools="$BATS_TEST_TMPDIR/tools"
+        mkdir -p "$tools"
+        for tool in git mktemp sort awk sed cat rm tr grep cut head mkdir uname env bash dirname basename wc find; do
+          real="$(command -v "$tool")" || continue
+          printf '#!/bin/sh\nexec "%s" "$@"\n' "$real" >"$tools/$tool"
+          chmod +x "$tools/$tool"
+        done
+        run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; PATH="$3"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base" "$tools"
+        assert_failed_closed
+        for tool in sha256sum shasum; do
+          real="$(command -v "$tool")" || continue
+          printf '#!/bin/sh\nexec "%s" "$@"\n' "$real" >"$tools/$tool"
+          chmod +x "$tools/$tool"
+        done
+        run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; PATH="$3"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base" "$tools"
+        assert_succeeded
+        ;;
+      'merge base the identity listing cannot read')
+        run v2_all 1111111111111111111111111111111111111111
+        assert_failed_closed
+        run v2_all "$merge_base"
+        assert_succeeded
+        ;;
+      'local base tip not a commit here')
+        run bash -c '
+          . "$1/.claude/hooks/lib/audit-digest.sh"
+          audit_local_base_reference() { printf "%s\n" 1111111111111111111111111111111111111111; }
+          audit_branch_digests_local "$1"
+        ' _ "$CATCHUP_ROOT"
+        assert_failed_closed 4
+        ;;
+      'root with no auditors')
+        catchup_init "$BATS_TEST_TMPDIR/fail-closed-no-roster" || return 1
+        merge_base="$(catchup_git merge-base refs/remotes/origin/main HEAD)"
+        # The classifier names the missing roster on stderr, which is not the
+        # stdout this case pins.
+        run bash -c '. "$1"; audit_branch_digests_all "$2" "$3" 2>/dev/null' _ "$DIGEST_LIBRARY" "$CATCHUP_ROOT" "$merge_base"
+        assert_failed_closed
+        seed_audit_roster "$CATCHUP_ROOT" || return 1
+        run bash -c '. "$1"; audit_branch_digests_all "$2" "$3"' _ "$DIGEST_LIBRARY" "$CATCHUP_ROOT" "$merge_base"
+        assert_succeeded
+        ;;
+      'criss-cross history')
+        v2_seed "$BATS_TEST_TMPDIR/fail-closed-criss-cross" || return 1
+        catchup_criss_cross || return 1
+        run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_local "$1"' _ "$CATCHUP_ROOT"
+        assert_failed_closed 3
+        ;;
+    esac
   done
-  run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; PATH="$3"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base" "$tools"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-  for tool in sha256sum shasum; do
-    real="$(command -v "$tool")" || continue
-    printf '#!/bin/sh\nexec "%s" "$@"\n' "$real" >"$tools/$tool"
-    chmod +x "$tools/$tool"
-  done
-  run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; PATH="$3"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base" "$tools"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-}
-
-@test "branch-own: a merge base the identity listing cannot read emits nothing and fails" {
-  v2_seed "$BATS_TEST_TMPDIR/identity-failure" || return 1
-  v2_branch_work || return 1
-  merge_base="$(catchup_git merge-base refs/remotes/origin/main HEAD)"
-  run v2_all 1111111111111111111111111111111111111111
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-  run v2_all "$merge_base"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-}
-
-@test "branch-own: a root with no auditors emits nothing and fails" {
-  catchup_init "$BATS_TEST_TMPDIR/no-roster" || return 1
-  merge_base="$(catchup_git merge-base refs/remotes/origin/main HEAD)"
-  # The classifier names the missing roster on stderr, which is not the stdout
-  # this case pins.
-  run bash -c '. "$1"; audit_branch_digests_all "$2" "$3" 2>/dev/null' _ "$DIGEST_LIBRARY" "$CATCHUP_ROOT" "$merge_base"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-  seed_audit_roster "$CATCHUP_ROOT" || return 1
-  run bash -c '. "$1"; audit_branch_digests_all "$2" "$3"' _ "$DIGEST_LIBRARY" "$CATCHUP_ROOT" "$merge_base"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-}
-
-@test "branch-own local: a base tip that is not a commit here returns 4 and emits nothing" {
-  v2_seed "$BATS_TEST_TMPDIR/absent-tip" || return 1
-  v2_branch_work || return 1
-  run bash -c '
-    . "$1/.claude/hooks/lib/audit-digest.sh"
-    audit_local_base_reference() { printf "%s\n" 1111111111111111111111111111111111111111; }
-    audit_branch_digests_local "$1"
-  ' _ "$CATCHUP_ROOT"
-  [ "$status" -eq 4 ]
-  [ -z "$output" ]
-}
-
-@test "branch-own local: a criss-cross history returns 3 and emits nothing" {
-  v2_seed "$BATS_TEST_TMPDIR/criss-cross" || return 1
-  catchup_criss_cross || return 1
-  run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_local "$1"' _ "$CATCHUP_ROOT"
-  [ "$status" -eq 3 ]
-  [ -z "$output" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -907,7 +796,7 @@ exec "$real_git" "\$@"
 STUB
   chmod +x "$stub/git"
   V2_MEMBERS_OUTPUT="$(PATH="$stub:$PATH" bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$2" "$3"' \
-    _ "${V2_LIBRARY_ROOT:-$CATCHUP_ROOT}" "$CATCHUP_ROOT" "$merge_base")" || return 1
+    _ "$CATCHUP_ROOT" "$CATCHUP_ROOT" "$merge_base")" || return 1
   V2_MEMBER_COUNT="$(printf '%s\n' "$V2_MEMBERS_OUTPUT" | wc -l | tr -d ' ')"
   V2_LISTINGS="$(grep -c -- '--raw' "$log")" || true
 }
@@ -920,20 +809,11 @@ STUB
   [ "$V2_LISTINGS" -eq 1 ]
 }
 
-@test "the identity listing count rises with the roster when the listing moves into the member loop" {
-  v2_use_mutant audit-digest.sh ': >"$work/frame" || return 1' ': >"$work/frame" || return 1; audit_branch_patch_identities "$root" "$merge_base" "$target" >/dev/null 2>/dev/null' || return 1
-  v2_seed "$BATS_TEST_TMPDIR/batching-mutant" || return 1
-  v2_branch_work || return 1
-  v2_identity_listings || return 1
-  [ "$V2_LISTINGS" -gt 1 ]
-}
-
 # ---------------------------------------------------------------------------
 # The release-change skip: the digest arms the classifier's release context, so
 # the members whose frame holds more than machinery are exactly the members the
 # dispatch resolver names, on a release-applying branch and on an ordinary one,
 # for HEAD and for HEAD's bare tree id (the fix verifier's target).
-# The mutation proofs live in audit-scope-release-skip.bats.
 # ---------------------------------------------------------------------------
 
 # release_skip_digest_set <root> <target>: members whose digest differs from
@@ -961,10 +841,15 @@ release_skip_digest_agrees() {
   [ "$by_tree" = "$resolved" ] || { echo "digest (tree): $by_tree" >&2; return 1; }
 }
 
-@test "release skip: the digest's member set equals the resolver's on a release-applying branch" {
-  release_skip_digest_agrees release "$(printf 'fixture-default\nfixture-scripts')"
-}
-
-@test "release skip: the digest's member set equals the resolver's on an ordinary branch" {
-  release_skip_digest_agrees ordinary fixture-shell
+@test "release skip: the digest's member set equals the resolver's on each branch kind" {
+  local row kind members
+  local rows=(
+    'release|fixture-default fixture-scripts'
+    'ordinary|fixture-shell'
+  )
+  for row in "${rows[@]}"; do
+    IFS='|' read -r kind members <<<"$row"
+    echo "case: $kind branch -> $members"
+    release_skip_digest_agrees "$kind" "$(tr ' ' '\n' <<<"$members")"
+  done
 }

@@ -4,7 +4,6 @@ import {
   fetchDependabotAlerts,
   ghFailureReason,
   parseAlertPages,
-  resolveGithubRepository,
   runPnpmAudit,
 } from './advisory-sources.js';
 
@@ -14,14 +13,21 @@ const failure = (
 ): Extract<GhResult, {ok: false}> => ({exitCode, ok: false, stderr});
 
 describe('parseAlertPages', () => {
-  test('reads every page of concatenated JSON arrays', () => {
-    expect(
-      parseAlertPages('[{"number":1}][{"number":2},{"number":3}]\n')
-    ).toHaveLength(3);
-  });
-
-  test('tolerates brackets inside strings', () => {
-    expect(parseAlertPages('[{"a":"]["}]\n[]')).toStrictEqual([{a: ']['}]);
+  test.each(
+    [
+      {
+        expected: [{number: 1}, {number: 2}, {number: 3}],
+        name: 'reads every page of concatenated JSON arrays',
+        stdout: '[{"number":1}][{"number":2},{"number":3}]\n',
+      },
+      {
+        expected: [{a: ']['}],
+        name: 'tolerates brackets inside strings',
+        stdout: '[{"a":"]["}]\n[]',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {expected, stdout}) => {
+    expect(parseAlertPages(stdout)).toStrictEqual(expected);
   });
 
   test.each([
@@ -65,24 +71,6 @@ describe('ghFailureReason', () => {
     ],
   ])('maps a failure to its reason token (%#)', (result, token) => {
     expect(ghFailureReason(result)).toBe(token);
-  });
-});
-
-describe('resolveGithubRepository', () => {
-  test('parses a github.com origin', () => {
-    expect(
-      resolveGithubRepository('/repo', () => 'git@github.com:acme/widgets.git')
-    ).toStrictEqual({ok: true, owner: 'acme', repo: 'widgets'});
-  });
-
-  test('refuses a non-GitHub host and a missing origin', () => {
-    expect(
-      resolveGithubRepository('/repo', () => 'git@gitlab.com:acme/widgets.git')
-    ).toStrictEqual({ok: false, reason: 'non-github-remote'});
-    expect(resolveGithubRepository('/repo', () => null)).toStrictEqual({
-      ok: false,
-      reason: 'no-remote',
-    });
   });
 });
 

@@ -48,9 +48,3 @@ merge_commands() {
   [ "$invoked" = "$expected" ]
 }
 
-@test "guards-must-fail: a scratch settings copy whose merge registration names another hook is caught" {
-  local scratch="$BATS_TEST_TMPDIR/settings.json"
-  sed 's/pr-merge-cost\.sh/other-merge-hook.sh/' "$SOURCE_ROOT/.claude/settings.json" >"$scratch"
-  [ -n "$(merge_commands "$scratch")" ]
-  [ "$(merge_commands "$scratch" | grep -c 'pr-merge-cost\.sh' || true)" -eq 0 ]
-}

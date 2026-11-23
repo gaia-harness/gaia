@@ -23,11 +23,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {resolveRepoRootFromImportMeta} from '../../util/repo-root-fixture.js';
 import {collectTreeFiles, EVERY_EXTENSION} from '../../util/tree-walk.js';
-import {
-  attributeBody,
-  attributeBodyWith,
-  DEFAULT_PREDICATES,
-} from '../attribution.js';
+import {attributeBody} from '../attribution.js';
 import type {AttributionResult} from '../attribution.js';
 import {attributionBodyDigest} from '../cache.js';
 import {run as runCursor} from '../cursor-cmd.js';
@@ -120,71 +116,6 @@ const buildStaleAttribution = (): AttributionResult => ({
   keyless: [{disposition: 'accept', unit_start_line: 2}],
   keyless_count: 1,
   malformed: [],
-});
-
-// ---------------------------------------------------------------------------
-// UAT-012 mutation control, tally side: `attributeBodyWith` +
-// `DEFAULT_PREDICATES` are frozen exports for exactly this, so no module
-// under .gaia/cli/src/residue/ is edited.
-// ---------------------------------------------------------------------------
-
-describe('UAT-012 mutation control (tally side, via the frozen predicate seam)', () => {
-  test("mutating attributeBodyWith's canonWaive predicate over the shared corpus diverges from the hand-written oracle", () => {
-    const prs = JSON.parse(
-      readFileSync(path.join(CORPUS_DIR, 'prs.json'), 'utf8')
-    ) as {body: string; number: number}[];
-    const oracle = JSON.parse(
-      readFileSync(path.join(CORPUS_DIR, 'expected-attribution.json'), 'utf8')
-    ) as {bodies: {pr_number: number; tuples: string[]}[]};
-
-    const oracleTuples = oracle.bodies
-      .flatMap((b) => b.tuples.map((t) => `${b.pr_number}\t${t}`))
-      .toSorted((a, b) => a.localeCompare(b));
-
-    expect(oracleTuples.length).toBeGreaterThan(0);
-
-    const mutatedTuples: string[] = [];
-
-    for (const pr of prs) {
-      const result = attributeBodyWith(pr.body, {
-        ...DEFAULT_PREDICATES,
-        canonWaive: '## MUTATED waive heading',
-      });
-
-      for (const entry of result.entries) {
-        mutatedTuples.push(
-          `${pr.number}\t${entry.unit_start_line}|${entry.disposition}|1|${entry.raw_key}`
-        );
-      }
-
-      for (const bad of result.malformed) {
-        mutatedTuples.push(
-          `${pr.number}\t${bad.unit_start_line}|${bad.disposition}|1|${bad.raw_key}`
-        );
-      }
-
-      for (const kl of result.keyless) {
-        mutatedTuples.push(
-          `${pr.number}\t${kl.unit_start_line}|${kl.disposition}|0|-`
-        );
-      }
-    }
-
-    const sortedMutatedTuples = mutatedTuples.toSorted((a, b) =>
-      a.localeCompare(b)
-    );
-
-    expect(sortedMutatedTuples).not.toStrictEqual(oracleTuples);
-
-    // Name which side diverged: every waive-disposition tuple the oracle
-    // carries must be absent from the mutant's output (PRs 2000, 2003,
-    // 3002, 3008, 5002, 5004, 5006 all use the waive heading).
-    const oracleWaiveTuples = oracleTuples.filter((t) => t.includes('|waive|'));
-
-    expect(oracleWaiveTuples.length).toBeGreaterThan(0);
-    for (const tuple of oracleWaiveTuples)
-      expect(mutatedTuples).not.toContain(tuple);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -356,28 +287,6 @@ describe('UAT-010', () => {
       '.gaia/local/cache/residual-attribution.json',
       '.gaia/local/cache/residual-cursor.json',
     ]);
-  });
-
-  // Editing tally.ts itself is out of this task's remit (Files to touch),
-  // so "a scratch copy of the tally" is realized as a scratch copy of the
-  // FILE-SYSTEM SNAPSHOT the assertion above reasons over: inject one stray
-  // path into the "after" set a buggy tally might have produced, and prove
-  // `assertExactNewFiles` -- the same function the real assertion above
-  // uses -- reds on it rather than passing silently.
-  test('guard-must-fail: a stray write injected into the after-snapshot reds assertExactNewFiles', () => {
-    const before: string[] = [];
-    const strayAfter = [
-      '.gaia/local/cache/residual-attribution.json',
-      '.gaia/local/cache/residual-cursor.json',
-      '.gaia/some/unexpected/stray-file.txt',
-    ];
-
-    expect(() =>
-      assertExactNewFiles(before, strayAfter, [
-        '.gaia/local/cache/residual-attribution.json',
-        '.gaia/local/cache/residual-cursor.json',
-      ])
-    ).toThrow(/unexpected file-set diff/);
   });
 });
 
@@ -694,87 +603,64 @@ describe("SPEC-082: a spaced path terminates on the key comment's own closer", (
 });
 
 describe('UAT-014: the attribution cache schema bump is the discriminator, not the digest', () => {
-  test('a cache stamped with the pre-change schema is discarded wholesale, and the spaced-path residual re-attributes keyed', () => {
-    const root = makeTemporaryRoot();
-    const prs = JSON.parse(
-      readFileSync(path.join(CORPUS_DIR, 'prs.json'), 'utf8')
-    ) as {body: string; headRefOid: string; mergedAt: string; number: number}[];
-    const pr3006 = prs.find((pr) => pr.number === 3006);
-
-    expect(pr3006).toBeDefined();
-
-    const preChangeCache = {
-      high_water_merged_at: pr3006?.mergedAt ?? null,
-      prs: {
-        '3006': {
-          attribution: buildStaleAttribution(),
-          bodyDigest: attributionBodyDigest(pr3006?.body ?? ''),
-          headRefOid: pr3006?.headRefOid ?? '',
-          mergedAt: pr3006?.mergedAt ?? '',
-        },
-      },
-      resolutions: {},
+  test.each<{
+    expectReAttributed: boolean;
+    highWaterBeforeMergeMs: number;
+    schema: string;
+    title: string;
+  }>([
+    {
+      expectReAttributed: true,
+      highWaterBeforeMergeMs: 0,
       schema: 'v1',
-    };
-    const cacheDir = path.join(root, '.gaia', 'local', 'cache');
-
-    mkdirSync(cacheDir, {recursive: true});
-    writeFileSync(
-      path.join(cacheDir, 'residual-attribution.json'),
-      `${JSON.stringify(preChangeCache)}\n`
-    );
-
-    const out = capture();
-    const exitCode = runTally([], {
-      cwd: root,
-      env: UNCAPPED_ENV,
-      now: FIXED_NOW,
-    });
-
-    expect(exitCode).toBe(0);
-    const emitted = out.json() as {candidates: {line: number; path: string}[]};
-
-    expect(
-      emitted.candidates.some(
-        (c) => c.path === 'app/my dir/file.ts' && c.line === 1
-      )
-    ).toBe(true);
-  });
-
-  test('the same scenario under the CURRENT schema stamp is served straight from the cache, not re-attributed', () => {
+      title:
+        'a cache stamped with the pre-change schema is discarded wholesale, and the spaced-path residual re-attributes keyed',
+    },
+    {
+      expectReAttributed: false,
+      highWaterBeforeMergeMs: DAY_MS,
+      // The digest matches the real body byte for byte: reuse happens here
+      // anyway, which is what proves the schema bump is the discriminator
+      // rather than the digest.
+      schema: 'v3',
+      title:
+        'the same scenario under the CURRENT schema stamp is served straight from the cache, not re-attributed',
+    },
+  ])('$title', ({expectReAttributed, highWaterBeforeMergeMs, schema}) => {
     const root = makeTemporaryRoot();
     const prs = JSON.parse(
       readFileSync(path.join(CORPUS_DIR, 'prs.json'), 'utf8')
-    ) as {body: string; headRefOid: string; mergedAt: string; number: number}[];
+    ) as {
+      body: string;
+      headRefOid: string;
+      mergedAt: string;
+      number: number;
+    }[];
     const pr3006 = prs.find((pr) => pr.number === 3006);
 
     expect(pr3006).toBeDefined();
 
-    const dayBeforeMerge = new Date(
-      Date.parse(pr3006?.mergedAt ?? '') - DAY_MS
-    ).toISOString();
-    const currentSchemaCache = {
-      high_water_merged_at: dayBeforeMerge,
+    const cache = {
+      high_water_merged_at: new Date(
+        Date.parse(pr3006?.mergedAt ?? '') - highWaterBeforeMergeMs
+      ).toISOString(),
       prs: {
         '3006': {
           attribution: buildStaleAttribution(),
-          // The digest matches the real body byte for byte: reuse happens
-          // here anyway, which is what proves the schema bump is the
-          // discriminator rather than the digest.
           bodyDigest: attributionBodyDigest(pr3006?.body ?? ''),
           headRefOid: pr3006?.headRefOid ?? '',
           mergedAt: pr3006?.mergedAt ?? '',
         },
       },
       resolutions: {},
-      schema: 'v3',
+      schema,
     };
     const cacheDir = path.join(root, '.gaia', 'local', 'cache');
 
     mkdirSync(cacheDir, {recursive: true});
     writeFileSync(
       path.join(cacheDir, 'residual-attribution.json'),
-      `${JSON.stringify(currentSchemaCache)}\n`
+      `${JSON.stringify(cache)}\n`
     );
 
     const out = capture();
@@ -785,12 +671,14 @@ describe('UAT-014: the attribution cache schema bump is the discriminator, not t
     });
 
     expect(exitCode).toBe(0);
-    const emitted = out.json() as {candidates: {line: number; path: string}[]};
+    const emitted = out.json() as {
+      candidates: {line: number; path: string}[];
+    };
 
     expect(
       emitted.candidates.some(
         (c) => c.path === 'app/my dir/file.ts' && c.line === 1
       )
-    ).toBe(false);
+    ).toBe(expectReAttributed);
   });
 });

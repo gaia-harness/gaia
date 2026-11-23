@@ -46,31 +46,40 @@ describe('fixtureProvider', () => {
       rmSync(dir, {force: true, recursive: true});
   });
 
-  test('a missing prs.json is a read failure', () => {
-    const dir = makeFixtureDir({});
+  test.each<{
+    expected: unknown;
+    files: Record<string, unknown>;
+    read: (provider: ReturnType<typeof fixtureProvider>) => unknown;
+    title: string;
+  }>([
+    {
+      expected: {ok: false},
+      files: {},
+      read: (provider) => provider.mergedPrs(null),
+      title: 'a missing prs.json is a read failure',
+    },
+    {
+      expected: {ok: false},
+      files: {'prs.json': []},
+      read: (provider) => provider.techDebtIssues(),
+      title: 'a missing issues.json is a read failure',
+    },
+    {
+      expected: [null, null],
+      files: {'prs.json': []},
+      read: (provider) => [
+        provider.blobAt('sha', 'app/x.ts', 1),
+        provider.blobAtHead('app/x.ts'),
+      ],
+      title:
+        'a missing blobs.json makes every blobAt and blobAtHead call return null',
+    },
+  ])('$title', ({expected, files, read}) => {
+    const dir = makeFixtureDir(files);
 
     dirs.push(dir);
 
-    expect(fixtureProvider(dir).mergedPrs(null)).toEqual({ok: false});
-  });
-
-  test('a missing issues.json is a read failure', () => {
-    const dir = makeFixtureDir({'prs.json': []});
-
-    dirs.push(dir);
-
-    expect(fixtureProvider(dir).techDebtIssues()).toEqual({ok: false});
-  });
-
-  test('a missing blobs.json makes every blobAt and blobAtHead call return null', () => {
-    const dir = makeFixtureDir({'prs.json': []});
-
-    dirs.push(dir);
-
-    const provider = fixtureProvider(dir);
-
-    expect(provider.blobAt('sha', 'app/x.ts', 1)).toBeNull();
-    expect(provider.blobAtHead('app/x.ts')).toBeNull();
+    expect(read(fixtureProvider(dir))).toEqual(expected);
   });
 
   test('blobAt and blobAtHead read the sha-keyed and HEAD-keyed blob entries', () => {
@@ -238,20 +247,15 @@ describe('liveProvider.mergedPrs, the window walk', () => {
     expect(runProcess.runGh).toHaveBeenCalledTimes(20);
   });
 
-  test('a non-zero exit is a read failure', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(failResult());
-
-    expect(liveProvider('/repo').mergedPrs(null)).toEqual({ok: false});
-  });
-
-  test('unparseable JSON is a read failure', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(okResult('not json'));
-
-    expect(liveProvider('/repo').mergedPrs(null)).toEqual({ok: false});
-  });
-
-  test('a well-formed non-array response is a read failure', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(okResult('{}'));
+  test.each([
+    {result: failResult(), title: 'a non-zero exit is a read failure'},
+    {result: okResult('not json'), title: 'unparseable JSON is a read failure'},
+    {
+      result: okResult('{}'),
+      title: 'a well-formed non-array response is a read failure',
+    },
+  ])('$title', ({result}) => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(result);
 
     expect(liveProvider('/repo').mergedPrs(null)).toEqual({ok: false});
   });
@@ -300,36 +304,32 @@ describe('liveProvider.blobAt, fetch-before-show and the git-env chokepoint', ()
     expect(observedArgs).toEqual(['show', `sha:${dangerousPath}`]);
   });
 
-  test('a failed fetch still attempts git show, and a failed show falls back to the gh api', () => {
+  test.each([
+    {
+      expected: 'api content',
+      result: okResult(Buffer.from('api content').toString('base64')),
+      title:
+        'a failed fetch still attempts git show, and a failed show falls back to the gh api',
+    },
+    {
+      expected: null,
+      result: failResult(),
+      title: 'when fetch, show, and the api all fail, blobAt returns null',
+    },
+  ])('$title', ({expected, result}) => {
     vi.spyOn(gitEnvironment, 'execGaiaGit').mockImplementation(() => {
       throw new Error('fetch failed');
     });
     vi.spyOn(gitEnvironment, 'execGaiaGitRaw').mockImplementation(() => {
       throw new Error('object not found');
     });
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      okResult(Buffer.from('api content').toString('base64'))
-    );
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(result);
 
-    const result = liveProvider('/repo').blobAt('sha', 'app/x.ts', 7);
-
-    expect(result).toBe('api content');
+    expect(liveProvider('/repo').blobAt('sha', 'app/x.ts', 7)).toBe(expected);
     expect(runProcess.runGh).toHaveBeenCalledWith(
       expect.arrayContaining(['api', 'repos/{owner}/{repo}/contents/app/x.ts']),
       expect.anything()
     );
-  });
-
-  test('when fetch, show, and the api all fail, blobAt returns null', () => {
-    vi.spyOn(gitEnvironment, 'execGaiaGit').mockImplementation(() => {
-      throw new Error('fetch failed');
-    });
-    vi.spyOn(gitEnvironment, 'execGaiaGitRaw').mockImplementation(() => {
-      throw new Error('object not found');
-    });
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(failResult());
-
-    expect(liveProvider('/repo').blobAt('sha', 'app/x.ts', 7)).toBeNull();
   });
 
   test('blobAtHead reads HEAD:<path> and returns null on a throw', () => {
@@ -348,45 +348,38 @@ describe('liveProvider.blobAt, fetch-before-show and the git-env chokepoint', ()
 describe('liveProvider.techDebtIssues', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  test('merges open and closed issues from two gh calls', () => {
+  test.each([
+    {
+      expected: {
+        issues: [
+          {body: '', labels: [], number: 1, state: 'OPEN', stateReason: null},
+          {body: '', labels: [], number: 2, state: 'CLOSED', stateReason: null},
+        ],
+        ok: true,
+      },
+      first: okResult(
+        JSON.stringify([
+          {body: '', labels: [], number: 1, state: 'OPEN', stateReason: null},
+        ])
+      ),
+      second: okResult(
+        JSON.stringify([
+          {body: '', labels: [], number: 2, state: 'CLOSED', stateReason: null},
+        ])
+      ),
+      title: 'merges open and closed issues from two gh calls',
+    },
+    {
+      expected: {ok: false},
+      first: okResult('[]'),
+      second: failResult(),
+      title: 'either call failing makes the whole read a failure',
+    },
+  ])('$title', ({expected, first, second}) => {
     vi.spyOn(runProcess, 'runGh')
-      .mockReturnValueOnce(
-        okResult(
-          JSON.stringify([
-            {body: '', labels: [], number: 1, state: 'OPEN', stateReason: null},
-          ])
-        )
-      )
-      .mockReturnValueOnce(
-        okResult(
-          JSON.stringify([
-            {
-              body: '',
-              labels: [],
-              number: 2,
-              state: 'CLOSED',
-              stateReason: null,
-            },
-          ])
-        )
-      );
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second);
 
-    const result = liveProvider('/repo').techDebtIssues();
-
-    expect(result).toEqual({
-      issues: [
-        {body: '', labels: [], number: 1, state: 'OPEN', stateReason: null},
-        {body: '', labels: [], number: 2, state: 'CLOSED', stateReason: null},
-      ],
-      ok: true,
-    });
-  });
-
-  test('either call failing makes the whole read a failure', () => {
-    vi.spyOn(runProcess, 'runGh')
-      .mockReturnValueOnce(okResult('[]'))
-      .mockReturnValueOnce(failResult());
-
-    expect(liveProvider('/repo').techDebtIssues()).toEqual({ok: false});
+    expect(liveProvider('/repo').techDebtIssues()).toEqual(expected);
   });
 });

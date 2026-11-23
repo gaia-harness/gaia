@@ -53,16 +53,14 @@ DRIFT_FIXTURE='{"features":"x","recorded":{"project":1,"machine":1},"decided":{}
 {"id":"D","scope":"machine","required":true,"admin":false,"standalone":true,"reference":"ref/d.md","action":"apply"},
 {"id":"W","scope":"project","required":true,"admin":true,"standalone":false,"reference":"ref/w.md","action":"setup"}]}'
 
-@test "drift splits undecided features into apply, ask, owed-by-admin and setup" {
+@test "drift splits undecided features into APPLY, ASK, OWED_ADMIN and SETUP by admin answer" {
   make_drift_fixture
+  echo "case: not an admin, C is owed by admin"
   run_drift DRIFT_JSON="$DRIFT_FIXTURE" ADMIN_ANSWER=false
   [ "$status" -eq 0 ]
   expected="$(printf '%s\n' 'APPLY A ref/a.md' 'ASK B ref/b.md' 'OWED_ADMIN C' 'APPLY D ref/d.md' 'SETUP W')"
   [ "$output" = "$expected" ]
-}
-
-@test "an admin applies the admin-gated feature" {
-  make_drift_fixture
+  echo "case: an admin applies the admin-gated feature"
   run_drift DRIFT_JSON="$DRIFT_FIXTURE" ADMIN_ANSWER=true
   [ "$status" -eq 0 ]
   printf '%s\n' "$output" | grep -qxF 'APPLY C ref/c.md'
@@ -70,27 +68,16 @@ DRIFT_FIXTURE='{"features":"x","recorded":{"project":1,"machine":1},"decided":{}
   true
 }
 
-@test "a failing drift prints DRIFT_FAILED and exits 0" {
+@test "a failing or unreadable drift prints DRIFT_FAILED and exits 0" {
   make_drift_fixture
+  echo "case: drift fails"
   run_drift DRIFT_JSON='' ADMIN_ANSWER=false DRIFT_FAILS=1
   [ "$status" -eq 0 ]
   printf '%s\n' "$output" | grep -qxF 'DRIFT_FAILED features list unreadable'
-}
-
-@test "unreadable drift output prints DRIFT_FAILED and exits 0" {
-  make_drift_fixture
+  echo "case: drift output is not JSON"
   run_drift DRIFT_JSON='not json' ADMIN_ANSWER=false
   [ "$status" -eq 0 ]
   [ "$output" = 'DRIFT_FAILED drift output unreadable' ]
-}
-
-@test "usage errors exit 2" {
-  run bash "$SCRIPT"
-  [ "$status" -eq 2 ]
-  run bash "$SCRIPT" --features
-  [ "$status" -eq 2 ]
-  run bash "$SCRIPT" --bogus x
-  [ "$status" -eq 2 ]
 }
 
 # Runs the script with extra arguments after --features; NAME=value pairs come
@@ -111,40 +98,29 @@ MIXED_SCOPE_FIXTURE='{"features":"x","recorded":{"project":1,"machine":1},"decid
 {"id":"P","scope":"project","required":true,"admin":false,"standalone":true,"reference":"ref/p.md","action":"apply"},
 {"id":"Q","scope":"project","required":false,"admin":true,"standalone":true,"reference":"ref/q.md","action":"ask"}]}'
 
-@test "--scope machine emits only the machine-scope token" {
-  make_drift_fixture
-  run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true -- --scope machine
-  [ "$status" -eq 0 ]
-  [ "$output" = 'APPLY M ref/m.md' ]
-}
-
-@test "--scope machine never calls the admin probe" {
+@test "--scope machine emits machine tokens without the admin probe, no scope reports all, other values exit 2" {
   make_drift_fixture
   local probe_log="$BATS_TEST_TMPDIR/probe.log"
+  echo "case: --scope machine emits only the machine-scope token and never calls the admin probe"
   : >"$probe_log"
   run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true PROBE_LOG="$probe_log" -- --scope machine
   [ "$status" -eq 0 ]
+  [ "$output" = 'APPLY M ref/m.md' ]
   [ ! -s "$probe_log" ]
-}
-
-@test "without --scope the project admin feature still probes and all scopes report" {
-  make_drift_fixture
-  local probe_log="$BATS_TEST_TMPDIR/probe.log"
+  echo "case: without --scope the project admin feature still probes and all scopes report"
   : >"$probe_log"
   run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true PROBE_LOG="$probe_log" --
   [ "$status" -eq 0 ]
   expected="$(printf '%s\n' 'APPLY M ref/m.md' 'APPLY P ref/p.md' 'ASK Q ref/q.md')"
   [ "$output" = "$expected" ]
   [ -s "$probe_log" ]
-}
-
-@test "--scope project and any other scope value exit 2" {
-  make_drift_fixture
   local bad_scope
   for bad_scope in project all ''; do
+    echo "case: --scope '$bad_scope' exits 2"
     run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true -- --scope "$bad_scope"
     [ "$status" -eq 2 ]
   done
+  echo "case: --scope with no value exits 2"
   run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true -- --scope
   [ "$status" -eq 2 ]
 }

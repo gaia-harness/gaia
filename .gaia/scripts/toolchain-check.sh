@@ -28,8 +28,10 @@
 # checks a fresh clone that has no pnpm yet.
 #
 # Everything here is a bash builtin or a tool being checked: this script is what
-# tells a machine with no jq that it needs one. Guidance always routes to the
-# latest release of a tool, never to its floor, and pins no version number.
+# tells a machine with no jq that it needs one. For git, jq and pnpm, guidance
+# routes to the latest release and pins no version number. Node is the
+# exception: its guidance and route name and install the floor's Node major as
+# read from the floors file (wiki/concepts/Toolchain Floors.md, ## Guidance).
 #
 # Bash 3.2 compatible. Never `cd`.
 
@@ -44,6 +46,8 @@ usage() {
 
 script_directory="${BASH_SOURCE[0]%/*}"
 [ "$script_directory" != "${BASH_SOURCE[0]}" ] || script_directory="."
+# shellcheck source=.gaia/scripts/toolchain-node-lib.sh
+. "$script_directory/toolchain-node-lib.sh"
 FLOORS_FILE="$script_directory/../toolchain-floors.tsv"
 SCOPE="all"
 ONLY_TOOL=""
@@ -183,6 +187,7 @@ tool_reason() {
   case "$1" in
     git) printf 'GAIA'"'"'s light audit review replays the merge with git merge-tree --merge-base.' ;;
     jq) printf 'GAIA'"'"'s hooks and scripts read JSON with it.' ;;
+    node) printf 'pnpm and GAIA'"'"'s CLI run on it.' ;;
     pnpm) printf 'GAIA installs, tests and builds with it.' ;;
     lsof | ss) printf 'dev-smoke finds the running dev server with it.' ;;
   esac
@@ -194,6 +199,22 @@ guide() {
     git | jq)
       lead="Update to the latest $tool"
       printf 'GUIDE %s: %s: %s. %s\n' "$tool" "$lead" "$(package_route "$tool")" "$(tool_reason "$tool")"
+      ;;
+    node)
+      # nvm-windows has no nvm alias default, so Windows hears only of fnm. The
+      # version is the floor's major from the floors file: the project's own
+      # .nvmrc and .node-version still pin the old release during /update-gaia.
+      local node_major version missing_manager=""
+      node_major="$(node_floor_major)"
+      version="${node_major:-<major>}"
+      lead="fnm: run fnm install $version, fnm use $version and fnm default $version"
+      [ -n "$(node_version_manager)" ] || missing_manager=" fnm is not installed here, so install it first, or install Node $version another way and make it your default."
+      if [ "$PLATFORM" != windows ]; then
+        lead="nvm or fnm: run nvm install $version, nvm use $version and nvm alias default $version, or fnm install $version, fnm use $version and fnm default $version"
+        [ -z "$missing_manager" ] || missing_manager=" Neither nvm nor fnm is installed here, so install one of them first, or install Node $version another way and make it your default."
+      fi
+      printf 'GUIDE node: Install Node %s with %s, so this terminal uses it and it is your default.%s Then' "${node_major:-at the floor major in .gaia/toolchain-floors.tsv}" "$lead" "$missing_manager"
+      printf ' reinstall pnpm under it with npm install -g pnpm@latest, since global packages stay with the old Node. Then open a fresh terminal in the project folder, since a running session keeps the old PATH. If your shell switches Node per folder (fnm --use-on-cd, nvm auto-use, asdf, mise), select Node %s there, or the old pin is reselected and this check fails again. Then start Claude Code from that terminal. %s\n' "$version" "$(tool_reason node)"
       ;;
     pnpm)
       printf 'GUIDE pnpm: Update to the latest pnpm: run corepack disable pnpm if you use corepack, then npm install -g pnpm@latest. If an older pnpm still wins on PATH, upgrade or remove that install. %s\n' "$(tool_reason pnpm)"
@@ -223,6 +244,8 @@ brew_route() {
   fi
 }
 
+PNPM_INSTALL='corepack disable pnpm 2>/dev/null; npm install -g pnpm@latest'
+
 # route_for <tool>: "<class> <command>" for the ROUTE line, or nothing when no
 # exact command exists. The class tells the caller who runs it: run (Claude,
 # after asking), user (the user, as `! <command>`: it needs sudo) or terminal
@@ -231,7 +254,11 @@ route_for() {
   local tool="$1"
   case "$tool" in
     pnpm)
-      printf 'run corepack disable pnpm 2>/dev/null; npm install -g pnpm@latest'
+      printf 'run %s' "$PNPM_INSTALL"
+      return 0
+      ;;
+    node)
+      node_route
       return 0
       ;;
     lsof)

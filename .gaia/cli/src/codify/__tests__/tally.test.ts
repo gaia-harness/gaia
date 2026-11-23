@@ -466,14 +466,25 @@ describe('codify-tally run', () => {
     severity: 'major',
   };
 
-  test('ignores findings blocks from commenters without repository access, so they neither supersede nor add', () => {
-    const forgedFinding = {
-      area_tags: ['forged'],
-      finding_class: 'rule/switch-statement',
-      severity: 'major',
-    };
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh([
+  const knipExportsFinding = {
+    area_tags: [],
+    finding_class: 'knip/exports',
+    severity: 'major',
+  };
+
+  const forgedFinding = {
+    area_tags: ['forged'],
+    finding_class: 'rule/switch-statement',
+    severity: 'major',
+  };
+
+  test.each([
+    {
+      auditedPrCount: 3,
+      candidateClasses: ['axe/color-contrast'],
+      candidatePrNumbers: [1, 2, 3],
+      name: 'ignores findings blocks from commenters without repository access, so they neither supersede nor add',
+      prs: [
         // The forged empty block reuses the maintainer's auditor key; it
         // must not erase PR 1's findings.
         ghPr(1, [
@@ -492,24 +503,14 @@ describe('codify-tally run', () => {
             'FIRST_TIME_CONTRIBUTOR'
           ),
         ]),
-      ])
-    );
-
-    run([], {cwd: sandbox.root, declines: noDeclines});
-
-    const printed = parseStdout(stdout.out);
-    expect(printed.audited_pr_count).toBe(3);
-    expect(printed.candidate_count).toBe(1);
-    const candidates = printed.candidates as Record<string, unknown>[];
-    expect(candidates[0]?.finding_class).toBe('axe/color-contrast');
-    expect(candidates[0]?.pr_numbers).toEqual(
-      expect.arrayContaining([1, 2, 3])
-    );
-  });
-
-  test('fails closed on a comment whose authorAssociation is missing or unrecognized', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh([
+      ],
+    },
+    {
+      auditedPrCount: 0,
+      candidateClasses: [],
+      candidatePrNumbers: [],
+      name: 'fails closed on a comment whose authorAssociation is missing or unrecognized',
+      prs: [
         ghPr(1, [
           {body: findingsComment(1, 'local', [colorContrastFinding]).body},
         ]),
@@ -528,19 +529,14 @@ describe('codify-tally run', () => {
           ],
           number: 4,
         },
-      ])
-    );
-
-    run([], {cwd: sandbox.root, declines: noDeclines});
-
-    const printed = parseStdout(stdout.out);
-    expect(printed.audited_pr_count).toBe(0);
-    expect(printed.candidate_count).toBe(0);
-  });
-
-  test('counts findings blocks from OWNER, MEMBER and COLLABORATOR commenters', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh([
+      ],
+    },
+    {
+      auditedPrCount: 3,
+      candidateClasses: ['axe/color-contrast'],
+      candidatePrNumbers: [1, 2, 3],
+      name: 'counts findings blocks from OWNER, MEMBER and COLLABORATOR commenters',
+      prs: [
         ghPr(1, [findingsComment(1, 'local', [colorContrastFinding], 'OWNER')]),
         ghPr(2, [
           findingsComment(2, 'local', [colorContrastFinding], 'MEMBER'),
@@ -548,14 +544,24 @@ describe('codify-tally run', () => {
         ghPr(3, [
           findingsComment(3, 'local', [colorContrastFinding], 'COLLABORATOR'),
         ]),
-      ])
-    );
+      ],
+    },
+  ])('$name', ({auditedPrCount, candidateClasses, candidatePrNumbers, prs}) => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(stubGh(prs));
 
     run([], {cwd: sandbox.root, declines: noDeclines});
 
     const printed = parseStdout(stdout.out);
-    expect(printed.audited_pr_count).toBe(3);
-    expect(printed.candidate_count).toBe(1);
+    const candidates = printed.candidates as {
+      finding_class: string;
+      pr_numbers: number[];
+    }[];
+    expect(printed.audited_pr_count).toBe(auditedPrCount);
+    expect(printed.candidate_count).toBe(candidateClasses.length);
+    expect(candidates.map((c) => c.finding_class)).toEqual(candidateClasses);
+    expect(
+      candidates.flatMap((c) => c.pr_numbers).toSorted((a, b) => a - b)
+    ).toEqual(candidatePrNumbers);
   });
 
   test('two anonymous (missing-auditor) blocks on the same PR collapse, latest wins', () => {
@@ -613,42 +619,28 @@ describe('codify-tally run', () => {
     expect(candidates[0]?.distinct_pr_count).toBe(3);
   });
 
-  test('does not surface a class on only 2 distinct PRs', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh([
+  test.each([
+    [
+      'does not surface a class on only 2 distinct PRs',
+      [
+        ghPr(1, [findingsComment(1, 'ci', [knipExportsFinding])]),
+        ghPr(2, [findingsComment(2, 'ci', [knipExportsFinding])]),
+      ],
+    ],
+    [
+      'does not surface a class found 3 times in a single PR',
+      [
         ghPr(1, [
           findingsComment(1, 'ci', [
-            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
+            knipExportsFinding,
+            knipExportsFinding,
+            knipExportsFinding,
           ]),
         ]),
-        ghPr(2, [
-          findingsComment(2, 'ci', [
-            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
-          ]),
-        ]),
-      ])
-    );
-
-    run([], {
-      cwd: sandbox.root,
-      declines: noDeclines,
-    });
-
-    expect(parseStdout(stdout.out).candidate_count).toBe(0);
-  });
-
-  test('does not surface a class found 3 times in a single PR', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh([
-        ghPr(1, [
-          findingsComment(1, 'ci', [
-            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
-            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
-            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
-          ]),
-        ]),
-      ])
-    );
+      ],
+    ],
+  ])('%s', (_label, prs) => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(stubGh(prs));
 
     run([], {
       cwd: sandbox.root,
@@ -857,12 +849,19 @@ describe('codify-tally run', () => {
     expect(stderr).not.toHaveBeenCalled();
   });
 
-  test('falls back to candidate_count 0 and gh_ok false when gh fails (non-fatal)', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue({
-      exitCode: 4,
-      stderr: 'gh: not authenticated',
-      stdout: '',
-    });
+  test.each([
+    [
+      'falls back to candidate_count 0 and gh_ok false when gh fails (non-fatal)',
+      {exitCode: 4, stderr: 'gh: not authenticated', stdout: ''},
+      false,
+    ],
+    [
+      'sets gh_ok true on a successful read of a genuinely empty window',
+      stubGh([]),
+      true,
+    ],
+  ])('%s', (_label, ghResult, expectedGhOk) => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(ghResult);
 
     const exit = run([], {
       cwd: sandbox.root,
@@ -873,21 +872,7 @@ describe('codify-tally run', () => {
     const printed = parseStdout(stdout.out);
     expect(printed.candidate_count).toBe(0);
     expect(printed.candidates).toEqual([]);
-    expect(printed.gh_ok).toBe(false);
-  });
-
-  test('sets gh_ok true on a successful read of a genuinely empty window', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(stubGh([]));
-
-    const exit = run([], {
-      cwd: sandbox.root,
-      declines: noDeclines,
-    });
-    expect(exit).toBe(0);
-
-    const printed = parseStdout(stdout.out);
-    expect(printed.gh_ok).toBe(true);
-    expect(printed.candidate_count).toBe(0);
+    expect(printed.gh_ok).toBe(expectedGhOk);
   });
 
   test('a fallback suppression silences unclassified', () => {
@@ -1387,59 +1372,6 @@ describe('codify-tally run: findings the PR body disposes of', () => {
     ]);
   });
 
-  test('a waive cancels the finding in every auditor block that reported it', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh(
-        WAIVED_PR_NUMBERS.map((prNumber) => waivedPr(prNumber, ['ci', 'local']))
-      )
-    );
-
-    run([], {cwd: sandbox.root, declines: noDeclines});
-
-    expect(parseStdout(stdout.out).candidate_count).toBe(0);
-  });
-
-  test('a waive cancels one finding, so a second finding of the class still counts its PR', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh(
-        WAIVED_PR_NUMBERS.map((prNumber) =>
-          ghPrWithBody(prNumber, WAIVED_BODY, [
-            findingsComment(prNumber, 'local', [
-              hooksFinding('holistic/drifting-duplicate'),
-              hooksFinding('holistic/drifting-duplicate'),
-            ]),
-          ])
-        )
-      )
-    );
-
-    run([], {cwd: sandbox.root, declines: noDeclines});
-
-    expect(parseStdout(stdout.out).candidate_count).toBe(1);
-  });
-
-  test('a waive whose directory matches no area tag cancels nothing', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh(
-        WAIVED_PR_NUMBERS.map((prNumber) =>
-          ghPrWithBody(prNumber, WAIVED_BODY, [
-            findingsComment(prNumber, 'local', [
-              {
-                area_tags: ['.gaia/scripts'],
-                finding_class: 'holistic/drifting-duplicate',
-                severity: 'minor',
-              },
-            ]),
-          ])
-        )
-      )
-    );
-
-    run([], {cwd: sandbox.root, declines: noDeclines});
-
-    expect(parseStdout(stdout.out).candidate_count).toBe(1);
-  });
-
   test('accepted residuals cancel by their dedup key, leaving the unmatched finding counted', () => {
     // The block posted beside ACCEPTED_BODY: three classless findings, two of
     // them the accepted residuals.
@@ -1480,19 +1412,59 @@ describe('codify-tally run: findings the PR body disposes of', () => {
     expect(printed.unclassified_window_count).toBe(1);
   });
 
-  test('a body that is missing or not a string disposes of nothing', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh(
+  test.each([
+    {
+      candidateCount: 0,
+      name: 'a waive cancels the finding in every auditor block that reported it',
+      prs: () =>
+        WAIVED_PR_NUMBERS.map((prNumber) =>
+          waivedPr(prNumber, ['ci', 'local'])
+        ),
+    },
+    {
+      candidateCount: 1,
+      name: 'a waive cancels one finding, so a second finding of the class still counts its PR',
+      prs: () =>
+        WAIVED_PR_NUMBERS.map((prNumber) =>
+          ghPrWithBody(prNumber, WAIVED_BODY, [
+            findingsComment(prNumber, 'local', [
+              hooksFinding('holistic/drifting-duplicate'),
+              hooksFinding('holistic/drifting-duplicate'),
+            ]),
+          ])
+        ),
+    },
+    {
+      candidateCount: 1,
+      name: 'a waive whose directory matches no area tag cancels nothing',
+      prs: () =>
+        WAIVED_PR_NUMBERS.map((prNumber) =>
+          ghPrWithBody(prNumber, WAIVED_BODY, [
+            findingsComment(prNumber, 'local', [
+              {
+                area_tags: ['.gaia/scripts'],
+                finding_class: 'holistic/drifting-duplicate',
+                severity: 'minor',
+              },
+            ]),
+          ])
+        ),
+    },
+    {
+      candidateCount: 2,
+      name: 'a body that is missing or not a string disposes of nothing',
+      prs: () =>
         WAIVED_PR_NUMBERS.map((prNumber, index) => ({
           ...waivedPr(prNumber),
           body: index === 0 ? undefined : 42,
-        }))
-      )
-    );
+        })),
+    },
+  ])('$name', ({candidateCount, prs}) => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(stubGh(prs()));
 
     run([], {cwd: sandbox.root, declines: noDeclines});
 
-    expect(parseStdout(stdout.out).candidate_count).toBe(2);
+    expect(parseStdout(stdout.out).candidate_count).toBe(candidateCount);
   });
 });
 
@@ -1708,108 +1680,119 @@ describe('codify-tally run: team declines', () => {
     expect(printedTally().triggers).toEqual([]);
   });
 
-  test('a material rise over the committed decline re-surfaces the class as a candidate', () => {
-    commitDeclines(sandbox.root, [{findingClass: X, name: 'x-1'}]);
-    stubWindowWith(range(MATERIAL_RISE), [X]);
+  test.each([
+    {
+      classes: [X],
+      count: MATERIAL_RISE,
+      declines: [{findingClass: X, name: 'x-1'}],
+      expected: {candidates: [X], teamDeclined: [], unclassifiedPresent: false},
+      name: 'a material rise over the committed decline re-surfaces the class as a candidate',
+    },
+    {
+      classes: [X],
+      count: BELOW_RISE,
+      declines: [
+        {
+          findingClass: X,
+          name: 'x-1',
+          schemaVersion: TALLY_SCHEMA_VERSION - 1,
+        },
+      ],
+      expected: {candidates: [X], teamDeclined: [], unclassifiedPresent: false},
+      name: 'a committed decline from another tally schema version does not suppress',
+    },
+    {
+      classes: [X, UNCLASSIFIED],
+      count: 3,
+      declines: [
+        {declinedAt: '2026-07-29T11:59:59.000Z', findingClass: X, name: 'x-1'},
+        {
+          declinedAt: '2026-07-29T11:59:59.000Z',
+          findingClass: UNCLASSIFIED,
+          name: 'u-1',
+        },
+      ],
+      expected: {candidates: [X], teamDeclined: [], unclassifiedPresent: true},
+      name: 'a decline older than the window lifts the class and the unclassified signal',
+    },
+    {
+      classes: [X, UNCLASSIFIED],
+      count: 3,
+      declines: [
+        {declinedAt: '2026-07-30T12:00:00.000Z', findingClass: X, name: 'x-1'},
+        {
+          declinedAt: '2026-07-30T12:00:00.000Z',
+          findingClass: UNCLASSIFIED,
+          name: 'u-1',
+        },
+      ],
+      expected: {candidates: [], teamDeclined: [X], unclassifiedPresent: false},
+      name: 'the same declines one day inside the window suppress both',
+    },
+    {
+      classes: [UNCLASSIFIED],
+      count: MATERIAL_RISE,
+      declines: [{findingClass: UNCLASSIFIED, name: 'u-1'}],
+      expected: {candidates: [], teamDeclined: [], unclassifiedPresent: true},
+      name: 'a live unclassified decline lifts on a material rise of the classless cluster',
+    },
+    {
+      classes: [X],
+      count: BELOW_RISE,
+      declines: [
+        {declinedAt: '2026-08-01T00:00:00.000Z', findingClass: X, name: 'x-1'},
+      ],
+      expected: {candidates: [], teamDeclined: [X], unclassifiedPresent: false},
+      name: 'a live committed decline suppresses however long the class has recurred',
+    },
+  ] as {
+    classes: string[];
+    count: number;
+    declines: CommittedDecline[];
+    expected: {
+      candidates: string[];
+      teamDeclined: string[];
+      unclassifiedPresent: boolean;
+    };
+    name: string;
+  }[])('$name', ({classes, count, declines, expected}) => {
+    commitDeclines(sandbox.root, declines);
+    stubWindowWith(range(count), classes);
 
     runTally();
 
     const printed = printedTally();
-    expect(classesOf(printed, 'candidates')).toEqual([X]);
-    expect(printed.team_declined).toEqual([]);
+    expect({
+      candidates: classesOf(printed, 'candidates'),
+      teamDeclined: classesOf(printed, 'team_declined'),
+      unclassifiedPresent: printed.unclassified !== null,
+    }).toEqual(expected);
   });
 
-  test('a committed decline from another tally schema version does not suppress', () => {
-    commitDeclines(sandbox.root, [
-      {findingClass: X, name: 'x-1', schemaVersion: TALLY_SCHEMA_VERSION - 1},
-    ]);
-    stubWindowWith(range(BELOW_RISE), [X]);
-
-    runTally();
-
-    expect(classesOf(printedTally(), 'candidates')).toEqual([X]);
-  });
-
-  test('a decline older than the window lifts the class and the unclassified signal', () => {
-    commitDeclines(sandbox.root, [
-      {declinedAt: '2026-07-29T11:59:59.000Z', findingClass: X, name: 'x-1'},
-      {
-        declinedAt: '2026-07-29T11:59:59.000Z',
-        findingClass: UNCLASSIFIED,
-        name: 'u-1',
-      },
-    ]);
-    stubWindowWith(range(3), [X, UNCLASSIFIED]);
-
-    runTally();
-
-    const printed = printedTally();
-    expect(classesOf(printed, 'candidates')).toEqual([X]);
-    expect(printed.unclassified).not.toBeNull();
-  });
-
-  test('the same declines one day inside the window suppress both', () => {
-    commitDeclines(sandbox.root, [
-      {declinedAt: '2026-07-30T12:00:00.000Z', findingClass: X, name: 'x-1'},
-      {
-        declinedAt: '2026-07-30T12:00:00.000Z',
-        findingClass: UNCLASSIFIED,
-        name: 'u-1',
-      },
-    ]);
-    stubWindowWith(range(3), [X, UNCLASSIFIED]);
-
-    runTally();
-
-    const printed = printedTally();
-    expect(classesOf(printed, 'candidates')).toEqual([]);
-    expect(classesOf(printed, 'team_declined')).toEqual([X]);
-    expect(printed.unclassified).toBeNull();
-  });
-
-  test('a live unclassified decline lifts on a material rise of the classless cluster', () => {
-    commitDeclines(sandbox.root, [{findingClass: UNCLASSIFIED, name: 'u-1'}]);
-    stubWindowWith(range(MATERIAL_RISE), [UNCLASSIFIED]);
-
-    runTally();
-
-    expect(printedTally().unclassified).not.toBeNull();
-  });
-
-  test('a live committed decline suppresses however long the class has recurred', () => {
-    commitDeclines(sandbox.root, [
-      {declinedAt: '2026-08-01T00:00:00.000Z', findingClass: X, name: 'x-1'},
-    ]);
-    stubWindowWith(range(BELOW_RISE), [X]);
-
-    runTally();
-
-    const printed = printedTally();
-    expect(classesOf(printed, 'candidates')).toEqual([]);
-    expect(classesOf(printed, 'team_declined')).toEqual([X]);
-  });
-
-  test('a legacy-only decline within the window suppresses and leaves the file untouched', () => {
-    const before = writeLegacyLedger(sandbox.root, [legacyDecline(X)]);
-    stubWindowWith(range(BELOW_RISE), [X]);
-
-    runTally();
-
-    const printed = printedTally();
-    expect(classesOf(printed, 'candidates')).toEqual([]);
-    expect(classesOf(printed, 'team_declined')).toEqual([X]);
-    expect(readFileSync(legacyLedgerPath(sandbox.root), 'utf8')).toBe(before);
-  });
-
-  test('a legacy entry older than the window suppresses nothing and the file is untouched', () => {
+  test.each([
+    {
+      declinedAt: undefined,
+      expected: {candidates: [], teamDeclined: [X]},
+      name: 'a legacy-only decline within the window suppresses and leaves the file untouched',
+    },
+    {
+      declinedAt: '2026-07-01T00:00:00.000Z',
+      expected: {candidates: [X], teamDeclined: []},
+      name: 'a legacy entry older than the window suppresses nothing and the file is untouched',
+    },
+  ])('$name', ({declinedAt, expected}) => {
     const before = writeLegacyLedger(sandbox.root, [
-      legacyDecline(X, '2026-07-01T00:00:00.000Z'),
+      legacyDecline(X, declinedAt),
     ]);
     stubWindowWith(range(BELOW_RISE), [X]);
 
     runTally();
 
-    expect(classesOf(printedTally(), 'candidates')).toEqual([X]);
+    const printed = printedTally();
+    expect({
+      candidates: classesOf(printed, 'candidates'),
+      teamDeclined: classesOf(printed, 'team_declined'),
+    }).toEqual(expected);
     expect(readFileSync(legacyLedgerPath(sandbox.root), 'utf8')).toBe(before);
   });
 

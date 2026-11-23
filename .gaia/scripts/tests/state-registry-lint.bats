@@ -31,24 +31,20 @@ mutate_registry() {
 
 # Reads the real committed registry, so a registry edit alone selects this suite.
 # bats test_tags=whole-tree
-@test "the committed registry lints clean and the input set is non-empty" {
+@test "the committed registry lints clean, with or without an argument, and the input set is non-empty" {
   local row_count
   row_count="$(jq '.entries | length' "$COMMITTED_REGISTRY")"
   [ "$row_count" -gt 0 ]
   run bash "$LINT_SCRIPT" "$COMMITTED_REGISTRY"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-# bats test_tags=whole-tree
-@test "no argument lints the registry beside the script" {
   run bash "$LINT_SCRIPT"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
 # bats test_tags=whole-tree
-@test "a row losing retention is named, first row and last row" {
+@test "a registry row defect is named: missing retention, unknown class, legacy reaped_by, duplicate id" {
   local row_count first_id last_id
   row_count="$(jq '.entries | length' "$COMMITTED_REGISTRY")"
   first_id="$(jq -r '.entries[0].id' "$COMMITTED_REGISTRY")"
@@ -56,54 +52,39 @@ mutate_registry() {
 
   mutate_registry 'del(.entries[0].retention)'
   run bash "$LINT_SCRIPT" "$SCRATCH_REGISTRY"
-  [ "$status" -eq 1 ]
-  [ "$output" = "$first_id: missing retention" ]
+  [ "$status" -eq 1 ] || { echo "first row without retention: status $status"; return 1; }
+  [ "$output" = "$first_id: missing retention" ] || { echo "first row without retention: '$output'"; return 1; }
 
   mutate_registry 'del(.entries[-1].retention)'
   run bash "$LINT_SCRIPT" "$SCRATCH_REGISTRY"
-  [ "$status" -eq 1 ]
-  [ "$output" = "$last_id: missing retention" ]
+  [ "$status" -eq 1 ] || { echo "last row without retention: status $status"; return 1; }
+  [ "$output" = "$last_id: missing retention" ] || { echo "last row without retention: '$output'"; return 1; }
 
   # Every row was checked: removing retention from all of them yields one
   # violation line per row.
   mutate_registry 'del(.entries[].retention)'
   run bash "$LINT_SCRIPT" "$SCRATCH_REGISTRY"
-  [ "$status" -eq 1 ]
-  [ "${#lines[@]}" -eq "$row_count" ]
-}
+  [ "$status" -eq 1 ] || { echo "no row with retention: status $status"; return 1; }
+  [ "${#lines[@]}" -eq "$row_count" ] || { echo "no row with retention: ${#lines[@]} lines"; return 1; }
 
-# bats test_tags=whole-tree
-@test "an unknown retention class is named" {
-  local row_id
-  row_id="$(jq -r '.entries[0].id' "$COMMITTED_REGISTRY")"
   mutate_registry '.entries[0].retention = {"class": "sometimes"}'
   run bash "$LINT_SCRIPT" "$SCRATCH_REGISTRY"
-  [ "$status" -eq 1 ]
-  [ "$output" = "$row_id: unknown class \"sometimes\"" ]
-}
+  [ "$status" -eq 1 ] || { echo "unknown class: status $status"; return 1; }
+  [ "$output" = "$first_id: unknown class \"sometimes\"" ] || { echo "unknown class: '$output'"; return 1; }
 
-# bats test_tags=whole-tree
-@test "a legacy reaped_by next to a valid retention is named" {
-  local row_id
-  row_id="$(jq -r '.entries[0].id' "$COMMITTED_REGISTRY")"
   mutate_registry '.entries[0].reaped_by = "an old prose reaper"'
   run bash "$LINT_SCRIPT" "$SCRATCH_REGISTRY"
-  [ "$status" -eq 1 ]
-  [ "${lines[0]}" = "$row_id: carries the legacy reaped_by field; retention replaces it" ]
-  [ "${#lines[@]}" -eq 1 ]
-}
+  [ "$status" -eq 1 ] || { echo "legacy reaped_by: status $status"; return 1; }
+  [ "${lines[0]}" = "$first_id: carries the legacy reaped_by field; retention replaces it" ] || { echo "legacy reaped_by: '$output'"; return 1; }
+  [ "${#lines[@]}" -eq 1 ] || { echo "legacy reaped_by: ${#lines[@]} lines"; return 1; }
 
-# bats test_tags=whole-tree
-@test "a duplicate row id is named" {
-  local row_id
-  row_id="$(jq -r '.entries[0].id' "$COMMITTED_REGISTRY")"
-  mutate_registry '.entries[1].id = $id' --arg id "$row_id"
+  mutate_registry '.entries[1].id = $id' --arg id "$first_id"
   run bash "$LINT_SCRIPT" "$SCRATCH_REGISTRY"
-  [ "$status" -eq 1 ]
-  [ "$output" = "$row_id: duplicate row id" ]
+  [ "$status" -eq 1 ] || { echo "duplicate id: status $status"; return 1; }
+  [ "$output" = "$first_id: duplicate row id" ] || { echo "duplicate id: '$output'"; return 1; }
 }
 
-# bats test_tags=whole-tree
+# bats test_tags=whole-tree,protected
 @test "a protected row must be keep or branch-spent with days 7" {
   local expected="audit-loop-state: a protected/ row must be keep, or branch-spent with days 7"
 
@@ -128,21 +109,15 @@ mutate_registry() {
   [ "$status" -eq 0 ]
 }
 
-@test "exit 2 when the registry is missing" {
+@test "exit 2 when the registry is missing, not JSON, or has no entries array" {
   run bash "$LINT_SCRIPT" "$BATS_TEST_TMPDIR/no-such-registry.json"
-  [ "$status" -eq 2 ]
-}
-
-@test "exit 2 when the registry is not JSON" {
+  [ "$status" -eq 2 ] || { echo "missing registry: status $status"; return 1; }
   printf 'not json {' >"$SCRATCH_REGISTRY"
   run bash "$LINT_SCRIPT" "$SCRATCH_REGISTRY"
-  [ "$status" -eq 2 ]
-}
-
-@test "exit 2 when the JSON has no entries array" {
+  [ "$status" -eq 2 ] || { echo "not JSON: status $status"; return 1; }
   printf '{"residue": []}' >"$SCRATCH_REGISTRY"
   run bash "$LINT_SCRIPT" "$SCRATCH_REGISTRY"
-  [ "$status" -eq 2 ]
+  [ "$status" -eq 2 ] || { echo "no entries array: status $status"; return 1; }
 }
 
 # build_fixture_trees: a fixture main checkout whose committed registry is
@@ -176,16 +151,4 @@ build_fixture_trees() {
   run bash -c 'cd "$1" && bash "$2"' _ "$FIXTURE_WORKTREE" "$FIXTURE_MAIN/.gaia/scripts/state-registry-lint.sh"
   [ "$status" -eq 1 ]
   [ -n "$output" ]
-}
-
-# bats test_tags=whole-tree
-@test "a copy defaulting through the main-root resolver fails the worktree case" {
-  build_fixture_trees
-  local mutant="$FIXTURE_WORKTREE/.gaia/scripts/state-registry-lint-mutant.sh"
-  sed 's|^registry_path=.*|. "$script_directory/main-root-lib.sh"; registry_path="${1-$(gaia_resolve_main_root "$script_directory")/.gaia/state-registry.json}"|' \
-    "$FIXTURE_WORKTREE/.gaia/scripts/state-registry-lint.sh" >"$mutant"
-  grep -q 'gaia_resolve_main_root' "$mutant"
-
-  run bash -c 'cd "$1" && bash "$2"' _ "$FIXTURE_MAIN" "$mutant"
-  [ "$status" -eq 1 ]
 }

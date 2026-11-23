@@ -8,8 +8,9 @@
 # - Behavioral: in a scratch copy of the scripts, the statusline and the hook,
 #   change GAIA_CONTEXT_ASK_TOKENS_DEFAULT once and assert that the statusline's
 #   red boundary and the hook's context decision both move with it.
-# - Textual: no other tracked shell file spells the line or the yellow anchor
-#   as a whole word, with a red twin proving the same grep reports a plant.
+# - Textual: no other tracked shell file spells the line as a whole word.
+#   Yellow has no token constant to spell: the lib derives it from the line
+#   and the window.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/context-threshold-single-source.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -23,7 +24,6 @@ setup() {
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
   ORIGINAL_LINE="$GAIA_CONTEXT_ASK_TOKENS_DEFAULT"
-  ORIGINAL_YELLOW="$GAIA_CONTEXT_YELLOW_TOKENS"
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/tests/helpers/audit-loop-fixture.sh"
   alf_init
@@ -100,21 +100,10 @@ hook_denies() {
   hook_denies "$probe"
 }
 
-@test "no tracked shell file other than the lib spells the line or the yellow anchor as a word" {
+@test "no tracked shell file other than the lib spells the line as a word" {
   local hits
-  hits="$(git -C "$REPO_ROOT" grep -lwE "$ORIGINAL_LINE|$ORIGINAL_YELLOW" -- '*.sh' ':!*.bats' ':!*/fixtures/*')"
+  [[ $ORIGINAL_LINE =~ ^[0-9]+$ ]] || return 1
+  hits="$(git -C "$REPO_ROOT" grep -lw "$ORIGINAL_LINE" -- '*.sh' ':!*.bats' ':!*/fixtures/*')"
   [ "$hits" = ".gaia/scripts/context-checkpoint-lib.sh" ] || { printf 'unexpected files:\n%s\n' "$hits" >&2; return 1; }
 }
 
-@test "red twin: the same grep reports a value planted in a tracked shell file" {
-  local sandbox="$BATS_TEST_TMPDIR/plant" hits
-  mkdir -p "$sandbox/.gaia/scripts" "$sandbox/tools"
-  git -C "$sandbox" init -q
-  printf 'GAIA_CONTEXT_ASK_TOKENS_DEFAULT=%s\n' "$ORIGINAL_LINE" >"$sandbox/.gaia/scripts/context-checkpoint-lib.sh"
-  printf 'X=%s\n' "$ORIGINAL_LINE" >"$sandbox/tools/planted.sh"
-  printf 'Y=%s1\n' "$ORIGINAL_LINE" >"$sandbox/tools/longer.sh"
-  git -C "$sandbox" add -A
-  hits="$(git -C "$sandbox" grep -lwE "$ORIGINAL_LINE|$ORIGINAL_YELLOW" -- '*.sh' ':!*.bats' ':!*/fixtures/*')"
-  [ "$hits" = "$(printf '.gaia/scripts/context-checkpoint-lib.sh\ntools/planted.sh')" ] ||
-    { printf 'unexpected hits:\n%s\n' "$hits" >&2; return 1; }
-}

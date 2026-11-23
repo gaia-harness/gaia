@@ -64,22 +64,28 @@ describe('update-deps namespace router', () => {
     expect(stdio.errors.join('')).toContain('unknown_subcommand');
   });
 
-  test('run --help prints subcommand usage and exits 0', async () => {
-    const exit = await run(['run', '--help']);
+  test.each(
+    [
+      {name: 'run --help prints subcommand usage and exits 0', verb: 'run'},
+      {
+        name: 'decline --help routes to the decline handler and exits 0',
+        verb: 'decline',
+      },
+      ...[
+        'advisories',
+        'advisory-landed',
+        'dismiss-alert',
+        'write-security-cache',
+        'check-security-override',
+      ].map((verb) => ({
+        name: `${verb} --help routes to its handler and exits 0`,
+        verb,
+      })),
+    ].map((row) => [row.name, row] as const)
+  )('%s', async (_name, {verb}) => {
+    const exit = await run([verb, '--help']);
     expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('Usage: gaia update-deps run');
-  });
-
-  test('namespace help lists the decline subcommand', async () => {
-    const exit = await run([]);
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('decline');
-  });
-
-  test('decline --help routes to the decline handler and exits 0', async () => {
-    const exit = await run(['decline', '--help']);
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain('Usage: gaia update-deps decline');
+    expect(stdio.outputs.join('')).toContain(`Usage: gaia update-deps ${verb}`);
   });
 
   test('namespace help lists the advisories and advisory-landed subcommands', async () => {
@@ -92,17 +98,6 @@ describe('update-deps namespace router', () => {
       'advisory-landed --package <name> --vulnerable-range <range>'
     );
   });
-
-  test.each(['advisories', 'advisory-landed'])(
-    '%s --help routes to its handler and exits 0',
-    async (verb) => {
-      const exit = await run([verb, '--help']);
-      expect(exit).toBe(0);
-      expect(stdio.outputs.join('')).toContain(
-        `Usage: gaia update-deps ${verb}`
-      );
-    }
-  );
 
   test('namespace help lists every update-deps verb', async () => {
     const exit = await run([]);
@@ -120,15 +115,5 @@ describe('update-deps namespace router', () => {
     ]) {
       expect(stdio.outputs.join('')).toContain(`  ${verb} `);
     }
-  });
-
-  test.each([
-    'dismiss-alert',
-    'write-security-cache',
-    'check-security-override',
-  ])('%s --help routes to its handler and exits 0', async (verb) => {
-    const exit = await run([verb, '--help']);
-    expect(exit).toBe(0);
-    expect(stdio.outputs.join('')).toContain(`Usage: gaia update-deps ${verb}`);
   });
 });

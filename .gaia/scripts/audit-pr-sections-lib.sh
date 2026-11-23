@@ -374,7 +374,7 @@ _command_record_residual() {
   if ! { [ -f "$recorded_file" ] && jq -e -R -n --argjson row "$row" "$_ROW_TEXT_JQ"'
       def full: [.member, .finding_class, .path, (.line | line_of)];
       [inputs | fromjson? | select(type == "object") | select(full == ($row | full))] | last
-      | . != null and .source == $row.source and .decision == $row.decision and .round == $row.round' <"$recorded_file" >/dev/null 2>&1; }; then
+      | . != null and .source == $row.source and .decision == $row.decision and .round == $row.round and .reason == $row.reason' <"$recorded_file" >/dev/null 2>&1; }; then
     mkdir -p "$RUN_FOLDER" 2>/dev/null || { _error "cannot create $RUN_FOLDER"; return 3; }
     printf '%s\n' "$row" >>"$recorded_file" || { _error "cannot write $recorded_file"; return 3; }
   fi

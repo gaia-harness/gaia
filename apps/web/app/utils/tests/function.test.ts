@@ -1,55 +1,53 @@
 import {describe, expect, test} from 'vitest';
 import {tryCatch} from '../function';
 
-const sleep = async (durationInMilliseconds: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, durationInMilliseconds);
-  });
+const throwing = (thrownValue: unknown) => (): never => {
+  throw thrownValue;
+};
 
 describe('function utils', () => {
-  test('tryCatch async result', async () => {
-    expect(
-      await tryCatch(async (value: number) => {
-        await sleep(100);
+  test.each(
+    [
+      {
+        expected: [undefined, 2],
+        isAsync: true,
+        name: 'async result',
+        run: async () => tryCatch(async (value: number) => 10 / value, 5),
+      },
+      {
+        expected: [new Error('failed'), undefined],
+        isAsync: true,
+        name: 'async error',
+        run: async () =>
+          tryCatch(async () => {
+            throw new Error('failed');
+          }),
+      },
+      {
+        expected: [new Error('failed'), undefined],
+        isAsync: false,
+        name: 'sync error',
+        run: () => tryCatch(throwing(new Error('failed'))),
+      },
+      ...[0, false, '', null].map((falsyValue) => ({
+        expected: [undefined, falsyValue],
+        isAsync: false,
+        name: `falsy sync result (${JSON.stringify(falsyValue)}) is preserved as success`,
+        run: () => tryCatch(() => falsyValue),
+      })),
+      ...[null, 0, ''].map((thrownValue) => ({
+        expected: [thrownValue, undefined],
+        isAsync: false,
+        name: `falsy sync throw (${JSON.stringify(thrownValue)}) is reported as an error`,
+        run: () => tryCatch(throwing(thrownValue)),
+      })),
+    ].map((row) => [row.name, row] as const)
+  )(
+    'tryCatch returns [error, result] for each sync and async outcome: %s',
+    async (_name, {expected, isAsync, run}) => {
+      const outcome = run();
 
-        return 10 / value;
-      }, 5)
-    ).toEqual([undefined, 2]);
-  });
-
-  test('tryCatch async error', async () => {
-    expect(
-      await tryCatch(async () => {
-        await sleep(100);
-
-        throw new Error('failed');
-      })
-    ).toEqual([new Error('failed'), undefined]);
-  });
-
-  test('tryCatch sync error', async () => {
-    expect(
-      tryCatch(() => {
-        throw new Error('failed');
-      })
-    ).toEqual([new Error('failed'), undefined]);
-  });
-
-  test('tryCatch preserves falsy sync results as success', () => {
-    expect(tryCatch(() => 0)).toEqual([undefined, 0]);
-    expect(tryCatch(() => false)).toEqual([undefined, false]);
-    expect(tryCatch(() => '')).toEqual([undefined, '']);
-    expect(tryCatch(() => null)).toEqual([undefined, null]);
-  });
-
-  test.each([null, 0, ''])(
-    'tryCatch reports a falsy sync throw (%o) as an error',
-    (thrownValue) => {
-      expect(
-        tryCatch(() => {
-          throw thrownValue;
-        })
-      ).toEqual([thrownValue, undefined]);
+      expect(isAsync ? await outcome : outcome).toEqual(expected);
     }
   );
 });

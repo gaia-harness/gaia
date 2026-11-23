@@ -151,16 +151,13 @@ describe('gaia setup mark-step', () => {
     ]);
   });
 
-  test('rejects an unknown step', () => {
-    const exit = runMarkStep(['nope'], {cwd: sandbox.root});
+  test.each<[string, string[], 'errors' | 'outputs', string]>([
+    ['rejects an unknown step', ['nope'], 'errors', 'unknown step'],
+    ['rejects when no step is supplied', [], 'outputs', 'Usage:'],
+  ])('%s', (_name, args, stream, message) => {
+    const exit = runMarkStep(args, {cwd: sandbox.root});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('unknown step');
-  });
-
-  test('rejects when no step is supplied', () => {
-    const exit = runMarkStep([], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.outputs.join('')).toContain('Usage:');
+    expect(stdio[stream].join('')).toContain(message);
   });
 });
 
@@ -309,31 +306,30 @@ describe('state file robustness', () => {
     vi.restoreAllMocks();
   });
 
-  const writeStateJson = (value: unknown): void => {
+  test.each(
+    [
+      {
+        contents: '{ broken',
+        message: 'state_malformed',
+        name: 'rejects malformed state file',
+      },
+      {
+        contents: JSON.stringify({
+          completed_at: null,
+          completed_steps: ['install-tools'],
+          version: 1,
+        }),
+        message: 'started_at',
+        name: 'rejects a state file with a missing started_at',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {contents, message}) => {
     const stateDirectory = path.dirname(sandbox.statePath);
     execFileSync('mkdir', ['-p', stateDirectory]);
-    writeFileSync(sandbox.statePath, JSON.stringify(value), 'utf8');
-  };
-
-  test('rejects malformed state file', () => {
-    const stateDirectory = path.dirname(sandbox.statePath);
-    execFileSync('mkdir', ['-p', stateDirectory]);
-    writeFileSync(sandbox.statePath, '{ broken', 'utf8');
+    writeFileSync(sandbox.statePath, contents, 'utf8');
 
     const exit = runStatus(['--json'], {cwd: sandbox.root});
     expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('state_malformed');
-  });
-
-  test('rejects a state file with a missing started_at', () => {
-    writeStateJson({
-      completed_at: null,
-      completed_steps: ['install-tools'],
-      version: 1,
-    });
-
-    const exit = runStatus(['--json'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('started_at');
+    expect(stdio.errors.join('')).toContain(message);
   });
 });

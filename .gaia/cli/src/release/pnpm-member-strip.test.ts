@@ -92,54 +92,84 @@ describe('stripPnpmMember golden pairs', () => {
 });
 
 describe('stripPnpmMember refusals', () => {
-  test.each([
-    ['unknown-version-document-1', 'lockfile', 'unknown-lockfile-version'],
-    ['unknown-version-document-2', 'lockfile', 'unknown-lockfile-version'],
-    ['member-without-importer', 'workspace', 'member-without-importer'],
-    ['importer-without-member', 'lockfile', 'importer-without-member'],
-    ['missing-snapshot', 'lockfile', 'missing-snapshot'],
-  ])('%s refuses naming the %s with %s', (caseName, file, token) => {
-    expect(stripPnpmMember(inputFor(caseName))).toMatchObject({
+  type StripInput = ReturnType<typeof inputFor>;
+
+  // `detail` is the part of the refusal text that names the cause: which
+  // document carries the version, or which snapshot id is absent. An empty
+  // string only asserts that a detail string exists.
+  const synthetic = inputFor('synthetic');
+
+  test.each<{
+    detail: string;
+    file: string;
+    input: () => StripInput;
+    name: string;
+    token: string;
+  }>([
+    {
+      detail: 'document 1',
+      file: 'lockfile',
+      input: () => inputFor('unknown-version-document-1'),
+      name: 'unknown-version-document-1 refuses naming the lockfile with unknown-lockfile-version',
+      token: 'unknown-lockfile-version',
+    },
+    {
+      detail: 'document 2',
+      file: 'lockfile',
+      input: () => inputFor('unknown-version-document-2'),
+      name: 'unknown-version-document-2 refuses naming the lockfile with unknown-lockfile-version',
+      token: 'unknown-lockfile-version',
+    },
+    {
+      detail: '',
+      file: 'workspace',
+      input: () => inputFor('member-without-importer'),
+      name: 'member-without-importer refuses naming the workspace with member-without-importer',
+      token: 'member-without-importer',
+    },
+    {
+      detail: '',
+      file: 'lockfile',
+      input: () => inputFor('importer-without-member'),
+      name: 'importer-without-member refuses naming the lockfile with importer-without-member',
+      token: 'importer-without-member',
+    },
+    {
+      detail: 'debug@4.4.0',
+      file: 'lockfile',
+      input: () => inputFor('missing-snapshot'),
+      name: 'missing-snapshot refuses naming the lockfile with missing-snapshot',
+      token: 'missing-snapshot',
+    },
+    {
+      detail: '',
+      file: 'lockfile',
+      input: () => ({
+        ...synthetic,
+        lockfile: synthetic.lockfile.slice(
+          firstDocument(synthetic.lockfile).length
+        ),
+      }),
+      name: 'a lockfile that is not two documents is unparseable',
+      token: 'unparseable',
+    },
+    {
+      detail: '',
+      file: 'workspace',
+      input: () => ({
+        ...synthetic,
+        workspace: `packages: [frontend, ${MEMBER}]\n`,
+      }),
+      name: 'a flow-style packages list the line locator cannot edit is unparseable',
+      token: 'unparseable',
+    },
+  ])('$name', ({detail, file, input, token}) => {
+    expect(stripPnpmMember(input())).toMatchObject({
+      detail: expect.stringContaining(detail),
       file,
       kind: 'refused',
       token,
     });
-  });
-
-  test('the version refusal names which document carries the version', () => {
-    expect(stripPnpmMember(inputFor('unknown-version-document-1'))).toEqual(
-      expect.objectContaining({detail: expect.stringContaining('document 1')})
-    );
-    expect(stripPnpmMember(inputFor('unknown-version-document-2'))).toEqual(
-      expect.objectContaining({detail: expect.stringContaining('document 2')})
-    );
-  });
-
-  test('the missing-snapshot refusal names the absent id', () => {
-    expect(stripPnpmMember(inputFor('missing-snapshot'))).toEqual(
-      expect.objectContaining({detail: expect.stringContaining('debug@4.4.0')})
-    );
-  });
-
-  test('a lockfile that is not two documents is unparseable', () => {
-    const input = inputFor('synthetic');
-    const single = input.lockfile.slice(firstDocument(input.lockfile).length);
-
-    expect(stripPnpmMember({...input, lockfile: single})).toMatchObject({
-      file: 'lockfile',
-      token: 'unparseable',
-    });
-  });
-
-  test('a flow-style packages list the line locator cannot edit is unparseable', () => {
-    const input = inputFor('synthetic');
-
-    expect(
-      stripPnpmMember({
-        ...input,
-        workspace: `packages: [frontend, ${MEMBER}]\n`,
-      })
-    ).toMatchObject({file: 'workspace', token: 'unparseable'});
   });
 });
 
@@ -171,27 +201,27 @@ describe('findMemberOnlyLeftovers', () => {
   const input = inputFor('synthetic');
   const expected = readFixture('synthetic', 'expected.lock.fixture.yaml');
 
-  test('a correct strip leaves nothing behind', () => {
+  const variant = 'use-sync-external-store@1.2.2(react@17.0.2)';
+
+  test.each<{after: string; expected: string[]; name: string}>([
+    {
+      after: expected,
+      expected: [],
+      name: 'a correct strip leaves nothing behind',
+    },
+    {
+      after: `${expected}${snapshotBlock(input.lockfile, variant)}\n`,
+      expected: [`snapshots[${variant}]`],
+      name: 'names a member-only snapshot that survived',
+    },
+  ])('$name', ({after, expected: leftovers}) => {
     expect(
       findMemberOnlyLeftovers({
-        after: expected,
+        after,
         before: input.lockfile,
         member: MEMBER,
       })
-    ).toEqual([]);
-  });
-
-  test('names a member-only snapshot that survived', () => {
-    const variant = 'use-sync-external-store@1.2.2(react@17.0.2)';
-    const bad = `${expected}${snapshotBlock(input.lockfile, variant)}\n`;
-
-    expect(
-      findMemberOnlyLeftovers({
-        after: bad,
-        before: input.lockfile,
-        member: MEMBER,
-      })
-    ).toEqual([`snapshots[${variant}]`]);
+    ).toEqual(leftovers);
   });
 });
 
@@ -203,41 +233,54 @@ describe('checkStrippedPair', () => {
     expect(checkStrippedPair(input, good)).toBeNull();
   });
 
-  test('refuses a pair that keeps a member-only snapshot', () => {
-    const variant = 'use-sync-external-store@1.2.2(react@17.0.2)';
-    const lockfile = `${good.lockfile}${snapshotBlock(input.lockfile, variant)}\n`;
+  const memberOnlyVariant = 'use-sync-external-store@1.2.2(react@17.0.2)';
 
-    expect(checkStrippedPair(input, {...good, lockfile})).toMatchObject({
-      detail: expect.stringContaining(variant),
-      token: 'cli-only-key-survives',
-    });
-  });
-
-  test('refuses a pair that drops a shared snapshot', () => {
-    const lockfile = good.lockfile.replace(
-      snapshotBlock(good.lockfile, 'ms@2.1.3'),
-      ''
-    );
-
-    expect(checkStrippedPair(input, {...good, lockfile})).toMatchObject({
-      detail: expect.stringContaining('ms@2.1.3'),
-      token: 'integrity',
-    });
-  });
-
-  test('refuses a pair whose packageManagerDependencies document changed', () => {
-    // The first `hasBin` belongs to pnpm's own entry in document 1.
-    const lockfile = good.lockfile.replace('hasBin: true', 'hasBin: false');
-
-    expect(checkStrippedPair(input, {...good, lockfile})).toMatchObject({
-      token: 'integrity',
-    });
-  });
-
-  test('refuses a workspace that still lists the member', () => {
-    expect(
-      checkStrippedPair(input, {...good, workspace: input.workspace})
-    ).toMatchObject({file: 'workspace', token: 'integrity'});
+  test.each<{
+    mutate: () => typeof good;
+    name: string;
+    refusal: Record<string, unknown>;
+  }>([
+    {
+      mutate: () => ({
+        ...good,
+        lockfile: `${good.lockfile}${snapshotBlock(input.lockfile, memberOnlyVariant)}\n`,
+      }),
+      name: 'refuses a pair that keeps a member-only snapshot',
+      refusal: {
+        detail: expect.stringContaining(memberOnlyVariant),
+        token: 'cli-only-key-survives',
+      },
+    },
+    {
+      mutate: () => ({
+        ...good,
+        lockfile: good.lockfile.replace(
+          snapshotBlock(good.lockfile, 'ms@2.1.3'),
+          ''
+        ),
+      }),
+      name: 'refuses a pair that drops a shared snapshot',
+      refusal: {
+        detail: expect.stringContaining('ms@2.1.3'),
+        token: 'integrity',
+      },
+    },
+    {
+      // The first `hasBin` belongs to pnpm's own entry in document 1.
+      mutate: () => ({
+        ...good,
+        lockfile: good.lockfile.replace('hasBin: true', 'hasBin: false'),
+      }),
+      name: 'refuses a pair whose packageManagerDependencies document changed',
+      refusal: {token: 'integrity'},
+    },
+    {
+      mutate: () => ({...good, workspace: input.workspace}),
+      name: 'refuses a workspace that still lists the member',
+      refusal: {file: 'workspace', token: 'integrity'},
+    },
+  ])('$name', ({mutate, refusal}) => {
+    expect(checkStrippedPair(input, mutate())).toMatchObject(refusal);
   });
 });
 

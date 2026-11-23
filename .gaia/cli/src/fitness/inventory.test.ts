@@ -130,40 +130,36 @@ describe('gaia fitness inventory', () => {
     expect(report.findings).toEqual([]);
   });
 
-  test('a root with a dot and a plus reads the memory directory keyed with every non-alphanumeric as a dash', async () => {
+  test.each<[string, (home: string, root: string) => string, number]>([
+    [
+      'a root with a dot and a plus reads the memory directory keyed with every non-alphanumeric as a dash',
+      (home, root) => memoryDirectoryFor(home, root),
+      1,
+    ],
+    [
+      'a memory directory keyed by slashes only is not read for a dotted root',
+      (home, root) =>
+        path.join(
+          home,
+          '.claude',
+          'projects',
+          root.replaceAll('/', '-'),
+          'memory'
+        ),
+      0,
+    ],
+  ])('%s', async (_name, directoryFor, expectedCount) => {
     const oddRoot = path.join(sandbox.scratch, 'odd.root+x');
 
     mkdirSync(oddRoot, {recursive: true});
     write(
-      path.join(memoryDirectoryFor(sandbox.home, oddRoot), 'MEMORY.md'),
+      path.join(directoryFor(sandbox.home, oddRoot), 'MEMORY.md'),
       'kept\n'
     );
 
     const report = await inventoryOf(oddRoot, sandbox.home);
 
-    expect(report.stores.memory.count).toBe(1);
-  });
-
-  test('a memory directory keyed by slashes only is not read for a dotted root', async () => {
-    const oddRoot = path.join(sandbox.scratch, 'odd.root+x');
-    const slashOnlyKey = oddRoot.replaceAll('/', '-');
-
-    mkdirSync(oddRoot, {recursive: true});
-    write(
-      path.join(
-        sandbox.home,
-        '.claude',
-        'projects',
-        slashOnlyKey,
-        'memory',
-        'MEMORY.md'
-      ),
-      'misfiled\n'
-    );
-
-    const report = await inventoryOf(oddRoot, sandbox.home);
-
-    expect(report.stores.memory.count).toBe(0);
+    expect(report.stores.memory.count).toBe(expectedCount);
   });
 
   test('count equals the listed files for every store, with words, lines and an epoch mtime', async () => {
@@ -246,22 +242,20 @@ describe('gaia fitness inventory', () => {
     ]);
   });
 
-  test('a root that is not a directory exits 3', async () => {
-    const missing = path.join(sandbox.scratch, 'missing');
-    const result = await runFitness(['inventory', '--root', missing], {
+  test.each<[string, (scratch: string) => string[], number]>([
+    [
+      'a root that is not a directory exits 3',
+      (scratch) => ['inventory', '--root', path.join(scratch, 'missing')],
+      3,
+    ],
+    ['an unknown flag exits 2', () => ['inventory', '--bogus'], 2],
+  ])('%s', async (_name, argumentsFor, exitCode) => {
+    const result = await runFitness(argumentsFor(sandbox.scratch), {
       env: {HOME: sandbox.home},
     });
 
-    expect(result.exitCode).toBe(3);
+    expect(result.exitCode).toBe(exitCode);
     expect(result.stdout).toBe('');
-  });
-
-  test('an unknown flag exits 2', async () => {
-    const result = await runFitness(['inventory', '--bogus'], {
-      env: {HOME: sandbox.home},
-    });
-
-    expect(result.exitCode).toBe(2);
   });
 });
 
@@ -289,30 +283,50 @@ describe('memory.dead-path', () => {
     expect(report.findings[0]?.message).toContain('scripts/gone.sh');
   });
 
-  test('an existing path yields no finding', async () => {
-    write(path.join(sandbox.project, 'scripts/here.sh'), '#!/bin/sh\n');
-    write(
-      path.join(memoryDirectoryFor(sandbox.home, sandbox.project), 'MEMORY.md'),
-      'See `scripts/here.sh` and [the script](scripts/here.sh#top).\n'
-    );
-
-    const report = await inventoryOf(sandbox.project, sandbox.home);
-
-    expect(report.findings).toEqual([]);
-  });
-
-  test('urls, placeholders, absolute paths and fenced code are not repo paths', async () => {
-    write(
-      path.join(memoryDirectoryFor(sandbox.home, sandbox.project), 'MEMORY.md'),
-      [
-        'A `https://example.com/a/b.html` link, `scripts/<name>.sh`, `src/*.ts`,',
-        'and `/etc/hosts.conf` plus `~/notes/a.md`.',
-        '```',
-        '`scripts/in-fence.sh`',
-        '```',
-        '',
-      ].join('\n')
-    );
+  test.each<[string, () => void]>([
+    [
+      'an existing path yields no finding',
+      () => {
+        write(path.join(sandbox.project, 'scripts/here.sh'), '#!/bin/sh\n');
+        write(
+          path.join(
+            memoryDirectoryFor(sandbox.home, sandbox.project),
+            'MEMORY.md'
+          ),
+          'See `scripts/here.sh` and [the script](scripts/here.sh#top).\n'
+        );
+      },
+    ],
+    [
+      'urls, placeholders, absolute paths and fenced code are not repo paths',
+      () => {
+        write(
+          path.join(
+            memoryDirectoryFor(sandbox.home, sandbox.project),
+            'MEMORY.md'
+          ),
+          [
+            'A `https://example.com/a/b.html` link, `scripts/<name>.sh`, `src/*.ts`,',
+            'and `/etc/hosts.conf` plus `~/notes/a.md`.',
+            '```',
+            '`scripts/in-fence.sh`',
+            '```',
+            '',
+          ].join('\n')
+        );
+      },
+    ],
+    [
+      'only the memory store is scanned for dead paths',
+      () => {
+        write(
+          path.join(sandbox.project, '.claude/rules/house.md'),
+          'See `scripts/gone.sh`.\n'
+        );
+      },
+    ],
+  ])('%s', async (_name, arrange) => {
+    arrange();
 
     const report = await inventoryOf(sandbox.project, sandbox.home);
 
@@ -331,17 +345,6 @@ describe('memory.dead-path', () => {
       expect.stringContaining('app/gone.ts'),
       expect.stringContaining('docs/gone.md'),
     ]);
-  });
-
-  test('only the memory store is scanned for dead paths', async () => {
-    write(
-      path.join(sandbox.project, '.claude/rules/house.md'),
-      'See `scripts/gone.sh`.\n'
-    );
-
-    const report = await inventoryOf(sandbox.project, sandbox.home);
-
-    expect(report.findings).toEqual([]);
   });
 
   test('a credential in a message is redacted', async () => {

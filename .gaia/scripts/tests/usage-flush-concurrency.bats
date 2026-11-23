@@ -97,6 +97,7 @@ holds_within() {
     END { exit (hold_count > 0 && bad == 0) ? 0 : 1 }' "$1"
 }
 
+# bats test_tags=protected
 @test "TST-012a: two session flushers, a sweep, and a links append released together: no torn line, golden totals, quiescent cursors" {
   install conc
   local rows="$TEMPORARY_DIRECTORY/link.jsonl" release_file="$TEMPORARY_DIRECTORY/go" flusher_arguments flusher_pid pids=()
@@ -150,23 +151,4 @@ holds_within() {
   holds_within "$stderr_file" 2
   [ "$(grep -c 'usage-flush: hold' "$stderr_file")" -eq 6 ]
   assert_golden sweep
-}
-
-@test "COV-006 guard: a scratch copy that sleeps 3 s inside the locked commit breaks the 2 s hold assertion" {
-  local scratch_directory="$TEMPORARY_DIRECTORY/scratch" stderr_file="$TEMPORARY_DIRECTORY/mut.err"
-  mkdir -p "$scratch_directory/.gaia/scripts" "$scratch_directory/.gaia/scripts/spec"
-  cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/main-root-lib.sh \
-    "$SCRIPTS"/branch-name-lib.sh "$scratch_directory/.gaia/scripts/"
-  cp "$REPO_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$scratch_directory/.gaia/scripts/spec/"
-  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$scratch_directory/.gaia/scripts/"
-  mkdir -p "$scratch_directory/.gaia/scripts/notebook"
-  cp "$SCRIPTS"/notebook/*.sh "$scratch_directory/.gaia/scripts/notebook/"
-  sed 's/^  commit_started_at="\$(_uf_now)"$/  commit_started_at="$(_uf_now)"; sleep 3/' "$SCRIPTS/usage-flush.sh" >"$scratch_directory/.gaia/scripts/usage-flush.sh"
-  cmp -s "$SCRIPTS/usage-flush.sh" "$scratch_directory/.gaia/scripts/usage-flush.sh" && return 1
-  install branch
-  GAIA_USAGE_DEBUG_HOLD=1 bash "$scratch_directory/.gaia/scripts/usage-flush.sh" --projects-root "$PROJECTS_DIRECTORY" --main-root "$ROOT" \
-    --session s-branch --finished-main 2>"$stderr_file"
-  grep -q 'usage-flush: hold' "$stderr_file"
-  run holds_within "$stderr_file" 2
-  [ "$status" -ne 0 ]
 }

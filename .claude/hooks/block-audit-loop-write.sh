@@ -7,6 +7,7 @@
 #     protected/audit-loop/                             state: history + allowance
 #     protected/checkpoint-override.json                the per-machine override
 #   <main>/.gaia/local/cache/shared/context/            per-session context readings
+#   <main>/.gaia/local/cache/shared/rate-limits.json    the shared rate-limit reading
 # The protected folder is guarded as a whole, so a file added to it later is
 # protected by its placement, with no edit to this guard.
 #
@@ -20,6 +21,10 @@
 # checkpoint is answered by the pinned AskUserQuestion or by a human typing
 # `audit-grant <n>` or `audit-accept`; both reach the state through a hook,
 # never a tool call.
+# The dispatch checkpoint trusts the shared rate-limit reading (the statusline
+# writes it through the CLI's library), so Claude writing it, or running the
+# CLI's write verb, would forge the figure every session acts on. That arm lives
+# in lib/rate-limits-guard.sh, sourced below.
 # The recorders read a hook payload on stdin, so a forged payload piped to one
 # from Bash would mint an answer: this guard denies executing them. The writer
 # hooks and the statusline run as their own processes, so they are not subject
@@ -35,7 +40,8 @@
 #     re-appended), so a linked worktree's `.gaia/local` symlink to the main
 #     checkout resolves to the real directory. Denied when the result is
 #     <main>/.gaia/local/protected or lies inside it, or lies inside
-#     <main>/.gaia/local/cache/shared/context/ (<main> from
+#     <main>/.gaia/local/cache/shared/context/, or is
+#     <main>/.gaia/local/cache/shared/rate-limits.json (<main> from
 #     gaia_resolve_main_root of the payload cwd), or when the literal path
 #     contains or ends in one of those spellings (catches a worktree spelling
 #     whose symlink target cannot be resolved). A sibling inside the folder
@@ -46,7 +52,9 @@
 #     remit.
 #   Bash / Monitor: .tool_input.command. Cheap pre-filter first: allowed unless
 #     the payload contains `audit-loop`, `local/protected` or
-#     `cache/shared/context`. For the protected folder the command must name
+#     `cache/shared/context`, `cache/shared/rate-limits.json`,
+#     `rate-limits-lib.sh`, or `rate-limits.sh` with `write` after it (never a
+#     bare `rate-limits`, so a read arms nothing). For the protected folder the command must name
 #     `.gaia/local/protected` followed by a slash, a delimiter or the end of
 #     the command: a path segment that merely starts with `protected` (a
 #     sibling such as `.gaia/local/protected-notes.md`) does not arm it. The
@@ -85,6 +93,14 @@
 #     state-reaper-session-start.sh. Naming them stays allowed, and so does
 #     running a bats suite whose path merely contains `state-reaper`, since the
 #     suite path is not one of those four file names.
+#   Shared rate-limit reading: the same quote-aware reading and unsound-reading
+#     fallback denies a command that redirects into the file or runs a write,
+#     move or delete verb over it (`>`, `rm`, `mv`, `cp`, `tee`, `ln`, `sed -i`
+#     and the like), and a command that EXECUTES `rate-limits.sh` with `write`
+#     as its first argument (command word, or the script argument of bash, sh,
+#     zsh, dash, ksh, `source`, `.` or `exec`; quoted or not). `rate-limits.sh
+#     read`, `cat` and `jq .` of the file, and `git add`, `git diff`,
+#     `shellcheck` or `bash -n` naming either script stay allowed.
 #
 # WHAT IS NOT COVERED (exotic spellings, outside the guarantee): a `cd` into a
 # guarded directory followed by relative names; `eval`, `bash -c`, `env`,
@@ -113,7 +129,14 @@
 # .gaia/scripts/context-checkpoint-lib.sh and calling gaia_context_write, directly or
 # through a wrapper such as .gaia/statusline/context-reading.sh's
 # gaia_statusline_write_context (such a reading stands until the next real
-# statusline render overwrites it).
+# statusline render overwrites it). The shared rate-limit reading has the same
+# residuals: a crafted payload piped into .gaia/statusline/gaia-statusline.sh,
+# sourcing .gaia/scripts/rate-limits-lib.sh and calling its writer (directly or
+# through .gaia/statusline/rate-limits-reading.sh), and a write spelled through
+# the wrappers above, a path in a variable or a `cd` followed by a relative
+# name; such a reading stands until a higher real reading or the window's reset.
+# With jq absent, a quoted `'write'` or a doubled space before it passes the
+# jq-absent refusal, which matches the unquoted single-space literal only.
 #
 # THE PARENT. Deleting the parent `.gaia/local` (which would take the state with
 # it) is block-rm-rf.sh's remit, not this guard's, and is not widened here.
@@ -144,7 +167,7 @@ fi
 # a payload without any is outside the remit with no
 # jq read at all. This is the path every ordinary Bash call takes.
 case "$payload" in
-  *audit-loop* | *state-reaper* | *local/protected* | *cache/shared/context*) ;;
+  *audit-loop* | *state-reaper* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits.json* | *rate-limits-lib.sh* | *rate-limits.sh*write*) ;;
   *) exit 0 ;;
 esac
 
@@ -157,7 +180,7 @@ if ! type gaia_require_jq >/dev/null 2>&1; then
   printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/jq-availability.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
-gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'local/protected' 'cache/shared/context'
+gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits.json' 'rate-limits-lib.sh' 'rate-limits.sh write'
 
 set +e
 # shellcheck source=lib/hook-payload.sh
@@ -172,15 +195,38 @@ fi
 gaia_hook_payload_read "$payload" || exit 0
 tool_name="$GAIA_HOOK_TOOL_NAME"
 
-DENY_STATE_MESSAGE="BLOCKED: block-audit-loop-write.sh: the audit loop state (<main>/.gaia/local/protected/audit-loop/) is written only by the audit loop hooks. Claude never writes, edits, moves or deletes it. A human answers a checkpoint through the pinned AskUserQuestion, or by typing a whole prompt that is exactly the audit-grant <n> or audit-accept line (see wiki/concepts/PR Merge Workflow.md, #### The branch checkpoint). A corrupt state file is repaired by a human from a terminal outside Claude Code."
-DENY_CONTEXT_MESSAGE="BLOCKED: block-audit-loop-write.sh: the context readings (<main>/.gaia/local/cache/shared/context/) are written by the statusline on each render, and the audit checkpoint trusts them. Claude never writes, edits, moves or deletes them. A human answers a checkpoint through the pinned AskUserQuestion, or by typing a whole prompt that is exactly the audit-grant <n> or audit-accept line (see wiki/concepts/PR Merge Workflow.md, #### The branch checkpoint)."
-DENY_OVERRIDE_MESSAGE="BLOCKED: block-audit-loop-write.sh: <main>/.gaia/local/protected/checkpoint-override.json is the per-machine audit checkpoint override, and only a human edits the override, by hand from outside Claude Code. Claude never creates, writes, edits, moves or deletes it. GAIA's writable per-machine opt-ins live in <main>/.gaia/local/settings.json, which this guard does not cover. A human answers a checkpoint through the pinned AskUserQuestion, or by typing a whole prompt that is exactly the audit-grant <n> or audit-accept line (see wiki/concepts/PR Merge Workflow.md, #### The branch checkpoint)."
-DENY_FOLDER_MESSAGE="BLOCKED: block-audit-loop-write.sh: <main>/.gaia/local/protected/ holds state the audit checkpoint trusts, and only hooks or a human write <main>/.gaia/local/protected/, by hand from a terminal outside Claude Code. Claude never creates, writes, edits, moves or deletes anything in it. A human answers a checkpoint through the pinned AskUserQuestion, or by typing a whole prompt that is exactly the audit-grant <n> or audit-accept line (see wiki/concepts/PR Merge Workflow.md, #### The branch checkpoint)."
-DENY_RECORDER_MESSAGE="BLOCKED: block-audit-loop-write.sh: audit-loop-grant.sh and audit-loop-ask-grant.sh run only as hooks. Claude never executes them from Bash or Monitor, because a piped payload would forge a checkpoint answer. A human answers a checkpoint through the pinned AskUserQuestion, or by typing a whole prompt that is exactly the audit-grant <n> or audit-accept line (see wiki/concepts/PR Merge Workflow.md, #### The branch checkpoint). Naming the files (git add, git diff, git grep -l, shellcheck, cat, bash -n) is allowed."
-DENY_REAPER_MESSAGE="BLOCKED: block-audit-loop-write.sh: the local-state reaper scripts (state-reaper.sh, state-reaper-lib.sh, state-reaper-classes.sh and state-reaper-session-start.sh) execute only as hooks. The reaper prunes <main>/.gaia/local/protected/, which Claude never writes or deletes, so Claude never executes them from Bash or Monitor. Naming the files (git add, git diff, git grep -l, shellcheck, cat, bash -n) and running a bats suite for them is allowed."
+# The shell reading, then the per-class libraries: each is fail-loud, so a
+# missing one refuses the call rather than letting its class through.
+set +e
+# shellcheck source=lib/audit-loop-write-scan.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/audit-loop-write-scan.sh" ] && . "$_jq_library_directory/audit-loop-write-scan.sh" 2>/dev/null
+set -e
+if ! type runs_guarded_script >/dev/null 2>&1; then
+  printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/audit-loop-write-scan.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
+  exit 2
+fi
+
+set +e
+# shellcheck source=lib/gate-input-paths-guard.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/gate-input-paths-guard.sh" ] && . "$_jq_library_directory/gate-input-paths-guard.sh" 2>/dev/null
+set -e
+if ! type guarded_class >/dev/null 2>&1; then
+  printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/gate-input-paths-guard.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
+  exit 2
+fi
+
+set +e
+# shellcheck source=lib/hook-only-scripts-guard.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/hook-only-scripts-guard.sh" ] && . "$_jq_library_directory/hook-only-scripts-guard.sh" 2>/dev/null
+set -e
+if ! type guarded_script_kind >/dev/null 2>&1; then
+  printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/hook-only-scripts-guard.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
+  exit 2
+fi
+
 DENY_BASH_TRIGGER="Trigger: the command names that path and either redirects into it or carries a write, move or delete verb (rm, mv, cp, tee, ln, touch, sed -i, an interpreter given -c or -e, and the like) outside quotes; in a command holding a heredoc, an unclosed quote, a command substitution inside double quotes, or a redirect target built from a variable or a glob, any redirect or such verb anywhere counts. A command that names the path only as quoted text and redirects elsewhere is allowed, so stage a note that mentions it with printf and a quoted string, no heredoc, or leave the literal path out of the command."
 
-# deny <state|override|folder|context|recorder|reaper> [bash]
+# deny <state|override|folder|context|recorder|reaper|rate-limits> [bash]
 deny() {
   local message
   case "$1" in
@@ -189,6 +235,7 @@ deny() {
     folder) message="$DENY_FOLDER_MESSAGE" ;;
     recorder) message="$DENY_RECORDER_MESSAGE" ;;
     reaper) message="$DENY_REAPER_MESSAGE" ;;
+    rate-limits) message="$DENY_RATE_LIMITS_MESSAGE" ;;
     *) message="$DENY_STATE_MESSAGE" ;;
   esac
   [ "${2-}" != bash ] || message="$message $DENY_BASH_TRIGGER"
@@ -202,362 +249,14 @@ deny() {
   exit 0
 }
 
-# protected_class <path> <folder>: print the class a path inside, or equal to,
-# the protected folder names. The audit loop state directory and the exact
-# override file name get their own message; every other occupant, a sibling
-# such as `protected/checkpoint-override.json.bak` included, is the folder.
-protected_class() {
-  case "$1" in
-    "$2/audit-loop" | "$2/audit-loop"/*) printf state ;;
-    "$2/checkpoint-override.json") printf override ;;
-    *) printf folder ;;
-  esac
-}
-
-# guarded_class <path>: print the guarded class a path spelling names, or
-# nothing. The protected arm pairs the folder itself with its children, so a
-# sibling beside it such as `.gaia/local/protected-notes.md` and the writable
-# opt-ins file `.gaia/local/settings.json` do not match.
-guarded_class() {
-  case "$1" in
-    */.gaia/local/protected/* | */.gaia/local/protected) protected_class "$1" "${1%%/.gaia/local/protected*}/.gaia/local/protected" ;;
-    */.gaia/local/cache/shared/context/* | */.gaia/local/cache/shared/context) printf context ;;
-  esac
-}
-
-# physical_path <path> <base-dir>: print the physically resolved absolute path.
-# Walks the segments; while each prefix exists as a directory it is entered with
-# `pwd -P` (symlinks and `..` resolved by the filesystem), and once a segment is
-# missing the rest is joined lexically with `..` collapsed.
-physical_path() {
-  local input_path="$1" base="$2" current_path path_component lexical=0 rest hops=0 target
-  case "$input_path" in
-    /*) ;;
-    *) input_path="$base/$input_path" ;;
-  esac
-  current_path=/
-  rest="${input_path#/}"
-  while [ -n "$rest" ]; do
-    case "$rest" in
-      */*)
-        path_component="${rest%%/*}"
-        rest="${rest#*/}"
-        ;;
-      *)
-        path_component="$rest"
-        rest=''
-        ;;
-    esac
-    case "$path_component" in
-      '' | .) continue ;;
-      ..)
-        if [ "$lexical" -eq 1 ]; then
-          current_path="${current_path%/*}"
-          [ -n "$current_path" ] || current_path=/
-        else
-          current_path=$( (cd "${current_path%/}/.." 2>/dev/null && pwd -P) ) || current_path=/
-        fi
-        continue
-        ;;
-    esac
-    if [ "$lexical" -eq 0 ] && [ -d "${current_path%/}/$path_component" ]; then
-      current_path=$( (cd "${current_path%/}/$path_component" 2>/dev/null && pwd -P) ) || { lexical=1; current_path="${current_path%/}/$path_component"; }
-    else
-      # A final component that is itself a symlink (a file link into the
-      # directory): follow it, a bounded number of hops.
-      if [ "$lexical" -eq 0 ] && [ -z "$rest" ] && [ -L "${current_path%/}/$path_component" ] && [ "$hops" -lt 8 ]; then
-        hops=$((hops + 1))
-        target=$(readlink "${current_path%/}/$path_component" 2>/dev/null) || target=''
-        if [ -n "$target" ]; then
-          physical_path "$target" "$current_path"
-          return 0
-        fi
-      fi
-      lexical=1
-      current_path="${current_path%/}/$path_component"
-    fi
-  done
-  printf '%s' "$current_path"
-}
-
-# has_write_verb <text>: rc 0 when the text carries a write, move or delete
-# verb.
-has_write_verb() {
-  local verbs_re sedi_re interpreter_re
-  verbs_re='(^|[[:space:];&|(`/])(rm|mv|cp|tee|ln|install|dd|touch|truncate|chmod|rsync|unlink|shred)([[:space:]]|$)'
-  sedi_re='(^|[[:space:];&|(`/])(sed|perl)[[:space:]]+(-[a-zA-Z]*i|--in-place)'
-  interpreter_re='(^|[[:space:];&|(`/])(python[0-9.]*|node|perl|ruby)[[:space:]]+-[a-zA-Z]*[ce]'
-  [[ "$1" =~ $verbs_re ]] && return 0
-  [[ "$1" =~ $sedi_re ]] && return 0
-  [[ "$1" =~ $interpreter_re ]] && return 0
-  return 1
-}
-
-# has_write_spelling <command>: rc 0 when the command carries a write, move or
-# delete spelling anywhere, quoted text included. The fallback reading.
-has_write_spelling() {
-  local scrub
-
-  # Drop redirects that cannot write a guarded path: descriptor duplication
-  # (2>&1, >&2) and a redirect to /dev/null.
-  scrub=$(sed -E 's/[0-9]*>&[0-9-]+//g; s/[0-9&]*>>?[[:space:]]*\/dev\/null//g' <<<"$1")
-
-  # A redirect to anything else.
-  case "$scrub" in
-    *'>'*) return 0 ;;
-  esac
-  has_write_verb "$scrub"
-}
-
-# shell_scan <text>: read the text the way the shell groups it, as far as this
-# guard needs. Sets
-#   SCAN_WORDS    the words, quotes removed: single and double quotes group, a
-#                 backslash outside single quotes escapes the next character,
-#                 unquoted blanks, newlines and ; & | ( ) ` end a word, and a
-#                 redirect target is not a word
-#   SCAN_TARGETS  each `>`, `>>`, `>|` or `>&` redirect target, one per line;
-#                 a descriptor duplication (2>&1, >&-) and a process
-#                 substitution `>(` have none
-#   SCAN_BARE     the text outside quotes and comments, each quoted span as
-#                 one Q
-#   SCAN_SOUND    0 when the text ends inside a quote, holds a heredoc, has a
-#                 command substitution or backtick inside double quotes, or
-#                 has a redirect target holding `$`, a backtick or a glob
-# An unquoted `#` that starts a word opens a comment to the end of the line.
-# A heredoc body is unquoted prose whose apostrophes this reading would take
-# for quotes, and a quoted substitution runs commands this reading takes for
-# text, so on SCAN_SOUND=0 the caller falls back to the whole-text reading.
-shell_scan() {
-  local scanned_text="$1" text_length=${#1} i=0 character open_quote='' word='' inword=0 want=0
-  SCAN_WORDS=()
-  SCAN_TARGETS=''
-  SCAN_BARE=''
-  SCAN_SOUND=1
-  while [ "$i" -le "$text_length" ]; do
-    character="${scanned_text:i:1}"
-    if [ -n "$open_quote" ] && [ "$i" -lt "$text_length" ]; then
-      if [ "$character" = "$open_quote" ]; then
-        open_quote=''
-      elif [ "$open_quote" = '"' ] && [ "$character" = "\\" ]; then
-        i=$((i + 1))
-        word="$word${scanned_text:i:1}"
-      else
-        if [ "$open_quote" = '"' ]; then
-          case "$character" in
-            '`') SCAN_SOUND=0 ;;
-            '$') [ "${scanned_text:i+1:1}" != '(' ] || SCAN_SOUND=0 ;;
-          esac
-        fi
-        word="$word$character"
-      fi
-      i=$((i + 1))
-      continue
-    fi
-    case "$character" in
-      "'" | '"')
-        open_quote="$character"
-        inword=1
-        SCAN_BARE="${SCAN_BARE}Q"
-        ;;
-      "\\")
-        i=$((i + 1))
-        word="$word${scanned_text:i:1}"
-        inword=1
-        SCAN_BARE="$SCAN_BARE$character${scanned_text:i:1}"
-        ;;
-      '' | ' ' | $'\t' | $'\n' | ';' | '&' | '|' | '(' | ')' | '`' | '>')
-        # The end of the text, or a character that ends the word in hand.
-        if [ "$inword" -eq 1 ]; then
-          if [ "$want" -eq 1 ]; then
-            SCAN_TARGETS="$SCAN_TARGETS$word"$'\n'
-            want=0
-            # A target built from a variable, a substitution or a glob can
-            # land on a path the command names elsewhere.
-            case "$word" in
-              *'$'* | *'*'* | *'?'* | *'['* | *'`'*) SCAN_SOUND=0 ;;
-            esac
-          elif [ "$character" = '>' ] && [[ "$word" =~ ^[0-9]+$ ]]; then
-            : # the descriptor number of a redirect such as 2>, not a word
-          else
-            SCAN_WORDS[${#SCAN_WORDS[@]}]="$word"
-          fi
-        fi
-        word=''
-        inword=0
-        SCAN_BARE="$SCAN_BARE$character"
-        if [ "$character" = '>' ]; then
-          case "${scanned_text:i+1:1}" in
-            '>' | '|')
-              i=$((i + 1))
-              SCAN_BARE="$SCAN_BARE${scanned_text:i:1}"
-              ;;
-          esac
-          if [ "${scanned_text:i+1:1}" = '&' ]; then
-            i=$((i + 1))
-            SCAN_BARE="$SCAN_BARE&"
-            case "${scanned_text:i+1:1}" in
-              [0-9-]) ;;
-              *) want=1 ;;
-            esac
-          elif [ "${scanned_text:i+1:1}" != '(' ]; then
-            want=1
-          fi
-        fi
-        ;;
-      '#')
-        if [ "$inword" -eq 1 ]; then
-          word="$word$character"
-          SCAN_BARE="$SCAN_BARE$character"
-        else
-          # A comment runs to the end of the line; its apostrophes are not
-          # quotes. The newline itself is read next, as a separator.
-          while [ "$((i + 1))" -lt "$text_length" ] && [ "${scanned_text:i+1:1}" != $'\n' ]; do
-            i=$((i + 1))
-          done
-        fi
-        ;;
-      '<')
-        # `<<<` is a here-string; a bare `<<` opens a heredoc.
-        if [ "${scanned_text:i+1:2}" = '<<' ]; then
-          i=$((i + 2))
-          word="$word<<"
-          SCAN_BARE="$SCAN_BARE<<"
-        elif [ "${scanned_text:i+1:1}" = '<' ]; then
-          SCAN_SOUND=0
-        fi
-        word="$word$character"
-        inword=1
-        SCAN_BARE="$SCAN_BARE$character"
-        ;;
-      *)
-        word="$word$character"
-        inword=1
-        SCAN_BARE="$SCAN_BARE$character"
-        ;;
-    esac
-    i=$((i + 1))
-  done
-  [ -z "$open_quote" ] || SCAN_SOUND=0
-  return 0
-}
-
-# writes_named <command> <names-regex>: rc 0 when the command writes, moves or
-# deletes what the regex names: a redirect whose target names it, or a write
-# verb outside quotes in a command that names it anywhere. On an unsound
-# reading (see shell_scan), any redirect or verb anywhere counts.
-writes_named() {
-  local target
-  [ "$SCAN_SOUND" -eq 1 ] || {
-    has_write_spelling "$1"
-    return
-  }
-  while IFS= read -r target; do
-    [ -n "$target" ] || continue
-    [[ "$target" =~ $2 ]] && return 0
-  done <<<"$SCAN_TARGETS"
-  has_write_verb "$SCAN_BARE"
-}
-
-# guarded_script_kind <word>: rc 0 when the word's file name is one of the two
-# recorders or one of the four reaper scripts; sets SCRIPT_KIND to the deny
-# class (recorder or reaper).
-guarded_script_kind() {
-  case "$1" in
-    audit-loop-grant.sh | */audit-loop-grant.sh | audit-loop-ask-grant.sh | */audit-loop-ask-grant.sh)
-      SCRIPT_KIND=recorder
-      return 0
-      ;;
-    state-reaper.sh | */state-reaper.sh | state-reaper-lib.sh | */state-reaper-lib.sh | state-reaper-classes.sh | */state-reaper-classes.sh | state-reaper-session-start.sh | */state-reaper-session-start.sh)
-      SCRIPT_KIND=reaper
-      return 0
-      ;;
-  esac
-  return 1
-}
-
-# words_run_guarded_script: rc 0 when the simple command held in the `words`
-# array executes a recorder or a reaper script (command word, or script
-# argument of a shell or `source`/`.`/`exec`).
-words_run_guarded_script() {
-  local count=${#words[@]} word_index=0 word base syntax_check
-
-  # Skip leading NAME=value words, `!`, and `exec`.
-  while [ "$word_index" -lt "$count" ]; do
-    case "${words[$word_index]}" in
-      [A-Za-z_]*=* | '!' | exec) word_index=$((word_index + 1)) ;;
-      *) break ;;
-    esac
-  done
-  [ "$word_index" -lt "$count" ] || return 1
-
-  word="${words[$word_index]}"
-  guarded_script_kind "$word" && return 0
-  base="${word##*/}"
-  case "$base" in
-    bash | sh | zsh | dash | ksh | source | .)
-      syntax_check=0
-      word_index=$((word_index + 1))
-      while [ "$word_index" -lt "$count" ]; do
-        word="${words[$word_index]}"
-        case "$word" in
-          -n) syntax_check=1 ;;
-          -o | +o) word_index=$((word_index + 1)) ;;
-          -* | +*) ;;
-          *)
-            if guarded_script_kind "$word" && [ "$syntax_check" -eq 0 ]; then
-              return 0
-            fi
-            break
-            ;;
-        esac
-        word_index=$((word_index + 1))
-      done
-      ;;
-  esac
-  return 1
-}
-
-# runs_guarded_script <command>: rc 0 when a simple command in the line
-# executes a recorder or a reaper script, with SCRIPT_KIND naming which. Each
-# segment is read twice, as the shell groups its quotes (a
-# quoted path with a space stays one word) and as blank-separated words with
-# their quotes stripped (a quote the segment split cut in half), and either
-# reading executing a recorder counts.
-runs_guarded_script() {
-  local command_line="$1" segments segment words word_index count word
-  case "$command_line" in
-    *audit-loop-grant.sh* | *audit-loop-ask-grant.sh* | *state-reaper*) ;;
-    *) return 1 ;;
-  esac
-  segments="${command_line//\$\(/$'\n'}"
-  segments=$(printf '%s' "$segments" | tr ';&|`()' '\n')
-  while IFS= read -r segment; do
-    words=()
-    read -r -a words <<<"$segment" || true
-    count=${#words[@]}
-    [ "$count" -gt 0 ] || continue
-    word_index=0
-    while [ "$word_index" -lt "$count" ]; do
-      word="${words[$word_index]//\"/}"
-      word="${word//\'/}"
-      words[word_index]="$word"
-      word_index=$((word_index + 1))
-    done
-    words_run_guarded_script && return 0
-
-    shell_scan "$segment"
-    words=()
-    count=${#SCAN_WORDS[@]}
-    word_index=0
-    while [ "$word_index" -lt "$count" ]; do
-      words[word_index]="${SCAN_WORDS[$word_index]}"
-      word_index=$((word_index + 1))
-    done
-    [ "$count" -gt 0 ] || continue
-    words_run_guarded_script && return 0
-  done <<<"$segments"
-  return 1
-}
+set +e
+# shellcheck source=lib/rate-limits-guard.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/rate-limits-guard.sh" ] && . "$_jq_library_directory/rate-limits-guard.sh" 2>/dev/null
+set -e
+if ! type gaia_rate_limits_guard_path >/dev/null 2>&1; then
+  printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/rate-limits-guard.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
+  exit 2
+fi
 
 case "$tool_name" in
   Edit | Write | MultiEdit)
@@ -592,6 +291,7 @@ case "$tool_name" in
     # whose main root could not be resolved).
     class=$(guarded_class "$resolved")
     [ -z "$class" ] || deny "$class"
+    ! gaia_rate_limits_guard_path "$file_path" "$resolved" || deny rate-limits
     exit 0
     ;;
 
@@ -619,6 +319,9 @@ case "$tool_name" in
     fi
     if [[ "$command_line" =~ $context_names_re ]] && writes_named "$command_line" "$context_names_re"; then
       deny context bash
+    fi
+    if gaia_rate_limits_guard_runs_write "$command_line" || gaia_rate_limits_guard_writes_file "$command_line"; then
+      deny rate-limits bash
     fi
     exit 0
     ;;

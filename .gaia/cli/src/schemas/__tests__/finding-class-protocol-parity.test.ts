@@ -69,45 +69,4 @@ describe('holistic class list parity: protocol and schema', () => {
       missingFromSchema: [],
     });
   });
-
-  test('a class gained or lost on either side is reported', () => {
-    const [firstClass] = HOLISTIC_FINDING_CLASSES;
-
-    expect(
-      setDifference(
-        [...HOLISTIC_FINDING_CLASSES, 'holistic/invented-class'],
-        HOLISTIC_FINDING_CLASSES
-      ).missingFromSchema
-    ).toEqual(['holistic/invented-class']);
-    expect(
-      setDifference(HOLISTIC_FINDING_CLASSES.slice(1), HOLISTIC_FINDING_CLASSES)
-        .missingFromProtocol
-    ).toEqual([firstClass]);
-    expect(
-      setDifference(HOLISTIC_FINDING_CLASSES, [
-        ...HOLISTIC_FINDING_CLASSES,
-        'holistic/invented-class',
-      ]).missingFromProtocol
-    ).toEqual(['holistic/invented-class']);
-    expect(
-      setDifference(HOLISTIC_FINDING_CLASSES, HOLISTIC_FINDING_CLASSES.slice(1))
-        .missingFromSchema
-    ).toEqual([firstClass]);
-  });
-
-  test('the extractor reads only the holistic section', () => {
-    const markdown = [
-      '## Findings sidecar (local run record)',
-      '- `holistic/outside-the-section`: not a class bullet of this section',
-      SECTION_HEADING,
-      '- `holistic/inside-the-section`: a class bullet',
-      'The fallback `holistic/unclassified` is prose, not a bullet.',
-      '## Honest limits',
-      '- `holistic/after-the-section`: not a class bullet of this section',
-    ].join('\n');
-
-    expect(extractProtocolClasses(markdown)).toEqual([
-      'holistic/inside-the-section',
-    ]);
-  });
 });

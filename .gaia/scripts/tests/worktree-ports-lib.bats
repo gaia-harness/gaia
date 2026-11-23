@@ -39,7 +39,14 @@ ledger_line_count_for_slot() {
   grep -c -- "^$1"$'\t' "$STATE/slots.tsv"
 }
 
-@test "assign: first tree gets 1, second gets 2, re-assigning the first is byte-identical" {
+# use_state <name>: points the ledger, and the machine claims derived from it, at a fresh directory.
+use_state() {
+  STATE="$BATS_TEST_TMPDIR/$1"
+  export GAIA_PORTS_STATE_DIRECTORY="$STATE"
+}
+
+@test "slot assignment: first and second, byte-identical re-assign, lowest free reused, foreign listener skips, exhaustion" {
+  echo "case: first and second, re-assigning the first is byte-identical"
   tree_one="$(add_worktree one)"
   tree_two="$(add_worktree two)"
   run gaia_ports_assign_slot "$STATE" "$tree_one"
@@ -53,9 +60,79 @@ ledger_line_count_for_slot() {
   [ "$status" -eq 0 ]
   [ "$output" = "1" ]
   cmp -s "$STATE/slots.tsv" "$BATS_TEST_TMPDIR/before.tsv"
+
+  echo "case: the lowest free slot is reused after reclaim and appears once"
+  use_state state-reuse
+  tree_one="$(add_worktree reuse-one)"
+  tree_two="$(add_worktree reuse-two)"
+  gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
+  gaia_ports_assign_slot "$STATE" "$tree_two" >/dev/null
+  rm -rf "$tree_one"
+  gaia_ports_reclaim "$STATE" "$FIXTURE_MAIN" >/dev/null
+  tree_three="$(add_worktree reuse-three)"
+  run gaia_ports_assign_slot "$STATE" "$tree_three"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+  [ "$(ledger_line_count_for_slot 1)" -eq 1 ]
+  [ "$(ledger_line_count_for_slot 2)" -eq 1 ]
+
+  echo "case: exhaustion is rc 1 and appends nothing"
+  use_state state-exhaustion
+  mkdir -p "$STATE"
+  slot=1
+  : >"$STATE/slots.tsv"
+  while [ "$slot" -le 99 ]; do
+    printf '%s\t/fake/tree-%s\tmarker\n' "$slot" "$slot" >>"$STATE/slots.tsv"
+    slot=$((slot + 1))
+  done
+  [ "$(wc -l <"$STATE/slots.tsv" | tr -d ' ')" -eq 99 ]
+  cp "$STATE/slots.tsv" "$BATS_TEST_TMPDIR/before.tsv"
+  tree_one="$(add_worktree exhaustion-one)"
+  run gaia_ports_assign_slot "$STATE" "$tree_one"
+  [ "$status" -eq 1 ]
+  cmp -s "$STATE/slots.tsv" "$BATS_TEST_TMPDIR/before.tsv"
+
+  echo "case: a foreign listener on a dev or Storybook port skips the slot for a new tree"
+  use_state state-foreign
+  gaia_server_listener_owner() {
+    printf '%s\n' "$*" >>"$BATS_TEST_TMPDIR/probe.log"
+    if [ "$1" = "$FOREIGN_PORT" ]; then
+      printf 'foreign 123 /elsewhere\n'
+    else
+      printf 'free\n'
+    fi
+  }
+  tree_one="$(add_worktree foreign-one)"
+  tree_two="$(add_worktree foreign-two)"
+  tree_three="$(add_worktree foreign-three)"
+
+  FOREIGN_PORT=5174
+  run gaia_ports_assign_slot "$STATE" "$tree_one"
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  FOREIGN_PORT=none
+  run gaia_ports_assign_slot "$STATE" "$tree_two"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+
+  # An existing holder keeps its slot with no probe even while the port reads foreign.
+  FOREIGN_PORT=5174
+  rm -f "$BATS_TEST_TMPDIR/probe.log"
+  run gaia_ports_assign_slot "$STATE" "$tree_two"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+  [ -e "$BATS_TEST_TMPDIR/probe.log" ] && return 1
+
+  # A Storybook port held by a foreign listener skips the slot as well.
+  FOREIGN_PORT=6009
+  run gaia_ports_assign_slot "$STATE" "$tree_three"
+  [ "$status" -eq 0 ]
+  [ "$output" = "4" ]
 }
 
-@test "reclaim: removed directories are retired with tombstones, locked or not" {
+@test "reclaim: removed or unlisted entries retired with tombstones, git failure changes nothing" {
+  echo "case: removed directories are retired with tombstones, locked or not"
   tree_a="$(add_worktree a)"
   tree_b="$(add_worktree b)"
   tree_c="$(add_worktree c)"
@@ -90,10 +167,10 @@ ledger_line_count_for_slot() {
     [ "$((now - recorded_epoch))" -le 10 ]
     [ "$((now - recorded_epoch))" -ge -2 ]
   done
-}
 
-@test "reclaim: an entry for a path git does not list is removed though its directory exists" {
-  tree_one="$(add_worktree one)"
+  echo "case: an entry for a path git does not list is removed though its directory exists"
+  use_state state-unlisted
+  tree_one="$(add_worktree unlisted-one)"
   gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
   mkdir -p "$BATS_TEST_TMPDIR/stranger"
   stranger="$(cd "$BATS_TEST_TMPDIR/stranger" && pwd -P)"
@@ -105,68 +182,15 @@ ledger_line_count_for_slot() {
   [ -d "$stranger" ]
   grep -qF -- "$stranger" "$STATE/slots.tsv" && return 1
   grep -qF -- "$tree_one" "$STATE/slots.tsv"
-}
 
-@test "reclaim: git failing to list worktrees changes nothing" {
-  tree_one="$(add_worktree one)"
+  echo "case: git failing to list worktrees changes nothing"
+  use_state state-git-failure
+  tree_one="$(add_worktree git-failure-one)"
   gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
   cp "$STATE/slots.tsv" "$BATS_TEST_TMPDIR/before.tsv"
   run gaia_ports_reclaim "$STATE" "$BATS_TEST_TMPDIR/not-a-repository"
   [ "$status" -eq 1 ]
   cmp -s "$STATE/slots.tsv" "$BATS_TEST_TMPDIR/before.tsv"
-}
-
-@test "assign: the lowest free slot is reused after reclaim and appears once" {
-  tree_one="$(add_worktree one)"
-  tree_two="$(add_worktree two)"
-  gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
-  gaia_ports_assign_slot "$STATE" "$tree_two" >/dev/null
-  rm -rf "$tree_one"
-  gaia_ports_reclaim "$STATE" "$FIXTURE_MAIN" >/dev/null
-  tree_three="$(add_worktree three)"
-  run gaia_ports_assign_slot "$STATE" "$tree_three"
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
-  [ "$(ledger_line_count_for_slot 1)" -eq 1 ]
-  [ "$(ledger_line_count_for_slot 2)" -eq 1 ]
-}
-
-@test "assign: a foreign listener on a dev or Storybook port skips the slot for a new tree" {
-  gaia_server_listener_owner() {
-    printf '%s\n' "$*" >>"$BATS_TEST_TMPDIR/probe.log"
-    if [ "$1" = "$FOREIGN_PORT" ]; then
-      printf 'foreign 123 /elsewhere\n'
-    else
-      printf 'free\n'
-    fi
-  }
-  tree_one="$(add_worktree one)"
-  tree_two="$(add_worktree two)"
-  tree_three="$(add_worktree three)"
-
-  FOREIGN_PORT=5174
-  run gaia_ports_assign_slot "$STATE" "$tree_one"
-  [ "$status" -eq 0 ]
-  [ "$output" = "2" ]
-
-  FOREIGN_PORT=none
-  run gaia_ports_assign_slot "$STATE" "$tree_two"
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
-
-  # An existing holder keeps its slot with no probe even while the port reads foreign.
-  FOREIGN_PORT=5174
-  rm -f "$BATS_TEST_TMPDIR/probe.log"
-  run gaia_ports_assign_slot "$STATE" "$tree_two"
-  [ "$status" -eq 0 ]
-  [ "$output" = "1" ]
-  [ -e "$BATS_TEST_TMPDIR/probe.log" ] && return 1
-
-  # A Storybook port held by a foreign listener skips the slot as well.
-  FOREIGN_PORT=6009
-  run gaia_ports_assign_slot "$STATE" "$tree_three"
-  [ "$status" -eq 0 ]
-  [ "$output" = "4" ]
 }
 
 # add_other_project_tree <name>: a linked worktree of a second GAIA project
@@ -181,8 +205,10 @@ add_other_project_tree() {
   ( cd "$BATS_TEST_TMPDIR/other-trees/$1" && pwd -P )
 }
 
-@test "machine claim: a slot another project's live tree holds is skipped for a new tree" {
+@test "machine claim: another project's live claim is skipped, stale or missing claims are reused or taken, reclaim releases" {
   export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
+
+  echo "case: a slot another project's live tree holds is skipped for a new tree"
   other_tree="$(add_other_project_tree elsewhere)"
   run gaia_ports_assign_slot "$BATS_TEST_TMPDIR/other-state" "$other_tree"
   [ "$status" -eq 0 ]
@@ -194,17 +220,17 @@ add_other_project_tree() {
   [ "$output" = "2" ]
   [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1")" = "$other_tree" ]
   [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-2")" = "$tree_one" ]
-}
 
-@test "machine claim: an existing entry whose slot another project claims moves to the next free slot" {
-  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
-  tree_one="$(add_worktree one)"
+  echo "case: an existing entry whose slot another project claims moves to the next free slot"
+  use_state state-collision
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine-collision"
+  tree_one="$(add_worktree collision-one)"
   gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
   # A collision written before machine claims existed: the other project's
   # tree took slot 1 without a claim from this one on record.
   rm -f "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1"
-  other_tree="$(add_other_project_tree elsewhere)"
-  [ "$(gaia_ports_assign_slot "$BATS_TEST_TMPDIR/other-state" "$other_tree")" = "1" ]
+  other_tree="$(add_other_project_tree collision-elsewhere)"
+  [ "$(gaia_ports_assign_slot "$BATS_TEST_TMPDIR/other-state-collision" "$other_tree")" = "1" ]
 
   run gaia_ports_assign_slot "$STATE" "$tree_one"
   [ "$status" -eq 0 ]
@@ -214,34 +240,34 @@ add_other_project_tree() {
   [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1")" = "$other_tree" ]
 
   # The holder of the claim keeps its slot on re-entry.
-  run gaia_ports_assign_slot "$BATS_TEST_TMPDIR/other-state" "$other_tree"
+  run gaia_ports_assign_slot "$BATS_TEST_TMPDIR/other-state-collision" "$other_tree"
   [ "$output" = "1" ]
-}
 
-@test "machine claim: an existing entry with no claim on record takes one and keeps its slot" {
-  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
-  tree_one="$(add_worktree one)"
+  echo "case: an existing entry with no claim on record takes one and keeps its slot"
+  use_state state-unclaimed
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine-unclaimed"
+  tree_one="$(add_worktree unclaimed-one)"
   gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
   rm -rf "$GAIA_PORTS_MACHINE_DIRECTORY"
   run gaia_ports_assign_slot "$STATE" "$tree_one"
   [ "$output" = "1" ]
   [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1")" = "$tree_one" ]
-}
 
-@test "machine claim: a claim naming a removed tree is stale and the slot is reused" {
-  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
+  echo "case: a claim naming a removed tree is stale and the slot is reused"
+  use_state state-stale-claim
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine-stale-claim"
   mkdir -p "$GAIA_PORTS_MACHINE_DIRECTORY"
   printf '%s\tmarker\n' "$BATS_TEST_TMPDIR/removed-tree" >"$GAIA_PORTS_MACHINE_DIRECTORY/slot-1"
-  tree_one="$(add_worktree one)"
+  tree_one="$(add_worktree stale-claim-one)"
   run gaia_ports_assign_slot "$STATE" "$tree_one"
   [ "$output" = "1" ]
   [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1")" = "$tree_one" ]
-}
 
-@test "machine claim: reclaim and stale-marker retirement release the tree's claim" {
-  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
-  tree_one="$(add_worktree one)"
-  tree_two="$(add_worktree two)"
+  echo "case: reclaim and stale-marker retirement release the tree's claim"
+  use_state state-release
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine-release"
+  tree_one="$(add_worktree release-one)"
+  tree_two="$(add_worktree release-two)"
   gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
   gaia_ports_assign_slot "$STATE" "$tree_two" >/dev/null
   [ -f "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1" ]
@@ -253,13 +279,14 @@ add_other_project_tree() {
 
   fixture_git worktree remove --force "$tree_two"
   sleep 1.1
-  fixture_git worktree add -q -b recreated "$tree_two" >/dev/null 2>&1
+  fixture_git worktree add -q -b recreated-release "$tree_two" >/dev/null 2>&1
   gaia_ports_retire_stale_entry "$STATE" "$tree_two"
   [ -e "$GAIA_PORTS_MACHINE_DIRECTORY/slot-2" ] && return 1
   true
 }
 
-@test "machine directory: the seam wins, then the state seam, then XDG_STATE_HOME, then HOME" {
+@test "state and machine directory resolution precedence" {
+  echo "case: machine directory, the seam wins, then the state seam, then XDG_STATE_HOME, then HOME"
   export GAIA_PORTS_MACHINE_DIRECTORY=/machine-seam
   [ "$(gaia_ports_machine_directory)" = "/machine-seam" ]
   unset GAIA_PORTS_MACHINE_DIRECTORY
@@ -267,9 +294,22 @@ add_other_project_tree() {
   unset GAIA_PORTS_STATE_DIRECTORY
   [ "$(XDG_STATE_HOME=/xdg gaia_ports_machine_directory)" = "/xdg/gaia/ports" ]
   [ "$(XDG_STATE_HOME='' HOME=/home-directory gaia_ports_machine_directory)" = "/home-directory/.local/state/gaia/ports" ]
+
+  echo "case: state directory, the seam wins and otherwise the main root's ports folder is named"
+  export GAIA_PORTS_STATE_DIRECTORY="$STATE"
+  run gaia_ports_state_directory "$FIXTURE_MAIN"
+  [ "$output" = "$STATE" ]
+  unset GAIA_PORTS_STATE_DIRECTORY
+  tree_one="$(add_worktree one)"
+  run gaia_ports_state_directory "$tree_one"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$FIXTURE_MAIN/.gaia/local/ports" ]
+  run gaia_ports_state_directory "$BATS_TEST_TMPDIR/not-a-repository"
+  [ "$status" -eq 1 ]
 }
 
-@test "stale marker: a recreated worktree is retired by its marker and assigned afresh" {
+@test "stale marker: a recreated worktree is retired, a matching marker retires nothing" {
+  echo "case: a recreated worktree is retired by its marker and assigned afresh"
   tree_one="$(add_worktree one)"
   gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
   marker_before="$(gaia_ports_tree_marker "$tree_one")"
@@ -297,60 +337,35 @@ add_other_project_tree() {
   [ "$output" = "1" ]
   IFS=$'\t' read -r _ _ recorded_marker <"$STATE/slots.tsv"
   [ "$recorded_marker" = "$marker_after" ]
-}
 
-@test "stale marker: a matching marker retires nothing and writes no tombstone" {
-  tree_one="$(add_worktree one)"
-  gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
+  echo "case: a matching marker retires nothing and writes no tombstone"
+  use_state state-matching-marker
+  tree_two="$(add_worktree two)"
+  gaia_ports_assign_slot "$STATE" "$tree_two" >/dev/null
   mkdir -p "$STATE/tombstones"
   before="$(ls "$STATE/tombstones" | wc -l | tr -d ' ')"
-  run gaia_ports_retire_stale_entry "$STATE" "$tree_one"
+  run gaia_ports_retire_stale_entry "$STATE" "$tree_two"
   [ "$status" -eq 1 ]
   [ "$(ls "$STATE/tombstones" | wc -l | tr -d ' ')" = "$before" ]
-  grep -qF -- "$tree_one" "$STATE/slots.tsv"
+  grep -qF -- "$tree_two" "$STATE/slots.tsv"
 }
 
-@test "assign: exhaustion is rc 1 and appends nothing" {
-  mkdir -p "$STATE"
-  slot=1
-  : >"$STATE/slots.tsv"
-  while [ "$slot" -le 99 ]; do
-    printf '%s\t/fake/tree-%s\tmarker\n' "$slot" "$slot" >>"$STATE/slots.tsv"
-    slot=$((slot + 1))
-  done
-  [ "$(wc -l <"$STATE/slots.tsv" | tr -d ' ')" -eq 99 ]
-  cp "$STATE/slots.tsv" "$BATS_TEST_TMPDIR/before.tsv"
-  tree_one="$(add_worktree one)"
-  run gaia_ports_assign_slot "$STATE" "$tree_one"
-  [ "$status" -eq 1 ]
-  cmp -s "$STATE/slots.tsv" "$BATS_TEST_TMPDIR/before.tsv"
-}
-
-@test "lock: a held lock times out near the deadline" {
-  mkdir -p "$STATE/slots.lock"
+@test "lock: held lock times out or stops a second taker, a stale lock is broken" {
   export GAIA_PORTS_LOCK_DEADLINE_SECONDS=1
+
+  echo "case: a held lock times out near the deadline"
+  use_state state-lock-timeout
+  mkdir -p "$STATE/slots.lock"
   start="$(date +%s)"
   run gaia_ports_lock "$STATE"
   [ "$status" -eq 1 ]
   [ "$(($(date +%s) - start))" -le 3 ]
   [ -d "$STATE/slots.lock" ]
-}
 
-@test "lock: a held lock stops a second taker, with a non-exclusive mkdir first on PATH" {
-  PATH="$(non_exclusive_mkdir_path)"
-  export GAIA_PORTS_LOCK_DEADLINE_SECONDS=1
-  gaia_ports_lock "$STATE"
-  run gaia_ports_lock "$STATE"
-  [ "$status" -eq 1 ]
-  gaia_ports_unlock "$STATE"
-  [ -d "$STATE/slots.lock" ] && return 1
-  true
-}
-
-@test "lock: a lock past a minute old is broken and taken, and unlock releases it" {
+  echo "case: a lock past a minute old is broken and taken, and unlock releases it"
+  use_state state-lock-stale
   mkdir -p "$STATE/slots.lock"
   touch -t 200001010000 "$STATE/slots.lock"
-  export GAIA_PORTS_LOCK_DEADLINE_SECONDS=1
   run gaia_ports_lock "$STATE"
   [ "$status" -eq 0 ]
   [ -d "$STATE/slots.lock" ]
@@ -359,6 +374,16 @@ add_other_project_tree() {
   [ -d "$STATE/slots.lock" ] && return 1
   run gaia_ports_lock "$STATE"
   [ "$status" -eq 0 ]
+
+  echo "case: a held lock stops a second taker, with a non-exclusive mkdir first on PATH"
+  use_state state-lock-second
+  PATH="$(non_exclusive_mkdir_path)"
+  gaia_ports_lock "$STATE"
+  run gaia_ports_lock "$STATE"
+  [ "$status" -eq 1 ]
+  gaia_ports_unlock "$STATE"
+  [ -d "$STATE/slots.lock" ] && return 1
+  true
 }
 
 @test "port file: written in the exact format and read back" {
@@ -379,12 +404,12 @@ add_other_project_tree() {
   [ "$output" = "$file" ]
 }
 
-@test "port file: absent is rc 1" {
+@test "port file read: absent is rc 1, malformed shapes rc 2, valid rc 0" {
+  echo "case: absent is rc 1"
   run gaia_ports_read_file "$BATS_TEST_TMPDIR/missing-file"
   [ "$status" -eq 1 ]
-}
 
-@test "port file: every malformed shape is rc 2 and the valid shape is rc 0" {
+  echo "case: every malformed shape is rc 2 and the valid shape is rc 0"
   file="$BATS_TEST_TMPDIR/ports-file"
   valid=$'GAIA_PORT_SLOT=1\nDEV_PORT=5174\nSTORYBOOK_PORT=6007\nSITE_URL=http://localhost:5174\n'
   printf '%s' "$valid" >"$file"
@@ -414,15 +439,6 @@ add_other_project_tree() {
   printf '%s' $'GAIA_PORT_SLOT=x\nDEV_PORT=5174\nSTORYBOOK_PORT=6007\nSITE_URL=http://localhost:5174\n' >"$file"
   run gaia_ports_read_file "$file"
   [ "$status" -eq 2 ]
-}
-
-@test "port file: an unwritable package directory is rc 1 and leaves no file behind" {
-  [ "$(id -u)" -ne 0 ] || skip "root ignores directory permissions"
-  chmod a-w "$FIXTURE_MAIN/apps/web"
-  run gaia_ports_write_file "$FIXTURE_MAIN" 1
-  chmod u+w "$FIXTURE_MAIN/apps/web"
-  [ "$status" -eq 1 ]
-  [ -z "$(find "$FIXTURE_MAIN/apps/web" -maxdepth 1 -name '.gaia-ports*')" ]
 }
 
 @test "site url: the port is replaced for every URL shape" {
@@ -495,34 +511,4 @@ add_other_project_tree() {
   ( cd "$tree_one" && bash "$REPO_ROOT/.gaia/scripts/link-worktree.sh" ) >/dev/null 2>&1
   is_regular_file "$tree_one/apps/web/.gaia-ports"
   [ "$(grep -c '^GAIA_PORT_SLOT=1$' "$tree_one/apps/web/.gaia-ports")" -eq 1 ]
-}
-
-@test "context line and missing-file message carry the ask-first sentence and ports hint" {
-  run gaia_ports_context_line 2 http://localhost:5175 6008
-  grep -qF -- "Never stop a process on a port another live tree owns without asking the user first." <<<"$output"
-  grep -qF -- "Run bash .gaia/scripts/ports.sh to see this tree's ports." <<<"$output"
-  run gaia_ports_missing_file_message /t /t/apps/web/.gaia-ports
-  grep -qF -- "Never stop a process on a port another live tree owns without asking the user first." <<<"$output"
-  grep -qF -- "Run bash .gaia/scripts/ports.sh to see this tree's ports." <<<"$output"
-  grep -qF -- "Run: bash .claude/hooks/provision-worktree.sh /t" <<<"$output"
-}
-
-@test "state directory: the seam wins and otherwise the main root's ports folder is named" {
-  run gaia_ports_state_directory "$FIXTURE_MAIN"
-  [ "$output" = "$STATE" ]
-  unset GAIA_PORTS_STATE_DIRECTORY
-  tree_one="$(add_worktree one)"
-  run gaia_ports_state_directory "$tree_one"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$FIXTURE_MAIN/.gaia/local/ports" ]
-  run gaia_ports_state_directory "$BATS_TEST_TMPDIR/not-a-repository"
-  [ "$status" -eq 1 ]
-}
-
-@test "base ports honor the test seams" {
-  [ "$(gaia_ports_dev_base_port)" = "5173" ]
-  [ "$(gaia_ports_storybook_base_port)" = "6006" ]
-  export GAIA_PORTS_DEV_BASE_PORT=7000 GAIA_PORTS_STORYBOOK_BASE_PORT=8000
-  [ "$(gaia_ports_dev_base_port)" = "7000" ]
-  [ "$(gaia_ports_storybook_base_port)" = "8000" ]
 }

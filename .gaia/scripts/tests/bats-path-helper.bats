@@ -32,27 +32,20 @@ setup() {
   . "$REPO_ROOT/.gaia/tests/helpers/path.sh"
 }
 
-@test "path_shim_without refuses rather than writing outside a bats per-test temp dir" {
+@test "path helpers refuse rather than writing outside a bats per-test temp dir" {
   # Sourced outside a test there is nowhere sanctioned to build the shim, and
   # picking one anyway would write where no caller asked. Asserted on the
-  # diagnostic rather than on the status alone: a non-zero status is also what a
-  # failed mkdir at an unwritable guessed path returns, so the status cannot
+  # diagnostic rather than on the status alone: a non-zero status is also what
+  # a failed mkdir at an unwritable guessed path returns, so the status cannot
   # tell the refusal apart from the accident it exists to replace.
   local diagnostic_output exit_status=0
   diagnostic_output="$(BATS_TEST_TMPDIR="" path_shim_without uvx 2>&1)" || exit_status=$?
-  [ "$exit_status" -ne 0 ]
-  grep -qF 'BATS_TEST_TMPDIR is unset' <<<"$diagnostic_output"
-}
-
-@test "path_allowlist refuses rather than writing outside a bats per-test temp dir" {
-  # Same refusal, and the same reason, as path_shim_without's: the directory is
-  # torn down with the test that built it, so outside a test there is nowhere
-  # sanctioned to build one. Asserted on the diagnostic rather than the status
-  # alone, because a failed mkdir at a guessed path returns non-zero too.
-  local diagnostic_output exit_status=0
+  [ "$exit_status" -ne 0 ] || { echo "path_shim_without: status 0"; return 1; }
+  grep -qF 'BATS_TEST_TMPDIR is unset' <<<"$diagnostic_output" || { echo "path_shim_without: $diagnostic_output"; return 1; }
+  exit_status=0
   diagnostic_output="$(BATS_TEST_TMPDIR="" path_allowlist gaia-fixture-wanted 2>&1)" || exit_status=$?
-  [ "$exit_status" -ne 0 ]
-  grep -qF 'BATS_TEST_TMPDIR is unset' <<<"$diagnostic_output"
+  [ "$exit_status" -ne 0 ] || { echo "path_allowlist: status 0"; return 1; }
+  grep -qF 'BATS_TEST_TMPDIR is unset' <<<"$diagnostic_output" || { echo "path_allowlist: $diagnostic_output"; return 1; }
 }
 
 # make_fixture_command <directory> <name>: an executable regular file, which is
@@ -76,8 +69,9 @@ resolve_under() {
   fi
 }
 
-@test "path_shim_without hides the named tool and keeps every command a mirrored or kept directory provides" {
+@test "path_shim_without hides the named tool and keeps every command a mirrored or kept directory provides, earlier directories first" {
   local mirrored="$BATS_TEST_TMPDIR/mirrored" kept="$BATS_TEST_TMPDIR/kept" rebuilt
+  local first="$BATS_TEST_TMPDIR/first" second="$BATS_TEST_TMPDIR/second"
   make_fixture_command "$mirrored" gaia-fixture-absent
   make_fixture_command "$mirrored" gaia-fixture-sibling
   make_fixture_command "$kept" gaia-fixture-elsewhere
@@ -85,10 +79,7 @@ resolve_under() {
   resolve_under "$rebuilt" gaia-fixture-absent && return 1
   [ "$(resolve_under "$rebuilt" gaia-fixture-sibling)" = "$mirrored/gaia-fixture-sibling" ]
   [ "$(resolve_under "$rebuilt" gaia-fixture-elsewhere)" = "$kept/gaia-fixture-elsewhere" ]
-}
 
-@test "path_shim_without keeps an earlier mirrored directory's command ahead of a later one's" {
-  local first="$BATS_TEST_TMPDIR/first" second="$BATS_TEST_TMPDIR/second" rebuilt
   make_fixture_command "$first" gaia-fixture-absent
   make_fixture_command "$first" gaia-fixture-shared
   make_fixture_command "$second" gaia-fixture-absent

@@ -76,26 +76,40 @@ describe('readStateFile: retired-step migration', () => {
     sandbox.cleanup();
   });
 
-  test('a persisted mentorship-decision entry parses and is dropped from completed_steps', () => {
+  test.each(
+    [
+      {
+        completedSteps: [
+          'install-tools',
+          'install-plugins',
+          'init-speckit',
+          'chmod-statusline',
+          'bootstrap-env',
+          'mentorship-decision',
+          'audit-mode-decision',
+        ],
+        name: 'a persisted mentorship-decision entry parses and is dropped from completed_steps',
+        retired: 'mentorship-decision',
+      },
+      {
+        completedSteps: [...SETUP_STEPS, 'init-speckit'],
+        name: 'a persisted init-speckit entry from a pre-removal GAIA parses, is dropped, and leaves no pending step',
+        retired: 'init-speckit',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {completedSteps, retired}) => {
     writeStateJson(sandbox.statePath, {
       completed_at: null,
-      completed_steps: [
-        'install-tools',
-        'install-plugins',
-        'init-speckit',
-        'chmod-statusline',
-        'bootstrap-env',
-        'mentorship-decision',
-        'audit-mode-decision',
-      ],
+      completed_steps: completedSteps,
       started_at: '2026-05-07T11:00:00.000Z',
       version: 1,
     });
 
     const state = readStateFile(sandbox.root);
     expect(state).not.toBeNull();
-    expect(state?.completed_steps).not.toContain('mentorship-decision');
+    expect(state?.completed_steps).not.toContain(retired);
     expect(state?.completed_steps).toEqual([...SETUP_STEPS]);
+    expect(pendingSteps(state)).toEqual([]);
   });
 
   test('pendingSteps reports none when every surviving step is present', () => {
@@ -115,21 +129,6 @@ describe('readStateFile: retired-step migration', () => {
     });
 
     const state = readStateFile(sandbox.root);
-    expect(pendingSteps(state)).toEqual([]);
-  });
-
-  test('a persisted init-speckit entry from a pre-removal GAIA parses, is dropped, and leaves no pending step', () => {
-    writeStateJson(sandbox.statePath, {
-      completed_at: null,
-      completed_steps: [...SETUP_STEPS, 'init-speckit'],
-      started_at: '2026-05-07T11:00:00.000Z',
-      version: 1,
-    });
-
-    const state = readStateFile(sandbox.root);
-    expect(state).not.toBeNull();
-    expect(state?.completed_steps).not.toContain('init-speckit');
-    expect(state?.completed_steps).toEqual([...SETUP_STEPS]);
     expect(pendingSteps(state)).toEqual([]);
   });
 });

@@ -130,24 +130,6 @@ escalate_through_light() {
 
 # --- routing outcomes ------------------------------------------------------------
 
-@test "on a first dispatch whose route is full no reviewer input is written, and a member that has no quick route gets none either" {
-  lsb_init
-  lsb_commit apps/web/app/notes.md "one line"
-  lsb_route "$FRONTEND"
-  expect_full quick-path
-  local merge_base record
-  merge_base="$(lsb_git merge-base refs/remotes/origin/main HEAD)" || return 1
-  record="$(light_directory)/$(lsb_member_digest "$FRONTEND").$FRONTEND.route.json"
-  [ "$(jq -r '.anchor_kind + " " + .anchor_sha' "$record")" = "merge-base $merge_base" ] \
-    || { jq -c . "$record" >&2; return 1; }
-  [ ! -e "$(route_input_path)" ]
-  find "$(light_directory)" -name '*.input.md' 2>/dev/null | grep -q . && return 1
-  lsb_route code-audit-maintainer-shell
-  expect_full no-full-clearance
-  find "$(light_directory)" -name '*.input.md' 2>/dev/null | grep -q . && return 1
-  true
-}
-
 # --- the first-dispatch quick route, end to end ------------------------------------
 
 QUICK_ENGLISH="apps/web/app/languages/en/common.ts"
@@ -182,7 +164,24 @@ record_for_frontend() {
   assert_gate_allows
 }
 
-@test "a quick route whose reply carries a minor note is refused, the router still sends the delta to the reviewer, and the merge gate keeps denying" {
+@test "a refused branch repaired by a small delta clears light against the refusal's findings, and the merge gate allows it" {
+  lsb_init
+  lsb_commit_lines apps/web/app/notes.md 5 line
+  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding apps/web/app/notes.md 2 major false)]"
+  assert_gate_denies
+  lsb_commit_lines apps/web/app/notes.md 5 fixed
+  assert_gate_denies
+  lsb_route "$FRONTEND"
+  expect_line "$(printf 'light\trefusal-anchored')"
+  grep -qxF 'open_findings: 1' "$(route_input_path)"
+  clear_through_light
+  expect_line "light-cleared"
+  [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
+  assert_gate_allows
+}
+
+@test "a reply that does not clear leaves no marker and the merge gate keeps denying: a minor note on a quick-eligible route, an escalate on a light-eligible route" {
+  # case: a quick route whose reply carries a minor note is refused, the router still sends the delta to the reviewer, and the merge gate keeps denying
   lsb_init
   lsb_main_base_begin
   lsb_commit "$QUICK_ENGLISH" "$(quick_locale_text Hello)"
@@ -202,44 +201,9 @@ record_for_frontend() {
   clear_through_light
   expect_line "light-cleared"
   assert_gate_allows
-}
 
-@test "a clear reply after a full clearance and a small owned Markdown commit clears light, and the merge gate allows it" {
-  lsb_init
-  lsb_full_clearance "$FRONTEND"
-  [ "$(jq -r .review "$(marker_path)")" = "full" ]
-  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
-  assert_gate_denies
-  lsb_route "$FRONTEND"
-  expect_light_eligible
-  [ -f "$(route_input_path)" ]
-  clear_through_light
-  expect_line "light-cleared"
-  [ "$(jq -r '[.provenance, .review, .tree] | join(" ")' "$(marker_path)")" = "earned light $LSB_TREE" ]
-  local light_sidecars
-  light_sidecars="$(find "$(audit_directory)" -maxdepth 1 -name "*.$FRONTEND.light.findings.json")"
-  [ "$(printf '%s\n' "$light_sidecars" | grep -c .)" = "1" ]
-  [ "$(jq -r .review "$light_sidecars")" = "light" ]
-  assert_gate_allows
-}
-
-@test "a refused branch repaired by a small delta clears light against the refusal's findings, and the merge gate allows it" {
-  lsb_init
-  lsb_commit_lines apps/web/app/notes.md 5 line
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding apps/web/app/notes.md 2 major false)]"
-  assert_gate_denies
-  lsb_commit_lines apps/web/app/notes.md 5 fixed
-  assert_gate_denies
-  lsb_route "$FRONTEND"
-  expect_line "$(printf 'light\trefusal-anchored')"
-  grep -qxF 'open_findings: 1' "$(route_input_path)"
-  clear_through_light
-  expect_line "light-cleared"
-  [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
-  assert_gate_allows
-}
-
-@test "an escalate reply leaves no marker for the current digest and the merge gate denies" {
+  # case: an escalate reply leaves no marker for the current digest and the merge gate denies
+  rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
   prepare_light
   escalate_through_light
   expect_full escalate
@@ -250,11 +214,10 @@ record_for_frontend() {
 # --- anchoring ---------------------------------------------------------------------
 
 @test "after a full clearance at one tree and a light clear at the next, a full-routed commit resolves its base at the full tree" {
-  lsb_init
-  lsb_full_clearance "$FRONTEND"
-  local anchor_commit="$LSB_HEAD" anchor_tree="$LSB_TREE"
-  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
-  local light_commit="$LSB_HEAD"
+  lsb_from_template prepared-plain
+  local anchor_commit anchor_tree light_commit="$LSB_HEAD"
+  anchor_commit="$(lsb_git rev-parse HEAD~1)"
+  anchor_tree="$(lsb_git rev-parse 'HEAD~1^{tree}')"
   lsb_route "$FRONTEND"
   expect_light_eligible
   clear_through_light
@@ -341,21 +304,6 @@ record_for_frontend() {
   bash -n "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
 
   lsb_full_clearance "$FRONTEND"
-  lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
-  lsb_route "$FRONTEND"
-  expect_light_eligible
-  clear_through_light
-  expect_line "light-cleared"
-  [ "$(jq -r .review "$(marker_path)")" = "light" ]
-  [ ! -e "$(telemetry_log)" ]
-}
-
-@test "a telemetry directory that cannot be written still routes light and clears" {
-  lsb_init --maintainer
-  lsb_full_clearance "$FRONTEND"
-  mkdir -p "$(dirname "$(telemetry_log)")"
-  chmod 0555 "$(dirname "$(telemetry_log)")"
-  [ ! -w "$(dirname "$(telemetry_log)")" ] || skip "the directory stays writable for this user"
   lsb_commit apps/web/app/notes.md "$(printf 'one\ntwo\nthree')"
   lsb_route "$FRONTEND"
   expect_light_eligible

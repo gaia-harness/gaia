@@ -47,7 +47,7 @@ build_hook_root() {
   rm -rf "$hook_root"
   mkdir -p "$hook_root/.claude/hooks" "$hook_root/.gaia/scripts" "$hook_root/.gaia/tests/helpers"
   for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
-    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-dispositions-check.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh; do
+    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-dispositions-check.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$hook_root/.gaia/scripts/$script_name"
   done
   ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$hook_root/.claude/hooks/lib"
@@ -143,47 +143,124 @@ run_runner_branch() {
   [ "$(rounds_recorded)" = 1 ]
 }
 
-@test "the record the real runner writes satisfies the gate in the main checkout" {
-  run_runner_branch "$VHF_ROOT"
-  [ "$status" -eq 0 ]
-  [ -f "$RECORD_FILE" ]
-  dispatch_member
-  assert_allowed
-  [ "$(rounds_recorded)" = 1 ]
+# Each row of the tables below runs on the one fixture setup built; a row that
+# commits leaves its commit, and reset_verify_state clears what a row records.
+# reset_verify_state: no pass record, no branch state, the maintainer rule file
+# present and a hook root that holds the pass-record helper.
+reset_verify_state() {
+  rm -f "$RECORD_FILE" "$STATE_FILE"
+  rm -rf "${STATE_FILE%.json}.d"
+  : >"$VHF_ROOT/.claude/rules/maintainers/harness-triage-threshold.md"
+  build_hook_root with-helper
 }
 
-@test "the record the real runner writes from a linked worktree lands at the main checkout and satisfies the gate for that worktree" {
-  local worktree="$BATS_TEST_TMPDIR/linked"
-  vhf_git worktree add -q -b feat/linked "$worktree"
-  worktree="$(cd "$worktree" && pwd -P)"
-  run_runner_branch "$worktree"
-  [ "$status" -eq 0 ]
-  [ -f "$VHF_ROOT/.gaia/local/protected/verify-pass/feat/linked.json" ]
-  [ ! -e "$worktree/.gaia/local/protected/verify-pass" ]
-  dispatch_member code-audit-frontend "$worktree"
-  assert_allowed
-  [ "$(jq -r '.history.rounds | length' "$VHF_ROOT/.gaia/local/protected/audit-loop/feat/linked.json")" = 1 ]
+@test "a valid pass record satisfies the gate" {
+  local row worktree
+  for row in pre-existing-failure real-runner-main-checkout real-runner-linked-worktree; do
+    echo "case: $row"
+    reset_verify_state
+    case "$row" in
+      pre-existing-failure)
+        write_record "$(head_sha)" '["bats whole-tree"]'
+        dispatch_member
+        assert_allowed
+        [ "$(rounds_recorded)" = 1 ]
+        ;;
+      real-runner-main-checkout)
+        run_runner_branch "$VHF_ROOT"
+        [ "$status" -eq 0 ]
+        [ -f "$RECORD_FILE" ]
+        dispatch_member
+        assert_allowed
+        [ "$(rounds_recorded)" = 1 ]
+        ;;
+      real-runner-linked-worktree)
+        worktree="$BATS_TEST_TMPDIR/linked"
+        vhf_git worktree add -q -b feat/linked "$worktree"
+        worktree="$(cd "$worktree" && pwd -P)"
+        run_runner_branch "$worktree"
+        [ "$status" -eq 0 ]
+        [ -f "$VHF_ROOT/.gaia/local/protected/verify-pass/feat/linked.json" ]
+        [ ! -e "$worktree/.gaia/local/protected/verify-pass" ]
+        dispatch_member code-audit-frontend "$worktree"
+        assert_allowed
+        [ "$(jq -r '.history.rounds | length' "$VHF_ROOT/.gaia/local/protected/audit-loop/feat/linked.json")" = 1 ]
+        ;;
+    esac
+  done
 }
 
-@test "a commit after the pass makes the first dispatch refused again, naming the recorded head" {
-  local recorded
-  recorded="$(head_sha)"
-  write_record "$recorded"
-  printf 'more\n' >"$VHF_ROOT/after.txt"
-  vhf_commit "a commit after the pass"
-  dispatch_member
-  assert_verify_denied
-  reason_has 'bash .gaia/tests/verify-harness.sh branch'
-  reason_has "$(printf '%s' "$recorded" | cut -c1-8)"
-  reason_has "$(head_sha | cut -c1-8)"
-  [ "$(rounds_recorded)" = 0 ]
+@test "a stale or unreadable pass record or a missing helper refuses the first dispatch" {
+  local row recorded
+  for row in commit-after-the-pass record-not-json helper-missing; do
+    echo "case: $row"
+    reset_verify_state
+    case "$row" in
+      commit-after-the-pass)
+        recorded="$(head_sha)"
+        write_record "$recorded"
+        printf 'more\n' >"$VHF_ROOT/after.txt"
+        vhf_commit "a commit after the pass"
+        dispatch_member
+        assert_verify_denied
+        reason_has 'bash .gaia/tests/verify-harness.sh branch'
+        reason_has "$(printf '%s' "$recorded" | cut -c1-8)"
+        reason_has "$(head_sha | cut -c1-8)"
+        [ "$(rounds_recorded)" = 0 ]
+        ;;
+      record-not-json)
+        mkdir -p "${RECORD_FILE%/*}"
+        printf 'not json at all\n' >"$RECORD_FILE"
+        dispatch_member
+        assert_verify_denied
+        reason_has "$RECORD_FILE"
+        reason_has 'bash .gaia/tests/verify-harness.sh branch'
+        reason_has 'unreadable'
+        [ "$(rounds_recorded)" = 0 ]
+        ;;
+      helper-missing)
+        write_record "$(head_sha)"
+        build_hook_root without-helper
+        dispatch_member
+        assert_verify_denied
+        reason_has 'will not load'
+        [ "$(rounds_recorded)" = 0 ]
+        ;;
+    esac
+  done
 }
 
-@test "a record naming a pre-existing failure and matching HEAD allows the dispatch" {
-  write_record "$(head_sha)" '["bats whole-tree"]'
-  dispatch_member
-  assert_allowed
-  [ "$(rounds_recorded)" = 1 ]
+@test "a dispatch the verification gate does not cover is not refused" {
+  local row
+  for row in light-reviewer no-maintainer-rule-file round-after-the-first; do
+    echo "case: $row"
+    reset_verify_state
+    case "$row" in
+      light-reviewer)
+        dispatch_member audit-light-reviewer
+        assert_allowed
+        [ "$(rounds_recorded)" = 0 ]
+        ;;
+      no-maintainer-rule-file)
+        rm -f "$VHF_ROOT/.claude/rules/maintainers/harness-triage-threshold.md"
+        dispatch_member
+        assert_allowed
+        [ "$(rounds_recorded)" = 1 ]
+        ;;
+      round-after-the-first)
+        write_record "$(head_sha)"
+        dispatch_member
+        assert_allowed
+        [ "$(rounds_recorded)" = 1 ]
+        rm -f "$RECORD_FILE"
+        printf 'next\n' >"$VHF_ROOT/next.txt"
+        vhf_commit "a second tree"
+        dispatch_member
+        case "$output" in *'BLOCKED: audit verify'*) printf 'the gate fired after round one: %s\n' "$output" >&2; return 1 ;; esac
+        [ "$status" -eq 0 ]
+        ;;
+    esac
+  done
 }
 
 @test "a first unit dispatch with no record is refused with the same text and appends no unit; with a record for HEAD it is admitted" {
@@ -196,50 +273,4 @@ run_runner_branch() {
   run_hook "$(unit_payload "$VHF_ROOT")"
   assert_allowed
   [ "$(units_recorded)" = 1 ]
-}
-
-@test "only the first round is gated: with a round recorded and no record, a dispatch on a new tree is not refused by the verification gate" {
-  write_record "$(head_sha)"
-  dispatch_member
-  assert_allowed
-  [ "$(rounds_recorded)" = 1 ]
-  rm -f "$RECORD_FILE"
-  printf 'next\n' >"$VHF_ROOT/next.txt"
-  vhf_commit "a second tree"
-  dispatch_member
-  case "$output" in *'BLOCKED: audit verify'*) printf 'the gate fired after round one: %s\n' "$output" >&2; return 1 ;; esac
-  [ "$status" -eq 0 ]
-}
-
-@test "a light reviewer dispatch is not refused by the verification gate" {
-  dispatch_member audit-light-reviewer
-  assert_allowed
-  [ "$(rounds_recorded)" = 0 ]
-}
-
-@test "a repository without the maintainer rule file is not gated" {
-  rm -f "$VHF_ROOT/.claude/rules/maintainers/harness-triage-threshold.md"
-  dispatch_member
-  assert_allowed
-  [ "$(rounds_recorded)" = 1 ]
-}
-
-@test "a record that is not JSON denies naming its path and branch mode" {
-  mkdir -p "${RECORD_FILE%/*}"
-  printf 'not json at all\n' >"$RECORD_FILE"
-  dispatch_member
-  assert_verify_denied
-  reason_has "$RECORD_FILE"
-  reason_has 'bash .gaia/tests/verify-harness.sh branch'
-  reason_has 'unreadable'
-  [ "$(rounds_recorded)" = 0 ]
-}
-
-@test "a hook root without the pass-record helper denies instead of allowing" {
-  write_record "$(head_sha)"
-  build_hook_root without-helper
-  dispatch_member
-  assert_verify_denied
-  reason_has 'will not load'
-  [ "$(rounds_recorded)" = 0 ]
 }

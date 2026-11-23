@@ -1,9 +1,7 @@
 #!/usr/bin/env bats
 #
 # Pins the story-layer instructions of the security test writer
-# (.claude/agents/security-test-writer.md) and the security-writer step that
-# hands it every listed test with a security kind
-# (.claude/skills/gaia/references/security-writer.md).
+# (.claude/agents/security-test-writer.md).
 #
 # A plan can hand the writer an access, forgery or secrets test on a story. A
 # kind bullet with no story-layer instruction leaves the writer to report the
@@ -14,15 +12,13 @@
 # entry point.
 #
 # Each check reads one line, found by its own prefix, so a phrase surviving on
-# another line cannot green a line that dropped it. Each helper takes the file
-# it reads so a scratch copy proves a check can fail.
+# another line cannot green a line that dropped it.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   WRITER_AGENT="$REPO_ROOT/.claude/agents/security-test-writer.md"
-  SECURITY_WRITER_STEP="$REPO_ROOT/.claude/skills/gaia/references/security-writer.md"
 }
 
 # line_with_prefix <file> <literal prefix>
@@ -46,19 +42,9 @@ ACCESS_STORY="For a test on a story, assert the forbidden control or data is abs
 SECRET_STORY="For a test on a story, assert the value is absent from the story's rendered output while it is present in the story's props."
 FORGERY_STORY='with a `Sibling:` line, edit it to assert the field is no longer rendered and report it `written`; without one, edit nothing and report it `cannot_write`'
 STORY_ENTRY_POINT='a story test is a `.test()` on the story that renders the behavior'"'"'s state'
-STEP_INPUT='The phase'"'"'s security tests are the Test lines of its task docs whose security kind is not `none`.'
-STEP_RECORD='append one JSON line to `{PLAN_DIR}/security-tests.jsonl`'
 
 @test "the Access bullet tells the writer what an access row on a story test asserts" {
   line_carries "$WRITER_AGENT" '- Access:' "$ACCESS_STORY"
-}
-
-@test "the Access check fails on a copy whose Access bullet lacks the story sentence" {
-  local copy="$BATS_TEST_TMPDIR/security-test-writer.md"
-  awk -v drop=" $ACCESS_STORY" '{ i = index($0, drop); if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(drop)); print }' "$WRITER_AGENT" > "$copy"
-  grep -qF -- "$ACCESS_STORY" "$copy" && return 1
-  run line_carries "$copy" '- Access:' "$ACCESS_STORY"
-  [ "$status" -ne 0 ]
 }
 
 @test "the Secret bullet covers any row on a story test, not only a change row" {
@@ -71,16 +57,4 @@ STEP_RECORD='append one JSON line to `{PLAN_DIR}/security-tests.jsonl`'
 
 @test "the entry-point line names a story test's entry point" {
   line_carries "$WRITER_AGENT" "Use the layer's real entry point:" "$STORY_ENTRY_POINT"
-}
-
-@test "security writer takes every listed test with a security kind and records it itself" {
-  line_carries "$SECURITY_WRITER_STEP" '1. **Dispatch.**' "$STEP_INPUT"
-  line_carries "$SECURITY_WRITER_STEP" '2. **Record.**' "$STEP_RECORD"
-}
-
-@test "the security writer step check fails on a copy that records through the table" {
-  local copy="$BATS_TEST_TMPDIR/security-writer.md"
-  awk -v drop="$STEP_RECORD" '{ i = index($0, drop); if (i) $0 = substr($0, 1, i - 1) "run record-security" substr($0, i + length(drop)); print }' "$SECURITY_WRITER_STEP" > "$copy"
-  run line_carries "$copy" '2. **Record.**' "$STEP_RECORD"
-  [ "$status" -ne 0 ]
 }

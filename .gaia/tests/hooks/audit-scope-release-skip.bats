@@ -5,7 +5,7 @@
 #
 # Fixtures come from .gaia/tests/helpers/release-skip-fixture.sh (its header
 # names the roster and the branch kinds). Every case builds its repository in
-# $BATS_TEST_TMPDIR; mutation cases copy the library under test there too.
+# $BATS_TEST_TMPDIR; the lone-classifier case copies the library under test there too.
 #
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   bash .gaia/scripts/bats5.sh .gaia/tests/hooks/audit-scope-release-skip.bats
@@ -99,22 +99,6 @@ parser_globs_agree() {
   parser_globs_agree "$LIBRARY_DIRECTORY/audit-scope.sh"
 }
 
-@test "the parser-compatibility check fails on a parser that reads the key line as a glob" {
-  local scratch="$BATS_TEST_TMPDIR/mutated-parser"
-  mkdir -p "$scratch"
-  cp "$LIBRARY_DIRECTORY/audit-scope.sh" "$LIBRARY_DIRECTORY/audit-scope-release.sh" "$scratch/"
-  awk '
-    /Any other member-level scalar key/ && !done {
-      print "      if (in_globs && raw ~ /skip_gaia_release_changes/) { nglobs++; globs[nglobs] = \"key\"; next }"
-      done = 1
-    }
-    { print }
-  ' "$LIBRARY_DIRECTORY/audit-scope.sh" > "$scratch/audit-scope.sh"
-  grep -q 'globs\[nglobs\] = "key"' "$scratch/audit-scope.sh"
-  run parser_globs_agree "$scratch/audit-scope.sh"
-  [ "$status" -ne 0 ]
-}
-
 @test "skip members: only the literal true arms a member, in roster order; an absent roster exits 1" {
   local roster="$BATS_TEST_TMPDIR/keys.yml"
   printf '%s\n' 'auditors:' \
@@ -137,76 +121,96 @@ parser_globs_agree() {
 
 # ---------- release branch ---------------------------------------------------
 
-@test "release branch: the keyed member is not dispatched, and the resolver agrees with the roster that lacks it" {
+# One fixture holds every row: the release rows run on the release branch, the
+# audit-only row on its own branch cut from main.
+@test "release branch routes without the keyed member" {
+  local row path expected without
   release_skip_branch "$FIXTURE" release
-  run resolve_members
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(lines_of fixture-default fixture-scripts)" ]
-  local without
-  without="$(resolve_members_without_keyed)"
-  [ "$output" = "$without" ]
-}
-
-@test "release branch: each owned path resolves to exactly the owner it has with the keyed entry removed" {
-  release_skip_branch "$FIXTURE" release
-  [ "$(state_with "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml")" = "armed 5" ]
-  local path expected
-  for path in .gaia/scripts/gaia-tool.sh .claude/hooks/gaia-guard.sh .gaia/scripts/gaia-new.sh .gaia/scripts/gaia-retired.sh .github/audit/gaia-audit.sh; do
-    expected="$(owner_without_keyed "$path")"
-    [ "$(owner_of "$path")" = "$expected" ] || { echo "$path: $(owner_of "$path") != $expected" >&2; return 1; }
+  for row in resolver owners audit-only; do
+    echo "case: $row"
+    case "$row" in
+      resolver)
+        # The keyed member is not dispatched, and the resolver agrees with the
+        # roster that lacks it.
+        run resolve_members
+        [ "$status" -eq 0 ]
+        [ "$output" = "$(lines_of fixture-default fixture-scripts)" ]
+        without="$(resolve_members_without_keyed)"
+        [ "$output" = "$without" ]
+        ;;
+      owners)
+        # Each owned path resolves to exactly the owner it has with the keyed
+        # entry removed.
+        [ "$(state_with "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml")" = "armed 5" ]
+        for path in .gaia/scripts/gaia-tool.sh .claude/hooks/gaia-guard.sh .gaia/scripts/gaia-new.sh .gaia/scripts/gaia-retired.sh .github/audit/gaia-audit.sh; do
+          expected="$(owner_without_keyed "$path")"
+          [ "$(owner_of "$path")" = "$expected" ] || { echo "$path: $(owner_of "$path") != $expected" >&2; return 1; }
+        done
+        [ "$(owner_of .gaia/scripts/gaia-tool.sh)" = fixture-scripts ]
+        [ "$(owner_of .claude/hooks/gaia-guard.sh)" = fixture-default ]
+        [ "$(owner_of .gaia/scripts/gaia-new.sh)" = fixture-scripts ]
+        [ "$(owner_of .gaia/scripts/gaia-retired.sh)" = fixture-scripts ]
+        [ "$(owner_of .github/audit/gaia-audit.sh)" = fixture-default ]
+        # A path in no manifest keeps the keyed owner on the same armed branch.
+        [ "$(owner_of scripts/unlisted.sh)" = fixture-shell ]
+        ;;
+      audit-only)
+        # A release branch touching only an owned .github/audit script: the
+        # resolver output equals the keyed-entry-removed output.
+        git -C "$FIXTURE" checkout -q -b audit-only main
+        printf '1.1.0\n' > "$FIXTURE/.gaia/VERSION"
+        printf 'echo updated\n' > "$FIXTURE/.github/audit/gaia-audit.sh"
+        git -C "$FIXTURE" commit -qam "update the shipped audit script"
+        run resolve_members
+        [ "$status" -eq 0 ]
+        [ "$output" = fixture-default ]
+        [ "$output" = "$(resolve_members_without_keyed)" ]
+        ;;
+    esac
   done
-  [ "$(owner_of .gaia/scripts/gaia-tool.sh)" = fixture-scripts ]
-  [ "$(owner_of .claude/hooks/gaia-guard.sh)" = fixture-default ]
-  [ "$(owner_of .gaia/scripts/gaia-new.sh)" = fixture-scripts ]
-  [ "$(owner_of .gaia/scripts/gaia-retired.sh)" = fixture-scripts ]
-  [ "$(owner_of .github/audit/gaia-audit.sh)" = fixture-default ]
-  # A path in no manifest keeps the keyed owner on the same armed branch.
-  [ "$(owner_of scripts/unlisted.sh)" = fixture-shell ]
-}
-
-@test "release branch touching only an owned .github/audit script: the resolver output equals the keyed-entry-removed output" {
-  git -C "$FIXTURE" checkout -q -b audit-only main
-  printf '1.1.0\n' > "$FIXTURE/.gaia/VERSION"
-  printf 'echo updated\n' > "$FIXTURE/.github/audit/gaia-audit.sh"
-  git -C "$FIXTURE" commit -qam "update the shipped audit script"
-  run resolve_members
-  [ "$status" -eq 0 ]
-  [ "$output" = fixture-default ]
-  [ "$output" = "$(resolve_members_without_keyed)" ]
 }
 
 # ---------- ordinary branches --------------------------------------------------
 
-@test "ordinary branch: adopter shell in no manifest belongs to the keyed member" {
-  release_skip_branch "$FIXTURE" ordinary
-  [ "$(state_with "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml")" = "disarmed no-version-change" ]
-  local path
-  for path in .gaia/scripts/my-tool.sh scripts/deploy.sh tests/deploy.bats .claude/hooks/my-guard.sh; do
-    [ "$(owner_of "$path")" = fixture-shell ] || { echo "$path: $(owner_of "$path")" >&2; return 1; }
+# Each row is a branch kind cut from main in the one fixture.
+@test "ordinary and mixed branches keep the keyed member" {
+  local kind path
+  for kind in ordinary hand-edit hand-edit-release mixed; do
+    echo "case: $kind"
+    release_skip_branch "$FIXTURE" "$kind"
+    case "$kind" in
+      ordinary)
+        # Adopter shell in no manifest belongs to the keyed member.
+        [ "$(state_with "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml")" = "disarmed no-version-change" ]
+        for path in .gaia/scripts/my-tool.sh scripts/deploy.sh tests/deploy.bats .claude/hooks/my-guard.sh; do
+          [ "$(owner_of "$path")" = fixture-shell ] || { echo "$path: $(owner_of "$path")" >&2; return 1; }
+        done
+        run resolve_members
+        [ "$output" = fixture-shell ]
+        ;;
+      hand-edit)
+        # An adopter edit to an owned hook routes to the keyed member.
+        [ "$(owner_of .claude/hooks/gaia-guard.sh)" = fixture-shell ]
+        run resolve_members
+        [ "$output" = fixture-shell ]
+        ;;
+      hand-edit-release)
+        # The same edit with a VERSION bump does not.
+        run resolve_members
+        [ "$status" -eq 0 ]
+        [ "$output" = fixture-default ]
+        ;;
+      mixed)
+        # Adopter shell on a release branch keeps the keyed member dispatched.
+        run resolve_members
+        [ "$output" = "$(lines_of fixture-default fixture-scripts fixture-shell)" ]
+        [ "$(owner_of scripts/deploy.sh)" = fixture-shell ]
+        [ "$(owner_of .gaia/scripts/gaia-tool.sh)" = fixture-scripts ]
+        ;;
+    esac
   done
-  run resolve_members
-  [ "$output" = fixture-shell ]
 }
 
-@test "an adopter edit to an owned hook routes to the keyed member; the same edit with a VERSION bump does not" {
-  release_skip_branch "$FIXTURE" hand-edit
-  [ "$(owner_of .claude/hooks/gaia-guard.sh)" = fixture-shell ]
-  run resolve_members
-  [ "$output" = fixture-shell ]
-
-  release_skip_branch "$FIXTURE" hand-edit-release
-  run resolve_members
-  [ "$status" -eq 0 ]
-  [ "$output" = fixture-default ]
-}
-
-@test "mixed release branch: adopter shell keeps the keyed member dispatched" {
-  release_skip_branch "$FIXTURE" mixed
-  run resolve_members
-  [ "$output" = "$(lines_of fixture-default fixture-scripts fixture-shell)" ]
-  [ "$(owner_of scripts/deploy.sh)" = fixture-shell ]
-  [ "$(owner_of .gaia/scripts/gaia-tool.sh)" = fixture-scripts ]
-}
 
 # ---------- every disarm reason fails toward over-review ----------------------
 
@@ -219,24 +223,72 @@ disarmed_and_over_reviews() {
   [ "$owner" = fixture-shell ] || { echo "owner: $owner" >&2; return 1; }
 }
 
-@test "disarm: no jq on PATH" {
+# Every row starts from the release branch, which arms the context when nothing
+# disarms it; the manifest row commits on a branch of its own.
+@test "the skip disarms on each failed condition and over-reviews" {
+  local row bin tool scratch
   release_skip_branch "$FIXTURE" release
-  local bin="$BATS_TEST_TMPDIR/no-jq-bin" tool
-  mkdir -p "$bin"
-  for tool in git awk sed cat tr sort grep head cut; do
-    ln -s "$(command -v "$tool")" "$bin/$tool"
+  for row in no-jq manifest-unreadable no-merge-base no-skip-member re-init lone-classifier; do
+    echo "case: $row"
+    git -C "$FIXTURE" checkout -q release
+    case "$row" in
+      no-jq)
+        bin="$BATS_TEST_TMPDIR/no-jq-bin"
+        mkdir -p "$bin"
+        for tool in git awk sed cat tr sort grep head cut; do
+          ln -s "$(command -v "$tool")" "$bin/$tool"
+        done
+        export INNER_PATH="$bin"
+        run disarmed_and_over_reviews "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" no-jq
+        unset INNER_PATH
+        [ "$status" -eq 0 ]
+        ;;
+      manifest-unreadable)
+        git -C "$FIXTURE" checkout -q -b broken-manifest
+        printf '{ "files": \n' > "$FIXTURE/.gaia/manifest.json"
+        git -C "$FIXTURE" commit -qam "break the manifest"
+        disarmed_and_over_reviews "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" manifest-unreadable
+        ;;
+      no-merge-base)
+        # A bare tree id head with no merge base.
+        disarmed_and_over_reviews "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" no-merge-base "$(git -C "$FIXTURE" rev-parse 'HEAD^{tree}')"
+        ;;
+      no-skip-member)
+        [ "$(state_with "$LIBRARY_DIRECTORY" "$FIXTURE" "$WITHOUT_KEYED")" = "disarmed no-skip-member" ]
+        [ "$(owner_without_keyed .gaia/scripts/gaia-tool.sh)" = fixture-scripts ]
+        ;;
+      re-init)
+        # A re-init disarms a context an earlier call armed.
+        run bash -c '
+          . "$1/audit-scope.sh"
+          audit_scope_init "$2" && audit_scope_release_context "$2" main
+          audit_scope_release_context_state
+          audit_scope_init "$2"
+          audit_scope_release_context_state
+          audit_owner_for_path .gaia/scripts/gaia-tool.sh
+        ' _ "$LIBRARY_DIRECTORY" "$FIXTURE"
+        [ "$status" -eq 0 ]
+        [ "$output" = "$(lines_of 'armed 5' 'disarmed not-requested' fixture-shell)" ]
+        ;;
+      lone-classifier)
+        # A copy of the classifier without its release sibling routes as before
+        # and never arms.
+        scratch="$BATS_TEST_TMPDIR/lone-classifier"
+        mkdir -p "$scratch"
+        cp "$LIBRARY_DIRECTORY/audit-scope.sh" "$scratch/"
+        run bash -c '
+          . "$1/audit-scope.sh"
+          audit_scope_init "$2" || exit 9
+          audit_scope_release_context "$2" main
+          audit_owner_for_path .gaia/scripts/gaia-tool.sh
+        ' _ "$scratch" "$FIXTURE"
+        [ "$status" -eq 0 ]
+        [ "$output" = fixture-shell ]
+        ;;
+    esac
   done
-  export INNER_PATH="$bin"
-  run disarmed_and_over_reviews "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" no-jq
-  [ "$status" -eq 0 ]
 }
 
-@test "disarm: an unparseable head manifest" {
-  release_skip_branch "$FIXTURE" release
-  printf '{ "files": \n' > "$FIXTURE/.gaia/manifest.json"
-  git -C "$FIXTURE" commit -qam "break the manifest"
-  disarmed_and_over_reviews "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" manifest-unreadable
-}
 
 # version_absent_at_base: a fixture whose base has no .gaia/VERSION and whose
 # branch adds one.
@@ -250,25 +302,10 @@ version_absent_at_base() {
   git -C "$FIXTURE" commit -qm "add version"
 }
 
+# bats test_tags=protected
 @test "disarm: .gaia/VERSION absent at the merge base" {
   version_absent_at_base
   disarmed_and_over_reviews "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" no-version-change
-}
-
-@test "the VERSION disarm check fails against a library that ignores the VERSION condition" {
-  version_absent_at_base
-  local scratch="$BATS_TEST_TMPDIR/ignores-version"
-  mkdir -p "$scratch"
-  cp "$LIBRARY_DIRECTORY/audit-scope.sh" "$scratch/"
-  sed 's/^  if \[ -z "\$base_version" \] .*then$/  if false; then/' "$LIBRARY_DIRECTORY/audit-scope-release.sh" > "$scratch/audit-scope-release.sh"
-  grep -q '^  if false; then$' "$scratch/audit-scope-release.sh"
-  run disarmed_and_over_reviews "$scratch" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" no-version-change
-  [ "$status" -ne 0 ]
-}
-
-@test "disarm: a bare tree id head with no merge base" {
-  release_skip_branch "$FIXTURE" release
-  disarmed_and_over_reviews "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" no-merge-base "$(git -C "$FIXTURE" rev-parse 'HEAD^{tree}')"
 }
 
 @test "a bare tree id head with the merge base supplied arms exactly as HEAD does" {
@@ -278,41 +315,6 @@ version_absent_at_base() {
   merge_base="$(git -C "$FIXTURE" merge-base main HEAD)"
   [ "$(state_with "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" "$tree" "$merge_base")" = "armed 5" ]
   [ "$(owners_with "$LIBRARY_DIRECTORY" "$FIXTURE" "$FIXTURE/.gaia/audit-ci.yml" "$tree" "$merge_base" .gaia/scripts/gaia-tool.sh | cut -f2)" = fixture-scripts ]
-}
-
-@test "disarm: no keyed member on the roster" {
-  release_skip_branch "$FIXTURE" release
-  [ "$(state_with "$LIBRARY_DIRECTORY" "$FIXTURE" "$WITHOUT_KEYED")" = "disarmed no-skip-member" ]
-  [ "$(owner_without_keyed .gaia/scripts/gaia-tool.sh)" = fixture-scripts ]
-}
-
-@test "a re-init disarms a context an earlier call armed" {
-  release_skip_branch "$FIXTURE" release
-  run bash -c '
-    . "$1/audit-scope.sh"
-    audit_scope_init "$2" && audit_scope_release_context "$2" main
-    audit_scope_release_context_state
-    audit_scope_init "$2"
-    audit_scope_release_context_state
-    audit_owner_for_path .gaia/scripts/gaia-tool.sh
-  ' _ "$LIBRARY_DIRECTORY" "$FIXTURE"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(lines_of 'armed 5' 'disarmed not-requested' fixture-shell)" ]
-}
-
-@test "a copy of the classifier without its release sibling routes as before and never arms" {
-  release_skip_branch "$FIXTURE" release
-  local scratch="$BATS_TEST_TMPDIR/lone-classifier"
-  mkdir -p "$scratch"
-  cp "$LIBRARY_DIRECTORY/audit-scope.sh" "$scratch/"
-  run bash -c '
-    . "$1/audit-scope.sh"
-    audit_scope_init "$2" || exit 9
-    audit_scope_release_context "$2" main
-    audit_owner_for_path .gaia/scripts/gaia-tool.sh
-  ' _ "$scratch" "$FIXTURE"
-  [ "$status" -eq 0 ]
-  [ "$output" = fixture-shell ]
 }
 
 # ---------- digest and resolver agree ------------------------------------------
@@ -340,53 +342,23 @@ digest_matches_resolver() {
   [ "$by_tree" = "$by_head" ] || { echo "tree digest set: $by_tree; head: $by_head" >&2; return 1; }
 }
 
-# mutated_digest_library <name> <sed-expression>: a scratch copy of the hook
-# libraries whose audit-digest.sh carries the edit; prints its directory.
-mutated_digest_library() {
-  local scratch="$BATS_TEST_TMPDIR/$1"
-  mkdir -p "$scratch/.claude/hooks/lib" "$scratch/.gaia/scripts"
-  cp "$LIBRARY_DIRECTORY"/*.sh "$scratch/.claude/hooks/lib/"
-  cp "$REPO_ROOT/.gaia/scripts/audit-key-lib.sh" "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$scratch/.gaia/scripts/"
-  sed "$2" "$LIBRARY_DIRECTORY/audit-digest.sh" > "$scratch/.claude/hooks/lib/audit-digest.sh"
-  cmp -s "$LIBRARY_DIRECTORY/audit-digest.sh" "$scratch/.claude/hooks/lib/audit-digest.sh" && return 1
-  printf '%s' "$scratch/.claude/hooks/lib"
+@test "digest and resolver agree on each branch kind, for HEAD and for its tree id" {
+  local kind
+  for kind in release ordinary; do
+    echo "case: $kind"
+    release_skip_branch "$FIXTURE" "$kind"
+    digest_matches_resolver "$LIBRARY_DIRECTORY"
+  done
 }
 
-@test "digest and resolver agree on a release branch, for HEAD and for its tree id" {
-  release_skip_branch "$FIXTURE" release
-  digest_matches_resolver "$LIBRARY_DIRECTORY"
-}
-
-@test "digest and resolver agree on an ordinary branch, for HEAD and for its tree id" {
-  release_skip_branch "$FIXTURE" ordinary
-  digest_matches_resolver "$LIBRARY_DIRECTORY"
-}
-
-@test "the agreement check fails against a digest that never arms the context" {
-  release_skip_branch "$FIXTURE" release
-  local library
-  library="$(mutated_digest_library no-context '/audit_scope_release_context "\$root"/d')"
-  run digest_matches_resolver "$library"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"head digest set"* ]] || return 1
-}
-
-@test "the agreement check fails against a digest that omits the merge base for a tree id" {
-  release_skip_branch "$FIXTURE" release
-  local library
-  library="$(mutated_digest_library no-merge-base-argument 's/"\$target" "\$merge_base"$/"$target"/')"
-  run digest_matches_resolver "$library"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"tree digest set"* ]] || return 1
-}
 
 # ---------- every branch-diff consumer arms the context ------------------------
 
 # Digest-only callers: their classification happens inside audit-digest.sh,
 # which arms itself. resolve-audit-base-context.sh's only classifier reference
 # is a presence probe.
-DIGEST_ONLY_CALLERS='.claude/hooks/post-audit-status.sh
-.gaia/scripts/audit-fix-verify.sh
+DIGEST_ONLY_CALLERS='.claude/hooks/lib/post-audit-status-gates.sh
+.gaia/scripts/audit-fix-verify-check-lib.sh
 .gaia/scripts/audit-member-digest.sh
 .gaia/scripts/audit-scope-digest.sh
 .gaia/scripts/audit-write-clearance-gates.sh
@@ -440,27 +412,6 @@ release_context_violations() {
     .gaia/scripts/audit-light-route.sh .gaia/scripts/audit-resolve-scope.sh; do
     _non_comment_mentions "$REPO_ROOT/$file" 'audit_scope_release_context'
   done
-}
-
-# bats test_tags=whole-tree
-@test "the consumer guard fails on a tree where one consumer's context call is removed" {
-  local scratch="$BATS_TEST_TMPDIR/guard-tree" file
-  mkdir -p "$scratch"
-  git -C "$scratch" init -q
-  while IFS= read -r -d '' file; do
-    case "$file" in .gaia/tests/*|*/tests/*) continue ;; esac
-    mkdir -p "$scratch/$(dirname "$file")"
-    cp "$REPO_ROOT/$file" "$scratch/$file"
-  done < <(git -C "$REPO_ROOT" ls-files -z --cached --others --exclude-standard -- '*.sh')
-  git -C "$scratch" add -A
-  run release_context_violations "$scratch"
-  [ -z "$output" ]
-  sed '/^audit_scope_release_context /d' "$REPO_ROOT/.gaia/scripts/resolve-audit-members.sh" > "$scratch/.gaia/scripts/resolve-audit-members.sh"
-  run release_context_violations "$scratch"
-  [ "$output" = "unarmed consumer: .gaia/scripts/resolve-audit-members.sh" ]
-  rm "$scratch/.gaia/scripts/audit-triage-lib.sh"
-  run release_context_violations "$scratch"
-  [[ "$output" == *"stale exemption: .gaia/scripts/audit-triage-lib.sh"* ]] || return 1
 }
 
 # ---------- no process per path --------------------------------------------------

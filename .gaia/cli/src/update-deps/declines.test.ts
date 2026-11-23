@@ -167,102 +167,102 @@ describe('declines ledger anchoring', () => {
   });
 });
 
+const windowRecord = declineRecord();
+const movedTargets = {...reactRouterTargets, 'react-router': '7.3.0'};
+
+type WindowCase = {
+  currentTargets: Record<string, string>;
+  isActive: boolean;
+  laterBy: number;
+  name: string;
+};
+
+// Each row asserts both readers of the window, so isSuppressed and
+// findActiveDecline cannot disagree on a case.
+const assertWindow = ({
+  currentTargets,
+  isActive,
+  laterBy,
+}: WindowCase): void => {
+  const query = {
+    currentTargets,
+    declines: [windowRecord],
+    group: 'react-router',
+    now: new Date(now.getTime() + laterBy),
+  };
+
+  expect(isSuppressed(query)).toBe(isActive);
+  expect(findActiveDecline(query)).toBe(isActive ? windowRecord : undefined);
+};
+
+const titled = (rows: WindowCase[]): (readonly [string, WindowCase])[] =>
+  rows.map((row) => [row.name, row] as const);
+
 describe('isSuppressed', () => {
-  test('matches on equal group + targets inside the 14-day window', () => {
-    expect(
-      isSuppressed({
+  test.each(
+    titled([
+      {
         currentTargets: reactRouterTargets,
-        declines: [declineRecord()],
-        group: 'react-router',
-        now,
-      })
-    ).toBe(true);
-  });
-
-  test('does not match when a target version moved', () => {
-    const moved = {...reactRouterTargets, 'react-router': '7.3.0'};
-    expect(
-      isSuppressed({
-        currentTargets: moved,
-        declines: [declineRecord()],
-        group: 'react-router',
-        now,
-      })
-    ).toBe(false);
-  });
-
-  test('does not match when a new sibling joins the group', () => {
-    const grown = {...reactRouterTargets, '@react-router/dev': '7.2.0'};
-    expect(
-      isSuppressed({
-        currentTargets: grown,
-        declines: [declineRecord()],
-        group: 'react-router',
-        now,
-      })
-    ).toBe(false);
-  });
-
-  test('still suppressed one day before the 14-day cap', () => {
-    const later = new Date(now.getTime() + MAX_SNOOZE_MS - 24 * 3600 * 1000);
-    expect(
-      isSuppressed({
+        isActive: true,
+        laterBy: 0,
+        name: 'matches on equal group + targets inside the 14-day window',
+      },
+      {
+        currentTargets: movedTargets,
+        isActive: false,
+        laterBy: 0,
+        name: 'does not match when a target version moved',
+      },
+      {
+        currentTargets: {...reactRouterTargets, '@react-router/dev': '7.2.0'},
+        isActive: false,
+        laterBy: 0,
+        name: 'does not match when a new sibling joins the group',
+      },
+      {
         currentTargets: reactRouterTargets,
-        declines: [declineRecord()],
-        group: 'react-router',
-        now: later,
-      })
-    ).toBe(true);
-  });
-
-  test('resurfaces once the 14-day cap elapses', () => {
-    const later = new Date(now.getTime() + MAX_SNOOZE_MS);
-    expect(
-      isSuppressed({
+        isActive: true,
+        laterBy: MAX_SNOOZE_MS - 24 * 3600 * 1000,
+        name: 'still suppressed one day before the 14-day cap',
+      },
+      {
         currentTargets: reactRouterTargets,
-        declines: [declineRecord()],
-        group: 'react-router',
-        now: later,
-      })
-    ).toBe(false);
+        isActive: false,
+        laterBy: MAX_SNOOZE_MS,
+        name: 'resurfaces once the 14-day cap elapses',
+      },
+    ])
+  )('%s', (_name, row) => {
+    expect.hasAssertions();
+    assertWindow(row);
   });
 });
 
 describe('findActiveDecline', () => {
-  test('returns the matching record inside the window', () => {
-    const record = declineRecord();
-    expect(
-      findActiveDecline({
+  test.each(
+    titled([
+      {
         currentTargets: reactRouterTargets,
-        declines: [record],
-        group: 'react-router',
-        now,
-      })
-    ).toBe(record);
-  });
-
-  test('returns undefined when nothing matches', () => {
-    const moved = {...reactRouterTargets, 'react-router': '7.3.0'};
-    expect(
-      findActiveDecline({
-        currentTargets: moved,
-        declines: [declineRecord()],
-        group: 'react-router',
-        now,
-      })
-    ).toBeUndefined();
-  });
-
-  test('returns undefined once the cap elapses', () => {
-    const later = new Date(now.getTime() + MAX_SNOOZE_MS);
-    expect(
-      findActiveDecline({
+        isActive: true,
+        laterBy: 0,
+        name: 'returns the matching record inside the window',
+      },
+      {
+        currentTargets: movedTargets,
+        isActive: false,
+        laterBy: 0,
+        name: 'returns undefined when nothing matches',
+      },
+      {
         currentTargets: reactRouterTargets,
-        declines: [declineRecord()],
-        group: 'react-router',
-        now: later,
-      })
-    ).toBeUndefined();
+        isActive: false,
+        laterBy: MAX_SNOOZE_MS,
+        name: 'returns undefined once the cap elapses',
+      },
+    ])
+  )('%s', (_name, row) => {
+    expect.hasAssertions();
+    assertWindow(row);
   });
 });
 
@@ -278,20 +278,32 @@ describe('collectSnoozedGroups', () => {
     ]);
   });
 
-  test('omits a group whose decline aged out of the window', () => {
-    const later = new Date(now.getTime() + MAX_SNOOZE_MS);
-    expect(collectSnoozedGroups(payload, [declineRecord()], later)).toEqual([]);
-  });
-
-  test('omits a group whose targets no longer match the offer', () => {
-    const moved = declineRecord({
-      targets: {...reactRouterTargets, 'react-router': '7.3.0'},
-    });
-    expect(collectSnoozedGroups(payload, [moved], now)).toEqual([]);
-  });
-
-  test('returns empty when the ledger is empty', () => {
-    expect(collectSnoozedGroups(payload, [], now)).toEqual([]);
+  test.each(
+    [
+      {
+        declines: [declineRecord()],
+        laterBy: MAX_SNOOZE_MS,
+        name: 'omits a group whose decline aged out of the window',
+      },
+      {
+        declines: [
+          declineRecord({
+            targets: {...reactRouterTargets, 'react-router': '7.3.0'},
+          }),
+        ],
+        laterBy: 0,
+        name: 'omits a group whose targets no longer match the offer',
+      },
+      {
+        declines: [],
+        laterBy: 0,
+        name: 'returns empty when the ledger is empty',
+      },
+    ].map((row) => [row.name, row] as const)
+  )('%s', (_name, {declines, laterBy}) => {
+    expect(
+      collectSnoozedGroups(payload, declines, new Date(now.getTime() + laterBy))
+    ).toEqual([]);
   });
 
   test('sorts multiple snoozed groups by group id', () => {

@@ -157,55 +157,63 @@ describe('runPreflight stops', () => {
   );
 });
 
+type PassRow = {
+  name: string;
+  options?: NonNullable<Parameters<typeof makeLegacyRepo>[0]>;
+  pass: 'fresh' | 'resume';
+  prepare?: (root: string) => void;
+};
+
+const PASS_ROWS: PassRow[] = [
+  {name: 'a clean default branch passes as fresh', pass: 'fresh'},
+  {
+    name: 'an absent registry reads as the app at the old path',
+    options: {registry: false},
+    pass: 'fresh',
+  },
+  {
+    name: 'a kept name at the old path passes with no question',
+    options: {name: 'storefront'},
+    pass: 'fresh',
+  },
+  {
+    name: 'a moved app with the manifest still keyed on the old root resumes, dirty and off the default branch',
+    pass: 'resume',
+    prepare: (root) => {
+      git(root, ['checkout', '-q', '-b', 'update/x']);
+      mkdirSync(path.join(root, 'apps'));
+      git(root, ['mv', OLD_ROOT, 'apps/web']);
+      write(root, 'uncommitted.txt', 'work\n');
+    },
+  },
+  {
+    name: 'a hand-moved app on a clean default branch with the registry unchanged passes',
+    pass: 'resume',
+    prepare: (root) => {
+      mkdirSync(path.join(root, 'apps'));
+      git(root, ['mv', OLD_ROOT, 'apps/web']);
+      commitAll(root);
+    },
+  },
+  {
+    name: 'a second member named web at the old path is the kept name, not a collision',
+    options: {name: 'web'},
+    pass: 'fresh',
+  },
+];
+
 describe('runPreflight passes', () => {
-  test('a clean default branch passes as fresh', () => {
-    const root = fresh();
+  test.each(PASS_ROWS.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {options, pass, prepare}) => {
+      const root = fresh(options);
 
-    expect(runPreflight(root)).toEqual({
-      exit: 0,
-      lines: ['CROSSING_PASS fresh'],
-    });
-  });
+      prepare?.(root);
 
-  test('an absent registry reads as the app at the old path', () => {
-    const root = fresh({registry: false});
-
-    expect(runPreflight(root).lines).toEqual(['CROSSING_PASS fresh']);
-  });
-
-  test('a kept name at the old path passes with no question', () => {
-    const root = fresh({name: 'storefront'});
-
-    expect(runPreflight(root).lines).toEqual(['CROSSING_PASS fresh']);
-  });
-
-  test('a moved app with the manifest still keyed on the old root resumes, dirty and off the default branch', () => {
-    const root = fresh();
-
-    git(root, ['checkout', '-q', '-b', 'update/x']);
-    mkdirSync(path.join(root, 'apps'));
-    git(root, ['mv', OLD_ROOT, 'apps/web']);
-    write(root, 'uncommitted.txt', 'work\n');
-
-    expect(runPreflight(root)).toEqual({
-      exit: 0,
-      lines: ['CROSSING_PASS resume'],
-    });
-  });
-
-  test('a hand-moved app on a clean default branch with the registry unchanged passes', () => {
-    const root = fresh();
-
-    mkdirSync(path.join(root, 'apps'));
-    git(root, ['mv', OLD_ROOT, 'apps/web']);
-    commitAll(root);
-
-    expect(runPreflight(root).exit).toBe(0);
-  });
-
-  test('a second member named web at the old path is the kept name, not a collision', () => {
-    const root = fresh({name: 'web'});
-
-    expect(runPreflight(root).lines).toEqual(['CROSSING_PASS fresh']);
-  });
+      expect(runPreflight(root)).toEqual({
+        exit: 0,
+        lines: [`CROSSING_PASS ${pass}`],
+      });
+    }
+  );
 });

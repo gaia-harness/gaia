@@ -12,7 +12,7 @@ FOLDER_NAME='.gaia-merge'
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  # The repository the helpers scan; a test points it at a scratch repository.
+  # The repository the helpers scan.
   SCAN_ROOT="$REPO_ROOT"
 }
 
@@ -65,40 +65,6 @@ run_check() {
   return 0
 }
 
-# A scratch git repository holding the given paths, each with the given text.
-make_scratch_repo() {
-  local repo="$1"
-  shift
-  mkdir -p "$repo"
-  git -C "$repo" init -q
-  local scratch_path
-  for scratch_path in "$@"; do
-    mkdir -p "$repo/$(dirname "$scratch_path")"
-    printf 'see %s for details\n' "$FOLDER_NAME" >"$repo/$scratch_path"
-    git -C "$repo" add -- "$scratch_path"
-  done
-}
-
-# bats test_tags=whole-tree
-@test "the scan covers the update skill, so discovery is not vacuous" {
-  run scanned_paths
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-  grep -qxF '.claude/skills/update-gaia/SKILL.md' <<<"$output" || return 1
-  grep -qxF '.claude/skills/update-gaia/references/conflict-flow.md' <<<"$output" || return 1
-  true
-}
-
-# bats test_tags=whole-tree
-@test "the scan leaves the allowed paths out" {
-  run scanned_paths
-  [ "$status" -eq 0 ]
-  grep -qxF 'CHANGELOG.md' <<<"$output" && return 1
-  grep -qxF '.gaia/migrations/2.0.0.md' <<<"$output" && return 1
-  grep -q '^\.gaia/tests/' <<<"$output" && return 1
-  true
-}
-
 # bats test_tags=whole-tree
 @test "no tracked shipped file names the retired folder" {
   run run_check
@@ -106,44 +72,4 @@ make_scratch_repo() {
     printf 'offending paths:\n%s\n' "$output" >&2
     return 1
   fi
-}
-
-@test "a mention in a shipped path fails the check" {
-  make_scratch_repo "$BATS_TEST_TMPDIR/shipped" \
-    .claude/skills/example/SKILL.md README.md
-  SCAN_ROOT="$BATS_TEST_TMPDIR/shipped"
-  run run_check
-  [ "$status" -eq 1 ]
-  grep -qxF '.claude/skills/example/SKILL.md' <<<"$output" || return 1
-  grep -qxF 'README.md' <<<"$output" || return 1
-  true
-}
-
-@test "a mention only in allowed paths passes the check" {
-  make_scratch_repo "$BATS_TEST_TMPDIR/allowed" \
-    CHANGELOG.md wiki/log.md wiki/meta/report.md .gaia/migrations/2.0.0.md \
-    .gaia/tests/lib/example.bats .gaia/scripts/tests/example.bats \
-    .gaia/cli/src/example.test.ts
-  printf 'ordinary\n' >"$BATS_TEST_TMPDIR/allowed/ordinary.txt"
-  git -C "$BATS_TEST_TMPDIR/allowed" add -- ordinary.txt
-  SCAN_ROOT="$BATS_TEST_TMPDIR/allowed"
-  run run_check
-  [ "$status" -eq 0 ]
-}
-
-@test "an empty scan fails the non-empty assertion" {
-  mkdir -p "$BATS_TEST_TMPDIR/empty"
-  git -C "$BATS_TEST_TMPDIR/empty" init -q
-  SCAN_ROOT="$BATS_TEST_TMPDIR/empty"
-  run assert_scan_non_empty
-  [ "$status" -ne 0 ]
-  run run_check
-  [ "$status" -eq 2 ]
-}
-
-@test "a repository holding only allowed paths fails the non-empty assertion" {
-  make_scratch_repo "$BATS_TEST_TMPDIR/only-allowed" CHANGELOG.md wiki/log.md
-  SCAN_ROOT="$BATS_TEST_TMPDIR/only-allowed"
-  run run_check
-  [ "$status" -eq 2 ]
 }

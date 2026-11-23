@@ -195,36 +195,6 @@ describe('init rename', () => {
     });
   });
 
-  test('idempotent: re-running with same args is a no-op', () => {
-    sandbox = setupSandbox();
-    run(['--title', 'Hello World', '--kebab', 'hello-world'], {
-      cwd: sandbox.root,
-    });
-    const claudeFirst = readFileSync(
-      path.join(sandbox.root, 'CLAUDE.md'),
-      'utf8'
-    );
-    const pageFirst = readFileSync(
-      path.join(sandbox.root, 'app', 'languages', 'en', 'pages', '_index.ts'),
-      'utf8'
-    );
-
-    const second = run(['--title', 'Hello World', '--kebab', 'hello-world'], {
-      cwd: sandbox.root,
-    });
-    expect(second).toBe(0);
-
-    expect(readFileSync(path.join(sandbox.root, 'CLAUDE.md'), 'utf8')).toBe(
-      claudeFirst
-    );
-    expect(
-      readFileSync(
-        path.join(sandbox.root, 'app', 'languages', 'en', 'pages', '_index.ts'),
-        'utf8'
-      )
-    ).toBe(pageFirst);
-  });
-
   test('does not clobber unrelated `title` properties in diverged _index.ts', () => {
     sandbox = setupSandbox();
     // Simulate a user whose _index.ts has diverged from the seed: extra
@@ -326,37 +296,35 @@ describe('init rename', () => {
     );
   });
 
-  test('exit 1 when package.json missing', () => {
+  test.each([
+    [
+      'package.json missing',
+      (root: string) => {
+        rmSync(path.join(root, 'package.json'));
+      },
+      ['--title', 'X', '--kebab', 'x'],
+      'package_json_missing',
+    ],
+    [
+      'an invalid kebab',
+      undefined,
+      ['--title', 'X', '--kebab', 'NotKebab'],
+      '--kebab must be',
+    ],
+    [
+      'a kebab containing a space',
+      undefined,
+      ['--title', 'X', '--kebab', 'my app'],
+      '--kebab must be',
+    ],
+    ['a missing --kebab', undefined, ['--title', 'X'], ''],
+    ['a missing --title', undefined, ['--kebab', 'x'], ''],
+  ])('exit 1 on %s', (_name, arrange, args, message) => {
     sandbox = setupSandbox();
-    rmSync(path.join(sandbox.root, 'package.json'));
+    arrange?.(sandbox.root);
 
-    const exit = run(['--title', 'X', '--kebab', 'x'], {cwd: sandbox.root});
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('package_json_missing');
-  });
-
-  test('exit 1 on invalid kebab', () => {
-    sandbox = setupSandbox();
-    const exit = run(['--title', 'X', '--kebab', 'NotKebab'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--kebab must be');
-  });
-
-  test('exit 1 on a kebab containing a space', () => {
-    sandbox = setupSandbox();
-    const exit = run(['--title', 'X', '--kebab', 'my app'], {
-      cwd: sandbox.root,
-    });
-    expect(exit).toBe(1);
-    expect(stdio.errors.join('')).toContain('--kebab must be');
-  });
-
-  test('exit 1 on missing flags', () => {
-    sandbox = setupSandbox();
-    expect(run(['--title', 'X'], {cwd: sandbox.root})).toBe(1);
-    expect(run(['--kebab', 'x'], {cwd: sandbox.root})).toBe(1);
+    expect(run(args, {cwd: sandbox.root})).toBe(1);
+    expect(stdio.errors.join('')).toContain(message);
   });
 
   test.each([
@@ -535,28 +503,23 @@ describe('init rename', () => {
   });
 
   test.each([
+    ['a plain title', 'Hello World'],
     ['an apostrophe', APOSTROPHE_TITLE],
     ['a `$&` whole-match reference', MATCH_REF_TITLE],
-  ])(
-    're-running with the same awkward title is still a no-op: %s',
-    (_label, title) => {
-      sandbox = setupSandbox();
-      const args = ['--title', title, '--kebab', 'hello-world'];
-      run(args, {cwd: sandbox.root});
-      const first = readFileSync(
-        path.join(sandbox.root, 'app', 'languages', 'en', 'common.ts'),
-        'utf8'
-      );
+  ])('re-running with the same args is a no-op: %s', (_label, title) => {
+    sandbox = setupSandbox();
+    const args = ['--title', title, '--kebab', 'hello-world'];
+    const rewritten = [
+      ['CLAUDE.md'],
+      ['app', 'languages', 'en', 'common.ts'],
+      ['app', 'languages', 'en', 'pages', '_index.ts'],
+    ].map((segments) => path.join(sandbox.root, ...segments));
+    run(args, {cwd: sandbox.root});
+    const first = rewritten.map((file) => readFileSync(file, 'utf8'));
 
-      expect(run(args, {cwd: sandbox.root})).toBe(0);
-      expect(
-        readFileSync(
-          path.join(sandbox.root, 'app', 'languages', 'en', 'common.ts'),
-          'utf8'
-        )
-      ).toBe(first);
-    }
-  );
+    expect(run(args, {cwd: sandbox.root})).toBe(0);
+    expect(rewritten.map((file) => readFileSync(file, 'utf8'))).toEqual(first);
+  });
 
   // The keys are optional, not required: the shipped `_index.ts` carries
   // neither, so a file missing `heroTitle` and a top-level `title`

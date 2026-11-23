@@ -10,16 +10,25 @@ vi.mock('~/i18n', async (importOriginal) => ({
 }));
 
 describe('Storybook default locale', () => {
-  test('the initial locale global follows DEFAULT_LOCALE', async () => {
-    const {default: preview} = await import('../.storybook/preview');
+  test.each([
+    [
+      'the initial locale global',
+      async (): Promise<unknown> => {
+        const {default: preview} = await import('../.storybook/preview');
 
-    expect(preview.input.initialGlobals?.locale).toBe('cimode');
-  });
+        return preview.input.initialGlobals?.locale;
+      },
+    ],
+    [
+      'the Storybook i18next instance',
+      async (): Promise<unknown> => {
+        const {default: i18n} = await import('../.storybook/i18next');
 
-  test('the Storybook i18next instance starts in DEFAULT_LOCALE', async () => {
-    const {default: i18n} = await import('../.storybook/i18next');
-
-    expect(i18n.language).toBe('cimode');
+        return i18n.language;
+      },
+    ],
+  ])('%s starts in DEFAULT_LOCALE', async (_name, readLocale) => {
+    expect(await readLocale()).toBe('cimode');
   });
 
   test('the preview loader switches i18next to the story locale global', async () => {

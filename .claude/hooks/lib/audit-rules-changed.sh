@@ -74,6 +74,7 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 .gaia/scripts/main-root-lib.sh
 .gaia/scripts/resolve-audit-members.sh
 .claude/hooks/post-audit-status.sh
+.claude/hooks/lib/post-audit-status-gates.sh
 .claude/hooks/pr-merge-audit-check.sh
 .claude/hooks/pr-merge-audit-check-context.sh
 .claude/hooks/pr-merge-audit-check-signals.sh

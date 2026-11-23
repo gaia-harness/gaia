@@ -18,7 +18,9 @@
 #
 # Whatever the left side is, the right side always renders, and every render
 # also writes the session's context reading for the audit-loop bound hook (see
-# context-reading.sh).
+# context-reading.sh) and merges the payload's usage windows into the shared
+# rate-limit reading, which GAIA's left side displays from (see
+# rate-limits-reading.sh).
 #
 # The hot path stays no-network: no network calls, no `pnpm` calls. It is no
 # longer under 50ms, and that target is retired rather than quietly missed:
@@ -152,6 +154,34 @@ if command -v gaia_statusline_write_effort >/dev/null 2>&1; then
   gaia_statusline_write_effort "$STATE_ROOT" "$session_id" "$effort_level" >/dev/null 2>&1 || true
 fi
 
+# ---------- Rate-limit reading (written on every render) ----------
+# The usage windows are merged into one shared file under the main checkout so
+# every session shows the freshest reading any of them has seen. Like the
+# context reading, the write comes before left-side resolution and happens
+# whatever draws the left side, so a user-command left side still produces it.
+# The writer's merged display records come back as the four values GAIA's left
+# side draws. With the library absent nothing is set and no usage segment
+# renders. `now` is read once here and handed to the left side.
+rate_limits_now=""
+_GAIA_RATE_LIMITS_FIVE_HOUR_PERCENTAGE=""
+_GAIA_RATE_LIMITS_FIVE_HOUR_RESETS_AT=""
+_GAIA_RATE_LIMITS_SEVEN_DAY_PERCENTAGE=""
+_GAIA_RATE_LIMITS_SEVEN_DAY_RESETS_AT=""
+if [ -f "$GAIA_DIRECTORY/scripts/rate-limits-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$GAIA_DIRECTORY/scripts/rate-limits-lib.sh" 2>/dev/null || true
+fi
+if [ -f "$GAIA_DIRECTORY/statusline/rate-limits-reading.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$GAIA_DIRECTORY/statusline/rate-limits-reading.sh" 2>/dev/null || true
+fi
+if command -v gaia_rate_limits_now >/dev/null 2>&1; then
+  rate_limits_now=$(gaia_rate_limits_now 2>/dev/null) || rate_limits_now=""
+fi
+if [ -n "$rate_limits_now" ] && command -v gaia_statusline_rate_limits >/dev/null 2>&1; then
+  gaia_statusline_rate_limits "$STATE_ROOT" "$rate_limits_now" "$five_hour_percentage" "$five_hour_resets_at" "$seven_day_percentage" "$seven_day_resets_at" >/dev/null 2>&1 || true
+fi
+
 # ---------- Left side ----------
 # First match wins: the user's own global `statusLine.command`, then the ported
 # default (project, branch, model and effort, context bar, usage windows), then
@@ -183,7 +213,7 @@ if [ -z "$left" ] && [ -f "$GAIA_DIRECTORY/statusline/gaia-statusline-left.sh" ]
   # shellcheck source=/dev/null
   . "$GAIA_DIRECTORY/statusline/gaia-statusline-left.sh" 2>/dev/null || true
   if command -v gaia_statusline_left >/dev/null 2>&1; then
-    if gaia_statusline_left "$STATE_ROOT" "$session_directory" "$IS_WORKTREE" "$model_name" "$effort_level" "$context_percentage" "$context_window_size" "$context_used_tokens" "$five_hour_percentage" "$five_hour_resets_at" "$seven_day_percentage" "$seven_day_resets_at" 2>/dev/null; then
+    if gaia_statusline_left "$STATE_ROOT" "$session_directory" "$IS_WORKTREE" "$model_name" "$effort_level" "$context_percentage" "$context_window_size" "$context_used_tokens" "$_GAIA_RATE_LIMITS_FIVE_HOUR_PERCENTAGE" "$_GAIA_RATE_LIMITS_FIVE_HOUR_RESETS_AT" "$_GAIA_RATE_LIMITS_SEVEN_DAY_PERCENTAGE" "$_GAIA_RATE_LIMITS_SEVEN_DAY_RESETS_AT" "$rate_limits_now" 2>/dev/null; then
       left="$_GAIA_STATUSLINE_LEFT"
     fi
   fi

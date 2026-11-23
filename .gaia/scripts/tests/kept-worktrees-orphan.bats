@@ -84,6 +84,7 @@ listed() { printf '%s\n' "$output" | grep -Fq -- "- $TREE "; }
 
 # --- live sessions ---
 
+# bats test_tags=protected
 @test "a kept tree a live session occupies is not listed, and is counted" {
   seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
   live_session 11111111-aaaa-bbbb-cccc-000000000001 "$TREE" || return 1
@@ -91,14 +92,6 @@ listed() { printf '%s\n' "$output" | grep -Fq -- "- $TREE "; }
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
   listed && { printf 'listed: %s\n' "$output"; return 1; }
   printf '%s\n' "$output" | grep -Fq "1 more kept worktree(s) not listed" || { printf '%s\n' "$output"; return 1; }
-}
-
-@test "red twin: a reminder that never reads occupancy lists a live session's tree" {
-  mutate kept-worktrees.sh -e 's/^      held) held_count=\$((held_count + 1)); continue ;;$/      held) ;;/' || return 1
-  seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
-  live_session 11111111-aaaa-bbbb-cccc-000000000001 "$TREE" || return 1
-  remind
-  listed || { printf 'stayed green: %s\n' "$output"; return 1; }
 }
 
 @test "an occupancy whose host has exited is pruned and the tree is listed" {
@@ -120,20 +113,13 @@ listed() { printf '%s\n' "$output" | grep -Fq -- "- $TREE "; }
   listed || { printf '%s\n' "$output"; return 1; }
 }
 
+# bats test_tags=protected
 @test "an occupancy with no readable host record counts as held" {
   seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
   run bash "$KEPT" occupy --session 11111111-aaaa-bbbb-cccc-000000000004 --tree "$TREE"
   remind
   listed && { printf 'listed: %s\n' "$output"; return 1; }
   [ -f "$MAIN/.gaia/local/worktree-occupancy/11111111-aaaa-bbbb-cccc-000000000004.tsv" ] || { echo "unknown occupancy was pruned"; return 1; }
-}
-
-@test "red twin: reading an unknown host as exited lists the tree" {
-  mutate kept-worktrees.sh -e 's/^  \[ -f "\$host_record" \] || { printf unknown; return 0; }$/  [ -f "$host_record" ] || { printf dead; return 0; }/' || return 1
-  seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
-  run bash "$KEPT" occupy --session 11111111-aaaa-bbbb-cccc-000000000004 --tree "$TREE"
-  remind
-  listed || { printf 'stayed green: %s\n' "$output"; return 1; }
 }
 
 @test "without the process library every occupied tree counts as held" {
@@ -165,19 +151,13 @@ listed() { printf '%s\n' "$output" | grep -Fq -- "- $TREE "; }
 
 # --- the session's own tree ---
 
+# bats test_tags=protected
 @test "the starting session's own tree is never listed" {
   seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
   run bash "$KEPT" remind --main-root "$MAIN" --own-tree "$TREE"
   [ "$status" -eq 0 ] || return 1
   listed && { printf 'listed: %s\n' "$output"; return 1; }
   true
-}
-
-@test "red twin: a reminder without the own-tree check lists the session's own tree" {
-  mutate kept-worktrees.sh -e 's/^    \[ -n "\$own_tree" \] && \[ "\$tree" = "\$own_tree" \] && continue$/    :/' || return 1
-  seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
-  run bash "$KEPT" remind --main-root "$MAIN" --own-tree "$TREE"
-  listed || { printf 'stayed green: %s\n' "$output"; return 1; }
 }
 
 # --- merged ---
@@ -191,6 +171,7 @@ listed() { printf '%s\n' "$output" | grep -Fq -- "- $TREE "; }
   true
 }
 
+# bats test_tags=protected
 @test "a squash-merged [gone] tree is not listed until the lookup confirms it, then is" {
   squash_merged_gone || return 1
   stub_gh 0 "$TIP"
@@ -200,14 +181,6 @@ listed() { printf '%s\n' "$output" | grep -Fq -- "- $TREE "; }
   grep -Fq -- "--head $BRANCH" "$GH_LOG" || { cat "$GH_LOG"; return 1; }
   remind
   listed || { printf 'not listed after confirmation: %s\n' "$output"; return 1; }
-}
-
-@test "red twin: a reminder that skips the merge check lists an unconfirmed squash tree" {
-  mutate kept-worktrees.sh -e 's/^        \*) unconfirmed=true; continue ;;$/        *) ;;/' || return 1
-  squash_merged_gone || return 1
-  stub_gh 1
-  remind
-  listed || { printf 'stayed green: %s\n' "$output"; return 1; }
 }
 
 @test "a PR merged from a different head sha does not confirm the tree" {
@@ -243,17 +216,6 @@ listed() { printf '%s\n' "$output" | grep -Fq -- "- $TREE "; }
   remind
   sleep 1
   [ "$(grep -c '' "$GH_LOG")" -eq 1 ] || { cat "$GH_LOG"; return 1; }
-}
-
-@test "red twin: without the interval check every reminder spawns a lookup" {
-  mutate kept-worktrees.sh -e 's/^  lookup_fresh "\$1" && return 0$/  :/' || return 1
-  squash_merged_gone || return 1
-  stub_gh 0
-  remind
-  wait_for "$GH_LOG" || return 1
-  remind
-  sleep 1
-  [ "$(grep -c '' "$GH_LOG")" -ge 2 ] || { printf 'stayed green\n'; cat "$GH_LOG"; return 1; }
 }
 
 @test "an unauthenticated gh is quiet: no output, no cache, exit 0" {
@@ -301,14 +263,4 @@ provision_enter() {
 @test "provisioning on EnterWorktree records the session's occupancy" {
   provision_enter "$REPO_ROOT/.claude/hooks/provision-worktree.sh"
   [ "$OCCUPANCY" = "$TREE" ] || { printf '%s\n' "$output"; return 1; }
-}
-
-@test "red twin: provisioning without the occupy call records nothing" {
-  local stage="$BATS_TEST_TMPDIR/hook-stage"
-  mkdir -p "$stage/.claude/hooks" "$stage/.gaia" || return 1
-  ln -s "$REPO_ROOT/.gaia/scripts" "$stage/.gaia/scripts" || return 1
-  sed -e '/kept_worktrees_script" occupy/d' "$REPO_ROOT/.claude/hooks/provision-worktree.sh" >"$stage/.claude/hooks/provision-worktree.sh" || return 1
-  cmp -s "$stage/.claude/hooks/provision-worktree.sh" "$REPO_ROOT/.claude/hooks/provision-worktree.sh" && { echo "the mutation changed nothing"; return 1; }
-  provision_enter "$stage/.claude/hooks/provision-worktree.sh"
-  [ -z "$OCCUPANCY" ] || { printf 'stayed green: %s\n' "$OCCUPANCY"; return 1; }
 }

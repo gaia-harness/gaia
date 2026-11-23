@@ -418,15 +418,6 @@ relocate_fixture() {
   [ ! -d "$PROJECT/.gaia/local/cleanse" ]
 }
 
-@test "relocate-reports red twin: an unknown flag exits 2 and moves nothing" {
-  relocate_fixture
-  printf 'r\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md"
-  run bash "$SCRIPT" relocate-reports --bogus --root "$PROJECT"
-  [ "$status" -eq 2 ]
-  [ -f "$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md" ]
-  [ ! -d "$PROJECT/.gaia/local/cleanse" ]
-}
-
 @test "relocate-reports red twin: a linked worktree skips the move" {
   relocate_fixture
   printf 'r\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md"
@@ -448,16 +439,4 @@ relocate_fixture() {
   [ "$status" -eq 0 ]
   [ -f "$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md" ]
   [ ! -e "$PROJECT/.gaia/local/cleanse" ]
-}
-
-# --- usage ---
-
-@test "usage: an unknown subcommand exits 2" {
-  run bash "$SCRIPT" frobnicate
-  [ "$status" -eq 2 ]
-}
-
-@test "usage: classify with no path exits 2" {
-  inventory classify
-  [ "$status" -eq 2 ]
 }

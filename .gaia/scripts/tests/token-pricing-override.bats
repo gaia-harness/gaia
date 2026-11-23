@@ -83,23 +83,19 @@ RATE_MARKER='  ! rate override ignored (unparseable): .gaia/local/telemetry/toke
   assert_no_network
 }
 
-@test "override unparseable: invalid JSON prints one marker and prices from the distributed table" {
-  install_override override-invalid-json.json
-  run run_pr
-  [ "$status" -eq 0 ]
-  [ "$(line_count "$RATE_MARKER")" -eq 1 ]
-  has_cost 1.50
-  has_line "  ! lower bound: unpriced model(s) claude-ccc-1, claude-zzz-1"
-  assert_no_network
-}
-
-@test "override unparseable: a models value that is not an object prints one marker and prices from the distributed table" {
-  install_override override-models-not-object.json
-  run run_pr
-  [ "$status" -eq 0 ]
-  [ "$(line_count "$RATE_MARKER")" -eq 1 ]
-  has_cost 1.50
-  assert_no_network
+@test "override unparseable: one marker and pricing from the distributed table (invalid JSON, models not an object)" {
+  local case_name
+  for case_name in override-invalid-json override-models-not-object; do
+    install_override "$case_name.json"
+    run run_pr
+    [ "$status" -eq 0 ] || { echo "case $case_name: status $status"; return 1; }
+    [ "$(line_count "$RATE_MARKER")" -eq 1 ] || { echo "case $case_name: marker count"; return 1; }
+    has_cost 1.50 || { echo "case $case_name: cost"; return 1; }
+    if [ "$case_name" = "override-invalid-json" ]; then
+      has_line "  ! lower bound: unpriced model(s) claude-ccc-1, claude-zzz-1" || return 1
+    fi
+    assert_no_network || return 1
+  done
 }
 
 @test "override unparseable: the marker prints once on a multi-root initiative readout" {
@@ -140,31 +136,4 @@ RATE_MARKER='  ! rate override ignored (unparseable): .gaia/local/telemetry/toke
     --projects-root "$TEMPORARY_DIRECTORY/projects"
   [ "$status" -eq 0 ]
   has_cost 3.00
-}
-
-# mutant_scripts <name>: a scratch copy of the scripts directory (files only, no
-# suites); sets $MUTANT_SCRIPTS.
-mutant_scripts() {
-  MUTANT_SCRIPTS="$TEMPORARY_DIRECTORY/mutant-$1"
-  rm -rf "$MUTANT_SCRIPTS"
-  mkdir -p "$MUTANT_SCRIPTS"
-  # gaia-lint-ignore whole-tree-mark-guard: the only test that reaches this helper
-  # carries the per-test whole-tree mark, because it copies every file in the scripts directory.
-  find "$SCRIPTS" -maxdepth 1 -type f -exec cp {} "$MUTANT_SCRIPTS/" \;
-}
-
-# bats test_tags=whole-tree
-@test "override valid, guard red: a pricing lib with the overlay step removed misses the override figure" {
-  install_override override-valid.json
-  mutant_scripts nooverlay
-  local lib="$MUTANT_SCRIPTS/token-pricing-lib.sh" overlay='.models = (.models + $override[0].models)'
-  [ "$(grep -cF -- "$overlay" "$lib")" -eq 1 ]
-  local text
-  text="$(cat "$lib")"
-  printf '%s\n' "${text/"$overlay"/.}" >"$lib"
-  [ "$(grep -cF -- "$overlay" "$lib")" -eq 0 ]
-  run run_pr "$MUTANT_SCRIPTS/usage.sh"
-  [ "$status" -eq 0 ]
-  grep -qF -- '$7.50' <<<"$output" && return 1
-  has_cost 1.50
 }

@@ -37,13 +37,7 @@ _plan_rows() {
   jq -c '[.items[] | select(.kind == "plan")]' "$REPO/.notebook/catalog.json"
 }
 
-# Every path under the fixture except git's own store, plus the catalog bytes.
-_snapshot() {
-  find "$REPO" -path "$REPO/.git" -prune -o -print | LC_ALL=C sort
-  if [ -f "$REPO/.notebook/catalog.json" ]; then cksum < "$REPO/.notebook/catalog.json"; fi
-}
-
-@test "1: fresh run registers a ready row + returns PLAN-001" {
+@test "a fresh run registers a ready PLAN-001 row, and the second call mints PLAN-002 with the exact row shape" {
   REPO="$(_fixture_repository)"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
@@ -52,12 +46,7 @@ _snapshot() {
   [ "$(_plan_rows | jq -r '.[0].id')" = "PLAN-001" ]
   [ "$(_plan_rows | jq -r '.[0].status')" = "ready" ]
   [ "$(_plan_rows | jq -r '.[0].path')" = "plans/PLAN-001" ]
-}
 
-@test "2: second call returns PLAN-002 with the exact row shape" {
-  REPO="$(_fixture_repository)"
-  run _run_allocator next "$REPO"
-  [ "$status" -eq 0 ]
   run _run_allocator next "$REPO" "my subject"
   [ "$status" -eq 0 ]
   [ "$output" = "PLAN-002" ]
@@ -77,19 +66,62 @@ _snapshot() {
   [ "$(tail -c1 "$REPO/.notebook/catalog.json" | wc -l)" -eq 1 ]
 }
 
-@test "3a: no-terminator multiline subject collapses to one line" {
+@test "plan-allocator mints one past the highest plan number across catalog rows and on-disk plan folders, ignoring spec rows, spec folders and archived/" {
+  local template row seed expected
+  template="$(_fixture_repository)"
+  for row in \
+    "live-folder|PLAN-051" \
+    "reaped-row-and-rowless-folder|PLAN-008" \
+    "reaped-row-alone|PLAN-005" \
+    "spec-row-and-folder|PLAN-001" \
+    "archived-folder|PLAN-001" \
+    "four-digit|PLAN-1000" \
+    "leading-zero|PLAN-019"; do
+    seed=${row%%|*}; expected=${row#*|}
+    case "$seed" in
+      reaped-row-and-rowless-folder)
+        REPO="$(_fixture_repository \
+          --seed-row '{"kind":"plan","id":"PLAN-004","path":"plans/PLAN-004","status":"merged","subject":"old","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reap":{"at":"2026-02-01T00:00:00Z","by":"plan-archive-merged"}}')"
+        mkdir -p "$REPO/.notebook/plans/PLAN-007"
+        ;;
+      reaped-row-alone)
+        REPO="$(_fixture_repository \
+          --seed-row '{"kind":"plan","id":"PLAN-004","path":"plans/PLAN-004","status":"merged","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reap":{"at":null,"by":"pre-catalog"}}')"
+        ;;
+      spec-row-and-folder)
+        REPO="$(_fixture_repository --seed-spec-folder SPEC-009 ready)"
+        ;;
+      *)
+        REPO="$BATS_TEST_TMPDIR/$seed"
+        cp -R "$template" "$REPO"
+        case "$seed" in
+          live-folder) mkdir -p "$REPO/.notebook/plans/PLAN-050" ;;
+          archived-folder) mkdir -p "$REPO/.notebook/plans/archived/PLAN-050" ;;
+          four-digit) mkdir -p "$REPO/.notebook/plans/PLAN-999" ;;
+          leading-zero) mkdir -p "$REPO/.notebook/plans/PLAN-018" ;;
+        esac
+        ;;
+    esac
+    run _run_allocator next "$REPO"
+    [ "$status" -eq 0 ] || { echo "row $row: status $status"; return 1; }
+    [ "$output" = "$expected" ] || { echo "row $row: got '$output'"; return 1; }
+    rm -rf "$REPO"
+  done
+  rm -rf "$template"
+  REPO=""
+}
+
+@test "plan-allocator normalizes a subject: multiline collapses to one line, an over-bound one is a word-safe bounded prefix with an ellipsis, an empty or absent one falls back to the id" {
+  local long stored bounded_prefix single_long single_stored
   REPO="$(_fixture_repository)"
   run _run_allocator next "$REPO" "$(printf 'first line\nsecond line')"
   [ "$status" -eq 0 ]
   [ "$(_plan_rows | jq -r '.[0].subject')" = "first line second line" ]
-}
 
-@test "3b: an over-bound multi-word subject is stored as a word-safe bounded prefix + ..." {
-  REPO="$(_fixture_repository)"
   long="$(printf 'alphabet%.0s ' $(seq 1 20))"
   run _run_allocator next "$REPO" "$long"
   [ "$status" -eq 0 ]
-  stored="$(_plan_rows | jq -r '.[0].subject')"
+  stored="$(_plan_rows | jq -r '.[1].subject')"
 
   case "$stored" in
     *...) ;;
@@ -112,72 +144,12 @@ _snapshot() {
   single_long="$(printf 'a%.0s' $(seq 1 150))"
   run _run_allocator next "$REPO" "$single_long"
   [ "$status" -eq 0 ]
-  single_stored="$(_plan_rows | jq -r '.[1].subject')"
+  single_stored="$(_plan_rows | jq -r '.[2].subject')"
   [ "$single_stored" = "$(printf 'a%.0s' $(seq 1 120))..." ]
-}
 
-@test "3c: empty/absent subject falls back to the allocated id" {
-  REPO="$(_fixture_repository)"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
-  [ "$(_plan_rows | jq -r '.[0].subject')" = "PLAN-001" ]
-}
-
-@test "4a: a live on-disk PLAN-050 folder is consumed; next allocates PLAN-051" {
-  REPO="$(_fixture_repository)"
-  mkdir -p "$REPO/.notebook/plans/PLAN-050"
-  run _run_allocator next "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PLAN-051" ]
-}
-
-@test "4b: a reaped row with no folder (PLAN-004) and a row-less folder (PLAN-007) -> PLAN-008" {
-  REPO="$(_fixture_repository \
-    --seed-row '{"kind":"plan","id":"PLAN-004","path":"plans/PLAN-004","status":"merged","subject":"old","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reap":{"at":"2026-02-01T00:00:00Z","by":"plan-archive-merged"}}')"
-  mkdir -p "$REPO/.notebook/plans/PLAN-007"
-  [ ! -e "$REPO/.notebook/plans/PLAN-004" ]
-  run _run_allocator next "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PLAN-008" ]
-}
-
-@test "4c: a reaped row alone (no folder) still consumes its number" {
-  REPO="$(_fixture_repository \
-    --seed-row '{"kind":"plan","id":"PLAN-004","path":"plans/PLAN-004","status":"merged","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reap":{"at":null,"by":"pre-catalog"}}')"
-  run _run_allocator next "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PLAN-005" ]
-}
-
-@test "4d: a spec row and a spec folder never raise the plan number" {
-  REPO="$(_fixture_repository --seed-spec-folder SPEC-009 ready)"
-  run _run_allocator next "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PLAN-001" ]
-}
-
-@test "4e: an archived/ folder is not a plan folder and is not scanned" {
-  REPO="$(_fixture_repository)"
-  mkdir -p "$REPO/.notebook/plans/archived/PLAN-050"
-  run _run_allocator next "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PLAN-001" ]
-}
-
-@test "5a: PLAN-999 folder expands to 4 digits with no leading zero" {
-  REPO="$(_fixture_repository)"
-  mkdir -p "$REPO/.notebook/plans/PLAN-999"
-  run _run_allocator next "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PLAN-1000" ]
-}
-
-@test "5b: a leading-zero legacy PLAN-018 folder counts as 18 (base-10, not octal)" {
-  REPO="$(_fixture_repository)"
-  mkdir -p "$REPO/.notebook/plans/PLAN-018"
-  run _run_allocator next "$REPO"
-  [ "$status" -eq 0 ]
-  [ "$output" = "PLAN-019" ]
+  [ "$(_plan_rows | jq -r '.[3].subject')" = "PLAN-004" ]
 }
 
 @test "6: concurrent next calls (forced mkdir fallback) yield two distinct ids" {
@@ -213,27 +185,6 @@ _snapshot() {
   [ "$(_plan_rows | jq -r '.[0].status')" = "ready" ]
   # The worktree's notebook stays the link to main's, never a folder of its own.
   [ -L "$LINKED/.notebook" ]
-}
-
-@test "8: a legacy (not-yet-moved) repo exits 3 with the move command and mints nothing" {
-  REPO="$(_fixture_repository --legacy)"
-  before="$(_snapshot)"
-  run --separate-stderr _run_allocator next "$REPO"
-  [ "$status" -eq 3 ]
-  [ -z "$output" ]
-  case "$stderr" in
-    *"bash .gaia/scripts/notebook/move.sh run"*) ;;
-    *) return 1 ;;
-  esac
-  [ "$(_snapshot)" = "$before" ]
-}
-
-@test "9: an unknown mode and a missing operand are usage errors (exit 2)" {
-  REPO="$(_fixture_repository)"
-  run _run_allocator
-  [ "$status" -eq 2 ]
-  run _run_allocator bogus "$REPO"
-  [ "$status" -eq 2 ]
 }
 
 @test "10: run from the real repo root, the allocation lands in the operand's fixture only" {

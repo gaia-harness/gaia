@@ -93,7 +93,7 @@ setup_removed_other_case() {
   write_findings TST-001 SEC-001
 }
 
-@test "refuses a dropped case whose destination is missing, elsewhere, short or absent" {
+@test "drop-check refuses a dropped case whose destination is missing, elsewhere, short, absent, or a requirements fragment without a SPEC pointer, and resolves SPEC.md to the post-fix draft" {
   setup_removed_other_case
 
   write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated SPEC.md "$OTHER_FRAGMENT")"
@@ -129,68 +129,7 @@ setup_removed_other_case() {
   write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated SPEC.md "always shows the text Nothing here yet")"
   check_spec
   [ "$status" -eq 0 ]
-}
 
-@test "refuses a changed behavior line no fix line quotes" {
-  setup_removed_other_case
-  write_fixes '[]' '[]'
-  check_spec
-  [ "$status" -eq 1 ]
-  has_output "a guest opens the list with no items" || return 1
-
-  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated SPEC.md "$OTHER_FRAGMENT")"
-  check_spec
-  [ "$status" -eq 0 ]
-
-  # A quote under six words does not count.
-  write_fixes "$(quote_json "a guest opens the list")" '[]'
-  check_spec
-  [ "$status" -eq 1 ]
-
-  # A reworded line is a change too.
-  sed 's/the page shows each item title/the page shows every item name/' "$PRE" >"$POST"
-  write_fixes '[]' '[]'
-  check_spec
-  [ "$status" -eq 1 ]
-  has_output "the page shows each item title" || return 1
-
-  write_fixes "$(quote_json "a guest opens a list with items")" '[]'
-  check_spec
-  [ "$status" -eq 0 ]
-
-  # An unchanged SPEC with no edits.
-  cp "$PRE" "$POST"
-  write_fixes '[]' '[]'
-  check_spec
-  [ "$status" -eq 0 ]
-}
-
-@test "refuses a missing, duplicated or extra finding id" {
-  write_pre
-  cp "$PRE" "$POST"
-  write_findings TST-001 SEC-001
-
-  write_fixes '[]' '[]'
-  check_spec
-  [ "$status" -eq 0 ]
-
-  printf '{"fixes":[{"finding":"TST-001","route":"rejected"}]}\n' >"$FIXES"
-  check_spec
-  [ "$status" -eq 1 ]
-  has_output "drop-check: SEC-001" || return 1
-
-  printf '{"fixes":[{"finding":"TST-001","route":"rejected"},{"finding":"TST-001","route":"rejected"},{"finding":"SEC-001","route":"rejected"}]}\n' >"$FIXES"
-  check_spec
-  [ "$status" -eq 1 ]
-  has_output "drop-check: TST-001: finding listed 2 times" || return 1
-
-  printf '{"fixes":[{"finding":"TST-001","route":"rejected"},{"finding":"SEC-001","route":"rejected"},{"finding":"COV-009","route":"rejected"}]}\n' >"$FIXES"
-  check_spec
-  [ "$status" -eq 1 ]
-  has_output "drop-check: COV-009" || return 1
-}
-
-@test "a requirements fragment counts only behind a SPEC pointer to its section" {
   setup_removed_other_case
   # The fragment sits in no SPEC text, only in the requirements file.
   printf '# Requirements: X\n\n## Brief\n\nThe empty list must always say Nothing here yet to guests.\n\n## Clarify\n\n### Q1. What does a guest see?\n\nAnswered by: the user\n\nA guest sees the greeting.\n' >"$REQUIREMENTS"
@@ -224,23 +163,52 @@ setup_removed_other_case() {
   printf '\nSee REQUIREMENTS.md § Q1 for the greeting.\n' >>"$POST"
   check_spec --requirements "$REQUIREMENTS"
   [ "$status" -eq 0 ]
+
+  setup_removed_other_case
+  mv "$POST" "$WORK/post/draft-SPEC-001.md"
+  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated SPEC.md "$OTHER_FRAGMENT")"
+  run node "$CLI" --fixes "$FIXES" --findings "$FINDINGS" --pre "$PRE" --post "$WORK/post/draft-SPEC-001.md"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+
+  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated OTHER.md "$OTHER_FRAGMENT")"
+  run node "$CLI" --fixes "$FIXES" --findings "$FINDINGS" --pre "$PRE" --post "$WORK/post/draft-SPEC-001.md"
+  [ "$status" -eq 1 ]
+  has_output "not a valid destination file" || return 1
 }
 
-# One drop per behavior of the six-behavior SPEC: $1 takes destination $2,
-# file $3 and fragment $4; every other behavior is still-stated.
-drops_for_all() {
-  local entries="" id
-  for id in B1 B2 B3 B4 B5 B6; do
-    if [ "$id" = "$1" ]; then
-      entries="$entries{\"behavior\":\"$id\",\"case\":\"old case\",\"destination\":\"$2\",\"file\":\"$3\",\"fragment\":\"$4\"},"
-    else
-      entries="$entries{\"behavior\":\"$id\",\"case\":\"old case\",\"destination\":\"still-stated\",\"file\":\"SPEC.md\",\"fragment\":\"still refused with 403 Forbidden by the server\"},"
-    fi
-  done
-  printf '[%s]' "${entries%,}"
-}
+@test "drop-check refuses a changed behavior line no fix quotes and a removed case with no drops entry for its behavior, and accepts the traced twin" {
+  setup_removed_other_case
+  write_fixes '[]' '[]'
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "a guest opens the list with no items" || return 1
 
-@test "a removed case with no drops entry for its behavior is refused whatever the edit says" {
+  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated SPEC.md "$OTHER_FRAGMENT")"
+  check_spec
+  [ "$status" -eq 0 ]
+
+  # A quote under six words does not count.
+  write_fixes "$(quote_json "a guest opens the list")" '[]'
+  check_spec
+  [ "$status" -eq 1 ]
+
+  # A reworded line is a change too.
+  sed 's/the page shows each item title/the page shows every item name/' "$PRE" >"$POST"
+  write_fixes '[]' '[]'
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "the page shows each item title" || return 1
+
+  write_fixes "$(quote_json "a guest opens a list with items")" '[]'
+  check_spec
+  [ "$status" -eq 0 ]
+
+  # An unchanged SPEC with no edits.
+  cp "$PRE" "$POST"
+  write_fixes '[]' '[]'
+  check_spec
+  [ "$status" -eq 0 ]
+
   setup_removed_other_case
   write_fixes "$(quote_json "$OTHER_QUOTE")" '[]'
   check_spec
@@ -258,17 +226,43 @@ drops_for_all() {
   [ "$status" -eq 0 ]
 }
 
-@test "SPEC.md names the post-fix draft whatever the draft file is called" {
-  setup_removed_other_case
-  mv "$POST" "$WORK/post/draft-SPEC-001.md"
-  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated SPEC.md "$OTHER_FRAGMENT")"
-  run node "$CLI" --fixes "$FIXES" --findings "$FINDINGS" --pre "$PRE" --post "$WORK/post/draft-SPEC-001.md"
-  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+@test "refuses a missing, duplicated or extra finding id" {
+  write_pre
+  cp "$PRE" "$POST"
+  write_findings TST-001 SEC-001
 
-  write_fixes "$(quote_json "$OTHER_QUOTE")" "$(drop_json B3 still-stated OTHER.md "$OTHER_FRAGMENT")"
-  run node "$CLI" --fixes "$FIXES" --findings "$FINDINGS" --pre "$PRE" --post "$WORK/post/draft-SPEC-001.md"
+  write_fixes '[]' '[]'
+  check_spec
+  [ "$status" -eq 0 ]
+
+  printf '{"fixes":[{"finding":"TST-001","route":"rejected"}]}\n' >"$FIXES"
+  check_spec
   [ "$status" -eq 1 ]
-  has_output "not a valid destination file" || return 1
+  has_output "drop-check: SEC-001" || return 1
+
+  printf '{"fixes":[{"finding":"TST-001","route":"rejected"},{"finding":"TST-001","route":"rejected"},{"finding":"SEC-001","route":"rejected"}]}\n' >"$FIXES"
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "drop-check: TST-001: finding listed 2 times" || return 1
+
+  printf '{"fixes":[{"finding":"TST-001","route":"rejected"},{"finding":"SEC-001","route":"rejected"},{"finding":"COV-009","route":"rejected"}]}\n' >"$FIXES"
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "drop-check: COV-009" || return 1
+}
+
+# One drop per behavior of the six-behavior SPEC: $1 takes destination $2,
+# file $3 and fragment $4; every other behavior is still-stated.
+drops_for_all() {
+  local entries="" id
+  for id in B1 B2 B3 B4 B5 B6; do
+    if [ "$id" = "$1" ]; then
+      entries="$entries{\"behavior\":\"$id\",\"case\":\"old case\",\"destination\":\"$2\",\"file\":\"$3\",\"fragment\":\"$4\"},"
+    else
+      entries="$entries{\"behavior\":\"$id\",\"case\":\"old case\",\"destination\":\"still-stated\",\"file\":\"SPEC.md\",\"fragment\":\"still refused with 403 Forbidden by the server\"},"
+    fi
+  done
+  printf '[%s]' "${entries%,}"
 }
 
 @test "a security or refusal case resolves only to still stated, restored, a narrower refusal or deferred" {
@@ -398,7 +392,7 @@ check_plan() {
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
 
-@test "plan mode refuses an untraced acceptance-criterion change and a drop outside the plan's documents" {
+@test "plan mode refuses an untraced acceptance-criterion change, a drop outside the plan documents and a removed bullet no drops entry accounts for" {
   make_plan_dirs
   write_findings DP-001 CG-001
   local structural='{"finding":"CG-001","route":"plan"}'
@@ -443,9 +437,7 @@ check_plan() {
   check_plan
   [ "$status" -eq 1 ]
   has_output "The page shows Settings to the owner" || return 1
-}
 
-@test "plan mode refuses a removed acceptance bullet no drops entry accounts for" {
   make_plan_dirs
   write_findings DP-001
   grep -vF "The page shows Settings to the owner" "$PLAN_PRE/task-a.md" >"$PLAN_POST/task-a.md"
@@ -461,3 +453,4 @@ check_plan() {
   check_plan
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
+

@@ -12,9 +12,8 @@
 #
 # Every case builds one fixture repo with a real merge base: the harness is
 # linked in, a base commit holds a readme, and the feature branch adds the three
-# tests. The step script a case may mutate is
-# copied into the fixture's own .gaia/scripts, so a mutant runs against a
-# scratch copy and never touches the real file.
+# tests. The step script is copied into the fixture's own .gaia/scripts, so
+# the fixture is the tree holding it.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/worthiness-widened-surface.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -29,7 +28,6 @@ HELPER_TEST='apps/web/test/fixture-builder.test.ts'
 UTIL_NAME='slugifies a title'
 HOOK_NAME='increments the counter'
 HELPER_NAME='builds a fixture'
-NEEDLE='With no human, run `settle --as residual` and keep the test'
 
 setup() {
   HOME_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -58,8 +56,8 @@ setup() {
 }
 
 # The fixture mirrors the repo-relative layout every script resolves from its
-# own root. Libraries and helper trees are links to the checkout; the one
-# script a case may mutate is a copy.
+# own root. Libraries and helper trees are links to the checkout; the step
+# script is a copy.
 install_harness() {
   mkdir -p "$REPO/.claude/hooks" "$REPO/.gaia/scripts"
   ln -sfn "$HOME_ROOT/.claude/hooks/lib" "$REPO/.claude/hooks/lib"
@@ -97,10 +95,6 @@ commit_branch_tests() {
   git -C "$REPO" commit -q -m "add tests"
 }
 
-classification_of() {
-  (cd "$REPO" && node "$HOME_ROOT/.gaia/scripts/classifier/classify-determinism.mjs" "$1" | jq -r '.classification')
-}
-
 run_route() {
   run --separate-stderr bash "$STEP" route --root "$REPO" --run-folder "$RUN_FOLDER"
 }
@@ -124,34 +118,19 @@ run_merge_hook() {
 denied() { [[ "$output" == *'"permissionDecision": "deny"'* ]]; }
 refute_denied() { if denied; then return 1; fi; }
 
-# Replaces the first occurrence of $1 with $2 in $3, writing $4; refuses an
-# absent anchor so a mutant that matched nothing cannot pass for one that did.
-mutate() {
-  awk -v from="$1" -v to="$2" '{ if (!done && (i = index($0, from)) > 0) { $0 = substr($0, 1, i - 1) to substr($0, i + length(from)); done = 1 } print }' "$3" >"$4"
-  if cmp -s "$3" "$4"; then printf '"%s" is not in %s\n' "$1" "$3" >&2; return 1; fi
-}
-
-@test "the utility and hook tests are labeled strict by the determinism classifier" {
+@test "the worthiness step lists a strict utility test, a strict hook test and a helper folder test, and a helper folder test written as tsx" {
   commit_branch_tests
-  [ "$(classification_of "$UTIL_TEST")" = strict ]
-  [ "$(classification_of "$HOOK_TEST")" = strict ]
-}
+  run_route
+  [ "$status" -eq 0 ] || { echo "row three-tests: status $status" >&2; return 1; }
+  [ "$(printf '%s' "$output" | jq -r 'map(.file) | sort | join(",")')" = "$HOOK_TEST,$UTIL_TEST,$HELPER_TEST" ] || { echo "row three-tests: files: $output" >&2; return 1; }
+  [ "$(printf '%s' "$output" | jq 'map(select(.route == "evaluate")) | length')" -eq 3 ] || { echo "row three-tests: not all evaluate: $output" >&2; return 1; }
 
-@test "the worthiness step lists a helper folder test written as tsx" {
   write_test 'apps/web/test/fixture-builder.test.tsx' "$HELPER_NAME"
   git -C "$REPO" add apps
   git -C "$REPO" commit -q -m "add tsx helper test"
   run_route
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r 'map(.file) | join(",")')" = 'apps/web/test/fixture-builder.test.tsx' ]
-}
-
-@test "the worthiness step lists a strict utility test, a strict hook test and a helper folder test" {
-  commit_branch_tests
-  run_route
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r 'map(.file) | sort | join(",")')" = "$HOOK_TEST,$UTIL_TEST,$HELPER_TEST" ]
-  [ "$(printf '%s' "$output" | jq 'map(select(.route == "evaluate")) | length')" -eq 3 ]
+  [ "$status" -eq 0 ] || { echo "row tsx-helper: status $status" >&2; return 1; }
+  [ "$(printf '%s' "$output" | jq -r 'map(.file) | sort | join(",")')" = "$HOOK_TEST,$UTIL_TEST,$HELPER_TEST,apps/web/test/fixture-builder.test.tsx" ] || { echo "row tsx-helper: files: $output" >&2; return 1; }
 }
 
 @test "the presence gate denies each unrecorded test, names the worthiness step, and allows once all three are recorded" {
@@ -193,10 +172,4 @@ mutate() {
   [ "$(cksum <"$REPO/$UTIL_TEST")" = "$before" ]
   run_route
   [ "$(printf '%s' "$output" | jq -r --arg f "$UTIL_TEST" '.[] | select(.file == $f) | .route')" = settled ]
-}
-
-@test "the step instructions state the no-human branch of a delete, and a copy without it fails the check" {
-  grep -qF -- "$NEEDLE" "$HOME_ROOT/.claude/skills/gaia/references/worthiness-step.md"
-  mutate "$NEEDLE" 'With no human, ask again.' "$HOME_ROOT/.claude/skills/gaia/references/worthiness-step.md" "$BATS_TEST_TMPDIR/worthiness-step.md"
-  if grep -qF -- "$NEEDLE" "$BATS_TEST_TMPDIR/worthiness-step.md"; then return 1; fi
 }

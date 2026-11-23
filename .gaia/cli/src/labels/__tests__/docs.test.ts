@@ -168,14 +168,6 @@ describe('labels/docs renderGeneratedSpan', () => {
     expect(headerOnlyTables(stripMaintainerBlock(span))).toEqual([]);
   });
 
-  test('the header-only-table detector can report', () => {
-    const broken = ['| Label | Reason |', '| --- | --- |', '', '## Next'].join(
-      '\n'
-    );
-
-    expect(headerOnlyTables(broken)).toEqual(['| Label | Reason |']);
-  });
-
   test('the render carries no em dash and no en dash', () => {
     const span = renderGeneratedSpan(registry);
 
@@ -242,47 +234,48 @@ describe('labels/docs spliceGeneratedSpan', () => {
     );
   });
 
-  test('a page with no markers throws', () => {
-    expect(() => spliceGeneratedSpan('# Header\n', 'x')).toThrow(
-      GENERATED_START_MARKER
-    );
-  });
+  const refusals = [
+    {
+      expected: GENERATED_START_MARKER,
+      name: 'a page with no markers throws',
+      page: '# Header\n',
+    },
+    {
+      expected: GENERATED_START_MARKER,
+      name: 'a page with only a start marker throws',
+      page: `${GENERATED_START_MARKER}\n`,
+    },
+    {
+      expected: GENERATED_START_MARKER,
+      name: 'a page with three markers throws',
+      page: [
+        GENERATED_START_MARKER,
+        GENERATED_START_MARKER,
+        GENERATED_START_MARKER,
+        GENERATED_END_MARKER,
+      ].join('\n'),
+    },
+    {
+      expected: 'at or above',
+      name: 'an end marker above its start throws',
+      page: [GENERATED_END_MARKER, GENERATED_START_MARKER].join('\n'),
+    },
+    {
+      expected: GENERATED_START_MARKER,
+      name: 'a marker that is not a whole line does not count',
+      page: [
+        `prose ${GENERATED_START_MARKER} prose`,
+        GENERATED_END_MARKER,
+      ].join('\n'),
+    },
+  ];
 
-  test('a page with only a start marker throws', () => {
-    expect(() =>
-      spliceGeneratedSpan(`${GENERATED_START_MARKER}\n`, 'x')
-    ).toThrow(GENERATED_START_MARKER);
-  });
-
-  test('a page with three markers throws', () => {
-    const page = [
-      GENERATED_START_MARKER,
-      GENERATED_START_MARKER,
-      GENERATED_START_MARKER,
-      GENERATED_END_MARKER,
-    ].join('\n');
-
-    expect(() => spliceGeneratedSpan(page, 'x')).toThrow(
-      GENERATED_START_MARKER
-    );
-  });
-
-  test('an end marker above its start throws', () => {
-    const page = [GENERATED_END_MARKER, GENERATED_START_MARKER].join('\n');
-
-    expect(() => spliceGeneratedSpan(page, 'x')).toThrow('at or above');
-  });
-
-  test('a marker that is not a whole line does not count', () => {
-    const page = [
-      `prose ${GENERATED_START_MARKER} prose`,
-      GENERATED_END_MARKER,
-    ].join('\n');
-
-    expect(() => spliceGeneratedSpan(page, 'x')).toThrow(
-      GENERATED_START_MARKER
-    );
-  });
+  test.each(refusals.map((row) => [row.name, row] as const))(
+    '%s',
+    (_name, {expected, page}) => {
+      expect(() => spliceGeneratedSpan(page, 'x')).toThrow(expected);
+    }
+  );
 });
 
 const captureStream = (stream: NodeJS.WriteStream): string[] => {

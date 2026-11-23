@@ -26,7 +26,6 @@ CHANGELOG.md	history ledger: released entries describe the old roots as they wer
 .gaia/scripts/tests/usage-resolve.bats	legacy fixture: a legacy plan ledger beside the catalog to prove the catalog wins
 .gaia/tests/hooks/block-rm-rf.bats	negative fixture: removal under an old root is refused and no longer whitelisted
 .gaia/tests/lib/helpers/tmp-notebook-repo.sh	legacy fixture: the --legacy flag builds a not-ready repository with a legacy spec ledger
-.gaia/tests/lib/tmp-notebook-repo.bats	legacy fixture: proves the --legacy flag and that a plain build leaves the old roots absent
 .gaia/tests/lib/notebook-plan-lifecycle.bats	negative fixture: a decoy folder under the old plans root must stay untouched
 .gaia/tests/lib/notebook-spec-lifecycle.bats	negative fixture: asserts no script creates or touches the old specs root
 .gaia/tests/lib/plan-archive-merged.bats	negative fixture: a decoy folder under the old plans root must stay untouched

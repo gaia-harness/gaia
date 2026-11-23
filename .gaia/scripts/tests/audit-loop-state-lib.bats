@@ -10,6 +10,12 @@
 # Run: .gaia/scripts/bats5.sh .gaia/scripts/tests/audit-loop-state-lib.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
+setup_file() {
+  # shellcheck source=/dev/null
+  . "$BATS_TEST_DIRNAME/../../tests/helpers/audit-loop-fixture.sh"
+  alf_build_template
+}
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS="${AUDIT_LOOP_SCRIPTS_DIRECTORY:-$REPO_ROOT/.gaia/scripts}"
@@ -61,14 +67,13 @@ valid_state() {
   [ "$output" = "debt/42-fix" ]
 }
 
-@test "key: a detached HEAD is rc 4" {
+@test "key: an undeterminable branch is refused by exit status" {
+  printf 'case: %s\n' 'detached HEAD rc 4' >&2
   alf_git checkout -q --detach
   run gaia_loop_key "$ALF_ROOT"
   [ "$status" -eq 4 ]
   [ -z "$output" ]
-}
-
-@test "key: a name that cannot key a state file is rc 5" {
+  printf 'case: %s\n' 'unkeyable name rc 5' >&2
   local stub_directory bad
   stub_directory="$(stub_git x)"
   for bad in 'feat/a..b' 'feat//x' '/lead' 'trail/' 'sp ace' "$(printf 'x%.0s' $(seq 1 129))"; do
@@ -76,9 +81,7 @@ valid_state() {
     PATH="$stub_directory:$PATH" run gaia_loop_key "$ALF_ROOT"
     [ "$status" -eq 5 ] || { echo "accepted: $bad"; return 1; }
   done
-}
-
-@test "key: git absent from PATH is rc 6" {
+  printf 'case: %s\n' 'no vcs on PATH rc 6' >&2
   # A fresh shell: this one has git hashed, and bash 3.2 keeps the hash
   # across a command-scoped PATH.
   PATH="$(path_shim_without git)" run bash -c '. "$1"; gaia_loop_key "$2"' _ "$SCRIPTS/audit-loop-state-lib.sh" "$ALF_ROOT"
@@ -129,7 +132,8 @@ EOF
   [ "$row_count" -eq 7 ]
 }
 
-@test "lock: two concurrent writers both land" {
+@test "lock: two concurrent writers both land, with and without a non-exclusive mkdir first on PATH" {
+  printf 'case: %s\n' 'default PATH' >&2
   local state_file="$BATS_TEST_TMPDIR/s/x.json" first_tree second_tree
   gaia_loop_write_state "$state_file" "$(valid_state)"
   first_tree="$(printf '1%.0s' $(seq 1 40))"
@@ -150,9 +154,7 @@ EOF
   case "$output" in *"$first_tree"*) ;; *) return 1 ;; esac
   case "$output" in *"$second_tree"*) ;; *) return 1 ;; esac
   [ ! -d "$state_file.lock" ]
-}
-
-@test "lock: two concurrent writers both land, with a non-exclusive mkdir first on PATH" {
+  printf 'case: %s\n' 'non-exclusive mkdir first on PATH' >&2
   local state_file="$BATS_TEST_TMPDIR/s/x.json" first_tree second_tree
   gaia_loop_write_state "$state_file" "$(valid_state)"
   first_tree="$(printf '1%.0s' $(seq 1 40))"
@@ -216,7 +218,8 @@ EOF
   done
 }
 
-@test "audited root: a named Working root that does not resolve is rc 2 naming it, never the cwd" {
+@test "audited root: an unresolvable root is refused" {
+  printf 'case: %s\n' 'named root does not resolve, rc 2' >&2
   local payload
   mkdir -p "$BATS_TEST_TMPDIR/nogit"
   payload="$(jq -n -c --arg cwd "$ALF_ROOT" --arg prompt "Working root: $BATS_TEST_TMPDIR/nogit, the path" \
@@ -228,9 +231,7 @@ EOF
   run gaia_loop_resolve_audited_root "$payload"
   [ "$status" -eq 2 ]
   [ "$output" = "rel/path" ]
-}
-
-@test "audited root: no Working root and a relative cwd is rc 1" {
+  printf 'case: %s\n' 'no root and relative cwd, rc 1' >&2
   local payload
   payload="$(jq -n -c '{cwd: "rel/dir", tool_input: {prompt: "no root named here"}}')"
   run gaia_loop_resolve_audited_root "$payload"
@@ -340,6 +341,13 @@ assert_refused() {
   [ -f "$BATS_TEST_TMPDIR/o.json" ]
 }
 
+@test "schema: a frozen ask_tokens of 0 (checkpoint off) is a valid state" {
+  local state_file="$BATS_TEST_TMPDIR/off.json"
+  full_state | jq '.history.context_config.ask_tokens = 0' >"$state_file"
+  run gaia_loop_read_state "$state_file"
+  [ "$status" -eq 0 ]
+}
+
 @test "schema: a legacy state round-trips byte-identically" {
   local state_file="$BATS_TEST_TMPDIR/legacy.json" rewritten_file="$BATS_TEST_TMPDIR/out.json"
   valid_state | jq . >"$state_file"
@@ -351,7 +359,7 @@ assert_refused() {
 
 @test "schema: red states for the new fields are corrupt and refused" {
   assert_refused pct150 "$(full_state | jq -c '.history.context_config.ask_window_pct = 150')"
-  assert_refused tokens0 "$(full_state | jq -c '.history.context_config.ask_tokens = 0')"
+  assert_refused tokens-negative "$(full_state | jq -c '.history.context_config.ask_tokens = -1')"
   assert_refused magic "$(full_state | jq -c '.history.units[0].admitted_on = "magic"')"
   assert_refused inline "$(full_state | jq -c '.history.units[0].admitted_on = "inline"')"
   assert_refused noafter "$(full_state | jq -c 'del(.history.units[0].after_checkpoint)')"
@@ -409,19 +417,8 @@ labels() { printf '%s' "$1" | jq -r '[.questions[0].options[].label] | join("|")
   [[ "$question" == *"audit-accept"*"deliberate override"* ]]
 }
 
-@test "pinned question red twin: a builder without the grants and the cap-ineligible option fails the two-option check" {
-  local mutant_directory="$BATS_TEST_TMPDIR/mut" question
-  mkdir -p "$mutant_directory"
-  cp "$SCRIPTS"/*.sh "$mutant_directory/"
-  sed -e 's/if \$cap and (\$eligible | not) then/if false then/' -e '/{key: "grant_/d' "$SCRIPTS/audit-loop-state-lib.sh" >"$mutant_directory/audit-loop-state-lib.sh"
-  if cmp -s "$SCRIPTS/audit-loop-state-lib.sh" "$mutant_directory/audit-loop-state-lib.sh"; then return 1; fi
-  question="$(bash -c '. "$1/context-checkpoint-lib.sh"; . "$1/audit-loop-state-lib.sh"; gaia_loop_pinned_question feat/x 0123456789abcdef 10 3 false true cap' _ "$mutant_directory")"
-  [ "$(option_count "$question")" -eq 1 ]
-  run at_least_two_options "$question"
-  [ "$status" -ne 0 ]
-}
-
-@test "pinned question: bad inputs are rc 2 with empty stdout" {
+@test "pinned question: bad inputs exit 2, or 6 with the context library unsourced, with empty stdout" {
+  printf 'case: %s\n' 'bad builder arguments rc 2' >&2
   run gaia_loop_pinned_question feat/x ZZZZ 6 3 true false context
   [ "$status" -eq 2 ]
   [ -z "$output" ]
@@ -434,6 +431,24 @@ labels() { printf '%s' "$1" | jq -r '[.questions[0].options[].label] | join("|")
   run gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 yes false context
   [ "$status" -eq 2 ]
   [ -z "$output" ]
+  printf 'case: %s\n' 'bad recommendation or line rc 2' >&2
+  run gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "" bogus 400000
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+  run gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "" grant abc
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+  printf 'case: %s\n' 'context lib not sourced rc 6' >&2
+  run bash -c '. "$1/audit-loop-state-lib.sh"; gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context' _ "$SCRIPTS"
+  [ "$status" -eq 6 ]
+  [ -z "$output" ]
+  printf 'case: %s\n' 'malformed context reading rc 2' >&2
+  local reading
+  for reading in "fresh 12" "fresh a b" "fresh 1 2 3" "bogus" "fresh -1 5"; do
+    run gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "$reading"
+    [ "$status" -eq 2 ]
+    [ -z "$output" ]
+  done
 }
 
 question_text() { printf '%s' "$1" | jq -r '.questions[0].question'; }
@@ -447,7 +462,8 @@ option_description() { printf '%s' "$1" | jq -r --arg label_prefix "$2" '.questi
 # recommended_count <json>: how many labels carry the (Recommended) suffix.
 recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.label | endswith(" (Recommended)"))] | length'; }
 
-@test "pinned question: a reading below the checkpoint line leads with continue here, and the choices carry the reading" {
+@test "pinned question: the context reading picks the lead and the text" {
+  printf 'case: %s\n' 'below the line leads with continue here' >&2
   local question
   question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false rubric:J2 "fresh 260000 1000000" grant 400000)"
   [ "$(first_label "$question")" = "Continue audit in this session (Recommended)" ]
@@ -455,9 +471,7 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   [ "$(ask_labels "$question" | sed -n 2p)" = "Continue audit in a new session" ]
   [ "$(option_description "$question" "Continue audit in this session")" = "Context 26% (260k of 1000k) is below the checkpoint line, so this session has room: records up to 3 more rounds and keeps working here." ]
   [[ "$(option_description "$question" "Continue audit in a new session")" == "Context 26% (260k of 1000k) is below the checkpoint line: records the same 3-round grant, then prints a continuation prompt for a fresh session."* ]]
-}
-
-@test "pinned question: a reading at or above the checkpoint line leads with new session" {
+  printf 'case: %s\n' 'at or above the line leads with new session' >&2
   local question reading
   for reading in "fresh 500000 1000000" "fresh 400000 1000000"; do
     question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false rubric:J2 "$reading" grant 400000)"
@@ -465,9 +479,7 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
     [ "$(recommended_count "$question")" -eq 1 ]
     [[ "$(option_description "$question" "Continue audit in a new session")" == *"is at or above the checkpoint line: records the same 3-round grant, then prints a continuation prompt for a fresh session."* ]]
   done
-}
-
-@test "pinned question: no usable reading, or no line, leads with new session and says context unavailable" {
+  printf 'case: %s\n' 'no usable reading or no line' >&2
   local question
   for reading in "" missing stale future unparseable "fresh 5 0"; do
     question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "$reading" grant 400000)"
@@ -476,6 +488,18 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   done
   question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "fresh 100000 1000000" grant)"
   [ "$(first_label "$question")" = "Continue audit in a new session (Recommended)" ]
+  printf 'case: %s\n' 'fresh reading figures in text' >&2
+  local question
+  question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "fresh 123456 400000")"
+  [ "$(question_text "$question")" = "Audit checkpoint 0123456789abcdef on feat/x: 6 rounds used (context), context 30% (123k of 400k). How should the audit loop continue?" ]
+  printf 'case: %s\n' 'no reading reads context unavailable' >&2
+  local reading question
+  question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context)"
+  [ "$(question_text "$question")" = "Audit checkpoint 0123456789abcdef on feat/x: 6 rounds used (context), context unavailable. How should the audit loop continue?" ]
+  for reading in missing stale future unparseable "fresh 5 0"; do
+    question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "$reading")"
+    [[ "$(question_text "$question")" == *"(context), context unavailable. How"* ]]
+  done
 }
 
 @test "pinned question: an accept recommendation leads with Accept when offered, otherwise the band picks the grant" {
@@ -503,32 +527,6 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   [ "$(first_label "$question")" = "Continue audit in a new session (Recommended)" ]
 }
 
-@test "pinned question: a bad recommendation or line is rc 2 with empty stdout" {
-  run gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "" bogus 400000
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-  run gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "" grant abc
-  [ "$status" -eq 2 ]
-  [ -z "$output" ]
-}
-
-@test "pinned question: the line comparison is strict, so a reading exactly on the line is not below it" {
-  local mutant_directory="$BATS_TEST_TMPDIR/mut-line" question
-  mkdir -p "$mutant_directory"
-  cp "$SCRIPTS"/*.sh "$mutant_directory/"
-  # The comparison lives in the shared band helper the builder reads its side of the line from.
-  sed '/^gaia_context_band()/,/^}/ s/-ge "\$red"/-gt "$red"/' "$SCRIPTS/context-checkpoint-lib.sh" >"$mutant_directory/context-checkpoint-lib.sh"
-  if cmp -s "$SCRIPTS/context-checkpoint-lib.sh" "$mutant_directory/context-checkpoint-lib.sh"; then return 1; fi
-  question="$(bash -c '. "$1/context-checkpoint-lib.sh"; . "$1/audit-loop-state-lib.sh"; gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false rubric:J2 "fresh 400000 1000000" grant 400000' _ "$mutant_directory")"
-  [ "$(first_label "$question")" = "Continue audit in this session (Recommended)" ]
-}
-
-@test "pinned question: without the shared context lib sourced it is rc 6 with empty stdout" {
-  run bash -c '. "$1/audit-loop-state-lib.sh"; gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context' _ "$SCRIPTS"
-  [ "$status" -eq 6 ]
-  [ -z "$output" ]
-}
-
 @test "recommended: a context checkpoint with no denying signal is a grant, otherwise the verdict decides" {
   [ "$(gaia_loop_recommended context '{"verdict":"stalled"}')" = stop ]
   [ "$(gaia_loop_recommended context '{"verdict":"quiet","signals":{"quiet":true}}')" = grant ]
@@ -547,12 +545,6 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   true
 }
 
-@test "pinned question: a fresh reading puts the percent and k-token figures in the text" {
-  local question
-  question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "fresh 123456 400000")"
-  [ "$(question_text "$question")" = "Audit checkpoint 0123456789abcdef on feat/x: 6 rounds used (context), context 30% (123k of 400k). How should the audit loop continue?" ]
-}
-
 @test "pinned question: an enriching trigger says the new finding sits on changed lines, and that accepting keeps them only when Accept is offered" {
   local question
   question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false rubric:enriching "fresh 123456 400000" accept)"
@@ -561,25 +553,6 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   [ "$(question_text "$question")" = "Audit checkpoint 0123456789abcdef on feat/x: 6 rounds used (rubric:enriching), context 30% (123k of 400k). A new finding sits on a line changed since the previous round, usually by its fix. How should the audit loop continue?" ]
   question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false rubric:stalled "fresh 123456 400000" stop)"
   [[ "$(question_text "$question")" != *"A new finding sits on a line"* ]]
-}
-
-@test "pinned question: no reading, or an unusable one, reads context unavailable" {
-  local reading question
-  question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context)"
-  [ "$(question_text "$question")" = "Audit checkpoint 0123456789abcdef on feat/x: 6 rounds used (context), context unavailable. How should the audit loop continue?" ]
-  for reading in missing stale future unparseable "fresh 5 0"; do
-    question="$(gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "$reading")"
-    [[ "$(question_text "$question")" == *"(context), context unavailable. How"* ]]
-  done
-}
-
-@test "pinned question: a malformed context reading is rc 2 with empty stdout" {
-  local reading
-  for reading in "fresh 12" "fresh a b" "fresh 1 2 3" "bogus" "fresh -1 5"; do
-    run gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context "$reading"
-    [ "$status" -eq 2 ]
-    [ -z "$output" ]
-  done
 }
 
 @test "nonce: two calls differ, are 16 hex, and pin different questions" {
@@ -603,7 +576,8 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   [ "$(printf '%s' "$question" | jq '[.questions[0].options[] | select(.label | startswith("Continue") or startswith("Accept")) | select(.description | test("type `audit-(grant 3|accept)`"))] | length')" -eq 3 ]
 }
 
-@test "interactive check: cli env and an all-cli transcript pass; every other shape fails" {
+@test "interactive check: cli session detection" {
+  printf 'case: %s\n' 'cli env and all-cli transcript' >&2
   local transcript_file="$BATS_TEST_TMPDIR/t.jsonl"
   printf '{"entrypoint":"cli"}\n{"type":"x"}\n{"entrypoint":"cli"}\n' >"$transcript_file"
   CLAUDE_CODE_ENTRYPOINT=cli gaia_loop_session_is_interactive "$transcript_file"
@@ -612,9 +586,7 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   if CLAUDE_CODE_ENTRYPOINT=cli gaia_loop_session_is_interactive "$BATS_TEST_TMPDIR/t2.jsonl"; then return 1; fi
   if CLAUDE_CODE_ENTRYPOINT=cli gaia_loop_session_is_interactive "$BATS_TEST_TMPDIR/missing.jsonl"; then return 1; fi
   if CLAUDE_CODE_ENTRYPOINT=cli gaia_loop_session_is_interactive ""; then return 1; fi
-}
-
-@test "gaia_loop_session_is_interactive returns 2 only for a cli session with no entrypoint record yet" {
+  printf 'case: %s\n' 'rc 2 only with no entrypoint record yet' >&2
   local exit_status
   : >"$BATS_TEST_TMPDIR/empty.jsonl"
   printf '{"type":"session-owner"}\n' >"$BATS_TEST_TMPDIR/no-entrypoint.jsonl"

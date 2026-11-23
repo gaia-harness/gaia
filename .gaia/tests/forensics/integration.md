@@ -260,8 +260,7 @@ must be untouched.
 - **Pass criterion**: the `find` in (a) returns no lines; `git status` in (b) is
   unchanged from the pre-snapshot; the `grep` in (c) returns no lines. Any FAIL
   branch reached means the shipped skill violated the write-surface or redaction
-  contract that `04-write-surface.bats` and the redaction fixtures only assert on
-  surrogates.
+  contract that the bats suites only assert on surrogates.
 
 > These commands are the deterministic, non-LLM half of the check: the only step
 > that needs the LLM is the `/gaia-forensics` invocation itself. A future
@@ -281,15 +280,15 @@ must be untouched.
 | UAT-004 | C     | This file, "UAT-004" section above.                                                                                                            |
 | UAT-005 | C     | This file, "UAT-005" section above.                                                                                                            |
 | UAT-006 | C     | This file, "UAT-006" section above.                                                                                                            |
-| UAT-007 | A+B   | `.gaia/tests/forensics/unit.bats` ("UAT-007: mixed allow + deny ...").                                                                         |
+| UAT-007 | A+B   | `.gaia/tests/forensics/unit.bats` ("check-scope.sh denies a denylisted or unenumerated path").                                                 |
 | UAT-008 | C     | This file, "UAT-008" section above.                                                                                                            |
-| UAT-009 | A+B   | `.github/forensics/tests/parse-issue-body.bats` (24 tests, deterministic regex).                                                               |
+| UAT-009 | A+B   | `.github/forensics/tests/parse-issue-body.bats` (deterministic regex).                                                                         |
 | UAT-010 | C     | This file, "UAT-010" section above.                                                                                                            |
 | UAT-011 | C     | This file, "UAT-011" section above.                                                                                                            |
 | UAT-012 | C     | This file, "UAT-012" section above.                                                                                                            |
 | UAT-013 | A+B   | `.gaia/tests/forensics/unit.bats` (`malformed-*` fixtures) + `.github/forensics/tests/parse-issue-body.bats` (failure-mode tests).             |
-| UAT-014 | A+B   | `.gaia/tests/forensics/unit.bats` ("UAT-014: unenumerated path ...").                                                                          |
-| UAT-015 | A+B   | `.gaia/tests/forensics/unit.bats` ("redaction-passthrough preserves ...") + `.github/forensics/tests/parse-issue-body.bats` (redaction tests). |
+| UAT-014 | A+B   | `.gaia/tests/forensics/unit.bats` ("check-scope.sh denies a denylisted or unenumerated path").                                                 |
+| UAT-015 | A+B   | `.gaia/tests/forensics/unit.bats` (`redaction-passthrough` fixture) + `.github/forensics/tests/parse-issue-body.bats` (redaction tests).       |
 
 ## Re-running this checklist
 

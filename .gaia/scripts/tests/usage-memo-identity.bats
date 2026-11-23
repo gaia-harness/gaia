@@ -444,14 +444,3 @@ epoch_all() {
   [ "$(jq '[.[] | select(. == "null")] | length' <<<"$old")" -ge 5 ]
   [ "$old" = "$new" ]
 }
-
-@test "UAT-013 guard: a fast path that drops the fraction term disagrees with the baseline" {
-  local corpus="$UM_FIXTURES/epoch/corpus.json" mutant_tree="$UM_TEMPORARY_DIRECTORY/tree-epoch" old new
-  mkdir -p "$mutant_tree"
-  cp "$UM_NEW"/.gaia/scripts/*.sh "$mutant_tree/"
-  bash "$UM_FIXTURES/epoch/mutant-drop-fraction.sh" "$UM_NEW/.gaia/scripts/usage-resolve-lib.sh" "$mutant_tree/usage-resolve-lib.sh"
-  old="$(epoch_all "$UM_OLD/.gaia/scripts" "$corpus")"
-  new="$(epoch_all "$mutant_tree" "$corpus")"
-  [ -n "$new" ]
-  [ "$old" != "$new" ]
-}

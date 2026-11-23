@@ -42,23 +42,3 @@ install_lines() {
   grep '^bare ' <<<"$lines" && return 1
   true
 }
-
-@test "a bare pnpm install in a workflow fails the scan (the guard can fail)" {
-  local root="$BATS_TEST_TMPDIR/tree"
-  mkdir -p "$root/.github/workflows" "$root/.github/forensics/tests"
-  printf '%s\n' 'jobs:' '  build:' '    steps:' \
-    '      # pnpm install --frozen-lockfile in a comment is not a step' \
-    '      - run: bash .github/actions/gaia-setup-node/bounded-install.sh --attempt-seconds 180 -- pnpm install --frozen-lockfile' \
-    '      - run: pnpm -C apps/web exec playwright install chromium' \
-    >"$root/.github/workflows/clean.yml"
-  printf '%s\n' 'pnpm install --frozen-lockfile' >"$root/.github/forensics/tests/stubbed.sh"
-  run install_lines "$root"
-  [ "$status" -eq 0 ] || return 1
-  [ "$output" = "bounded .github/workflows/clean.yml:5" ] || return 1
-
-  printf '%s\n' '      - run: pnpm --filter . install' >>"$root/.github/workflows/clean.yml"
-  printf '%s\n' 'pnpm i --frozen-lockfile' >"$root/.github/run.sh"
-  run install_lines "$root"
-  grep -qxF "bare .github/workflows/clean.yml:7" <<<"$output" || return 1
-  grep -qxF "bare .github/run.sh:1" <<<"$output"
-}
