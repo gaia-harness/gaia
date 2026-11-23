@@ -5,7 +5,7 @@
 # throwaway repository whose origin is a bare remote. `gh` is a stub on PATH
 # that logs its argv and keeps the comment body; audit-loop-eval.sh is a stub
 # serving the brief's grant line, so an audit-checkpoint park needs no loop
-# state. Assertion style follows .claude/rules/bats-assertions.md.
+# state.
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"

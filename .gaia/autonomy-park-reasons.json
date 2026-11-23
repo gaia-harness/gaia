@@ -4,14 +4,14 @@
   "reasons": {
     "question": {
       "summary": "a question only a human can answer",
-      "resume": "Answer it in an interactive Claude Code session on this branch; the next run resumes this item after that.",
+      "resume": "Answer it in an interactive Claude Code session on this branch.",
       "requires_pr": false,
       "grant_line": false,
       "requires_detail": true
     },
     "audit-checkpoint": {
       "summary": "an audit checkpoint",
-      "resume": "Type the line below in an interactive Claude Code session on this branch, then re-run the PR Merge Workflow there.",
+      "resume": "In an interactive Claude Code session on this branch, send any message first, then type the line below as the whole prompt and re-run the PR Merge Workflow.",
       "requires_pr": true,
       "grant_line": true,
       "requires_detail": false

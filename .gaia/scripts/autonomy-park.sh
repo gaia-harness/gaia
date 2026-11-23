@@ -3,8 +3,8 @@
 # Markdown backticks in printf formats are literal, not expansions.
 # shellcheck disable=SC2016
 #
-# autonomy-park.sh: the park procedure. Every unattended path that needs a
-# human stops here, the same safe and resumable way.
+# autonomy-park.sh: the park procedure an unattended run uses to stop,
+# resumably, where it needs a human.
 #
 #   autonomy-park.sh --reason <code> [--pr <n>] [--detail <text>]
 #
@@ -23,9 +23,9 @@
 #   5. prints one line telling Claude what to do next
 #
 # Every input is checked before step 1, and a marker left by an earlier park
-# is removed then, so a park that fails partway never leaves an item that
-# looks parked. The comment text is scanned with machine-local-ref-lib.sh and
-# refused on a hit.
+# is removed then, so a park that fails partway never leaves a parked marker.
+# The comment text is scanned with machine-local-ref-lib.sh and refused on a
+# hit.
 #
 # Exit: 0 parked; 1 a step failed, with one stderr line naming it (push
 # refused, gh unauthenticated); 2 usage error or refused input. A failed park
@@ -110,7 +110,7 @@ if [ "$(printf '%s' "$reason_entry" | jq -r '.grant_line')" = true ]; then
   grant_line="$(bash "$PARK_SCRIPT_DIRECTORY/audit-loop-eval.sh" brief --root "$tree_root" 2>/dev/null |
     jq -r '.grant_line // empty' 2>/dev/null)"
   [[ "$grant_line" =~ ^audit-grant\ [0-9]+$ ]] ||
-    park_fail "no grant line: audit-loop-eval.sh brief has no audit loop state for '$branch'" 2
+    park_fail "no grant line: audit-loop-eval.sh brief returned none for '$branch'" 2
 fi
 
 run_directory="$main_root/.gaia/local/runs/$branch_key"
