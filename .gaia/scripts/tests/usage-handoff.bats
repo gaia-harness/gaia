@@ -160,14 +160,14 @@ join_with() {
   run --separate-stderr usage handoff
   [ "$status" -eq 0 ]
   [ "${#lines[@]}" -eq 2 ]
-  [ "${lines[1]}" = "close the run when it ends with: bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt" ]
+  [ "${lines[1]}" = "close the run with: bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt" ]
   run usage record command:gaia-debt --workflow gaia-debt
   [ "$status" -eq 0 ]
   in_session sess-b
   main_start s2 11:00 gaia-plan
   run --separate-stderr usage handoff
   [ "$status" -eq 0 ]
-  [ "${lines[1]}" = "close the run when it ends with the record step of its own skill" ]
+  [ "${lines[1]}" = "close the run with the record step of its own skill" ]
 }
 
 @test "handoff with no open run prints nothing and exits 0" {

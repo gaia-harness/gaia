@@ -70,10 +70,10 @@ _handoff_main() {
       | select(. != null)
       | (.run // {session_id: .session_id, ts: .ts}) as $origin
       | "bash .gaia/scripts/usage.sh join --workflow \(.workflow) --session \($origin.session_id) --start \($origin.ts)",
-        # A spec or plan run closes on its own ref, which only its skill knows.
+        # A spec, plan or test run closes on its own ref, which only its skill knows.
         (if (.workflow | IN("gaia-spec", "gaia-plan", "gaia-test"))
-          then "close the run when it ends with the record step of its own skill"
-          else "close the run when it ends with: bash .gaia/scripts/usage.sh record command:\(.workflow) --workflow \(.workflow)" end)' 2>/dev/null
+          then "close the run with the record step of its own skill"
+          else "close the run with: bash .gaia/scripts/usage.sh record command:\(.workflow) --workflow \(.workflow)" end)' 2>/dev/null
   return 0
 }
 
