@@ -307,9 +307,8 @@ EOF
   done
 }
 
-# A `-c` the globals check approves must be safe on its own, not only because
-# the command-config rule would catch it: no safe key is one git runs as a
-# command.
+# Defense in depth: the classifier also runs the command-config rule, but the
+# safe list must hold without it.
 @test "no safe -c key is a key git runs as a command" {
   run bash -c '. "$1/.claude/hooks/lib/git-command-config.sh"
     for key in "${GAIA_GIT_SAFE_CONFIG_KEYS[@]}"; do
