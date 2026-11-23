@@ -29,7 +29,8 @@
 #                                   --result <fixer-file> --out <verifier-file>
 #                                   [--extra-declared <paths-file>]...
 #   audit-fix-verify.sh settled     --root <R> --baseline <f> --verifier <verifier-file>
-#                                   --result <fixer-file> [--extra-declared <paths-file>]...
+#                                   --verifier-sha <hex> --result <fixer-file>
+#                                   --security-paths <paths-file> [--gate-paths <paths-file>]
 #   audit-fix-verify.sh drift       --root <R> --baseline <f>
 #   audit-fix-verify.sh round-check --run-folder <dir> --round <r>
 #
@@ -126,7 +127,14 @@
 #     paths included and hashed, as the check read them. settled compares the
 #     tree and the fixer file against it before the round stages anything, and
 #     fails on head-moved, result-moved, tree-moved (one line per path; paths in
-#     --extra-declared files are exempt) or bad-input.
+#     the --security-paths and --gate-paths files are exempt) or bad-input.
+#     settled takes no --extra-declared (a usage error). The pre-gate run
+#     exempts only --security-paths (the security writer's tests, required,
+#     empty when none ran), never gate-<r>-<j>.paths, whose content the check
+#     already judged; only the post-gate re-check passes --gate-paths, that
+#     attempt's gate-<r>-<k>.paths. --verifier-sha (required) is the sha256 the
+#     main thread records of the verifier file right after check, so a verifier
+#     output rewritten afterwards is refused as bad-input.
 #     kinds: missing-disposition, undeclared-path, undeclared-revert,
 #     forbidden-path, enforcement-path, head-moved, index-changed,
 #     audit-artifact-written, bad-input.
@@ -171,7 +179,7 @@ usage() {
 usage:
   audit-fix-verify.sh baseline    --root <R> --round <r> --out <baseline-file>
   audit-fix-verify.sh check       --root <R> --round <r> --attempt <k> --dispositions <f> --dispositions-sha <hex> --baseline <f> --baseline-sha <hex> --result <f> --out <f> [--extra-declared <paths-file>]...
-  audit-fix-verify.sh settled     --root <R> --baseline <f> --verifier <f> --result <f> [--extra-declared <paths-file>]...
+  audit-fix-verify.sh settled     --root <R> --baseline <f> --verifier <f> --verifier-sha <hex> --result <f> --security-paths <paths-file> [--gate-paths <paths-file>]
   audit-fix-verify.sh drift       --root <R> --baseline <f>
   audit-fix-verify.sh round-check --run-folder <dir> --round <r>
 EOF
@@ -198,6 +206,9 @@ BASELINE_FILE=''
 BASELINE_SHA=''
 RESULT=''
 VERIFIER_FILE=''
+VERIFIER_SHA=''
+SECURITY_PATHS_FILE=''
+GATE_PATHS_FILE=''
 RUNFOLDER=''
 EXTRA_DECLARED_FILES=''
 
@@ -351,6 +362,15 @@ while [ $# -gt 0 ]; do
     --baseline-sha) BASELINE_SHA="$2" ;;
     --result) RESULT="$2" ;;
     --verifier) VERIFIER_FILE="$2" ;;
+    --verifier-sha) VERIFIER_SHA="$2" ;;
+    --security-paths)
+      [ -z "$SECURITY_PATHS_FILE" ] || die_usage '--security-paths is given once'
+      SECURITY_PATHS_FILE="$2"
+      ;;
+    --gate-paths)
+      [ -z "$GATE_PATHS_FILE" ] || die_usage '--gate-paths is given once'
+      GATE_PATHS_FILE="$2"
+      ;;
     --run-folder) RUNFOLDER="$2" ;;
     --extra-declared) EXTRA_DECLARED_FILES="$EXTRA_DECLARED_FILES$2"$'\n' ;;
     *) die_usage "unknown option $1" ;;

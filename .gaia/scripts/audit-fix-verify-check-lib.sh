@@ -25,6 +25,17 @@ add_error() {
 
 has_errors() { [ -s "$ERRORS_FILE" ]; }
 
+# Prints a declared-paths file's non-blank lines. A file written without a
+# trailing newline (the Write tool's) still ends its last path, so two files
+# read in turn never fuse into one path.
+read_declared_paths() {
+  local declared_line
+  while IFS= read -r declared_line || [ -n "$declared_line" ]; do
+    [ -z "$declared_line" ] || printf '%s\n' "$declared_line"
+  done <"$1"
+  return 0
+}
+
 # Reads paths on stdin and reports each one that is empty, absolute, starts
 # with a dash, or carries a `..` segment.
 validate_paths() {
@@ -161,8 +172,8 @@ command_check() {
       add_error bad-input "extra-declared file unreadable: $extra_declared_file"
       continue
     fi
-    grep -v '^$' "$extra_declared_file" | validate_paths extra-declared
-    grep -v '^$' "$extra_declared_file" >>"$TEMPORARY_DIRECTORY/extra"
+    read_declared_paths "$extra_declared_file" | validate_paths extra-declared
+    read_declared_paths "$extra_declared_file" >>"$TEMPORARY_DIRECTORY/extra"
   done <<EOF
 $EXTRA_DECLARED_FILES
 EOF
@@ -307,35 +318,42 @@ EOF
 # settled: the round runs it after a passing check and before it stages
 # anything. A fixer can keep running after it returns (a background run that
 # finishes later) and edit the tree or rewrite its result file; staging reads
-# both, so either change would reach the round's commit unverified. Paths named
-# in --extra-declared files (the check's own, plus the security writer's tests
-# written after it) may differ; nothing else may.
+# both, so either change would reach the round's commit unverified. Only the
+# security writer's tests (--security-paths, written after the check) and, on
+# the post-gate re-check alone, that attempt's autofix paths (--gate-paths) may
+# differ; nothing else may. A gate path is never exempt before the gate, because
+# the check already judged that content. --verifier-sha pins the verifier output
+# so a fixer that can write the run folder cannot rewrite the judged record.
 command_settled() {
-  local exit_status=0 file_path extra_declared_file judged_sha current_sha
-  if [ -z "$ROOT" ] || [ -z "$BASELINE_FILE" ] || [ -z "$VERIFIER_FILE" ] || [ -z "$RESULT" ]; then
-    die_usage 'settled needs --root, --baseline, --verifier and --result'
+  local exit_status=0 file_path paths_file judged_sha current_sha
+  [ -z "$EXTRA_DECLARED_FILES" ] || die_usage 'settled takes --security-paths and --gate-paths, not --extra-declared'
+  if [ -z "$ROOT" ] || [ -z "$BASELINE_FILE" ] || [ -z "$VERIFIER_FILE" ] || [ -z "$VERIFIER_SHA" ] ||
+    [ -z "$RESULT" ] || [ -z "$SECURITY_PATHS_FILE" ]; then
+    die_usage 'settled needs --root, --baseline, --verifier, --verifier-sha, --result and --security-paths'
   fi
   TEMPORARY_DIRECTORY="$(mktemp -d)" || exit 1
   _verify_pin "$BASELINE_FILE" || {
     printf 'bad-input: the verifier files beside this script differ from the digest pinned in %s\n' "$BASELINE_FILE" >&2
     exit 1
   }
+  if [ ! -r "$VERIFIER_FILE" ] || [ "$(_sha256 <"$VERIFIER_FILE" 2>/dev/null)" != "$VERIFIER_SHA" ]; then
+    printf 'bad-input: %s is unreadable or differs from the recorded verifier digest\n' "$VERIFIER_FILE" >&2
+    exit 1
+  fi
   jq -e '.pass == true and (.judged.paths | type == "object")
     and (.judged.result_sha | type == "string" and length > 0)' "$VERIFIER_FILE" >/dev/null 2>&1 || {
     printf 'bad-input: %s is not a passing verifier output with a judged record\n' "$VERIFIER_FILE" >&2
     exit 1
   }
   : >"$TEMPORARY_DIRECTORY/extra"
-  while IFS= read -r extra_declared_file; do
-    [ -n "$extra_declared_file" ] || continue
-    [ -r "$extra_declared_file" ] || {
-      printf 'bad-input: extra-declared file unreadable: %s\n' "$extra_declared_file" >&2
+  for paths_file in "$SECURITY_PATHS_FILE" "$GATE_PATHS_FILE"; do
+    [ -n "$paths_file" ] || continue
+    [ -r "$paths_file" ] || {
+      printf 'bad-input: declared-paths file unreadable: %s\n' "$paths_file" >&2
       exit 1
     }
-    cat "$extra_declared_file" >>"$TEMPORARY_DIRECTORY/extra" || exit 1
-  done <<EOF
-$EXTRA_DECLARED_FILES
-EOF
+    read_declared_paths "$paths_file" >>"$TEMPORARY_DIRECTORY/extra" || exit 1
+  done
   LC_ALL=C sort -u "$TEMPORARY_DIRECTORY/extra" -o "$TEMPORARY_DIRECTORY/extra"
   if ! snapshot_state "$TEMPORARY_DIRECTORY/cur" || ! judged_paths "$TEMPORARY_DIRECTORY/cur"; then
     printf 'bad-input: cannot read repo state in %s\n' "$ROOT" >&2
