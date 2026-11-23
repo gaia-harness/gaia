@@ -119,30 +119,82 @@ commit_base_files() {
   }
 }
 
-@test "a suite declaring a file fixture-only is selected only by the changed paths it does not declare" {
-  base="$(commit_base_files \
-    'CHANGELOG.md=# changelog' \
-    'scripts/tool.sh=a' \
-    'tests/reads-changelog.bats=body="$(cat "$REPO_ROOT/CHANGELOG.md")"' \
-    $'tests/scratch-changelog.bats=# bats-selector fixture-only: CHANGELOG.md\necho x > "$ROOT/CHANGELOG.md"; bash "$SCRIPTS/tool.sh"')"
+# Commits the given suites over a fixture holding CHANGELOG.md, edits
+# CHANGELOG.md, and leaves the selector's output in $output.
+select_on_changelog_edit() {
+  local base
+  base="$(commit_base_files 'CHANGELOG.md=# changelog' "$@")"
   printf 'edited\n' >> "$FIXTURE/CHANGELOG.md"
   git -C "$FIXTURE" commit -q -am changelog
-
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = "tests/reads-changelog.bats" ] || {
-    printf 'changelog only, got:\n%s\n' "$output" >&2
-    return 1
-  }
+}
 
+@test "a suite naming a changed file only as fixture data it writes under a temporary root is not selected; a read through the repo root, an unknown root, a root cut by a parameter expansion, a helper's root, an unwritten fixture or a path above the root is" {
+  select_on_changelog_edit \
+    $'tests/fixture-write.bats=ROOT="$BATS_TEST_TMPDIR/fixture"\nprintf x > "$ROOT/CHANGELOG.md"\ncat "$ROOT/CHANGELOG.md"' \
+    $'tests/mktemp-write.bats=TREE="$(cd "$(mktemp -d)" && pwd -P)"\nprintf x >"${TREE}/CHANGELOG.md"\ngrep -q x "$TREE/CHANGELOG.md"' \
+    $'tests/repo-root-read.bats=REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\nROOT="$BATS_TEST_TMPDIR/fixture"\nprintf x > "$ROOT/CHANGELOG.md"\ncat "$REPO_ROOT/CHANGELOG.md"' \
+    $'tests/unknown-root-read.bats=printf x > "$ROOT/CHANGELOG.md"\ncat "$ROOT/CHANGELOG.md"' \
+    $'tests/stripped-root-read.bats=ROOT="${BATS_TEST_DIRNAME%/tests}"\ncat "$ROOT/CHANGELOG.md"' \
+    $'tests/helper-root-read.bats=load helpers/sandbox\nSANDBOX="$BATS_TEST_TMPDIR/sandbox"\nprintf x > "$SANDBOX/CHANGELOG.md"\ncat "$SANDBOX/CHANGELOG.md"' \
+    $'tests/unwritten-fixture-read.bats=ROOT="$BATS_TEST_TMPDIR/fixture"\nrun bash "$SCRIPTS/tool.sh" --root "$ROOT"\ncat "$ROOT/CHANGELOG.md"' \
+    'tests/above-root-read.bats=cat "$PARENT/repo/CHANGELOG.md"'
+  [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$stderr" >&2; return 1; }
+  expected="$(printf '%s\n' tests/above-root-read.bats tests/helper-root-read.bats tests/repo-root-read.bats tests/stripped-root-read.bats tests/unknown-root-read.bats tests/unwritten-fixture-read.bats)"
+  [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
+}
+
+@test "a command substitution fixes its directory only as a cd whose command is pwd or pwd -P, or as dirname of the suite file (a pwd path tail joins on; another cd command or a helper substitution leaves it unknown; the cd and helper rows hold with or without spaces inside the substitution)" {
+  base="$(commit_base_files \
+    'scripts/tool.sh=a' \
+    $'tests/bare-pwd.bats=ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\nbash "$ROOT/tool.sh"' \
+    $'tests/physical-pwd.bats=ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd -P)"\nbash "$ROOT/tool.sh"' \
+    $'tests/pwd-tail-other.bats=ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)/other"\nbash "$ROOT/tool.sh"' \
+    $'tests/pwd-tail-read.bats=ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)/scripts"\nbash "$ROOT/tool.sh"' \
+    $'tests/other-command.bats=ROOT="$(cd "$BATS_TEST_DIRNAME/.." && ls)"\nbash "$ROOT/tool.sh"' \
+    $'tests/spaced-bare-pwd.bats=ROOT="$( cd "$BATS_TEST_DIRNAME/.." && pwd )"\nbash "$ROOT/tool.sh"' \
+    $'tests/spaced-physical-pwd.bats=ROOT="$( cd "$BATS_TEST_DIRNAME/.." && pwd -P )"\nbash "$ROOT/tool.sh"' \
+    $'tests/spaced-pwd-tail-read.bats=ROOT="$( cd "$BATS_TEST_DIRNAME/.." && pwd )/scripts"\nbash "$ROOT/tool.sh"' \
+    $'tests/spaced-other-command.bats=ROOT="$( cd "$BATS_TEST_DIRNAME/.." && ls )"\nbash "$ROOT/tool.sh"' \
+    $'tests/helper-substitution.bats=HELPERS="$BATS_TEST_DIRNAME/lib"\nROOT="$("$HELPERS/make.sh")"\nbash "$ROOT/tool.sh"' \
+    $'tests/spaced-helper-substitution.bats=HELPERS="$BATS_TEST_DIRNAME/lib"\nROOT="$( "$HELPERS/make.sh" )"\nbash "$ROOT/tool.sh"' \
+    $'tests/dirname-substitution.bats=ROOT="$(dirname "$BATS_TEST_FILENAME")"\nbash "$ROOT/tool.sh"')"
   printf 'edited\n' >> "$FIXTURE/scripts/tool.sh"
   git -C "$FIXTURE" commit -q -am tool
+
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
-  [ "$status" -eq 0 ]
-  [ "$output" = $'tests/reads-changelog.bats\ntests/scratch-changelog.bats' ] || {
-    printf 'changelog and tool, got:\n%s\n' "$output" >&2
-    return 1
-  }
+  [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$stderr" >&2; return 1; }
+  expected="$(printf '%s\n' tests/helper-substitution.bats tests/other-command.bats tests/pwd-tail-read.bats tests/spaced-helper-substitution.bats tests/spaced-other-command.bats tests/spaced-pwd-tail-read.bats)"
+  [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
+}
+
+@test "a temporary root populated from the real tree keeps its suite selected (a copy from the repo root or a bare repo path, a suite function that copies); a copy from another fixture does not" {
+  select_on_changelog_edit \
+    $'tests/copied-root.bats=REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\nTMP="$(mktemp -d)"\ncp -R "$REPO_ROOT/." "$TMP/"\nprintf x > "$TMP/CHANGELOG.md"\ncat "$TMP/CHANGELOG.md"' \
+    $'tests/bare-copy-root.bats=TMP="$(mktemp -d)"\ncp CHANGELOG.md "$TMP/"\nprintf x > "$TMP/CHANGELOG.md"\ncat "$TMP/CHANGELOG.md"' \
+    $'tests/populating-function.bats=make_tree() {\n  cp -R "$REPO_ROOT/." "$1"\n}\nTMP="$(mktemp -d)"\nmake_tree "$TMP"\nprintf x > "$TMP/CHANGELOG.md"\ncat "$TMP/CHANGELOG.md"' \
+    $'tests/fixture-copy.bats=TMP="$(mktemp -d)"\nprintf x > "$TMP/seed"\ncp "$TMP/seed" "$TMP/CHANGELOG.md"\nprintf x > "$TMP/CHANGELOG.md"\ncat "$TMP/CHANGELOG.md"'
+  [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$stderr" >&2; return 1; }
+  expected="$(printf '%s\n' tests/bare-copy-root.bats tests/copied-root.bats tests/populating-function.bats)"
+  [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
+}
+
+@test "a suite naming a different file that shares the changed basename is not selected" {
+  base="$(commit_base_files \
+    'skills/alpha/SKILL.md=a' \
+    'skills/beta/SKILL.md=b' \
+    $'tests/reads-alpha.bats=REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\ncat "$REPO_ROOT/skills/alpha/SKILL.md"' \
+    $'tests/reads-beta.bats=REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\ncat "$REPO_ROOT/skills/beta/SKILL.md"' \
+    'tests/names-beta.bats=grep -q x skills/beta/SKILL.md' \
+    'tests/longer-name.bats=cat "$RUN/child-SKILL.md"' \
+    'tests/any-skill.bats=for skill in skills/*/SKILL.md; do cat "$skill"; done')"
+  printf 'edited\n' >> "$FIXTURE/skills/alpha/SKILL.md"
+  git -C "$FIXTURE" commit -q -am alpha
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$base" HEAD
+  [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$stderr" >&2; return 1; }
+  expected="$(printf '%s\n' tests/any-skill.bats tests/reads-alpha.bats)"
+  [ "$output" = "$expected" ] || { printf 'got:\n%s\n' "$output" >&2; return 1; }
 }
 
 @test "a changed file selects suites by its unique trailing path (shared-basename source, deleted, in a tree holding a suite, unique basename, non-source, basename inside a directory path)" {
@@ -324,7 +376,16 @@ commit_base_files() {
 
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
   [ "$status" -eq 0 ]
-  [ "$(wc -l < "$BATS_TEST_TMPDIR/grep-calls" | tr -d ' ')" -eq 1 ]
+  several_paths="$(wc -l < "$BATS_TEST_TMPDIR/grep-calls" | tr -d ' ')"
+
+  # The count is a property of the search, not of the change: one path costs the same.
+  build_fixture
+  rm -f "$BATS_TEST_TMPDIR/grep-calls"
+  printf 'edited\n' >> "$FIXTURE/wiki/PR Merge Workflow.md"
+  git -C "$FIXTURE" commit -q -am one
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/grep-calls" | tr -d ' ')" -eq "$several_paths" ]
 }
 
 @test "no remote default branch exits 3 naming the fix, an unknown option exits 2" {
@@ -337,4 +398,171 @@ commit_base_files() {
 
   run --separate-stderr bash "$SCRIPT" --bogus
   [ "$status" -eq 2 ]
+}
+
+# add_helper_suites: commit a helper chain on top of the base, then edit
+# scripts/copied.sh, so that edit is the change under test.
+add_helper_suites() {
+  mkdir -p "$FIXTURE/tests/helpers"
+  printf 'echo copied\n' > "$FIXTURE/scripts/copied.sh"
+  # Copies the script into a fixture repository by name; its suite never names it.
+  printf 'copy_in() { cp "$ROOT/scripts/copied.sh" "$REPO/"; }\n' > "$FIXTURE/tests/helpers/copier.sh"
+  printf '# loads the copier\nload helpers/copier\n' > "$FIXTURE/tests/uses-copier.bats"
+  # Reaches the copier through a second helper that sources it.
+  printf '. "$BATS_TEST_DIRNAME/helpers/copier.sh"\n' > "$FIXTURE/tests/helpers/outer.sh"
+  printf 'source "$BATS_TEST_DIRNAME/helpers/outer.sh"\n' > "$FIXTURE/tests/uses-outer.bats"
+  # Names the script only as data it writes into a directory it made itself.
+  printf 'work="$(mktemp -d)"\nprintf x > "$work/scripts/copied.sh"\n' > "$FIXTURE/tests/helpers/scratch.sh"
+  printf 'load helpers/scratch\n' > "$FIXTURE/tests/uses-scratch.bats"
+  # Loads a helper that names no changed file.
+  printf 'noop() { :; }\n' > "$FIXTURE/tests/helpers/plain.sh"
+  printf 'load helpers/plain\n' > "$FIXTURE/tests/uses-plain.bats"
+  # Production code that mentions the script is not a helper.
+  printf '. "$ROOT/scripts/copied.sh"\n' > "$FIXTURE/scripts/library.sh"
+  printf '. "$BATS_TEST_DIRNAME/../scripts/library.sh"\n' > "$FIXTURE/tests/sources-library.bats"
+  git -C "$FIXTURE" add -A
+  git -C "$FIXTURE" commit -q -m helpers
+  BASE="$(git -C "$FIXTURE" rev-parse HEAD)"
+  git -C "$FIXTURE" update-ref refs/remotes/origin/main "$BASE"
+  printf 'edited\n' >> "$FIXTURE/scripts/copied.sh"
+  git -C "$FIXTURE" commit -q -am edit
+}
+
+@test "a suite that loads a helper copying the changed script is selected, one loading no such helper is not" {
+  add_helper_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  [ "$output" = $'tests/uses-copier.bats\ntests/uses-outer.bats' ] || {
+    printf 'got:\n%s\n' "$output" >&2
+    return 1
+  }
+}
+
+@test "a helper that names the changed script only as fixture data selects no suite" {
+  add_helper_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/uses-scratch.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-copier.bats' || return 1
+  true
+}
+
+@test "a helper mentioning the changed script only in a comment selects nothing; a helper rooted at the suite directory is not ruled out" {
+  mkdir -p "$FIXTURE/tests/helpers"
+  printf '# copies scripts/copied.sh somewhere, one day\nnoop() { :; }\n' > "$FIXTURE/tests/helpers/commented.sh"
+  printf 'load helpers/commented\n' > "$FIXTURE/tests/uses-commented.bats"
+  # The root climbs from BATS_TEST_DIRNAME, which is the loading suite's
+  # directory, so it names a different tree than the helper's own location.
+  printf 'ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"\ncopy_in() { cp "$ROOT/scripts/copied.sh" "$REPO/"; }\n' > "$FIXTURE/tests/helpers/rooted.sh"
+  printf 'load helpers/rooted\n' > "$FIXTURE/tests/uses-rooted.bats"
+  add_helper_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/uses-commented.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-rooted.bats' || return 1
+  true
+}
+
+@test "a failing search of the shell files a suite loads fails loudly" {
+  add_helper_suites
+  real_git="$(command -v git)"
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  # Fails every grep after the first, the ones that read the helper files, and
+  # runs every other call for real.
+  printf '#!/bin/sh\nfor argument in "$@"; do\n  if [ "$argument" = grep ]; then\n    count=$(cat "%s" 2>/dev/null || echo 0); count=$((count + 1)); echo "$count" > "%s"\n    [ "$count" -ge 2 ] && exit 128\n  fi\ndone\nexec "%s" "$@"\n' \
+    "$BATS_TEST_TMPDIR/count" "$BATS_TEST_TMPDIR/count" "$real_git" > "$BATS_TEST_TMPDIR/bin/git"
+  chmod +x "$BATS_TEST_TMPDIR/bin/git"
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 3 ] || { echo "status $status"; return 1; }
+  [ -z "$output" ]
+}
+
+# add_copy_pattern_suites: helpers that copy without naming the script, on top of
+# add_helper_suites; scripts/copied.sh is the edited file.
+add_copy_pattern_suites() {
+  add_helper_suites
+  mkdir -p "$FIXTURE/other"
+  printf 'echo other\n' > "$FIXTURE/other/elsewhere.sh"
+  # Copies every script of a directory by glob.
+  printf 'for source_file in "$ROOT"/scripts/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/globber.sh"
+  printf 'load helpers/globber\n' > "$FIXTURE/tests/uses-globber.bats"
+  # Copies every script of a directory the change does not touch.
+  printf 'for source_file in "$ROOT"/other/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/other-globber.sh"
+  printf 'load helpers/other-globber\n' > "$FIXTURE/tests/uses-other-globber.bats"
+  # Globs a directory held in a variable, so the change cannot be ruled out.
+  printf 'for source_file in "$ROOT"/$directory/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/unreadable-globber.sh"
+  printf 'load helpers/unreadable-globber\n' > "$FIXTURE/tests/uses-unreadable-globber.bats"
+  # Loops over a glob without copying the loop variable, in a helper that copies elsewhere.
+  printf 'cp "$ROOT/other/elsewhere.sh" "$REPO/"\nfor entry in "$ROOT"/scripts/*.sh; do\n  echo "$entry"\ndone\n' > "$FIXTURE/tests/helpers/reading-loop.sh"
+  printf 'load helpers/reading-loop\n' > "$FIXTURE/tests/uses-reading-loop.bats"
+  # Copies a bare "*" tail, which names no file.
+  printf 'cp "$ROOT"/* "$REPO/"\n' > "$FIXTURE/tests/helpers/bare-tail.sh"
+  printf 'load helpers/bare-tail\n' > "$FIXTURE/tests/uses-bare-tail.bats"
+  # Copies a glob whose stem is held in an expansion, leaving only "-*.sh".
+  printf 'for hook in "${HOOK%%.sh}"-*.sh; do cp "$hook" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/stemless.sh"
+  printf 'load helpers/stemless\n' > "$FIXTURE/tests/uses-stemless.bats"
+  # Copies a directory held in a parameter, leaving only the tail "*.sh".
+  printf 'for source_file in "$source_directory"/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/extension-only.sh"
+  printf 'load helpers/extension-only\n' > "$FIXTURE/tests/uses-extension-only.bats"
+  printf 'echo hooked\n' > "$FIXTURE/scripts/copied-hook.sh"
+  # Copies a script and derives more copies from what it sources.
+  printf 'cp "$ROOT/scripts/library.sh" "$REPO/"\ngrep -o "[a-z]*[.]sh" "$ROOT/scripts/library.sh"\n' > "$FIXTURE/tests/helpers/deriver.sh"
+  printf 'load helpers/deriver\n' > "$FIXTURE/tests/uses-deriver.bats"
+  # Copies the same script without deriving anything from it.
+  printf 'cp "$ROOT/scripts/library.sh" "$REPO/"\n' > "$FIXTURE/tests/helpers/plain-copier.sh"
+  printf 'load helpers/plain-copier\n' > "$FIXTURE/tests/uses-plain-copier.bats"
+  # Runs a helper by path instead of loading it.
+  printf 'run "$BATS_TEST_DIRNAME/helpers/copier.sh"\n' > "$FIXTURE/tests/invokes-copier.bats"
+  printf 'run "$BATS_TEST_DIRNAME/helpers/not-tracked.sh"\n' > "$FIXTURE/tests/invokes-missing.bats"
+  # Names a fixture file that copies the script; a fixture is data, not a helper.
+  mkdir -p "$FIXTURE/tests/fixtures"
+  printf 'cp "$ROOT/scripts/copied.sh" "$REPO/"\n' > "$FIXTURE/tests/fixtures/staged-copier.sh"
+  printf 'run "$STAGE/staged-copier.sh"\n' > "$FIXTURE/tests/invokes-fixture.bats"
+  git -C "$FIXTURE" add -A
+  git -C "$FIXTURE" commit -q -m copy-patterns
+  BASE="$(git -C "$FIXTURE" rev-parse HEAD)"
+  git -C "$FIXTURE" update-ref refs/remotes/origin/main "$BASE"
+  printf 'edited again\n' >> "$FIXTURE/scripts/copied.sh"
+  printf 'edited\n' >> "$FIXTURE/scripts/copied-hook.sh"
+  git -C "$FIXTURE" commit -q -am edit-again
+}
+
+@test "a helper copying by a glob that covers the changed script selects its suites; a glob over another directory does not, one that cannot be read does" {
+  add_copy_pattern_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/uses-globber.bats' || return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-unreadable-globber.bats' || return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-other-globber.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-reading-loop.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-bare-tail.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-stemless.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-extension-only.bats' && return 1
+  true
+}
+
+@test "a helper that copies a script and derives copies from it is selected through that script's sourced files; a plain copy is not" {
+  add_copy_pattern_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/uses-deriver.bats' || return 1
+  printf '%s\n' "$output" | grep -qx 'tests/uses-plain-copier.bats' && return 1
+  true
+}
+
+@test "a suite that runs a tracked helper by path is selected like one that loads it; a path naming no tracked helper, or only a fixture file, selects nothing" {
+  add_copy_pattern_suites
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qx 'tests/invokes-copier.bats' || return 1
+  printf '%s\n' "$output" | grep -qx 'tests/invokes-missing.bats' && return 1
+  printf '%s\n' "$output" | grep -qx 'tests/invokes-fixture.bats' && return 1
+  true
 }

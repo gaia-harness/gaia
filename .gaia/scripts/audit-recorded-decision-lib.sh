@@ -32,11 +32,18 @@ _veto_lock() {
 # veto (vetoes.json, shape in audit-fix-verify.sh's header). A row alone binds
 # nothing: a member whose clearance survives the commits after its round is
 # never re-dispatched, so the next unit could stop clean with the fix unmade.
+# The key's direction is the reason in FINDING_FILE, never the row's: the row
+# falls back to the failure mode, which would brief the fixer with the defect
+# as if it were the human's repair. A repeat decision replaces the direction
+# on every entry for the key, whatever its effective_from_round, and a blank
+# reason clears it.
 # Writing the veto before the row lets a retry finish a failed call. rc 3 when
-# next-unit fails, the lock stays held, vetoes.json is unreadable or malformed,
-# or the write fails. A hung live call's lock is cleared by removing vetoes.json.lock.
+# FINDING_FILE is unreadable, next-unit fails, the lock stays held, vetoes.json
+# is unreadable or malformed, or the write fails. A hung live call's lock is cleared by removing vetoes.json.lock.
 _veto_recorded_fix() {
-  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file="$RUN_FOLDER/vetoes.json.$$"
+  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file="$RUN_FOLDER/vetoes.json.$$" direction
+  direction="$(jq -r 'if (.reason | type) == "string" and (.reason | test("\\S")) then .reason else "" end' "$FINDING_FILE" 2>/dev/null)" ||
+    { _error "unreadable finding $FINDING_FILE, so the fix decision was not recorded"; return 3; }
   next_unit="$(_evaluator next-unit)" && [[ "$next_unit" =~ ^([0-9]+)\ ([0-9]+)$ ]] ||
     { _error "the evaluator could not print the next unit, so the fix decision was not recorded"; return 3; }
   _veto_lock "$vetoes_file.lock" || { _error "cannot lock $vetoes_file"; return 3; }
@@ -45,9 +52,14 @@ _veto_recorded_fix() {
       { rm -rf "$vetoes_file.lock"; _error "unparseable $vetoes_file"; return 3; }
   fi
   if ! jq -n --argjson vetoes "$veto_document" --argjson row "$1" --argjson unit "${BASH_REMATCH[1]}" --argjson from "${BASH_REMATCH[2]}" \
-    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '($row | [.member, .finding_class, .path, .line]) as $key
-    | if any($vetoes.keys[]; [.member, .finding_class, .path, .line] == $key and .effective_from_round == $from) then $vetoes
-      else $vetoes | .keys += [$row | {member, finding_class, path, line, vetoed_at: $now, unit: $unit, effective_from_round: $from}] end' \
+    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg direction "$direction" '($row | [.member, .finding_class, .path, .line]) as $key
+    | (if $direction == "" then {} else {direction: $direction} end) as $directed
+    | def samekey: [.member, .finding_class, .path, .line] == $key;
+    def same: samekey and .effective_from_round == $from;
+    def redirect: (del(.direction)) + $directed;
+    ($vetoes | .keys |= map(if samekey then redirect else . end)) as $redirected
+    | if any($vetoes.keys[]; same) then $redirected
+      else $redirected | .keys += [$row | {member, finding_class, path, line, vetoed_at: $now, unit: $unit, effective_from_round: $from} + $directed] end' \
     >"$temporary_file" 2>/dev/null || ! mv "$temporary_file" "$vetoes_file"; then
     rm -f "$temporary_file"; rm -rf "$vetoes_file.lock"; _error "cannot write $vetoes_file"; return 3
   fi
