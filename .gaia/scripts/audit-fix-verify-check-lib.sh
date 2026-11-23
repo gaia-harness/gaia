@@ -354,8 +354,8 @@ EOF
   # Not piped into sort: a pipe would report sort's status, and a jq failure
   # would read as an unmoved tree.
   jq -r --slurpfile now "$TEMPORARY_DIRECTORY/cur/judged.json" \
-    '.judged.paths as $then | ($then + $now[0]) | keys[] as $judged_path
-      | select($then[$judged_path] != $now[0][$judged_path]) | $judged_path' \
+    '.judged.paths as $judged_before | ($judged_before + $now[0]) | keys[] as $judged_path
+      | select($judged_before[$judged_path] != $now[0][$judged_path]) | $judged_path' \
     "$VERIFIER_FILE" >"$TEMPORARY_DIRECTORY/moved.raw" || {
     printf 'bad-input: cannot compare the tree with %s\n' "$VERIFIER_FILE" >&2
     exit 1
