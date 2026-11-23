@@ -508,7 +508,7 @@ add_copy_pattern_suites() {
   # Copies a directory held in a parameter, leaving only the tail "*.sh".
   printf 'for source_file in "$source_directory"/*.sh; do cp "$source_file" "$REPO/"; done\n' > "$FIXTURE/tests/helpers/extension-only.sh"
   printf 'load helpers/extension-only\n' > "$FIXTURE/tests/uses-extension-only.bats"
-  # Copy through a function parameter, called with the changed directory, with another one, and not at all.
+  # Copies through a function parameter, in three helpers: called with the changed directory, with another one, and not at all.
   printf 'copy_directory() {\n  local source_directory="$1" destination_directory="$2"\n  for source_file in "$source_directory"/*.sh; do cp "$source_file" "$destination_directory/"; done\n}\ncopy_directory "${ROOT}/other" "$REPO/other"\ncopy_directory "${ROOT}/scripts" "$REPO/scripts"\n' > "$FIXTURE/tests/helpers/parameter-called.sh"
   printf 'load helpers/parameter-called\n' > "$FIXTURE/tests/uses-parameter-called.bats"
   printf 'copy_directory() {\n  local source_directory="$1" destination_directory="$2"\n  for source_file in "$source_directory"/*.sh; do cp "$source_file" "$destination_directory/"; done\n}\ncopy_directory "${ROOT}/other" "$REPO/other"\n' > "$FIXTURE/tests/helpers/parameter-other.sh"

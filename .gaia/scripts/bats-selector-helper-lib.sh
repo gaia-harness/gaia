@@ -42,10 +42,10 @@
 # and whose tail starts with a wildcard (`"$source_directory"/*.sh`) is matched
 # under the argument each call to that function in the same helper passes for
 # that parameter. A glob matches nothing when what is left of it after its
-# expansions names no file (a bare `*`, `-*.sh`, or a `*.sh` whose directory no
-# call resolves), since nothing is left to tell the files it copies from any
-# other. A helper that copies a script
-# and also greps it reaches whatever that script sources.
+# expansions names no particular file (a bare `*`, `-*.sh`, or a `*.sh` whose
+# directory no call resolves), since nothing is left to tell the files it copies
+# from any other. A helper that copies a script and also greps it reaches
+# whatever that script sources.
 #
 # Limit: a copy list built any other way (a computed array, a `find`, a name
 # read from a file) names no file, so a change to a file it picks is not seen
@@ -191,7 +191,7 @@ bats_selector_helper_suites() {
     # Whether a readable tail has no directory part and starts with a wildcard
     # (`*.sh`, `*-hook.sh`): on its own it matches every such file in the
     # repository and tells the files it copies from none of them.
-    function glob_is_extension_only(tail) {
+    function glob_is_directoryless_wildcard(tail) {
       return (tail !~ /\// && tail ~ /^[*?\[]/)
     }
     function glob_regex(glob, anchored,   position, character, regex) {
@@ -302,7 +302,7 @@ bats_selector_helper_suites() {
               tail = glob_name_part(word)
               if (tail != "" && glob_names_a_change(tail, 0)) reaching[helper] = 1
             } else if (tail !~ /^\*+$/) {
-              if (glob_is_extension_only(tail)) { if (parameter_glob_names_a_change(helper, glob_line, word, tail)) reaching[helper] = 1 }
+              if (glob_is_directoryless_wildcard(tail)) { if (parameter_glob_names_a_change(helper, glob_line, word, tail)) reaching[helper] = 1 }
               else if (glob_names_a_change(tail, 1)) reaching[helper] = 1
             }
           }
