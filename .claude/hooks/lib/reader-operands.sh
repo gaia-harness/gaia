@@ -255,16 +255,15 @@ gaia_reader_strip_env_prefix() {
 # Prints the full command text with the body of each data-only heredoc masked,
 # for the caller to split into segments afterwards. The decision of which body
 # is data belongs to gaia_verb_arm_view (lib/verb-arming-walk.sh's header lists
-# the conditions); this function only asks it. A commit-message heredoc inside
-# `$(...)` is not data to the walk, so its body stays judged. Where the walk
-# abstains it prints the text unchanged, so every body stays judged, the
-# direction that fails closed. A missing walker degrades the same way; a
-# non-zero return from gaia_verb_arm_view is returned so the caller can deny.
+# the conditions); this function only asks it. Where the walk abstains it
+# prints the text unchanged, so every body stays judged, the direction that
+# fails closed. A missing walker degrades the same way; a non-zero return from
+# gaia_verb_arm_view is returned so the caller can deny.
 #
 # HONEST LIMIT. A body is data only as to what it is handed to: a quoted cat
 # heredoc that WRITES a script holding a dump or a dotenv read, with a later
-# line that runs that script, is allowed here, since the body is judged as
-# text and the run is a separate command naming only the script's path. The
+# line that runs that script, is allowed here, since the body is masked as
+# data and the run is a separate command naming only the script's path. The
 # same goes for a subprocess that reads the body back.
 gaia_reader_drop_data_heredoc_bodies() {
   local command_text="$1"

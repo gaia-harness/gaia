@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The data-proof walker behind the shared verb-arming decision, and the
 # liveness scan after it (verb-arming-live-helpers.sh states its contract).
-# Sourced by lib/verb-arming.sh, lazily, only once a raw arming match has
-# already hit or the text carries gh and a repository flag; sourced by nothing
-# else. Does no work at source time beyond
+# Sourced lazily by lib/verb-arming.sh, once a raw arming match has already hit
+# or the text carries gh and a repository flag, and by lib/reader-operands.sh
+# for the heredoc view. Does no work at source time beyond
 # loading its sibling files.
 #
 #   gaia_verb_arm_view <text>
