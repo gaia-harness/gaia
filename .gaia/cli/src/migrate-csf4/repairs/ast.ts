@@ -18,10 +18,9 @@ import type {
   VariableDeclaration,
   VariableStatement,
 } from 'typescript';
+import type {Ts} from '../../util/load-typescript.js';
 
-/** The TypeScript compiler module the repairs parse with. */
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- a namespace type import of this export= module adds a synthetic `default` the caller's own `typescript` value lacks
-export type Ts = typeof import('typescript');
+export type {Ts} from '../../util/load-typescript.js';
 
 /** Parses `source` as a module, choosing JSX support from the extension. */
 export const parseSource = (
