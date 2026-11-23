@@ -14,7 +14,7 @@
 # What earns a fall-through option: it makes git run a program (`--exec`,
 # `--upload-pack`, `--receive-pack`, a merge strategy, which git runs as
 # `git-merge-<name>` from PATH), opens an editor or pager that would hang an
-# unattended run, or writes a file the caller names (`--output`).
+# unattended run, or writes a file the caller names (`--output`) or writes a path an edit prompt guards (`restore --source`). `apply` is absent for the same reason: a patch can target `.claude/`.
 #
 # Subcommands are chosen from what GAIA's commands, skills, rules, agents and
 # executed wiki pages tell Claude to run, and from a scan of session
@@ -24,9 +24,8 @@
 # shellcheck disable=SC2034  # read by classify-git-command.sh
 GAIA_GIT_ALLOWED_SUBCOMMANDS=(
   'add'
-  'apply --unsafe-paths'
   'archive --exec --remote --output -o'
-  'blame'
+  'blame --output'
   'branch'
   'cat-file'
   'check-attr'
@@ -56,15 +55,15 @@ GAIA_GIT_ALLOWED_SUBCOMMANDS=(
   'rebase --exec --interactive --strategy -x -i -s'
   'remote @read-only'
   'reset'
-  'restore'
-  'rev-list'
+  'restore --source -s'
+  'rev-list --output'
   'rev-parse'
   'revert --strategy -s'
   'rm'
-  'shortlog'
+  'shortlog --output'
   'show --output'
   'show-ref'
-  'stash'
+  'stash --output'
   'status'
   'switch'
   'symbolic-ref'

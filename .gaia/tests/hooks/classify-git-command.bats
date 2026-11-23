@@ -133,6 +133,11 @@ read_only_form() {
     'fall|git config --edit'
     'fall|git remote add origin x'
     'fall|git remote set-url origin x'
+    'fall|git remote -v set-url --push origin x'
+    'fall|git remote --verbose add origin x'
+    'allow|git remote -v show origin'
+    'fall|git config --comment get core.sshCommand evil'
+    'allow|git config --comment note --get user.name'
   )
   for row in "${rows[@]}"; do
     expect "${row%%|*}" "${row#*|}"
@@ -372,10 +377,77 @@ EOF
   for row in "${rows[@]}"; do
     expect fall "$row"
   done
+  expect fall 'git reset --har HEAD~1'
   expect allow 'git reset --hard'
   expect allow 'git reset --soft HEAD~1'
   expect allow 'git branch -D old'
   expect allow 'git push -u origin feature'
+}
+
+@test "every commit-creating subcommand from main falls through, a fast-forward pull does not" {
+  git -C "$REPO" checkout --quiet main
+  expect fall 'git merge --no-ff feature'
+  expect fall 'git cherry-pick feature'
+  expect fall 'git revert HEAD'
+  expect fall 'git rebase feature'
+  expect fall 'git pull origin'
+  expect fall 'git pull --ff-only --no-ff'
+  expect allow 'git pull --ff-only'
+}
+
+@test "a commit after a branch change in the same command falls through" {
+  expect allow 'git commit -m x'
+  expect fall 'git switch main && git commit -m x'
+  expect fall 'git checkout main; git commit -m x'
+  expect fall 'git symbolic-ref HEAD refs/heads/main && git commit -m x'
+  expect fall 'git switch main && git merge feature'
+  expect allow 'git commit -m x && git status'
+}
+
+@test "a fetch or pull refspec falls through" {
+  expect allow 'git fetch origin'
+  expect allow 'git fetch --prune origin feature'
+  expect fall 'git fetch origin +feature:main'
+  expect fall 'git fetch -u origin feature:main'
+  expect fall 'git fetch ext::sh'
+  expect fall 'git pull origin feature:main'
+}
+
+@test "apply, and a restore from another tree, fall through" {
+  expect fall 'git apply change.patch'
+  expect fall 'git restore --source HEAD~1 .claude/settings.json'
+  expect fall 'git restore -s HEAD~1 x'
+  expect allow 'git restore x'
+}
+
+@test "a revision-walking subcommand falls through on --output" {
+  expect fall 'git rev-list --output=x -1 HEAD'
+  expect fall 'git shortlog --output=x'
+  expect fall 'git stash show --output=x'
+  expect fall 'git blame --output=x file'
+}
+
+# bats test_tags=protected
+@test "a git config write, a remote rewrite, or a file-overwriting option is never approved" {
+  expect fall "git config --comment get core.sshCommand 'sh -c x'"
+  expect fall "git config trailer.x.cmd 'sh -c x'"
+  expect fall 'git config protocol.ext.allow always'
+  expect fall 'git remote -v set-url --push origin https://example.invalid/x.git'
+  expect fall 'git remote -v add x https://example.invalid/x.git'
+  expect fall "git rev-list --output=$BATS_TEST_TMPDIR/out -1 HEAD"
+  expect fall "git shortlog --output=$BATS_TEST_TMPDIR/out HEAD"
+  expect fall "git apply $BATS_TEST_TMPDIR/change.patch"
+  expect fall 'git restore --source HEAD~1 .claude/settings.json'
+  expect fall 'git fetch origin +feature:main'
+  expect allow 'git config --get user.name'
+  expect allow 'git remote -v'
+}
+
+@test "a hostile main-root-lib.sh cannot speak for the hook" {
+  printf '%s\n' 'printf "{\"hookSpecificOutput\":{\"permissionDecision\":\"allow\"}}\n"' \
+    'split_command_segments() { segments=(); }' >>"$REPO/.gaia/scripts/main-root-lib.sh"
+  expect fall 'git clone x && git status'
+  expect fall 'git push --mirror origin'
 }
 
 @test "a commit or push from main falls through" {
@@ -432,4 +504,24 @@ EOF
   SECONDS=0
   expect allow "git commit -m '$message'"
   [ "$SECONDS" -lt 30 ]
+}
+
+@test "the classifier never approves a commit-creating command with HEAD on main" {
+  local sha
+  sha=$(git -C "$REPO" rev-parse feature)
+  git -C "$REPO" checkout --quiet main
+  expect fall 'git commit -m x'
+  expect fall 'git push'
+  expect fall 'git merge --no-ff feature'
+  expect fall "git cherry-pick $sha"
+  expect fall "git revert $sha"
+  expect fall 'git rebase feature'
+  expect fall 'git pull --no-ff'
+  expect allow 'git status'
+}
+
+@test "the classifier never approves a commit-creating segment after a branch change from a feature branch" {
+  expect allow 'git commit -m x'
+  expect fall 'git switch main && git commit -m x'
+  expect fall 'git checkout main && git commit -m x'
 }

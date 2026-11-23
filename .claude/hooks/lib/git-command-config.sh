@@ -32,7 +32,8 @@ GAIA_GIT_COMMAND_CONFIG_KEYS=(
   uploadpack.packobjectshook 'remote.*.uploadpack' 'remote.*.receivepack'
   'hook.*.command'
   include.path 'includeif.*.path'
-  'browser.*.cmd' 'man.*.cmd'
+  'browser.*.cmd' 'browser.*.path' 'man.*.cmd' 'man.*.path'
+  'trailer.*.cmd' 'trailer.*.command' protocol.allow 'protocol.*.allow'
   interactive.difffilter
 )
 

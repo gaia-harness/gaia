@@ -158,6 +158,25 @@ _history_update_ref_names_head() {
   return 1
 }
 
+# _history_symbolic_ref_writes_main: 0 when `git symbolic-ref` deletes or
+# re-points main or master: `-d` or `--delete` with a main operand, or a main
+# name as the first operand when a target follows it. A read (`symbolic-ref
+# refs/heads/main`) and `symbolic-ref HEAD refs/heads/main` (a switch) pass.
+_history_symbolic_ref_writes_main() {
+  local argument operand_count=0 first=""
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    case "$argument" in
+      -d | --delete) _history_names_main && return 0 ;;
+      -*) ;;
+      *)
+        operand_count=$((operand_count + 1))
+        [ "$operand_count" -eq 1 ] && first="$argument"
+        ;;
+    esac
+  done
+  [ "$operand_count" -ge 2 ] && _history_is_main_ref "$first"
+}
+
 # _history_has_short_flag <letter...>: 0 when any operand is a single-dash
 # short-flag bundle carrying one of the letters (`-x`, `-fdx`, `-Xdf`).
 _history_has_short_flag() {
@@ -207,9 +226,14 @@ _history_names_main() {
 # section unsets the key with it. Honest limit: an edit of `.git/config` by any
 # other route is not a `git config` invocation and is not read here.
 _history_config_reason() {
-  local argument key_seen=0 value_seen=0 value="" lowered is_unset=0 section_edit=0
+  local argument key_seen=0 value_seen=0 value="" lowered is_unset=0 section_edit=0 skip_next=0
   for argument in ${git_args[@]+"${git_args[@]}"}; do
+    if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
     lowered=$(printf '%s' "$argument" | tr '[:upper:]' '[:lower:]')
+    case "$lowered" in
+      --*=*) ;;
+      --*) if _history_option_is "$lowered" --comment; then skip_next=1; continue; fi ;;
+    esac
     case "$lowered" in
       -l) return 0 ;;
     esac
@@ -262,6 +286,10 @@ _history_config_command_reason() {
   while [ "$index" -lt "$count" ]; do
     word="${git_args[$index]}"
     lowered=$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')
+    case "$lowered" in
+      --*=*) ;;
+      --*) if _history_option_is "$lowered" --comment; then index=$((index + 2)); continue; fi ;;
+    esac
     if _history_option_is "$lowered" --get --get-all --get-regexp --get-urlmatch --list \
        --unset --unset-all || [ "$lowered" = -l ]; then
       return 0
@@ -354,12 +382,14 @@ history_rule_reason() {
         history_reason="'git update-ref' on main or master, or on HEAD, which is main in the main checkout, moves or deletes the shared branch outside every guard that protects it (wiki/concepts/Git Workflow.md). Main changes only through a merged pull request; on a feature branch use 'git branch' or 'git switch'."
       fi
       ;;
-    branch | checkout | switch)
+    branch | checkout | switch | worktree | symbolic-ref)
       if { [ "$git_subcommand" = branch ] && _history_names_main \
              && { _history_has_short_flag d D f m M c C \
                   || _history_has_option --delete --force --move --copy; }; } \
          || { [ "$git_subcommand" = checkout ] && _history_force_create_names_main B; } \
-         || { [ "$git_subcommand" = switch ] && _history_force_create_names_main C --force-create; }; then
+         || { [ "$git_subcommand" = switch ] && _history_force_create_names_main C --force-create; } \
+         || { [ "$git_subcommand" = worktree ] && _history_force_create_names_main B; } \
+         || { [ "$git_subcommand" = symbolic-ref ] && _history_symbolic_ref_writes_main; }; then
         history_reason="Deleting, renaming, copying over or force-moving the local main or master branch is the user's decision, not Claude's (wiki/concepts/Git Workflow.md): it is the base every feature branch, worktree and cleanup step reads. Ask the user to run it themselves if they want it."
       fi
       ;;

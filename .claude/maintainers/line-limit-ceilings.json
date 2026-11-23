@@ -7,6 +7,7 @@
     ".claude/hooks/lib/audit-branch-patch.sh": 564,
     ".claude/hooks/lib/audit-scope.sh": 528,
     ".claude/hooks/lib/gaia-packages.sh": 469,
+    ".claude/hooks/lib/main-git-guard-history.sh": 414,
     ".claude/hooks/local-janitor.sh": 528,
     ".claude/hooks/provision-worktree.sh": 615,
     ".claude/hooks/workflow-doctrine-inject.sh": 586,

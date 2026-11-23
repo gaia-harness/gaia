@@ -373,8 +373,8 @@ reset_hard_moves_head() {
   [ -n "$directory" ] && in_directory=(-C "$directory")
   for argument in ${git_args[@]+"${git_args[@]}"}; do
     if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
+    if _history_option_is "$argument" --hard; then hard=1; continue; fi
     case "$argument" in
-      --hard) hard=1; continue ;;
       --) break ;;
       *'>' | *'<') skip_next=1; continue ;;
       *[\<\>]*) continue ;;

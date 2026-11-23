@@ -63,6 +63,12 @@ gaia_hook_payload_read "$payload" || exit 0
 command=$GAIA_HOOK_COMMAND
 case "$command" in git | git[[:space:]]* | *[[:space:]]git[[:space:]]* | *[\;\&\|]git[[:space:]]*) ;; *) exit 0 ;; esac
 
+# main-root-lib.sh loads first, with its output discarded, so a function it also
+# defines is replaced by the hook library's definition below and nothing it
+# prints can reach this hook's stdout. `Edit(.gaia/**)` lets Claude rewrite it
+# unprompted, so it is not trusted to speak for this hook.
+# shellcheck source=/dev/null
+. "$hook_root/.gaia/scripts/main-root-lib.sh" >/dev/null 2>&1 || exit 0
 # shellcheck source=lib/main-git-guard-parse.sh
 . "$library_directory/main-git-guard-parse.sh" 2>/dev/null || exit 0
 # shellcheck source=lib/main-git-guard-history.sh
@@ -73,8 +79,6 @@ case "$command" in git | git[[:space:]]* | *[[:space:]]git[[:space:]]* | *[\;\&\
 . "$library_directory/git-allow-list.sh" 2>/dev/null || exit 0
 # shellcheck source=lib/git-command-segments.sh
 . "$library_directory/git-command-segments.sh" 2>/dev/null || exit 0
-# shellcheck source=/dev/null
-. "$hook_root/.gaia/scripts/main-root-lib.sh" 2>/dev/null || exit 0
 for required_function in parse_git_globals history_rule_reason \
     _history_option_is push_refspec_names_main push_refspec_targets_main reset_hard_moves_head \
     gaia_resolve_common_directory split_command_segments; do
@@ -139,20 +143,44 @@ directory_is_approved() {
   in_this_repository "$directory"
 }
 
-# main_branch_rule_matches: 0 when block-main-destructive-git.sh's main-branch
-# rules would deny the segment: a commit or push from main or master, a push
-# whose refspec names main as source or destination, or a hard reset that moves
-# HEAD. That hook denies these itself; reading them here keeps this file from
-# ever returning an allow beside its deny.
+# pull_fast_forwards_only: 0 when the `git pull` segment carries `--ff-only` and
+# no option that lets it merge or rebase instead.
+pull_fast_forwards_only() {
+  local argument fast_forward_only=0
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    case "$argument" in
+      --ff-only) fast_forward_only=1 ;;
+      --ff | --no-ff | --rebase* | -r) return 1 ;;
+    esac
+  done
+  [ "$fast_forward_only" -eq 1 ]
+}
+
+# main_branch_rule_matches: 0 when the segment must not be approved on a branch
+# question: a commit-creating subcommand from main or master (or from a branch
+# an earlier checkout, switch or symbolic-ref segment of this command may have
+# changed, since HEAD is read once before any segment runs), a push whose
+# refspec names main as source or destination, a hard reset that moves HEAD, or
+# a fetch or pull refspec, whose destination can force-move local main.
+# block-main-destructive-git.sh denies some of these itself; reading them here
+# keeps this file from ever returning an allow beside its deny.
 main_branch_rule_matches() {
-  local branch
+  local branch argument
   case "$git_subcommand" in
-    commit | push)
-      branch=$(git -C "$segment_run_directory" symbolic-ref --short HEAD 2>/dev/null) || branch=""
-      case "$branch" in main | master) return 0 ;; esac
+    commit | push | merge | cherry-pick | revert | rebase | pull)
+      if [ "$git_subcommand" != pull ] || ! pull_fast_forwards_only; then
+        [ "$branch_may_have_changed" -eq 1 ] && return 0
+        branch=$(git -C "$segment_run_directory" symbolic-ref --short HEAD 2>/dev/null) || branch=""
+        case "$branch" in main | master) return 0 ;; esac
+      fi
       ;;
   esac
   case "$git_subcommand" in
+    fetch | pull)
+      for argument in ${git_args[@]+"${git_args[@]}"}; do
+        case "$argument" in -*) ;; *:*) return 0 ;; esac
+      done
+      return 1 ;;
     push) push_refspec_names_main || push_refspec_targets_main ;;
     reset) reset_hard_moves_head "$segment_run_directory" 0 ;;
     *) return 1 ;;
@@ -187,6 +215,10 @@ config_is_read_only() {
   for argument in ${git_args[@]+"${git_args[@]}"}; do
     if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
     lowered=$(printf '%s' "$argument" | tr '[:upper:]' '[:lower:]')
+    case "$lowered" in
+      --*=*) ;;
+      --*) if _history_option_is "$lowered" --comment; then skip_next=1; continue; fi ;;
+    esac
     if _history_option_is "$lowered" --unset --unset-all --add --replace-all \
          --rename-section --remove-section --edit || [ "$lowered" = -e ]; then
       return 1
@@ -211,13 +243,18 @@ config_is_read_only() {
   [ "$operand_count" -le 1 ]
 }
 
-# remote_is_read_only: 0 for `git remote` with no operand, `-v`, `get-url` or
-# `show`.
+# remote_is_read_only: 0 for `git remote` with no operand, `get-url` or `show`,
+# each optionally after `-v`. Any other word is a write subcommand.
 remote_is_read_only() {
-  case "${git_args[0]:-}" in
-    '' | -v | --verbose | get-url | show) return 0 ;;
-  esac
-  return 1
+  local argument
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    case "$argument" in
+      -v | --verbose) continue ;;
+      get-url | show) return 0 ;;
+    esac
+    return 1
+  done
+  return 0
 }
 
 # subcommand_is_approved: 0 when the segment's subcommand is on the allow list
@@ -266,6 +303,7 @@ commit_reads_stdin() {
 
 split_command_segments "$command" || exit 0
 approved=0
+branch_may_have_changed=0
 for segment_index in "${!segments[@]}"; do
   segment="${segments[$segment_index]}"
   segment="${segment#"${segment%%[![:space:]]*}"}"
@@ -280,6 +318,7 @@ for segment_index in "${!segments[@]}"; do
   history_rule_reason
   [ -z "$history_reason" ] || exit 0
   main_branch_rule_matches && exit 0
+  case "$git_subcommand" in checkout | switch | symbolic-ref) branch_may_have_changed=1 ;; esac
   approved=1
 done
 [ "$approved" -eq 1 ] || exit 0

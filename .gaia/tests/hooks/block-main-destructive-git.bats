@@ -734,6 +734,7 @@ degrade_staged_library() {
   local rows=(
     'deny|keep_feature|||git reset -q --hard HEAD~1'
     'deny|keep_feature|||git reset --hard --quiet HEAD^'
+    'deny|keep_feature|||git reset --har HEAD~1'
     'deny|keep_feature|||git -C @MAIN@ reset --hard HEAD~1'
     'deny|keep_feature|||git reset --hard no-such-ref'
     'deny|keep_feature|||cd "$SOMEWHERE" && git reset --hard @HEAD@'
@@ -838,6 +839,10 @@ degrade_staged_library() {
     'deny|feature|||git switch --force-c main'
     'deny|feature|||git reflog drop --all'
     'deny|feature|||git gc --prun=now'
+    'deny|feature|||git worktree add -f -B main /tmp/other-tree HEAD'
+    'deny|feature|||git symbolic-ref refs/heads/main refs/heads/feature'
+    'deny|feature|||git symbolic-ref -d refs/heads/main'
+    'deny|feature|||git config --comment get core.hooksPath /dev/null'
   )
   for row in "${rows[@]}"; do
     echo "case: $row"
@@ -949,6 +954,14 @@ degrade_staged_library() {
     'deny|feature|||git config hook.pre.command evil'
     'deny|feature|||git config --rename-section foo alias'
     'deny|feature|||git config rename-section foo core'
+    'deny|feature|||git config --comment get core.sshCommand evil'
+    'deny|feature|||git config --comment list alias.x "!echo hi"'
+    'deny|feature|||git config trailer.x.cmd evil'
+    'deny|feature|||git config protocol.ext.allow always'
+    'deny|feature|||git config protocol.allow always'
+    'deny|feature|||git config browser.x.path evil'
+    'deny|feature|||git config --rename-section foo trailer'
+    'deny|feature|||git -c protocol.ext.allow=always fetch ext::sh'
   )
   for row in "${rows[@]}"; do
     echo "case: $row"
