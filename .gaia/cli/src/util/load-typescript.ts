@@ -7,12 +7,17 @@ import path from 'node:path';
 export type Ts = typeof import('typescript');
 
 /**
- * The project's own `typescript`, never bundled into this binary. Resolution
- * is gated on the project's own `node_modules`: `createRequire` alone would
- * also walk parent directories, `NODE_PATH` and global folders.
+ * The project's own `typescript`, never bundled into this binary. With
+ * `isGated`, resolution is gated on the project's own `node_modules`:
+ * `createRequire` alone would also walk parent directories, `NODE_PATH` and
+ * global folders. Without it, a workspace-root install still resolves.
  */
-export const loadTypescript = (projectDirectory: string): Ts | undefined => {
+export const loadTypescript = (
+  projectDirectory: string,
+  {isGated = false}: {isGated?: boolean} = {}
+): Ts | undefined => {
   if (
+    isGated &&
     !existsSync(
       path.join(projectDirectory, 'node_modules', 'typescript', 'package.json')
     )

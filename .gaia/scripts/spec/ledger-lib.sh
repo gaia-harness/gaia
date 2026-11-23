@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Shared pure helpers for the spec and plan status vocabulary and retention
-# windows. Sourced, never run: it defines functions and nothing else, sources
-# nothing itself, and locates no file (the notebook library owns that).
+# windows. Sourced, never run: it defines functions and the status-key arrays
+# its case arms are marked against, sources nothing itself, and locates no file (the notebook library owns that).
 #
 # Public functions:
 #   gaia_ledger_kind_for_id <id>                  spec | plan, else nothing + 2

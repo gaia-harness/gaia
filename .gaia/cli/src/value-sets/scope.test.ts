@@ -114,4 +114,20 @@ describe('collectScope', () => {
       files.find((file) => file.path === 'scripts/modified.sh')?.text
     ).toBe('echo working tree\n');
   });
+
+  test('an extensionless script named like an excluded directory is scanned, a file under that directory is not', () => {
+    const root = makeTree({
+      'build/inside.sh': 'echo inside\n',
+      'scripts/build': '#!/usr/bin/env bash\necho build\n',
+      'scripts/dist': '#!/bin/bash\necho dist\n',
+    });
+
+    const scope = collectScope({exclude: [], root});
+    const files = 'files' in scope ? scope.files : [];
+
+    expect(files.map((file) => file.path)).toEqual([
+      'scripts/build',
+      'scripts/dist',
+    ]);
+  });
 });

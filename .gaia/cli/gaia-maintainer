@@ -25222,6 +25222,26 @@ var collectTreeFiles = (root, extensions) => {
   return walk(root).toSorted((a, b) => a.localeCompare(b));
 };
 
+// src/util/packages.ts
+var NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+var PATH_PATTERN = /^(\.|[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*)$/;
+var CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
+var cleanString = external_exports.string().min(1).refine((value) => !CONTROL_CHARACTER.test(value));
+var globList = external_exports.array(cleanString);
+var wikiList = external_exports.array(external_exports.string().refine((v) => !CONTROL_CHARACTER.test(v)));
+var registryEntrySchema = external_exports.object({
+  name: external_exports.string().regex(NAME_PATTERN),
+  path: external_exports.string().regex(PATH_PATTERN)
+});
+var registrySchema = external_exports.array(registryEntrySchema);
+
+// src/wiki/dead-paths.ts
+var ADOPTER_OWNED_SENTINELS2 = /* @__PURE__ */ new Set([
+  ".gaia/project.json",
+  ".gaia/update-decisions.json",
+  ".gaia/value-sets.json"
+]);
+
 // src/release/marker-strip.ts
 var textBesideMarkers = (line, lineNumber, bounds) => {
   const trimmed = line.trim();
@@ -25308,11 +25328,9 @@ var HELP_TEXT10 = `Usage: gaia-maintainer release runtime-deps [--staging <dir>]
 `;
 var HELP_TOKENS10 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT7 = 2;
-var ADOPTER_OWNED_SENTINELS2 = /* @__PURE__ */ new Set([
+var ADOPTER_OWNED_SENTINELS3 = /* @__PURE__ */ new Set([
   ...ADOPTER_OWNED_SENTINELS,
-  ".gaia/project.json",
-  ".gaia/update-decisions.json",
-  ".gaia/value-sets.json"
+  ...ADOPTER_OWNED_SENTINELS2
 ]);
 var RUNTIME_PREFIXES = [
   ".gaia/local",
@@ -25378,9 +25396,9 @@ var expandPath = (line, start) => {
 var isVariableExpansionContext = (line, found) => {
   let cursor = found - 1;
   while (cursor >= 0) {
-    const ch = line.charAt(cursor);
-    if (ch === "$") return true;
-    if (!(ch === "/" || ch === "{" || ch === "}" || PATH_BODY_CHAR.test(ch))) {
+    const character = line.charAt(cursor);
+    if (character === "$") return true;
+    if (!(character === "/" || character === "{" || character === "}" || PATH_BODY_CHAR.test(character))) {
       return false;
     }
     cursor -= 1;
@@ -25457,7 +25475,7 @@ var computeShippedDirs = (manifest) => {
 };
 var isShippedPath = (candidate, manifest, shippedDirs) => {
   if (manifest.has(candidate)) return true;
-  if (ADOPTER_OWNED_SENTINELS2.has(candidate)) return true;
+  if (ADOPTER_OWNED_SENTINELS3.has(candidate)) return true;
   if (RUNTIME_PREFIXES.some(
     (prefix) => candidate === prefix || candidate.startsWith(`${prefix}/`)
   )) {

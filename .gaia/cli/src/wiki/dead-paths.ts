@@ -101,15 +101,10 @@ const RUNTIME_PREFIXES = ['.gaia/local/'] as const;
  * `.gaia/value-sets.json` is the duplicate value-set check's optional
  * exclusion config, which an adopter writes and commits and GAIA never ships.
  *
- * `release/runtime-deps.ts` keeps its own `ADOPTER_OWNED_SENTINELS` naming the
- * same file. The two sets intersect on the runtime-created entries only: that
- * one also spreads `manifest.ts`'s git-tracked sentinels, which are present on
- * disk here and so must NOT be exempted from this scan. Kept separate rather
- * than shared because this module ships in the adopter `gaia` bundle and that
- * one is maintainer-only, so importing across would pull release tooling into
- * the adopter binary and reverse the established `release/` → `wiki/` import
- * direction. A new runtime-created sentinel belongs in both; a git-tracked one
- * belongs only in the release-side set.
+ * `release/runtime-deps.ts` derives its own scan set from this one, adding
+ * `manifest.ts`'s git-tracked sentinels, which are present on disk here and so
+ * must NOT be exempted from this scan. A new runtime-created sentinel belongs
+ * here only; a git-tracked one belongs only in `manifest.ts`.
  */
 export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
   '.gaia/project.json',

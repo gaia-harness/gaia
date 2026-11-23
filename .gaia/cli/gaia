@@ -36983,8 +36983,8 @@ var run25 = async (argv) => {
 import { existsSync as existsSync24 } from "node:fs";
 import { createRequire } from "node:module";
 import path46 from "node:path";
-var loadTypescript = (projectDirectory) => {
-  if (!existsSync24(
+var loadTypescript = (projectDirectory, { isGated = false } = {}) => {
+  if (isGated && !existsSync24(
     path46.join(projectDirectory, "node_modules", "typescript", "package.json")
   )) {
     return void 0;
@@ -51297,10 +51297,7 @@ var loadPolicy = (options) => {
   };
 };
 
-// src/value-sets/shell-lexer.ts
-var WORD_BREAK_CHARACTERS = " 	\r\n;&|()<>";
-var GLOB_CHARACTERS = "*?[{}";
-var countNewlines = (source, from, to) => source.slice(from, to).split("\n").length - 1;
+// src/value-sets/shell-skip.ts
 var skipQuoted = (source, from, quote) => {
   let index = from;
   while (index < source.length) {
@@ -51310,33 +51307,107 @@ var skipQuoted = (source, from, quote) => {
   }
   return source.length;
 };
-var skipBalanced = (source, from, { close, open: open2 }) => {
+var skipHeredocBodies = (source, from, pending) => {
+  let index = from;
+  for (const heredoc of pending) {
+    let isOpen = true;
+    while (isOpen && index < source.length) {
+      const lineEnd = source.indexOf("\n", index);
+      const stop2 = lineEnd === -1 ? source.length : lineEnd;
+      const raw = source.slice(index, stop2).replace(/\r$/, "");
+      const candidate2 = heredoc.isTabStripped ? raw.replace(/^\t+/, "") : raw;
+      index = lineEnd === -1 ? source.length : lineEnd + 1;
+      isOpen = candidate2 !== heredoc.delimiter;
+    }
+  }
+  return index;
+};
+var HEREDOC_DELIMITER_BREAKS = " 	\r\n;&|()<>";
+var COMMENT_PRECEDERS = " 	\n;&|(";
+var readHeredocDelimiter = (source, from) => {
+  let index = from;
+  let text = "";
+  while (index < source.length && !HEREDOC_DELIMITER_BREAKS.includes(source[index])) {
+    const character = source[index];
+    if (character === "\\") {
+      text += source[index + 1] ?? "";
+      index += 2;
+    } else {
+      if (character !== "'" && character !== '"') text += character;
+      index += 1;
+    }
+  }
+  return { end: index, text };
+};
+var readSubstitutionHeredoc = (source, from) => {
+  if (source[from + 1] !== "<" || source[from + 2] === "<") return void 0;
+  const isTabStripped = source[from + 2] === "-";
+  let delimiterStart = from + (isTabStripped ? 3 : 2);
+  while (source[delimiterStart] === " " || source[delimiterStart] === "	") {
+    delimiterStart += 1;
+  }
+  const delimiter = readHeredocDelimiter(source, delimiterStart);
+  return delimiter.text === "" ? void 0 : { end: delimiter.end, heredoc: { delimiter: delimiter.text, isTabStripped } };
+};
+var skipCommandNoise = (source, index, pending) => {
+  const character = source[index];
+  if (character === "\n" && pending.length > 0) {
+    const bodyEnd = skipHeredocBodies(source, index + 1, pending);
+    pending.length = 0;
+    return bodyEnd;
+  }
+  if (character === "#" && COMMENT_PRECEDERS.includes(source[index - 1] ?? "\n")) {
+    const lineEnd = source.indexOf("\n", index);
+    return lineEnd === -1 ? source.length : lineEnd;
+  }
+  if (character === "<") {
+    const opened = readSubstitutionHeredoc(source, index);
+    if (opened === void 0) return void 0;
+    pending.push(opened.heredoc);
+    return opened.end;
+  }
+  return void 0;
+};
+var skipEscapeOrQuote = (source, index) => {
+  const character = source[index];
+  if (character === "\\") return index + 2;
+  return character === "'" || character === '"' ? skipQuoted(source, index + 1, character) : void 0;
+};
+var skipBalanced = (source, from, { close, isCommand = false, open: open2 }) => {
   let depth = 0;
   let index = from;
+  const pending = [];
   while (index < source.length) {
     const character = source[index];
-    if (character === "\\") index += 2;
-    else if (character === "'" || character === '"') {
-      index = skipQuoted(source, index + 1, character);
-    } else {
+    const skipped2 = (isCommand ? skipCommandNoise(source, index, pending) : void 0) ?? skipEscapeOrQuote(source, index);
+    if (skipped2 === void 0) {
       if (character === open2) depth += 1;
       if (character === close) depth -= 1;
       index += 1;
       if (depth === 0) return index;
-    }
+    } else index = skipped2;
   }
   return source.length;
 };
 var skipExpansion = (source, dollarIndex) => {
   const next = source[dollarIndex + 1];
   if (next === "(") {
-    return skipBalanced(source, dollarIndex + 1, { close: ")", open: "(" });
+    return skipBalanced(source, dollarIndex + 1, {
+      close: ")",
+      isCommand: source[dollarIndex + 2] !== "(",
+      open: "("
+    });
   }
   if (next === "{") {
     return skipBalanced(source, dollarIndex + 1, { close: "}", open: "{" });
   }
   return dollarIndex + 1;
 };
+
+// src/value-sets/shell-lexer.ts
+var WORD_BREAK_CHARACTERS = " 	\r\n;&|()<>";
+var GLOB_CHARACTERS = "*?[{}";
+var countNewlines = (source, from, to) => source.slice(from, to).split("\n").length - 1;
 var scanDoubleQuoted = (source, from, word) => {
   let index = from + 1;
   while (index < source.length && source[index] !== '"') {
@@ -51397,21 +51468,6 @@ var readWord = (source, start) => {
     isPlain: word.isPlain,
     text: word.text
   };
-};
-var skipHeredocBodies = (source, from, pending) => {
-  let index = from;
-  for (const heredoc of pending) {
-    let isOpen = true;
-    while (isOpen && index < source.length) {
-      const lineEnd = source.indexOf("\n", index);
-      const stop2 = lineEnd === -1 ? source.length : lineEnd;
-      const raw = source.slice(index, stop2).replace(/\r$/, "");
-      const candidate2 = heredoc.isTabStripped ? raw.replace(/^\t+/, "") : raw;
-      index = lineEnd === -1 ? source.length : lineEnd + 1;
-      isOpen = candidate2 !== heredoc.delimiter;
-    }
-  }
-  return index;
 };
 var pushOperator = (state, text, length) => {
   state.tokens.push({
@@ -51486,6 +51542,29 @@ var lexWord = (state, source) => {
   state.lastTokenEndLine = state.line;
   state.index = end;
 };
+var ARITHMETIC_PRECEDING_KEYWORDS = /* @__PURE__ */ new Set([
+  "!",
+  "do",
+  "elif",
+  "else",
+  "if",
+  "then",
+  "until",
+  "while",
+  "{"
+]);
+var isBareArithmetic = (state, source) => {
+  if (source[state.index] !== "(" || source[state.index + 1] !== "(") {
+    return false;
+  }
+  const previous = state.tokens.at(-1);
+  return previous === void 0 || previous.kind === "op" || ARITHMETIC_PRECEDING_KEYWORDS.has(previous.text);
+};
+var skipBareArithmetic = (state, source) => {
+  const end = skipBalanced(source, state.index, { close: ")", open: "(" });
+  state.line += countNewlines(source, state.index, end);
+  state.index = end;
+};
 var lexStep = (state, source) => {
   const character = source[state.index];
   const next = source[state.index + 1];
@@ -51502,7 +51581,8 @@ var lexStep = (state, source) => {
       next === character ? character + character : character,
       next === character ? 2 : 1
     );
-  } else if ("()>".includes(character)) pushOperator(state, character, 1);
+  } else if (isBareArithmetic(state, source)) skipBareArithmetic(state, source);
+  else if ("()>".includes(character)) pushOperator(state, character, 1);
   else if (character === "<") lexAngle(state, source);
   else lexWord(state, source);
 };
@@ -51979,7 +52059,7 @@ var collectScope = (options) => {
   }
   const isExcludedByConfig = exclude.length > 0 ? (0, import_picomatch4.default)([...exclude], { dot: true }) : () => false;
   const paths = [...new Set(splitZStream(listed))].filter(
-    (relative) => !relative.split("/").some((segment) => EXCLUDED_DIRECTORIES.has(segment))
+    (relative) => !relative.split("/").slice(0, -1).some((segment) => EXCLUDED_DIRECTORIES.has(segment))
   ).filter((relative) => !isExcludedByConfig(relative)).toSorted(byPath);
   const files = [];
   for (const relative of paths) {
@@ -52119,7 +52199,7 @@ var runValueSets = (argv, dependencies) => {
 };
 var run71 = (argv) => runValueSets(argv, {
   cwd: process.cwd(),
-  loadTypescript,
+  loadTypescript: (directory) => loadTypescript(directory, { isGated: true }),
   writeErr: (text) => process.stderr.write(text),
   writeOut: (text) => process.stdout.write(text)
 });

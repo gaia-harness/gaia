@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # The pre-notebook locations of specs, plans and research, for the one-time
 # move and for the notebook library's readiness gate. Sourced, never run: it
-# defines functions and nothing else.
+# defines functions and the kinds array its arms are marked against.
 #
 # This file is the one place outside the move script that spells the three old
 # roots. Everything else asks these functions, so the retired-path check can

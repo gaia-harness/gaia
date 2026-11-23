@@ -416,7 +416,9 @@ jobs:
       - uses: ./.github/actions/gaia-setup-node
       # On a pull request the exclusion config and the GAIA manifest come from
       # the base commit, never from the head: a pull request that could edit
-      # them would exclude its own duplicate or list its own file as harness. The
+      # them would exclude its own duplicate or list its own file as harness
+      # through them. That does not reach a pull request that edits this job or
+      # the committed CLI bundle; review of those files covers that case. The
       # CLI still shape-checks the head's config, so a malformed one fails here.
       # They are read through the contents API, not `git fetch`: the checkout
       # keeps no credential, and a private repository (what /setup-gaia

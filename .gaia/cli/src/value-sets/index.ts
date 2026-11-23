@@ -210,7 +210,7 @@ export const runValueSets = (
 export const run = (argv: string[]): number =>
   runValueSets(argv, {
     cwd: process.cwd(),
-    loadTypescript,
+    loadTypescript: (directory) => loadTypescript(directory, {isGated: true}),
     writeErr: (text) => process.stderr.write(text),
     writeOut: (text) => process.stdout.write(text),
   });

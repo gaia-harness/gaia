@@ -125,4 +125,27 @@ describe('shell reader through runValueSets', () => {
     expect(mixed.code).toBe(1);
     expect(mixed.stdout).toContain('--verbose, -v, verbose');
   });
+
+  test('a heredoc apostrophe inside a command substitution and a left shift in a bare arithmetic command do not hide a later array', () => {
+    expect(
+      execute({
+        'a.sh': [
+          'text=$(cat <<EOF',
+          "it's a heredoc with an apostrophe",
+          'EOF',
+          ')',
+          'kinds=(spec plan research)',
+          '',
+        ].join('\n'),
+        'b.sh': 'kinds=(spec plan research)\n',
+      }).code
+    ).toBe(1);
+
+    expect(
+      execute({
+        'a.sh': '((flags = 1 << 3))\nkinds=(spec plan research)\n',
+        'b.sh': 'kinds=(spec plan research)\n',
+      }).code
+    ).toBe(1);
+  });
 });

@@ -44,6 +44,7 @@ import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {takeValue} from '../util/argv.js';
 import {collectTreeFiles} from '../util/tree-walk.js';
+import {ADOPTER_OWNED_SENTINELS as RUNTIME_CREATED_SENTINELS} from '../wiki/dead-paths.js';
 import {ADOPTER_OWNED_SENTINELS as GIT_TRACKED_SENTINELS} from './manifest.js';
 import {stripMarkerBlocks} from './marker-strip.js';
 import {SCAN_GLOBS} from './scan-globs.js';
@@ -74,21 +75,15 @@ const UNEXPECTED_EXIT = 2;
  * `.gaia/manifest.json` because adopters take ownership at first install.
  *
  * The git-tracked subset is the single canonical set exported by
- * `manifest.ts` (`classifyPath` maps those to `null`). This scan adds
- * `.gaia/project.json`, a file created on the adopter side by `/gaia-init`
- * or `/setup-gaia`, and `.gaia/update-decisions.json`, the committed decision
- * log `/update-gaia` writes on the adopter side and shipped scripts read, and
- * `.gaia/value-sets.json`, the value-set check's optional exclusion config,
- * which an adopter writes and commits and GAIA never ships. None is in
- * the manifest, so `/update-gaia` leaves them alone; none can live in the
- * manifest's set, so they are added here to cover references found in the
- * extracted staging tree.
+ * `manifest.ts` (`classifyPath` maps those to `null`); the runtime-created
+ * subset (files an adopter or a skill writes, so absent from the manifest and
+ * left alone by `/update-gaia`) is the set `wiki/dead-paths.ts` exports. Both
+ * are spread here so a new sentinel is declared once, in its owner, and
+ * reaches the extracted-staging scan.
  */
 export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
   ...GIT_TRACKED_SENTINELS,
-  '.gaia/project.json',
-  '.gaia/update-decisions.json',
-  '.gaia/value-sets.json',
+  ...RUNTIME_CREATED_SENTINELS,
 ]);
 
 /**
@@ -278,11 +273,16 @@ const isVariableExpansionContext = (line: string, found: number): boolean => {
   let cursor = found - 1;
 
   while (cursor >= 0) {
-    const ch = line.charAt(cursor);
+    const character = line.charAt(cursor);
 
-    if (ch === '$') return true;
+    if (character === '$') return true;
 
-    if (!(ch === '/' || ch === '{' || ch === '}' || PATH_BODY_CHAR.test(ch))) {
+    if (!(
+      character === '/' ||
+      character === '{' ||
+      character === '}' ||
+      PATH_BODY_CHAR.test(character)
+    )) {
       return false;
     }
 

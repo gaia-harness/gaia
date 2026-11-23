@@ -201,7 +201,14 @@ export const ComposedForm = ({disabled = false}: ComposedFormProps) => {
             data-invalid={fields.colors.errors ? true : undefined}
             orientation="horizontal"
           >
-            <Checkbox {...checkboxProps} disabled={disabled} />
+            <Checkbox
+              {...checkboxProps}
+              aria-describedby={
+                fields.colors.errors ? fields.colors.errorId : undefined
+              }
+              aria-invalid={fields.colors.errors ? true : undefined}
+              disabled={disabled}
+            />
             <FieldLabel htmlFor={checkboxProps.id}>
               {colorLabels[checkboxProps.value as (typeof COLORS)[number]]}
             </FieldLabel>

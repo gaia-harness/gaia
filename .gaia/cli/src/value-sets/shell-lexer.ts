@@ -1,3 +1,11 @@
+import type {PendingHeredoc} from './shell-skip.js';
+import {
+  skipBalanced,
+  skipExpansion,
+  skipHeredocBodies,
+  skipQuoted,
+} from './shell-skip.js';
+
 export type ShellComment = {
   /** The comment body: the `#` and surrounding whitespace removed. */
   body: string;
@@ -40,8 +48,6 @@ type LexState = {
   tokens: ShellToken[];
 };
 
-type PendingHeredoc = {delimiter: string; isTabStripped: boolean};
-
 type Word = {
   end: number;
   isLiteral: boolean;
@@ -54,61 +60,6 @@ const GLOB_CHARACTERS = '*?[{}';
 
 const countNewlines = (source: string, from: number, to: number): number =>
   source.slice(from, to).split('\n').length - 1;
-
-/** Index just past the `quote` that closes the string opened before `from`; end of file when none does. */
-const skipQuoted = (source: string, from: number, quote: string): number => {
-  let index = from;
-
-  while (index < source.length) {
-    if (source[index] === '\\' && quote !== "'") index += 1;
-    else if (source[index] === quote) return index + 1;
-    index += 1;
-  }
-
-  return source.length;
-};
-
-type Brackets = {close: string; open: string};
-
-/** Index just past the bracket pair opened at `from`, quotes and escapes skipped; end of file when unbalanced. */
-const skipBalanced = (
-  source: string,
-  from: number,
-  {close, open}: Brackets
-): number => {
-  let depth = 0;
-  let index = from;
-
-  while (index < source.length) {
-    const character = source[index];
-
-    if (character === '\\') index += 2;
-    else if (character === "'" || character === '"') {
-      index = skipQuoted(source, index + 1, character);
-    } else {
-      if (character === open) depth += 1;
-      if (character === close) depth -= 1;
-      index += 1;
-      if (depth === 0) return index;
-    }
-  }
-
-  return source.length;
-};
-
-const skipExpansion = (source: string, dollarIndex: number): number => {
-  const next = source[dollarIndex + 1];
-
-  if (next === '(') {
-    return skipBalanced(source, dollarIndex + 1, {close: ')', open: '('});
-  }
-
-  if (next === '{') {
-    return skipBalanced(source, dollarIndex + 1, {close: '}', open: '{'});
-  }
-
-  return dollarIndex + 1;
-};
 
 type WordAccumulator = {isLiteral: boolean; isPlain: boolean; text: string};
 
@@ -206,34 +157,6 @@ const readWord = (source: string, start: number): Word => {
   };
 };
 
-/**
- * Consumes heredoc bodies from `from` (the start of the line after a newline);
- * returns the index after the last terminator line, or end of file.
- */
-const skipHeredocBodies = (
-  source: string,
-  from: number,
-  pending: readonly PendingHeredoc[]
-): number => {
-  let index = from;
-
-  for (const heredoc of pending) {
-    let isOpen = true;
-
-    while (isOpen && index < source.length) {
-      const lineEnd = source.indexOf('\n', index);
-      const stop = lineEnd === -1 ? source.length : lineEnd;
-      const raw = source.slice(index, stop).replace(/\r$/, '');
-      const candidate = heredoc.isTabStripped ? raw.replace(/^\t+/, '') : raw;
-
-      index = lineEnd === -1 ? source.length : lineEnd + 1;
-      isOpen = candidate !== heredoc.delimiter;
-    }
-  }
-
-  return index;
-};
-
 const pushOperator = (state: LexState, text: string, length: number): void => {
   state.tokens.push({
     end: state.index + length,
@@ -324,6 +247,40 @@ const lexWord = (state: LexState, source: string): void => {
   state.index = end;
 };
 
+const ARITHMETIC_PRECEDING_KEYWORDS = new Set([
+  '!',
+  'do',
+  'elif',
+  'else',
+  'if',
+  'then',
+  'until',
+  'while',
+  '{',
+]);
+
+/** True at a double open paren that starts a command: a bare arithmetic command, whose `<<` is a shift. */
+const isBareArithmetic = (state: LexState, source: string): boolean => {
+  if (source[state.index] !== '(' || source[state.index + 1] !== '(') {
+    return false;
+  }
+
+  const previous = state.tokens.at(-1);
+
+  return (
+    previous === undefined ||
+    previous.kind === 'op' ||
+    ARITHMETIC_PRECEDING_KEYWORDS.has(previous.text)
+  );
+};
+
+const skipBareArithmetic = (state: LexState, source: string): void => {
+  const end = skipBalanced(source, state.index, {close: ')', open: '('});
+
+  state.line += countNewlines(source, state.index, end);
+  state.index = end;
+};
+
 const lexStep = (state: LexState, source: string): void => {
   const character = source[state.index] as string;
   const next = source[state.index + 1];
@@ -341,7 +298,8 @@ const lexStep = (state: LexState, source: string): void => {
       next === character ? character + character : character,
       next === character ? 2 : 1
     );
-  } else if ('()>'.includes(character)) pushOperator(state, character, 1);
+  } else if (isBareArithmetic(state, source)) skipBareArithmetic(state, source);
+  else if ('()>'.includes(character)) pushOperator(state, character, 1);
   else if (character === '<') lexAngle(state, source);
   else lexWord(state, source);
 };

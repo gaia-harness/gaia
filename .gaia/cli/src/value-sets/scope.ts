@@ -175,6 +175,7 @@ export const collectScope = (options: {
       (relative) =>
         !relative
           .split('/')
+          .slice(0, -1)
           .some((segment) => EXCLUDED_DIRECTORIES.has(segment))
     )
     .filter((relative) => !isExcludedByConfig(relative))
