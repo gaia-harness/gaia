@@ -62,6 +62,38 @@ assert_silent_allow() {
   done
 }
 
+@test "a whole audit line padded with Unicode whitespace, separator or format characters is denied, for every guarded tool" {
+  # Byte escapes, not \u, so the cases hold under bash 3.2.
+  local pads=(
+    $'\xc2\xa0'
+    $'\xef\xbb\xbf'
+    $'\xe2\x80\x83'
+    $'\f'
+    $'\xe2\x80\x83\xc2\xa0\xef\xbb\xbf'
+  )
+  local audit_lines=('audit-accept' 'audit-grant 3' 'audit-accept-finding 2')
+  local tools=(ScheduleWakeup CronCreate RemoteTrigger SendMessage)
+  local pad audit_line tool padded tool_input checked=0
+  for tool in "${tools[@]}"; do
+    for pad in "${pads[@]}"; do
+      for audit_line in "${audit_lines[@]}"; do
+        padded="${pad}${audit_line}${pad}"
+        case "$tool" in
+          ScheduleWakeup) tool_input="$(jq -cn --arg p "$padded" '{delaySeconds: 60, reason: "r", prompt: $p}')" ;;
+          CronCreate) tool_input="$(jq -cn --arg p "$padded" '{cron: "7 * * * *", prompt: $p}')" ;;
+          RemoteTrigger) tool_input="$(jq -cn --arg p "$padded" '{action: "create", body: {name: "n", job_config: {steps: [{prompt: $p}]}}}')" ;;
+          SendMessage) tool_input="$(jq -cn --arg p "$padded" '{to: "peer", message: $p}')" ;;
+        esac
+        echo "case: $tool, line '$audit_line', pad bytes $(printf %s "$pad" | od -An -tx1 | tr -d ' \n')"
+        send "$tool" "$tool_input"
+        assert_denied_by_json
+        checked=$((checked + 1))
+      done
+    done
+  done
+  [ "$checked" -eq $((${#tools[@]} * ${#pads[@]} * ${#audit_lines[@]})) ]
+}
+
 @test "a prompt that only mentions a line, a malformed spelling, or no keyword in the tool input is allowed silently" {
   local row tool_name tool_input
   local rows=(

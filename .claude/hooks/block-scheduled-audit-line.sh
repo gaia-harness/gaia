@@ -8,11 +8,17 @@
 # an audit line. Claude Code fires UserPromptSubmit for a prompt this session
 # scheduled for itself too (a CronCreate job, a ScheduleWakeup iteration), and
 # that payload carries no documented field telling it from a typed prompt, so
-# the recorder cannot refuse it on arrival. This guard stops it at the source:
-# a call whose tool_input holds any string that is, whole, an audit line under
-# gaia_loop_parse_line (audit-loop-state-lib.sh owns the grammar) is denied. A
-# string that only mentions a line parses as malformed and is allowed, the same
-# split the recorder makes.
+# the recorder cannot refuse it on arrival. This guard denies the four tool
+# calls named above: a call whose tool_input holds any string that is, whole, an
+# audit line under gaia_loop_parse_line (audit-loop-state-lib.sh owns the
+# grammar) is denied. A string that only mentions a line parses as malformed and
+# is allowed, the same split the recorder makes. Each string is also checked with
+# every Unicode space, separator and format character stripped from its edges,
+# so padding the recorder's own trim would not remove still denies.
+#
+# Limit: a route that delivers a line without one of those four tools (keystroke
+# injection, an edit of a scheduled-task store) is not covered, and neither is a
+# durable scheduled job created before this guard was registered.
 #
 # Every string in tool_input is read, not one named field, so a prompt nested in
 # a RemoteTrigger body reaches the check. SendMessage is covered because a sent
@@ -56,7 +62,8 @@ if ! type gaia_loop_parse_line >/dev/null 2>&1; then
   exit 2
 fi
 
-# Each keyword-bearing string leaf of tool_input, NUL-terminated. A NUL inside a
+# Each keyword-bearing string leaf of tool_input, then the same leaf with Unicode
+# whitespace trimmed from its edges, NUL-terminated. A NUL inside a
 # value splits it, which can only turn up a shorter string: the deny direction.
 leaves_file="$(mktemp "${TMPDIR:-/tmp}/scheduled-audit-line.XXXXXX")" || {
   printf 'BLOCKED: block-scheduled-audit-line.sh could not create a scratch file, so this call cannot be checked.\n' >&2
@@ -64,7 +71,7 @@ leaves_file="$(mktemp "${TMPDIR:-/tmp}/scheduled-audit-line.XXXXXX")" || {
 }
 trap 'rm -f "$leaves_file"' EXIT
 if ! printf '%s' "$payload" |
-  jq -j 'if type == "object" then (.tool_input // {}) | .. | strings | select(test("audit-(grant|accept)")) | . + "\u0000" else error("not an object") end' \
+  jq -j 'if type == "object" then (.tool_input // {}) | .. | strings | select(test("audit-(grant|accept)")) | (., gsub("^[\\s\\p{Z}\\p{Cf}]+|[\\s\\p{Z}\\p{Cf}]+$"; "")) + "\u0000" else error("not an object") end' \
     >"$leaves_file" 2>/dev/null; then
   printf 'BLOCKED: block-scheduled-audit-line.sh could not parse the tool payload, so this call cannot be checked.\n' >&2
   exit 2
