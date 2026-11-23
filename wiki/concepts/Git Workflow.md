@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-21
-updated: 2026-10-20
+updated: 2026-11-24
 tags: [concept, git, workflow]
 ---
 
@@ -32,9 +32,29 @@ No `--force`, `--force-with-lease`, or `-f` to `main`/`master`; upstream history
 
 A push from `main`/`master` lands local commits on the shared branch without the pull request and audit every change passes through.
 
-The hook denies several independent conditions on `git push`, each with its own message and its own repair: a plain push while HEAD sits on `main`/`master` (switch to a feature branch and open a PR); a push whose refspec names `main`, `master`, or `HEAD` as the source (bare, or before a colon) from any branch (name the branch being pushed explicitly and open a PR instead); and a push the hook cannot place, because the command names a directory it cannot read and one of the checkouts that directory could name is on `main`/`master` (spell the directory literally, or create a feature branch).
+The hook denies several independent conditions on `git push`, each with its own message and its own repair: a plain push while HEAD sits on `main`/`master` (switch to a feature branch and open a PR); a push whose refspec names `main`, `master`, or `HEAD` as the source (bare, or before a colon), or names `main`/`master` as the destination (`feature:main`, `+feature:main`, `:main`, `heads/main`, `refs/heads/main`, `--delete refs/heads/main`), or pushes every shared branch (`:`) or a glob destination that covers `main`, from any branch (name the branch being pushed explicitly and open a PR instead); and a push the hook cannot place, because the command names a directory it cannot read and one of the checkouts that directory could name is on `main`/`master` (spell the directory literally, or create a feature branch).
 
 They answer in that order, and the order is by how much of the verdict each message can stand behind. Standing on `main` answers first, since its repair settles the refspec too. The refspec answers ahead of the unreadable directory because it holds whatever checkout the push turns out to run from, where the unreadable-directory message reports an unanswered question and offers repairs that do nothing for a refspec.
+
+## 4. Allowed by permission, bounded by hooks
+
+`.claude/settings.json` allows every `git` invocation (`Bash(git *)`) and the `gh` pull-request and issue verbs GAIA's workflows run, so a session, interactive or driven unattended by `/loop`, never stalls on a permission prompt for an ordinary commit, push, rebase, branch or merge. The allow list carries no safety of its own. The safety is the PreToolUse hooks, because a hook's deny overrides an allow: this guard, `block-no-verify.sh` for the commit floor, `block-rm-rf.sh`, and `pr-merge-audit-check.sh`, which still gates every `gh pr merge` on the audit. The narrower `deny` rows in the settings file stay as a second layer.
+
+Beyond rules 1 to 3 and the hard-reset rule, the guard denies, on any branch, the operations whose damage reaches past the feature branch the session is working on. `.claude/hooks/lib/main-git-guard-history.sh` holds them, and each deny names its repair:
+
+| Denied | Why | Allowed instead |
+| --- | --- | --- |
+| `git push --mirror`, `git push --all` / `--branches` | Overwrites or advances remote `main`, and `--mirror` deletes every remote branch the clone lacks | `git push -u origin <branch-name>` |
+| `git clean` with `-x` or `-X` | Deletes ignored files: the `.env` files, GAIA's local working state and the notebook, none of which git can restore | `git clean -fd` |
+| `git config` setting `core.hooksPath` to anything but `.githooks` (an empty value included), or unsetting it | Switches off the pre-commit and pre-push floor for every later commit, the persistent form of the inline `-c core.hooksPath=` override `block-no-verify.sh` denies | `git config core.hooksPath .githooks`, and reads |
+| `git update-ref` naming `main`/`master` or writing `HEAD`, or `--stdin` | Moves or deletes the shared branch outside every guard | `git branch` / `git switch` on the feature branch |
+| `git branch` deleting, renaming, copying over or force-moving `main`/`master`, and `git checkout -B` / `git switch -C` onto it | The local base every branch, worktree and cleanup step reads | The same operations on any other branch |
+| `git reflog expire`, `delete` or `drop`, `git gc --prune…`, `git prune` | Erase the record or the objects that recover a dropped commit | `git reflog`, `git gc` |
+| `git filter-branch`, `git filter-repo` | Rewrite history across branches | Ask the user to run it |
+
+Allowed on purpose: a force-push of a feature branch (the rebase repair), deleting a tag, `git worktree remove --force`, and the commands that discard uncommitted work on the session's own branch (`git checkout -- .`, `git restore .`, `git stash drop`/`clear`), which stay ordinary editing.
+
+The rules read the parsed operands, never the raw text, so a flag quoted inside a commit message is not an invocation, and match a long option in any prefix git accepts (`--mirr`). They inherit the parser's honest limits (an unexpanded variable or an unlisted value-taking global option reads no subcommand and allows), and an edit of `.git/config` by any route other than `git config` is not read. A sub-agent inherits the same allow list, so the execution doctrine's rule that executors run no state-changing git is held by that doctrine, not by a permission prompt.
 
 ## Setup standdown
 

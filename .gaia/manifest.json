@@ -81,6 +81,7 @@
     ".claude/hooks/lib/hook-payload.sh": "owned",
     ".claude/hooks/lib/jq-availability.sh": "owned",
     ".claude/hooks/lib/main-checkout-hop-guard.sh": "owned",
+    ".claude/hooks/lib/main-git-guard-history.sh": "owned",
     ".claude/hooks/lib/main-git-guard-parse.sh": "owned",
     ".claude/hooks/lib/post-audit-status-gates.sh": "owned",
     ".claude/hooks/lib/pr-body-stamp.sh": "owned",

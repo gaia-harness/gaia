@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse Bash hook: block commits on main/master, force-push naming main/master,
-# any push from main/master or with a main/master/HEAD refspec source,
+# any push from main/master or with a main/master/HEAD refspec source or destination,
 # a `git reset --hard` that moves HEAD to another commit on any branch,
+# the history rules lib/main-git-guard-history.sh owns (GAIA allows `Bash(git *)`),
 # and block a peer session moving the main checkout's HEAD off a branch another
 # session holds there with an open pull request.
 #
@@ -184,6 +185,14 @@ if ! type hop_target >/dev/null 2>&1 || ! type hop_guard >/dev/null 2>&1; then
   printf 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-checkout-hop-guard.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
+set +e
+# shellcheck source=lib/main-git-guard-history.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/main-git-guard-history.sh" ] && . "$_jq_library_directory/main-git-guard-history.sh" 2>/dev/null
+set -e
+if ! type history_rule_reason >/dev/null 2>&1 || ! type push_refspec_targets_main >/dev/null 2>&1; then
+  printf 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-git-guard-history.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
+  exit 2
+fi
 
 # Walk each command-position segment. Separators (`| & ; ( )`, newlines) become
 # line breaks so every line begins at a command word; leading env-var
@@ -311,6 +320,10 @@ while IFS= read -r segment; do
       ;;
   esac
   [ "$foreign_repo" -eq 1 ] && continue
+
+  # History rules need no checkout resolution, so they answer before the case.
+  history_rule_reason
+  [ -z "$history_reason" ] || deny "$history_reason"
 
   # Only commit, push and reset have rules past this point. Every other
   # subcommand would pay the checkout resolution below, two `git rev-parse`
@@ -446,7 +459,7 @@ while IFS= read -r segment; do
     # operands after the subcommand, so neither a global option ahead of `push`
     # nor one ahead of the remote can carry the refspec out of reach.
     refspec_main=0
-    if push_refspec_names_main; then
+    if push_refspec_names_main || push_refspec_targets_main; then
       refspec_main=1
     fi
 

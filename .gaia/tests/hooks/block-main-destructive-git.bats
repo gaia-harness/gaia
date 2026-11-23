@@ -698,6 +698,8 @@ degrade_staged_library() {
     '.claude/hooks/lib/main-git-guard-parse.sh|conflicted|git commit -m x|blocked'
     '.claude/hooks/lib/main-checkout-hop-guard.sh|absent|git commit -m x|blocked'
     '.claude/hooks/lib/main-checkout-hop-guard.sh|conflicted|git commit -m x|blocked'
+    '.claude/hooks/lib/main-git-guard-history.sh|absent|git commit -m x|blocked'
+    '.claude/hooks/lib/main-git-guard-history.sh|conflicted|git clean -fdx|blocked'
     '.claude/hooks/lib/main-git-guard-parse.sh|absent|ls|silent'
     '.claude/hooks/lib/hook-payload.sh|absent|git push --force origin main|blocked'
   )
@@ -763,6 +765,164 @@ degrade_staged_library() {
     echo "case: $row"
     run_row "$row"
   done
+}
+
+# --- history rules: main, the remote, the reflog and ignored local state ---
+
+# GAIA allows every git invocation, so these denials are the only thing between
+# an agent and a push that lands on or deletes main without a refspec source of
+# main, a remote-wide push, a wipe of ignored state, a hooks switch-off, a ref
+# write on main, a local main deletion or move, or a recovery-erasing command.
+# Every row runs from a feature branch, where the older rules allow a push.
+# bats test_tags=protected
+@test "history rules deny what reaches main, the remote, the reflog or ignored state" {
+  local row
+  local rows=(
+    'deny|feature|||git push origin feature:main'
+    'deny|feature|||git push origin +feature:main'
+    'deny|feature|||git push origin feature:refs/heads/master'
+    'deny|feature|||git push origin :main'
+    'deny|feature|||git push origin refs/heads/main'
+    'deny|feature|||git push origin --delete refs/heads/main'
+    'deny|feature|||git push --mirror origin'
+    'deny|feature|||git push --all origin'
+    'deny|feature|||git push --all --force origin'
+    'deny|feature|||git push --branches origin'
+    'deny|feature|||git clean -fdx'
+    'deny|feature|||git clean -xdf'
+    'deny|feature|||git clean -fX'
+    'deny|feature|||git -C @MAIN@ clean -f -x'
+    'deny|feature|||git config core.hooksPath /dev/null'
+    'deny|feature|||git config --local core.hooksPath .husky'
+    'deny|feature|||git config --unset core.hooksPath'
+    'deny|feature|||git config set core.HooksPath /tmp/none'
+    'deny|feature|||git update-ref -d refs/heads/main'
+    'deny|feature|||git update-ref refs/heads/master HEAD'
+    'deny|feature|||git update-ref --stdin'
+    'deny|feature|||git branch -D main'
+    'deny|feature|||git branch --delete --force master'
+    'deny|feature|||git branch -f main HEAD'
+    'deny|feature|||git branch -M main'
+    'deny|feature|||git reflog expire --expire=now --all'
+    'deny|feature|||git reflog delete HEAD@{1}'
+    'deny|feature|||git gc --prune=now'
+    'deny|feature|||git prune'
+    'deny|feature|||git filter-branch -f HEAD'
+    'deny|feature|||git filter-repo --path secrets --invert-paths'
+    'deny|feature|||git status && git clean -fdx'
+    'deny|feature|||git push origin feature:heads/main'
+    'deny|feature|||git push origin :'
+    'deny|feature|||git push origin +:'
+    'deny|feature|||git push origin refs/heads/*:refs/heads/*'
+    'deny|feature|||git push origin +refs/heads/*'
+    'deny|feature|||git push --mirr origin'
+    'deny|feature|||git push --al origin'
+    'deny|feature|||git push --bra origin'
+    'deny|feature|||git config core.hooksPath ""'
+    'deny|feature|||git config --unse core.hooksPath'
+    'deny|feature|||git config --remove-section core'
+    'deny|feature|||git config rename-section core old'
+    'deny|feature|||git update-ref --stdi'
+    'deny|feature|||git update-ref HEAD HEAD~1'
+    'deny|feature|||git update-ref -m reason -d HEAD'
+    'deny|feature|||git branch --forc main HEAD'
+    'deny|feature|||git branch --mov main old-main'
+    'deny|feature|||git checkout -B main origin/main'
+    'deny|feature|||git checkout -fB master'
+    'deny|feature|||git checkout -Bmain'
+    'deny|feature|||git switch -C main'
+    'deny|feature|||git switch --force-create=master origin/master'
+    'deny|feature|||git switch --force-c main'
+    'deny|feature|||git reflog drop --all'
+    'deny|feature|||git gc --prun=now'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# The everyday forms beside each rule pass: a feature-branch force push (the
+# rebase repair), a push naming another destination, a clean that keeps ignored
+# files, the hooksPath reads and the one write GAIA prescribes, branch work that
+# only reads main, a ref write off main, reading the reflog, a gc with no prune
+# option, and command text that only mentions a denied form.
+@test "history rules allow the everyday forms beside each rule" {
+  local row
+  local rows=(
+    'allow|feature|||git push --force-with-lease origin feature'
+    'allow|feature|||git push -u origin feature'
+    'allow|feature|||git push origin feature:feature-copy'
+    'allow|feature|||git push origin --delete feature-old'
+    'allow|feature|||git push origin --tags'
+    'allow|feature|||git clean -fd'
+    'allow|feature|||git clean -n'
+    'allow|feature|||git config --get core.hooksPath'
+    'allow|feature|||git config core.hooksPath'
+    'allow|feature|||git config core.hooksPath .githooks'
+    'allow|feature|||git config user.name Test'
+    'allow|feature|||git branch -D feature-old'
+    'allow|feature|||git branch -m feature-renamed'
+    'allow|feature|||git branch feature-two main'
+    'allow|feature|||git branch -u origin/main'
+    'allow|feature|||git update-ref refs/heads/feature-two HEAD'
+    'allow|feature|||git reflog'
+    'allow|feature|||git gc'
+    'allow|feature|||git gc --no-prune'
+    'allow|feature|||git rebase main'
+    'allow|feature|||echo "never run git clean -fdx here"'
+    'allow|feature|||git commit -m "do not git push --mirror"'
+    'allow|feature|||git push origin feature:feature/main'
+    'allow|feature|||git push origin refs/heads/feat/*:refs/heads/feat/*'
+    'allow|feature|||git push --atomic origin feature'
+    'allow|feature|||git config --get-all core.hooksPath'
+    'allow|feature|||git config --remove-section alias'
+    'allow|feature|||git update-ref refs/heads/feature-two HEAD~1'
+    'allow|feature|||git checkout -B feature-two main'
+    'allow|feature|||git checkout -b feature-two'
+    'allow|feature|||git switch -C feature-two main'
+    'allow|feature|||git switch -c feature-two'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# Each history denial says why and names the repair. Row: command|needle.
+@test "each history denial states its reason and the repair it names" {
+  local row command needle
+  local rows=(
+    'git push origin feature:main|git push -u origin <branch-name>'
+    'git push --mirror origin|deletes every remote branch this clone lacks'
+    'git push --all origin|main included'
+    'git clean -fdx|the notebook (specs, plans'
+    "git clean -fdx|'git clean -fd'"
+    "git config core.hooksPath /dev/null|'git config core.hooksPath .githooks'"
+    'git update-ref -d refs/heads/main|Main changes only through a merged pull request'
+    'git branch -D main|Ask the user to run it themselves'
+    'git reflog expire --expire=now --all|recovers a dropped commit'
+    'git gc --prune=now|no prune option'
+    'git filter-branch -f HEAD|ask them to run it themselves'
+  )
+  on_feature
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r command needle <<<"$row"
+    run_hook "$command"
+    assert_denied_by_json
+    grep -qF -- "$needle" <<<"$output"
+  done
+}
+
+# The history rules are this repository's policy: a foreign -C stands them down
+# the way it stands down the commit and push rules.
+@test "a history rule aimed at a foreign repository is allowed" {
+  on_feature
+  run_hook "git -C $FOREIGN clean -fdx"
+  assert_allowed_by_json
+  run_hook "git -C $FOREIGN branch -D main"
+  assert_allowed_by_json
 }
 
 # --- main-checkout hop guard, segment parsing and the -C early exit ---

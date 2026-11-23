@@ -315,9 +315,8 @@ parse_git_globals() {
 # where that value happens to spell a branch the result is a false deny rather
 # than a false allow, which is the safe direction for a guard whose escape is
 # running the command with the `!` prefix. A refspec naming main only as its
-# DESTINATION (`feature:main`) is not read here: that is the reading this rule
-# has always had, and narrowing or widening it is a separate question from where
-# the ref sits.
+# DESTINATION (`feature:main`) is not read here: push_refspec_targets_main in
+# lib/main-git-guard-history.sh reads it, and the hook denies on either.
 push_refspec_names_main() {
   local argument seen_remote=0 skip_next=0 refspec
   for argument in ${git_args[@]+"${git_args[@]}"}; do
