@@ -38,11 +38,13 @@
 # whose loop variable is named on a `cp` line, over `"$root"/dir/*.sh`) reaches
 # every changed file the glob's tail ends. A glob with a second expansion after
 # its root (`"$root"/$directory/*.sh`) is matched on its file-name part alone.
-# A glob whose directory is a parameter of its function (`"$source_directory"/*.sh`)
-# is matched under the argument each call to that function in the same helper
-# passes for that parameter. A glob matches nothing when what is left of it after
-# its expansions names no file (a bare `*`, `-*.sh`, `*.sh`), since nothing is
-# left to tell the files it copies from any other. A helper that copies a script
+# A glob whose directory is a parameter of its function, bound as `name="$1"`,
+# and whose tail starts with a wildcard (`"$source_directory"/*.sh`) is matched
+# under the argument each call to that function in the same helper passes for
+# that parameter. A glob matches nothing when what is left of it after its
+# expansions names no file (a bare `*`, `-*.sh`, or a `*.sh` whose directory no
+# call resolves), since nothing is left to tell the files it copies from any
+# other. A helper that copies a script
 # and also greps it reaches whatever that script sources.
 #
 # Limit: a copy list built any other way (a computed array, a `find`, a name
@@ -79,8 +81,8 @@ bats_selector_helper_suites() {
   status=$?
   if [ "$status" -gt 1 ]; then rm -rf "$scratch"; return 1; fi
 
-  # Function definitions, the positional parameters they bind to names, and
-  # every command line (a call), in the helper files only.
+  # Function definitions, the `name="$N"` bindings of their positional
+  # parameters, and every command line (a call), in the helper files only.
   git -C "$repository_root" grep -n -I -E '^[[:space:]]*(function[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)|[A-Za-z_][A-Za-z0-9_]*="\$[1-9]"|^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]+[^=[:space:]]' \
     -- '*tests/*.sh' '*tests/*.bash' '*helpers/*.sh' '*helpers/*.bash' > "$scratch/functions"
   status=$?
