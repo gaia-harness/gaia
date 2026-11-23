@@ -246,8 +246,10 @@ split_git_words() {
 # a commit, so both of those passed. Sets git_cwd (the last global `-C` path, so
 # `git -C <a> -C <b> commit` cannot slip past the commit and push rules on the
 # first one), normalized_segment (the segment minus its global `-C` pairs, for the commit and
-# push regexes), git_subcommand (the subcommand word), and git_args (the words after
-# it).
+# push regexes), git_subcommand (the subcommand word), git_args (the words after
+# it), and the global config overrides: git_config_settings (each `-c` value,
+# `key=value`) and git_config_environment_settings (each `--config-env` value,
+# `key=VARIABLE`).
 #
 # Honest limits, and they bind every rule the hook arms on git_subcommand rather than any
 # one of them. These spellings reach the subcommand slot carrying something
@@ -269,6 +271,8 @@ parse_git_globals() {
   local i=0 word_count current_word globals=0
   git_cwd="" git_subcommand=""
   git_args=()
+  git_config_settings=()
+  git_config_environment_settings=()
   split_git_words "$1"
   word_count=${#words[@]}
   while [ "$i" -lt "$word_count" ]; do
@@ -284,7 +288,12 @@ parse_git_globals() {
         # `--exec-path` is deliberately absent: without `=` it takes no value,
         # git prints its exec path and exits, and nothing after it runs.
         -c | --git-dir | --work-tree | --namespace | --config-env | --attr-source)
+          case "$current_word" in
+            -c) git_config_settings+=("${words[$((i + 1))]:-}") ;;
+            --config-env) git_config_environment_settings+=("${words[$((i + 1))]:-}") ;;
+          esac
           kept+=("$current_word" "${words[$((i + 1))]:-}"); i=$((i + 2)); continue ;;
+        --config-env=*) git_config_environment_settings+=("${current_word#--config-env=}") ;;
         -*) ;;
         *) globals=2; git_subcommand="$current_word"; git_args=("${words[@]:$((i + 1))}") ;;
       esac

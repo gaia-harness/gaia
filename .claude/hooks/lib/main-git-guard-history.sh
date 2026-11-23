@@ -211,10 +211,16 @@ _history_config_reason() {
   for argument in ${git_args[@]+"${git_args[@]}"}; do
     lowered=$(printf '%s' "$argument" | tr '[:upper:]' '[:lower:]')
     case "$lowered" in
-      -l | get | list) return 0 ;;
-      unset) is_unset=1; continue ;;
-      remove-section | rename-section) section_edit=1; continue ;;
+      -l) return 0 ;;
     esac
+    # A subcommand word counts only ahead of the key: after it, `get` is a value.
+    if [ "$key_seen" -eq 0 ]; then
+      case "$lowered" in
+        get | list) return 0 ;;
+        unset) is_unset=1; continue ;;
+        remove-section | rename-section) section_edit=1; continue ;;
+      esac
+    fi
     if _history_option_is "$lowered" --get --get-all --get-regexp --get-urlmatch --list; then
       return 0
     fi
@@ -242,7 +248,82 @@ _history_config_reason() {
   if [ "$is_unset" -eq 0 ] && [ "$value_seen" -eq 0 ]; then
     return 0
   fi
-  history_reason="Pointing core.hooksPath anywhere but .githooks, or unsetting it, switches off GAIA's pre-commit and pre-push checks for every later commit (wiki/concepts/Pre-commit Hooks.md). The only write Claude may make is 'git config core.hooksPath .githooks'. If the hooks should stay off on this machine, that is the user's decision: ask them to run it themselves."
+  history_reason="Pointing core.hooksPath anywhere but .githooks, or unsetting it, switches off GAIA's git hooks for every later commit (wiki/concepts/Pre-commit Hooks.md). The only write Claude may make is 'git config core.hooksPath .githooks'. If the hooks should stay off on this machine, that is the user's decision: ask them to run it themselves."
+}
+
+# _history_config_command_reason: the `git config` half of the command-config
+# rule. Denies a write that pairs a listed key with a value that runs something,
+# and a section rename into a section such a key lives in. A read or an unset
+# writes nothing that runs, so it passes. Every operand word is tried as the
+# key, with the word after it as the value, so a value-taking option this
+# function does not know (`--default <v>`, `--file <f>`) cannot hide the key.
+_history_config_command_reason() {
+  local index=0 count=${#git_args[@]} word lowered operand_seen=0 rename=0 renamed_from=""
+  while [ "$index" -lt "$count" ]; do
+    word="${git_args[$index]}"
+    lowered=$(printf '%s' "$word" | tr '[:upper:]' '[:lower:]')
+    if _history_option_is "$lowered" --get --get-all --get-regexp --get-urlmatch --list \
+       --unset --unset-all || [ "$lowered" = -l ]; then
+      return 0
+    fi
+    if _history_option_is "$lowered" --rename-section; then rename=1; index=$((index + 1)); continue; fi
+    case "$word" in
+      -*) index=$((index + 1)); continue ;;
+    esac
+    if [ "$operand_seen" -eq 0 ]; then
+      operand_seen=1
+      case "$lowered" in
+        get | list | unset) return 0 ;;
+        rename-section) rename=1; index=$((index + 1)); continue ;;
+      esac
+    fi
+    if [ "$rename" -eq 1 ]; then
+      if [ -z "$renamed_from" ]; then
+        renamed_from="$word"
+      elif gaia_git_config_section_runs_command "$word"; then
+        history_reason="Renaming a config section to '$word' can turn its keys into ones git runs as a command (an alias, a pager, an ssh command), and every git call runs without a permission prompt here, so that is an unprompted shell (wiki/concepts/Git Workflow.md). Ask the user to run it themselves if they want it."
+        return 0
+      fi
+    elif [ $((index + 1)) -lt "$count" ] \
+       && [ "$(gaia_git_config_key_class "$word" "${git_args[$((index + 1))]}")" = runs-command ]; then
+      history_reason="Setting '$word' makes git run its value as a command on later git calls, and every git call runs without a permission prompt here, so that is an unprompted shell (wiki/concepts/Git Workflow.md). Run the command directly, where its own permission rule applies, or ask the user to set the key themselves."
+      return 0
+    fi
+    index=$((index + 1))
+  done
+  return 0
+}
+
+# command_config_rule_reason: set history_reason when the segment makes git run
+# a program from config: a `-c` or `--config-env` override of a key
+# lib/git-command-config.sh lists, a `-c core.hooksPath` other than .githooks
+# (git runs that directory's hooks on any subcommand), or a `git config` write
+# of a listed key. The block-main-destructive-git.sh walk asks this before its
+# foreign-repository skip, because the command runs whichever repository the
+# segment names.
+command_config_rule_reason() {
+  local setting key value class
+  history_reason=""
+  for setting in ${git_config_settings[@]+"${git_config_settings[@]}"}; do
+    key="${setting%%=*}"
+    value=""
+    case "$setting" in *=*) value="${setting#*=}" ;; esac
+    class=$(gaia_git_config_key_class "$key" "$value")
+    if [ "$class" = runs-command ] \
+       || { [ "$class" = hookspath ] && [ "$value" != .githooks ] && [ "$value" != ./.githooks ]; }; then
+      history_reason="'git -c $key=...' makes git run a program or a shell command from config, and every git call runs without a permission prompt here, so that is an unprompted shell (wiki/concepts/Git Workflow.md). Run the command directly, where its own permission rule applies; for a pager, use 'git --no-pager'."
+      return 0
+    fi
+  done
+  for setting in ${git_config_environment_settings[@]+"${git_config_environment_settings[@]}"}; do
+    key="${setting%%=*}"
+    if [ -n "$(gaia_git_config_key_class "$key" '!')" ]; then
+      history_reason="'git --config-env=$key=...' sets a key git runs as a program or a shell command, from a variable this guard cannot read, and every git call runs without a permission prompt here (wiki/concepts/Git Workflow.md). Run the command directly, where its own permission rule applies."
+      return 0
+    fi
+  done
+  [ "$git_subcommand" = config ] && _history_config_command_reason
+  return 0
 }
 
 # history_rule_reason: set history_reason to the deny reason for the segment
@@ -289,11 +370,11 @@ history_rule_reason() {
       ;;
     gc)
       if _history_has_option --prune; then
-        history_reason="'git gc --prune' deletes unreachable objects ahead of git's own grace period, which removes the last copy of any commit the reflog could still recover (wiki/concepts/Git Workflow.md). Run 'git gc' with no prune option, or leave it to git's automatic maintenance."
+        history_reason="'git gc --prune' deletes unreachable objects on a cutoff it sets, the last copy of a dropped stash or a commit no reflog still names (wiki/concepts/Git Workflow.md). Run 'git gc' with no prune option, or leave it to git's automatic maintenance."
       fi
       ;;
     prune)
-      history_reason="'git prune' deletes unreachable objects, the last copy of any commit the reflog could still recover (wiki/concepts/Git Workflow.md). Leave it to git's automatic maintenance."
+      history_reason="'git prune' deletes unreachable objects, the last copy of a dropped stash or a commit no reflog still names (wiki/concepts/Git Workflow.md). Leave it to git's automatic maintenance."
       ;;
     filter-branch | filter-repo)
       history_reason="'git $git_subcommand' rewrites history across branches, and a rewrite of shared history pulls commits out from under every clone built on it (wiki/concepts/Git Workflow.md). History rewrites are the user's decision: ask them to run it themselves."

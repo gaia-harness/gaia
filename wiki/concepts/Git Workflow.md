@@ -46,7 +46,7 @@ Beyond rules 1 to 3 and the hard-reset rule, the guard denies, on any branch, th
 | --- | --- | --- |
 | `git push --mirror`, `git push --all` / `--branches` | Overwrites or advances remote `main`, and `--mirror` deletes every remote branch the clone lacks | `git push -u origin <branch-name>` |
 | `git clean` with `-x` or `-X` | Deletes ignored files: the `.env` files, GAIA's local working state and the notebook, none of which git can restore | `git clean -fd` |
-| `git config` setting `core.hooksPath` to anything but `.githooks` (an empty value included), or unsetting it | Switches off the pre-commit and pre-push floor for every later commit, the persistent form of the inline `-c core.hooksPath=` override `block-no-verify.sh` denies | `git config core.hooksPath .githooks`, and reads |
+| `git config` setting `core.hooksPath` to anything but `.githooks` (an empty value included), or unsetting it | Switches off GAIA's git hooks for every later commit, the persistent form of the inline `-c core.hooksPath=` override `block-no-verify.sh` denies | `git config core.hooksPath .githooks`, and reads |
 | `git update-ref` naming `main`/`master` or writing `HEAD`, or `--stdin` | Moves or deletes the shared branch outside every guard | `git branch` / `git switch` on the feature branch |
 | `git branch` deleting, renaming, copying over or force-moving `main`/`master`, and `git checkout -B` / `git switch -C` onto it | The local base every branch, worktree and cleanup step reads | The same operations on any other branch |
 | `git reflog expire`, `delete` or `drop`, `git gc --prune…`, `git prune` | Erase the record or the objects that recover a dropped commit | `git reflog`, `git gc` |

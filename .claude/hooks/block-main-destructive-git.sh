@@ -3,8 +3,17 @@
 # any push from main/master or with a main/master/HEAD refspec source or destination,
 # a `git reset --hard` that moves HEAD to another commit on any branch,
 # the history rules lib/main-git-guard-history.sh owns (GAIA allows `Bash(git *)`),
-# and block a peer session moving the main checkout's HEAD off a branch another
-# session holds there with an open pull request.
+# a `-c`, `--config-env` or `git config` write of a key git runs as a command
+# (lib/git-command-config.sh), and block a peer session moving the main
+# checkout's HEAD off a branch another session holds there with an open pull
+# request.
+#
+# Honest limits of the command-config rule: a file edit of `.git/config` or of
+# `.git/hooks/*` is not a git invocation, and the environment forms
+# (`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>`,
+# `GIT_CONFIG_PARAMETERS`, `GIT_SSH_COMMAND` and the like) ride an env-var
+# prefix, which `Bash(git *)` does not auto-approve, so a permission prompt
+# still meets them.
 #
 # Command-position anchoring: the rules fire only when `git` is the command word
 # of a pipeline segment (start of command, after a `| & ; ( )` separator, or
@@ -188,11 +197,15 @@ fi
 set +e
 # shellcheck source=lib/main-git-guard-history.sh
 [ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/main-git-guard-history.sh" ] && . "$_jq_library_directory/main-git-guard-history.sh" 2>/dev/null
+# shellcheck source=lib/git-command-config.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/git-command-config.sh" ] && . "$_jq_library_directory/git-command-config.sh" 2>/dev/null
 set -e
-if ! type history_rule_reason >/dev/null 2>&1 || ! type push_refspec_targets_main >/dev/null 2>&1; then
-  printf 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-git-guard-history.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
-  exit 2
-fi
+for _required in history_rule_reason:main-git-guard-history push_refspec_targets_main:main-git-guard-history gaia_git_config_key_class:git-command-config; do
+  if ! type "${_required%%:*}" >/dev/null 2>&1; then
+    printf 'BLOCKED: block-main-destructive-git.sh cannot load lib/%s.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' "${_required#*:}" >&2
+    exit 2
+  fi
+done
 
 # Walk each command-position segment. Separators (`| & ; ( )`, newlines) become
 # line breaks so every line begins at a command word; leading env-var
@@ -288,6 +301,9 @@ while IFS= read -r segment; do
   [[ "$segment_command" =~ ^git([[:space:]]|$) ]] || continue
 
   parse_git_globals "$segment"
+  # Config git runs as a command runs in any repository, so no skip below applies.
+  command_config_rule_reason
+  [ -z "$history_reason" ] || deny "$history_reason"
 
   # The hop check is the one arm here that can spend a bounded network lookup,
   # and the collapsed line re-emits the whole command, so a checkout whose

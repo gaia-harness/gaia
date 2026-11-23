@@ -700,6 +700,8 @@ degrade_staged_library() {
     '.claude/hooks/lib/main-checkout-hop-guard.sh|conflicted|git commit -m x|blocked'
     '.claude/hooks/lib/main-git-guard-history.sh|absent|git commit -m x|blocked'
     '.claude/hooks/lib/main-git-guard-history.sh|conflicted|git clean -fdx|blocked'
+    '.claude/hooks/lib/git-command-config.sh|absent|git commit -m x|blocked'
+    '.claude/hooks/lib/git-command-config.sh|conflicted|git status|blocked'
     '.claude/hooks/lib/main-git-guard-parse.sh|absent|ls|silent'
     '.claude/hooks/lib/hook-payload.sh|absent|git push --force origin main|blocked'
   )
@@ -769,11 +771,8 @@ degrade_staged_library() {
 
 # --- history rules: main, the remote, the reflog and ignored local state ---
 
-# GAIA allows every git invocation, so these denials are the only thing between
-# an agent and a push that lands on or deletes main without a refspec source of
-# main, a remote-wide push, a wipe of ignored state, a hooks switch-off, a ref
-# write on main, a local main deletion or move, or a recovery-erasing command.
-# Every row runs from a feature branch, where the older rules allow a push.
+# GAIA allows every git invocation, so these denials are the only guard on
+# these forms. Every row runs from a feature branch, where rules 1 to 3 allow a push.
 # bats test_tags=protected
 @test "history rules deny what reaches main, the remote, the reflog or ignored state" {
   local row
@@ -820,6 +819,9 @@ degrade_staged_library() {
     'deny|feature|||git push --bra origin'
     'deny|feature|||git config core.hooksPath ""'
     'deny|feature|||git config --unse core.hooksPath'
+    'deny|feature|||git config core.hooksPath get'
+    'deny|feature|||git config core.hooksPath list'
+    'deny|feature|||git config core.hooksPath remove-section'
     'deny|feature|||git config --remove-section core'
     'deny|feature|||git config rename-section core old'
     'deny|feature|||git update-ref --stdi'
@@ -842,11 +844,6 @@ degrade_staged_library() {
   done
 }
 
-# The everyday forms beside each rule pass: a feature-branch force push (the
-# rebase repair), a push naming another destination, a clean that keeps ignored
-# files, the hooksPath reads and the one write GAIA prescribes, branch work that
-# only reads main, a ref write off main, reading the reflog, a gc with no prune
-# option, and command text that only mentions a denied form.
 @test "history rules allow the everyday forms beside each rule" {
   local row
   local rows=(
@@ -923,6 +920,71 @@ degrade_staged_library() {
   assert_allowed_by_json
   run_hook "git -C $FOREIGN branch -D main"
   assert_allowed_by_json
+}
+
+# A key git runs as a command is an unprompted shell under `Bash(git *)`,
+# whether set inline, from the environment, or persisted by `git config`.
+# bats test_tags=protected
+@test "command-running config is denied inline, through --config-env and through git config" {
+  local row
+  local rows=(
+    "deny|feature|||git -c 'alias.zz=!echo ran' zz"
+    "deny|feature|||git -c 'alias.lg=-c core.pager=evil log' lg"
+    'deny|feature|||git -c core.sshCommand=evil fetch'
+    'deny|feature|||git -c CORE.PAGER=cat log'
+    'deny|feature|||git -c core.fsmonitor=./evil status'
+    'deny|feature|||git -c include.path=/tmp/x status'
+    'deny|feature|||git -c includeIf.gitdir:/x/.path=/tmp/x status'
+    'deny|feature|||git -c filter.lfs.smudge=evil status'
+    'deny|feature|||git -c diff.foo.textconv=evil diff'
+    'deny|feature|||git -c core.hooksPath=/tmp/hooks status'
+    'deny|feature|||git --config-env=core.editor=EDITOR status'
+    'deny|feature|||git --config-env core.pager=PAGER log'
+    "deny|feature|||git config alias.x '!echo hi'"
+    "deny|feature|||git config alias.x '-c core.sshCommand=evil fetch'"
+    "deny|feature|||git config --global core.sshCommand 'ssh -i key'"
+    'deny|feature|||git config --file /tmp/c credential.helper store'
+    'deny|feature|||git config set core.editor vim'
+    'deny|feature|||git config hook.pre.command evil'
+    'deny|feature|||git config --rename-section foo alias'
+    'deny|feature|||git config rename-section foo core'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+@test "config that runs nothing, reads and unsets pass the command-config rule" {
+  local row
+  local rows=(
+    'allow|feature|||git -c alias.co=checkout co'
+    'allow|feature|||git -c pager.log=false log'
+    'allow|feature|||git -c core.fsmonitor=true status'
+    'allow|feature|||git -c color.ui=always log'
+    'allow|feature|||git -c core.hooksPath=.githooks status'
+    'allow|feature|||git --config-env=user.name=NAME log'
+    'allow|feature|||git config alias.st status'
+    'allow|feature|||git config core.pager'
+    'allow|feature|||git config --default less core.pager'
+    'allow|feature|||git config --get core.sshCommand'
+    'allow|feature|||git config --unset alias.x'
+    'allow|feature|||git config --rename-section foo bar'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# The shell an alias runs does not care which repository it was named in, so
+# the foreign-repository skip that stands the other rules down does not apply.
+@test "command-running config aimed at a foreign repository is still denied" {
+  on_feature
+  run_hook "git -C $FOREIGN -c 'alias.zz=!echo ran' zz"
+  assert_denied_by_json
+  run_hook "git -C $FOREIGN config alias.x '!echo ran'"
+  assert_denied_by_json
 }
 
 # --- main-checkout hop guard, segment parsing and the -C early exit ---
