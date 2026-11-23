@@ -279,6 +279,14 @@ gaia_verb_arm_view() {
               *'$('*|*'`'*) data=0 ;;
             esac
           fi
+          # A body inside the opted-in argument substitution that holds a `)`:
+          # bash 3.2 ends the substitution at an unbalanced one and runs the
+          # lines after it, so the body is judged, not masked.
+          if [ "$first" = 1 ] && [ "$data" = 1 ] && [ "$argument_quote_open" = 1 ]; then
+            case "${remaining_text:0:$delimiter_offset}" in
+              *')'*) data=0 ;;
+            esac
+          fi
           if [ "$first" = 1 ] && [ "$data" = 1 ] && [ "$delimiter_offset" -gt 0 ]; then
             view_text+=x
           else

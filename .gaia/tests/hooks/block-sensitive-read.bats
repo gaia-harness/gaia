@@ -208,6 +208,8 @@ run_settings_row() {
     "deny|git commit -m \"\$(cat <<'EOF'\nx\nEOF\n) tail\ncat > f <<'EOF2'\nenv\nEOF2\n)\"" \
     "deny|git commit -m \"\$(cat <<'EOF')\"\ncat .env\nEOF" \
     "deny|git commit -m \"\$(cat <<'EOF')\"\nprintenv\nEOF" \
+    "deny|git commit -m \"\$(cat <<'EOF'\n- fixed a bug)\"\nprintenv\nEOF\n)\"" \
+    "deny|gh pr create --body \$(cat <<'EOF')\nprintenv\nEOF" \
     "allow|cat > out.txt <<'EOF'\nenv\nEOF"; do
     verdict=${row%%|*}
     payload=$(printf "${row#*|}")

@@ -263,7 +263,7 @@ _gaia_va_opener_is_data() {
   if [ -n "${GAIA_VERB_ARM_ARGUMENT_SUBSTITUTION_IS_DATA:-}" ]; then
     local argument_prefix_regex argument_operator_regex operator_text
     argument_prefix_regex='^[[:space:]]*(git[[:space:]]+commit|gh[[:space:]]+(pr|issue))[[:space:]][^$`|&;(<>]*\$\(cat[[:space:]]*$'
-    argument_operator_regex='^<<-?[[:space:]]*('"'"'[^'"'"']*'"'"'|"[^"]*"|\\[A-Za-z0-9_.-]+)[^$`|&;(<>]*$'
+    argument_operator_regex='^<<-?[[:space:]]*('"'"'[^'"'"']*'"'"'|"[^"]*"|\\[A-Za-z0-9_.-]+)[^$`|&;(<>)]*$'
     if [[ "$text_before_operator" =~ $argument_prefix_regex ]]; then
       operator_text="${line:${#text_before_operator}}"
       [[ "$operator_text" =~ $argument_operator_regex ]] && return 0
