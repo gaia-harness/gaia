@@ -85,13 +85,13 @@ gaia_message_heredoc_view() {
 
 # The run every mask line is cut from, grown by doubling and reused for the
 # life of the process. `${body//[!$newline]/x}` rescans the body per
-# replacement, which is quadratic on bash 3.2 (a 16 KB body takes minutes and
-# the hook is cancelled at its deadline), so the mask is built per line.
+# replacement, which is quadratic on bash 3.2 (a 16 KB body takes minutes), so
+# the mask is built per line.
 _gaia_message_heredoc_xrun=x
 _GAIA_MESSAGE_HEREDOC_MASK=""
 
-# _gaia_message_heredoc_mask <body>: ASSIGN _GAIA_MESSAGE_HEREDOC_MASK, <body>
-# with every character but a newline replaced by x, same character length.
+# _gaia_message_heredoc_mask <body>: ASSIGNS _GAIA_MESSAGE_HEREDOC_MASK, <body>
+# with every character but a newline replaced by x.
 _gaia_message_heredoc_mask() {
   local rest="$1" line line_length newline=$'\n'
   _GAIA_MESSAGE_HEREDOC_MASK=""

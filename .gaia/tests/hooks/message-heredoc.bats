@@ -137,8 +137,6 @@ check_rows() {
 }
 
 @test "a long plain body is masked within a time budget on /bin/bash" {
-  # The mask once used a per-character pattern substitution, quadratic on bash
-  # 3.2: a 16 KB body took minutes and the hook was cancelled at its deadline.
   local line text view start elapsed
   line=$(printf '%*s' 79 '' | tr ' ' a)
   text="git commit -m \"\$(cat <<'EOF'"$'\n'
