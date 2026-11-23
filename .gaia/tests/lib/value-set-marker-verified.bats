@@ -41,8 +41,7 @@ export const NARROW = ['north', 'south', 'east'] as const;
 SRC
 }
 
-# Stages the tree (the check reads tracked and staged files) and runs the
-# committed CLI bundle inside it.
+# Stages the tree and runs the committed CLI bundle inside it.
 run_check() {
   git -C "$TREE" add -A
   cd "$TREE" || return 1

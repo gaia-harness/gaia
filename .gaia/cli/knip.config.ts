@@ -6,8 +6,8 @@ export default {
   // skip their indexer checks when the frontend is not installed, so the CLI
   // never declares it.
   ignoreDependencies: ['storybook'],
-  // The value-set scope test creates a FIFO with mkfifo to prove an unreadable
-  // file is refused.
+  // The value-set scope test creates a FIFO with mkfifo to prove a special
+  // file is skipped.
   ignoreBinaries: ['mkfifo'],
   project: ['src/**/*.ts', 'test-fixtures/**'],
 } satisfies KnipConfig;

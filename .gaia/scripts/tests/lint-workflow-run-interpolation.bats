@@ -166,7 +166,7 @@ reset_workflows() {
       - run: >- # folded
           echo "${{ steps.x.outputs.y }}"'
   )
-  # Coincidental overlap: these line numbers are unrelated to that list; the marker stands until the check can name an unrelated overlap.
+  # These line numbers overlap that list by coincidence; the check has no marker for an unrelated overlap.
   # subset of .gaia/scripts/tests/debt-batch-budget.bats#numbers
   local -a first_lines=(4 5 6 5)
   local -a second_lines=("" "" 9 "")

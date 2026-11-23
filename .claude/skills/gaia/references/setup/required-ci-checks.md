@@ -6,7 +6,7 @@
 - `Shellcheck and bats`: shellcheck over the changed shell, and the bats suites when shell changed.
 - `Value sets`: the duplicate value-set check over the whole tree, on every pull request.
 
-`GAIA-Audit` alone gates the audit, not the code: a pull request whose lint or tests are red merges once the audit clears, and a commit that skipped the local Quality Gate reaches the default branch unchecked. All three jobs report on every pull request, green when nothing they cover changed, so requiring them never holds a pull request that has nothing to check.
+`GAIA-Audit` alone gates the audit, not the code: a pull request whose lint or tests are red merges once the audit clears, and a commit that skipped the local Quality Gate reaches the default branch unchecked. All three jobs report on every pull request, so requiring them never leaves one waiting on a job that never ran: `Vitest and Playwright` and `Shellcheck and bats` pass when nothing they cover changed.
 
 `Run Chromatic` is never registered: Chromatic is optional, and a project that runs out of its plan's snapshots would have every merge blocked.
 

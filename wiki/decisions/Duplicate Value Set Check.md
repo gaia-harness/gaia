@@ -30,7 +30,7 @@ Never read: a set computed from another (filtered, sliced, spread), a set holdin
 
 ## Scope
 
-Every tracked, staged and untracked-but-not-ignored file with a TypeScript extension (`.ts`, `.tsx`, `.mts`, `.cts`) or a shell extension (`.sh`, `.bash`, `.bats`), or no extension and a first-line shebang naming `sh`, `bash` or `bats` directly or through `env`. Content is the working tree's, never the index. A path that is not a regular file, a symbolic link and a special file are skipped. The run always reads the whole project, never only the changed files.
+Every tracked, staged and untracked-but-not-ignored file with a TypeScript extension (`.ts`, `.tsx`, `.mts`, `.cts`) or a shell extension (`.sh`, `.bash`, `.bats`), or no extension and a first-line shebang naming `sh`, `bash` or `bats` directly or through `env`. Content is the working tree's, never the index. A path that is not a regular file (a symbolic link, a FIFO or another special file) is skipped. The run always reads the whole project, never only the changed files.
 
 Any path under a directory named `node_modules`, `.git`, `dist`, `build`, `.react-router`, `storybook-static`, `coverage`, `fixtures`, `test-fixtures` or `__snapshots__` is never read. The CLI fixes this list; only the config below extends it.
 
@@ -85,7 +85,7 @@ A clean run prints `value-sets: no duplicate value sets`. A run that cannot read
 
 ## CI
 
-The shipped Tests workflow has a `Value sets` job that runs on every pull request, with no path filter, no `if:` condition and no early exit, so a pull request that changes only shell files, or only a README, still runs it. It checks out the whole head tree and installs the root dependencies so the project's `typescript` loads from the repository root, then runs `gaia value-sets --policy-from <dir>`. `<dir>` holds the base commit's copies of `.gaia/value-sets.json` and `.gaia/manifest.json`, so a pull request cannot exclude its own duplicate or list its own file as harness. A file absent at the base stays absent in `<dir>` and means no exclusions; a failed fetch for any other reason exits 2, never falling back to the head's copy. The head's own config is still checked for shape and never applied. Its name is in the required-check list `/setup-gaia` registers (`.claude/skills/gaia/references/setup/required-ci-checks.md`).
+The shipped Tests workflow has a `Value sets` job that runs on every pull request, with no path filter, no `if:` condition and no early exit, so a pull request that changes only shell files, or only a README, still runs it. It checks out the whole head tree and installs the root dependencies so the project's `typescript` loads from the repository root, then runs `gaia value-sets --policy-from <dir>`. `<dir>` holds the base commit's copies of `.gaia/value-sets.json` and `.gaia/manifest.json`, so a pull request cannot exclude its own duplicate or list its own file as harness. A file absent at the base stays absent in `<dir>`: no config means no exclusions, and no manifest means no harness files; a failed fetch for any other reason exits 2, never falling back to the head's copy. The head's own config is still checked for shape and never applied. Its name is in the required-check list `/setup-gaia` registers (`.claude/skills/gaia/references/setup/required-ci-checks.md`).
 
 <!-- gaia:maintainer-only:start -->
 In the maintainer repo the base commit's `.claude/rules/maintainers/harness-triage-threshold.md` also lands in `<dir>`, so a pull request that deletes the marker file keeps its harness findings.

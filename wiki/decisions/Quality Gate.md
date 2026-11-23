@@ -10,11 +10,11 @@ tags: [decision, ci, quality]
 
 # Decision: Mandatory Quality Gate
 
-Every change must pass the Quality Gate. Pre-commit hooks enforce a subset; Claude runs the full pipeline below before any `git commit` that touches source, except that an audit fix round may run [the smaller gate](#the-smaller-gate); **unless the gate has nothing to check**.
+Every change must pass the Quality Gate. Pre-commit hooks enforce a subset; Claude runs the full pipeline below before any `git commit`, except that an audit fix round may run [the smaller gate](#the-smaller-gate); **when the gate has nothing to check**, only the value-set step runs.
 
 ## Steps
 
-**Value sets** runs on every commit, whatever is staged, before the skip decision below: `.gaia/cli/gaia value-sets`. Exit 1 (findings) or 2 (cannot run) blocks the commit. It reads the whole project, so a duplicate whose other half sits in a file the commit did not touch is still found, and a shell-only commit runs it. How to fix a finding and everything else about the check: [[Duplicate Value Set Check]].
+**Value sets** runs on every commit, whatever is staged, before the skip decision below: `.gaia/cli/gaia value-sets`. Exit 1 (findings) or 2 (cannot run) blocks the commit. It reads the whole project, so a duplicate whose other half sits in a file the commit did not touch is still found. How to fix a finding and everything else about the check: [[Duplicate Value Set Check]].
 
 The contract lives at the repo root. Steps 3 to 5 are root scripts that run across every workspace member that defines the script, so a library or a second app is checked with no gate edit. Steps 6 to 8 exercise the web app only; each root `pnpm <script>` there is a proxy that forwards to the `pnpm -C apps/web <script>` shown beside it, and either spelling runs the same command.
 
