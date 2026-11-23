@@ -10,13 +10,13 @@
 #   -x            the short letter, alone or inside a bundle (`-ix`)
 #   @read-only    only the forms that write nothing: the classifier owns the
 #                 per-subcommand reading
-#   @guarded-paths  no path operand that names a hook, settings or other
-#                 edit-guarded path: the classifier reads the operands
+#   @no-pathspec  no pathspec operand (a `--`, or more operands than a branch
+#                 switch takes): the classifier reads the operands
 #
 # What earns a fall-through option: it makes git run a program (`--exec`,
 # `--upload-pack`, `--receive-pack`, a merge strategy, which git runs as
 # `git-merge-<name>` from PATH), opens an editor or pager that would hang an
-# unattended run, or writes a file the caller names (`--output`) or writes a path an edit prompt guards (`restore --source`). `apply` is absent for the same reason: a patch can target `.claude/`.
+# unattended run, or writes a file the caller names (`--output`) or writes a path an edit prompt guards (`restore --source`, `checkout <tree-ish> -- <path>`). `apply`, `rm` and `mv` are absent for the same reason: a patch can target `.claude/`, and an operand's text does not say which path git resolves (`-C`, the cwd, `:/`).
 #
 # Subcommands are chosen from what GAIA's commands, skills, rules, agents and
 # executed wiki pages tell Claude to run, and from a scan of session
@@ -32,7 +32,7 @@ GAIA_GIT_ALLOWED_SUBCOMMANDS=(
   'cat-file'
   'check-attr'
   'check-ignore'
-  'checkout'
+  'checkout @no-pathspec'
   'cherry'
   'cherry-pick --strategy -s'
   'commit'
@@ -50,7 +50,6 @@ GAIA_GIT_ALLOWED_SUBCOMMANDS=(
   'merge --strategy -s'
   'merge-base'
   'merge-tree'
-  'mv @guarded-paths'
   'patch-id'
   'pull --upload-pack --strategy --rebase=i -s'
   'push --receive-pack --exec'
@@ -61,7 +60,6 @@ GAIA_GIT_ALLOWED_SUBCOMMANDS=(
   'rev-list --output'
   'rev-parse'
   'revert --strategy -s'
-  'rm @guarded-paths --pathspec-from-file'
   'shortlog --output'
   'show --output'
   'show-ref'

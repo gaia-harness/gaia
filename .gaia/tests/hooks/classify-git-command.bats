@@ -99,7 +99,7 @@ read_only_form() {
       expect allow "git $name"
     fi
     for spec in ${specs[@]+"${specs[@]}"}; do
-      case "$spec" in @read-only | @guarded-paths) continue ;; esac
+      case "$spec" in @read-only | @no-pathspec) continue ;; esac
       spec_count=$((spec_count + 1))
       expect fall "git $name $(fall_through_neighbour "$spec") x"
     done
@@ -435,16 +435,23 @@ EOF
   expect fall 'git pull --refmap=x origin feature'
 }
 
-@test "git rm and git mv of a hook or settings path fall through" {
+@test "git rm and git mv fall through, whatever the operand, -C or pathspec magic" {
   expect fall 'git rm .claude/hooks/block-no-verify.sh'
-  expect fall 'git rm .claude/settings.json'
   expect fall 'git rm -r .githooks'
+  expect fall 'git -C .claude/hooks rm block-no-verify.sh'
+  expect fall 'git rm -r :/'
+  expect fall 'git rm -r :!README.md'
   expect fall 'git mv .claude/hooks/block-no-verify.sh x'
-  expect fall 'git mv x .claude/settings.json'
-  expect fall 'git rm -r .'
-  expect fall 'git rm --pathspec-from-file=list'
-  expect allow 'git rm old.txt'
-  expect allow 'git mv old.txt new.txt'
+  expect fall 'git rm old.txt'
+  expect fall 'git mv old.txt new.txt'
+}
+
+@test "git checkout with a pathspec falls through; a branch switch allows" {
+  expect fall 'git checkout HEAD~1 -- .claude/settings.json'
+  expect fall 'git checkout HEAD~1 .claude/hooks/block-no-verify.sh'
+  expect fall 'git checkout -- .claude/settings.json'
+  expect allow 'git checkout feature'
+  expect allow 'git checkout -b feature origin/main'
 }
 
 @test "apply, and a restore from another tree, fall through" {

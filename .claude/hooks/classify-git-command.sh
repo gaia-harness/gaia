@@ -178,20 +178,23 @@ reset_names_commit() {
   return 1
 }
 
-# paths_are_guarded: 0 when a path operand of the `git rm` or `git mv` segment
-# could be a hook, a settings file or other edit-guarded path: one that names
-# `.claude`, `.githooks` or `.gaia`, or a directory that holds them (`.`,
-# `..`, or an absolute or home path).
-paths_are_guarded() {
-  local argument lowered
+# checkout_names_pathspec: 0 when the `git checkout` segment carries a pathspec:
+# a `--` separator, or more operands than a branch switch takes (one, or two
+# with -b, -B or --orphan, whose second is the start point). Such a checkout
+# writes paths from a tree-ish or the index, which an edit prompt would guard.
+checkout_names_pathspec() {
+  local argument operand_count=0 allowed=1
   for argument in ${git_args[@]+"${git_args[@]}"}; do
-    case "$argument" in -- | -*) continue ;; esac
-    lowered=$(printf '%s' "$argument" | tr '[:upper:]' '[:lower:]')
-    case "$lowered" in
-      *.claude* | *.githooks* | *.gaia* | . | .. | ./ | ../ | */. | */.. | /* | '~'*) return 0 ;;
+    case "$argument" in
+      --) return 0 ;;
+      --orphan | --orphan=*) allowed=2 ;;
+      --*) ;;
+      -*[bB]*) allowed=2 ;;
+      -*) ;;
+      *) operand_count=$((operand_count + 1)) ;;
     esac
   done
-  return 1
+  [ "$operand_count" -gt "$allowed" ]
 }
 
 # main_branch_rule_matches: 0 when the segment must not be approved on a branch
@@ -311,8 +314,8 @@ subcommand_is_approved() {
     read -r -a specs <<<"${entry#"$name"}"
     for spec in ${specs[@]+"${specs[@]}"}; do
       case "$spec" in
-        @guarded-paths)
-          paths_are_guarded && return 1
+        @no-pathspec)
+          checkout_names_pathspec && return 1
           continue ;;
         @read-only)
           case "$git_subcommand" in
