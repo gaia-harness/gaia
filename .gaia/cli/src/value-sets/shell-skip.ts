@@ -76,7 +76,11 @@ const readHeredocDelimiter = (
   return {end: index, text};
 };
 
-/** The heredoc a `<<` at `from` opens inside a command substitution, or undefined for a here-string or shift. */
+/**
+ * The heredoc a `<<` at `from` opens inside a command substitution, or
+ * undefined for a here-string or a lone `<`. An arithmetic `<<` shift followed
+ * by a word reads as a heredoc opener; it is not told apart.
+ */
 const readSubstitutionHeredoc = (
   source: string,
   from: number
