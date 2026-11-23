@@ -63,8 +63,9 @@ if ! type gaia_loop_parse_line >/dev/null 2>&1; then
 fi
 
 # Each keyword-bearing string leaf of tool_input, then the same leaf with Unicode
-# whitespace trimmed from its edges, NUL-terminated. A NUL inside a
-# value splits it, which can only turn up a shorter string: the deny direction.
+# whitespace, separator and format characters trimmed from its edges,
+# NUL-terminated. A NUL inside a value splits it, which can only turn up a
+# shorter string: the deny direction.
 leaves_file="$(mktemp "${TMPDIR:-/tmp}/scheduled-audit-line.XXXXXX")" || {
   printf 'BLOCKED: block-scheduled-audit-line.sh could not create a scratch file, so this call cannot be checked.\n' >&2
   exit 2
