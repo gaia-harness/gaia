@@ -255,10 +255,12 @@ gaia_reader_strip_env_prefix() {
 # Prints the full command text with the body of each data-only heredoc masked,
 # for the caller to split into segments afterwards. The decision of which body
 # is data belongs to gaia_verb_arm_view (lib/verb-arming-walk.sh's header lists
-# the conditions); this function only asks it. Where the walk abstains it
-# prints the text unchanged, so every body stays judged, the direction that
-# fails closed. A missing walker degrades the same way; a non-zero return from
-# gaia_verb_arm_view is returned so the caller can deny.
+# the conditions) and, for a commit or PR message heredoc inside `"$(...)"`, to
+# gaia_message_heredoc_view (lib/message-heredoc.sh's header states the shape);
+# this function only asks them. Where either abstains its body stays as it is,
+# so it stays judged, the direction that fails closed. A missing library
+# degrades the same way; a non-zero return from gaia_verb_arm_view is returned
+# so the caller can deny.
 #
 # HONEST LIMIT. A body is data only as to what it is handed to: a quoted cat
 # heredoc that WRITES a script holding a dump or a dotenv read, with a later
@@ -277,6 +279,14 @@ gaia_reader_drop_data_heredoc_bodies() {
       return 0
       ;;
   esac
+  if ! type gaia_message_heredoc_view >/dev/null 2>&1; then
+    # shellcheck source=/dev/null
+    [ -f "$library_directory/message-heredoc.sh" ] && . "$library_directory/message-heredoc.sh" 2>/dev/null
+  fi
+  if type gaia_message_heredoc_view >/dev/null 2>&1; then
+    gaia_message_heredoc_view "$command_text"
+    command_text="$GAIA_MESSAGE_HEREDOC_VIEW"
+  fi
   if ! type gaia_verb_arm_view >/dev/null 2>&1; then
     # shellcheck source=/dev/null
     [ -f "$library_directory/verb-arming-walk.sh" ] && . "$library_directory/verb-arming-walk.sh" 2>/dev/null
