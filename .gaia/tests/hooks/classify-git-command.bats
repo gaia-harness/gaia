@@ -405,6 +405,18 @@ EOF
   expect allow 'git commit -m x && git status'
 }
 
+@test "a rebase naming the branch to rebase falls through from a feature branch" {
+  expect allow 'git rebase main'
+  expect allow 'git rebase --onto feature main'
+  expect allow 'git rebase -X ours main'
+  expect allow 'git rebase --strategy-option ours main'
+  expect fall 'git rebase feature main'
+  expect fall 'git rebase feature main && git push'
+  expect fall 'git rebase --onto feature feature main'
+  expect fall 'git rebase -X ours feature main'
+  expect fall 'git rebase --root main'
+}
+
 @test "a fetch or pull refspec falls through" {
   expect allow 'git fetch origin'
   expect allow 'git fetch --prune origin feature'

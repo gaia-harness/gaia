@@ -162,6 +162,27 @@ pull_fast_forwards_only() {
   [ "$operand_count" -le 1 ] && [ "$fast_forward_only" -eq 1 ]
 }
 
+# rebase_names_branch: 0 when the `git rebase` segment names the branch to
+# rebase (`<upstream> <branch>`, or `--root <branch>`). Git checks that branch
+# out first, so HEAD read before the segment says nothing about which branch
+# moves or what a later segment runs on.
+rebase_names_branch() {
+  local argument operand_count=0 root=0 skip_next=0
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
+    case "$argument" in
+      -X | -s | -x) skip_next=1 ;;
+      --*=*) ;;
+      --*)
+        _history_option_is "$argument" --onto --strategy-option --strategy --exec && skip_next=1
+        _history_option_is "$argument" --root && root=1 ;;
+      -*) ;;
+      *) operand_count=$((operand_count + 1)) ;;
+    esac
+  done
+  [ "$operand_count" -ge 2 ] || { [ "$root" -eq 1 ] && [ "$operand_count" -ge 1 ]; }
+}
+
 # reset_names_commit: 0 when the `git reset` segment carries an operand before
 # any `--` other than HEAD or @, so it may move HEAD onto another commit.
 reset_names_commit() {
@@ -203,11 +224,12 @@ checkout_names_pathspec() {
 # refspec names main as source or destination, a hard reset that moves HEAD, or
 # a fetch or pull refspec or --refmap, whose destination can force-move local
 # main, or, from main, a reset or a pull naming a branch, which moves it onto
-# another commit.
+# another commit, or, from any branch, a rebase naming the branch to rebase.
 # block-main-destructive-git.sh denies some of these itself; reading them here
 # keeps this file from ever returning an allow beside its deny.
 main_branch_rule_matches() {
   local branch argument
+  [ "$git_subcommand" = rebase ] && rebase_names_branch && return 0
   case "$git_subcommand" in
     commit | push | merge | cherry-pick | revert | rebase | pull | reset)
       if [ "$git_subcommand" = reset ] && ! reset_names_commit; then
