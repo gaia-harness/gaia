@@ -254,13 +254,13 @@ gaia_reader_strip_env_prefix() {
 
 # Prints the full command text with the body of each data-only heredoc masked,
 # for the caller to split into segments afterwards. The decision of which body
-# is data belongs to gaia_verb_arm_view in lib/verb-arming-view.sh (its header
-# lists the conditions); this function only asks it, with the one opt-in case a
-# commit-message or pull-request-body argument (`git commit -m "$(cat <<'EOF'`),
-# and prints the masked view. Where the walk abstains it prints the text
-# unchanged, so every body stays judged, the direction that fails closed. A
-# missing walker degrades the same way; a failure to read the text returns
-# non-zero so the caller can deny.
+# is data belongs to gaia_verb_arm_view (lib/verb-arming-walk.sh's header lists
+# the conditions); this function only asks it, with the one opt-in case a
+# `git commit`, `gh pr` or `gh issue` argument (`git commit -m "$(cat <<'EOF'`).
+# Where the walk abstains it prints the text unchanged, so every body stays
+# judged, the direction that fails closed. A missing walker degrades the same
+# way; a non-zero return from gaia_verb_arm_view is returned so the caller can
+# deny.
 #
 # HONEST LIMIT. A body is data only as to what it is handed to: a quoted cat
 # heredoc that WRITES a script holding a dump or a dotenv read, with a later

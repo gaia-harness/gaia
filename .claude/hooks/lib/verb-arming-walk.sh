@@ -44,8 +44,8 @@
 #      the body before `cat` ever sees it, so that body is not data.
 #
 # One opt-in widening exists for the read guard's dump split alone: with
-# GAIA_VERB_ARM_ARGUMENT_SUBSTITUTION_IS_DATA set, a commit-message or
-# pull-request-body argument (`git commit -m "$(cat <<'EOF'`, quoted delimiter)
+# GAIA_VERB_ARM_ARGUMENT_SUBSTITUTION_IS_DATA set, a `git commit`, `gh pr` or
+# `gh issue` argument (`git commit -m "$(cat <<'EOF'`, quoted delimiter)
 # is also data. Arming consumers never set it.
 #
 # The body runs from the newline ENDING the opener line, not from the heredoc
@@ -254,8 +254,8 @@ _gaia_va_find_delimiter() {
 # where its line is located; this decides 1, 2, 3 and 6.
 _gaia_va_opener_is_data() {
   local line="$1" text_before_operator="$2"
-  # The one opt-in case, for the read guard's dump split alone: a commit-message
-  # or pull-request-body argument, `git commit -m "$(cat <<'EOF'`. The command
+  # The one opt-in case, for the read guard's dump split alone: a `git commit`,
+  # `gh pr` or `gh issue` argument, `git commit -m "$(cat <<'EOF'`. The command
   # word is git or gh, the only `$` is the `$(cat` that opens the argument, and
   # the delimiter is quoted, so nothing ever expands or runs the body. Off unless
   # the caller sets GAIA_VERB_ARM_ARGUMENT_SUBSTITUTION_IS_DATA, so every arming
