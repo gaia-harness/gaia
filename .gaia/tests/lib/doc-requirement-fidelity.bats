@@ -161,7 +161,7 @@ check_stated_choice_goes_to_the_human() {
   in_order "$keep_rule" 'You drop a handed finding only on cited concrete evidence: a guard at `file:line` that prevents the input or state, a test that already asserts the correct behavior, or a demonstration that the failure path is unreachable.' || return 1
   grep -qiE -- 'pull request|commit message|on purpose|states' <<<"$keep_rule" && { printf 'the keep rule names a stated choice as drop evidence: %s\n' "$keep_rule" >&2; return 1; }
   in_order "$(joined "$(cat "$1/$ROUND_REL")")" \
-    'is disposed `accept-residual`, never `fix`, unless it is Critical or security-class or a binding veto names it.' || return 1
+    'is disposed `accept-residual`, never `fix`, unless it is Critical or security-class or an unsatisfied veto names it.' || return 1
 }
 
 # ---------- tests ----------
