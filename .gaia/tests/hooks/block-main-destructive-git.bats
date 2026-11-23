@@ -771,8 +771,9 @@ degrade_staged_library() {
 
 # --- history rules: main, the remote, the reflog and ignored local state ---
 
-# classify-git-command.sh approves ordinary git calls without a prompt, and a
-# deny here is the only guard that holds beside that allow. Every row runs from a feature branch, where rules 1 to 3 allow a push.
+# Ordinary git calls run without a prompt (classify-git-command.sh, and the
+# settings' narrower git allow rules such as `Bash(git branch:*)`), so these
+# denials are the only guard on these forms. Every row runs from a feature branch, where rules 1 to 3 allow a push.
 # bats test_tags=protected
 @test "history rules deny what reaches main, the remote, the reflog or ignored state" {
   local row
