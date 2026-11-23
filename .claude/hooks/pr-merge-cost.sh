@@ -40,6 +40,8 @@ case "$hook_script_path" in */*) hook_directory="${hook_script_path%/*}" ;; *) h
 . "$hook_directory/lib/hook-payload.sh"
 # shellcheck source=/dev/null
 . "$hook_directory/lib/verb-arming.sh"
+# shellcheck source=/dev/null
+. "$hook_directory/lib/repo-scope.sh"
 
 gaia_hook_payload_read "$payload" || exit 0
 [ "$GAIA_HOOK_TOOL_NAME" = "Bash" ] || exit 0
@@ -95,11 +97,6 @@ handoff_output="$(CLAUDE_CODE_SESSION_ID="$GAIA_HOOK_SESSION_ID" GAIA_USAGE_BOX_
 closing_step="$(sed -n '2p' <<<"$handoff_output")"
 [ -n "$closing_step" ] || exit 0
 # The scan below reads `gh`, so it runs only for a session with an open run.
-# shellcheck source=/dev/null
-. "$hook_directory/lib/repo-scope.sh" 2>/dev/null || exit 0
-type gaia_scan_gh_merge >/dev/null 2>&1 || exit 0
-type repo_slug_is_foreign >/dev/null 2>&1 || exit 0
-type gaia_gh_merge_reference_to_home_pr >/dev/null 2>&1 || exit 0
 # A merge of another repository's pull request closes none of this run.
 gaia_scan_gh_merge "$GAIA_HOOK_COMMAND" || exit 0
 repo_slug_is_foreign "$GAIA_GH_MERGE_REPO" && exit 0
