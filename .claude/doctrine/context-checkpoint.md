@@ -41,7 +41,7 @@ At fire and skull, always recommend `Clear and resume`, whatever the remaining w
 
 ## Carry the run's cost across
 
-Before printing any continuation prompt, run `bash .gaia/scripts/usage.sh handoff`. When it prints a line, write that line into STATE.md and make running it verbatim the prompt's first step: it binds the next session to the run this one started, so the run's cost record covers every session. No line means no recorded run is open, and the prompt carries nothing for it.
+Before printing any continuation prompt, run `bash .gaia/scripts/usage.sh handoff`. When it prints lines, write them into STATE.md and make running the first (the join line) verbatim the prompt's first step: it binds the next session to the run this one started, so the run's cost record covers every session. The second line is how the run closes; the prompt carries it as the run's last step. No lines means no recorded run is open, and the prompt carries nothing for it.
 
 ## Unattended
 
