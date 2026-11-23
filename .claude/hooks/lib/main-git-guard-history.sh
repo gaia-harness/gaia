@@ -7,14 +7,14 @@
 # (git_subcommand, git_args). Defines functions and does no other work at
 # source time.
 #
-# Why these rules exist. GAIA's settings allow every `git` invocation
-# (`Bash(git *)`), so an autonomous driver never stalls on a permission prompt
-# for an ordinary commit, push, rebase or branch. The allow list carries no
-# safety; these PreToolUse denials do, and a deny overrides an allow. Each rule
+# Why these rules exist. classify-git-command.sh approves ordinary git calls
+# without a prompt, so an autonomous driver never stalls on a commit, push,
+# rebase or branch, and these rules deny what no approval may cover: a
+# PreToolUse deny from any hook overrides that allow. Each rule
 # below names an operation whose damage reaches past the feature branch the
 # agent is working on: main itself, the remote, the means of recovery, or
 # machine-local state git cannot restore. Policy: wiki/concepts/Git Workflow.md
-# (`## 4. Allowed by permission, bounded by hooks`).
+# (`## 4. Approved by a classifier, bounded by hooks`).
 #
 # Every rule reads the parsed operands, never the raw text, so a flag written
 # inside a quoted commit message is not an invocation. A long option matches in
@@ -281,12 +281,12 @@ _history_config_command_reason() {
       if [ -z "$renamed_from" ]; then
         renamed_from="$word"
       elif gaia_git_config_section_runs_command "$word"; then
-        history_reason="Renaming a config section to '$word' can turn its keys into ones git runs as a command (an alias, a pager, an ssh command), and every git call runs without a permission prompt here, so that is an unprompted shell (wiki/concepts/Git Workflow.md). Ask the user to run it themselves if they want it."
+        history_reason="Renaming a config section to '$word' can turn its keys into ones git runs as a command (an alias, a pager, an ssh command), and ordinary git calls run without a permission prompt here, so that is an unprompted shell (wiki/concepts/Git Workflow.md). Ask the user to run it themselves if they want it."
         return 0
       fi
     elif [ $((index + 1)) -lt "$count" ] \
        && [ "$(gaia_git_config_key_class "$word" "${git_args[$((index + 1))]}")" = runs-command ]; then
-      history_reason="Setting '$word' makes git run its value as a command on later git calls, and every git call runs without a permission prompt here, so that is an unprompted shell (wiki/concepts/Git Workflow.md). Run the command directly, where its own permission rule applies, or ask the user to set the key themselves."
+      history_reason="Setting '$word' makes git run its value as a command on later git calls, and ordinary git calls run without a permission prompt here, so that is an unprompted shell (wiki/concepts/Git Workflow.md). Run the command directly, where its own permission rule applies, or ask the user to set the key themselves."
       return 0
     fi
     index=$((index + 1))
@@ -311,14 +311,14 @@ command_config_rule_reason() {
     class=$(gaia_git_config_key_class "$key" "$value")
     if [ "$class" = runs-command ] \
        || { [ "$class" = hookspath ] && [ "$value" != .githooks ] && [ "$value" != ./.githooks ]; }; then
-      history_reason="'git -c $key=...' makes git run a program or a shell command from config, and every git call runs without a permission prompt here, so that is an unprompted shell (wiki/concepts/Git Workflow.md). Run the command directly, where its own permission rule applies; for a pager, use 'git --no-pager'."
+      history_reason="'git -c $key=...' makes git run a program or a shell command from config, and ordinary git calls run without a permission prompt here, so that is an unprompted shell (wiki/concepts/Git Workflow.md). Run the command directly, where its own permission rule applies; for a pager, use 'git --no-pager'."
       return 0
     fi
   done
   for setting in ${git_config_environment_settings[@]+"${git_config_environment_settings[@]}"}; do
     key="${setting%%=*}"
     if [ -n "$(gaia_git_config_key_class "$key" '!')" ]; then
-      history_reason="'git --config-env=$key=...' sets a key git runs as a program or a shell command, from a variable this guard cannot read, and every git call runs without a permission prompt here (wiki/concepts/Git Workflow.md). Run the command directly, where its own permission rule applies."
+      history_reason="'git --config-env=$key=...' sets a key git runs as a program or a shell command, from a variable this guard cannot read, and ordinary git calls run without a permission prompt here (wiki/concepts/Git Workflow.md). Run the command directly, where its own permission rule applies."
       return 0
     fi
   done

@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# PreToolUse Edit|Write|MultiEdit hook: deny a write to git's own config or hook
-# directory: `.git/config`, a linked worktree's `.git/worktrees/<name>/config`
-# or `config.worktree`, and anything under `.git/hooks/`.
+# PreToolUse Edit|Write|MultiEdit hook: deny a write anywhere in git's own
+# directory (`.git/`, including its `config`, `hooks/` and each linked
+# worktree's `worktrees/<name>/`) and to a linked worktree's `.git` file.
 #
 # Why. Git runs commands named in its config (an alias with `!`, core.sshCommand,
-# core.pager) and the scripts in its hook directory, and the git classifier
-# auto-approves ordinary git calls. A write here would plant a command the next
-# approved git call runs with no prompt. block-main-destructive-git.sh denies
-# the `git config` route to the same keys; this hook closes the file-edit route.
-# GAIA's own hooks live in the tracked `.githooks/`, which this does not touch.
+# core.pager) and the scripts in its hook directory, and classify-git-command.sh
+# approves ordinary git calls without a prompt. A write here would plant a
+# command the next approved git call runs. The pointer files count too: a
+# worktree's `.git` file, or a `commondir` or `gitdir` under
+# `.git/worktrees/<name>/`, decides which repository git reads, and pointing one
+# at a planted repository hands git that repository's config while every
+# same-repository check reads the planted one as home.
+# block-main-destructive-git.sh denies the `git config` route to the command
+# keys; this hook closes the file-edit route. GAIA's own hooks live in the
+# tracked `.githooks/`, which this does not touch.
 #
 # Matched case-insensitively, because the default macOS filesystem is, so
 # `.GIT/config` names the same file. Honest limit: a path reaching the file
@@ -36,9 +41,9 @@ file_path=$(jq -r '.tool_input.file_path // ""' <<<"$payload" 2>/dev/null) || fi
 
 # Herestring, not a pipe: a `grep -q` that exits early on a long payload value
 # would SIGPIPE its writer, and pipefail would turn the match into an allow.
-grep -Eqi '(^|/)\.git/(config|worktrees/[^/]+/config(\.worktree)?|hooks/.*)$' <<<"$file_path" || exit 0
+grep -Eqi '(^|/)\.git(/.*)?$' <<<"$file_path" || exit 0
 
-jq -n --arg reason "Writing git's own config or hook directory ('$file_path') is denied: git runs commands named there (aliases, core.sshCommand, core.pager, hook scripts) on later git calls, and ordinary git calls run without a prompt here (wiki/concepts/Git Workflow.md). Change a repository setting with 'git config <key> <value>', which the git guard checks, or edit GAIA's tracked hooks under .githooks/. If this file truly needs a hand edit, ask the user to make it." '{
+jq -n --arg reason "Writing inside git's own directory ('$file_path') is denied: git runs commands named in its config and hook scripts on later git calls, its pointer files decide which repository git reads, and ordinary git calls run without a prompt here (wiki/concepts/Git Workflow.md). Change a repository setting with 'git config <key> <value>', which the git guard checks, or edit GAIA's tracked hooks under .githooks/. If this file truly needs a hand edit, ask the user to make it." '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "deny",

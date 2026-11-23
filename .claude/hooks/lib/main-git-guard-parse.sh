@@ -247,9 +247,10 @@ split_git_words() {
 # `git -C <a> -C <b> commit` cannot slip past the commit and push rules on the
 # first one), normalized_segment (the segment minus its global `-C` pairs, for the commit and
 # push regexes), git_subcommand (the subcommand word), git_args (the words after
-# it), and the global config overrides: git_config_settings (each `-c` value,
+# it), the global config overrides: git_config_settings (each `-c` value,
 # `key=value`) and git_config_environment_settings (each `--config-env` value,
-# `key=VARIABLE`).
+# `key=VARIABLE`), and git_global_words (every word between `git` and the
+# subcommand, values included, for a caller that must vouch for each one).
 #
 # Honest limits, and they bind every rule the hook arms on git_subcommand rather than any
 # one of them. These spellings reach the subcommand slot carrying something
@@ -273,13 +274,14 @@ parse_git_globals() {
   git_args=()
   git_config_settings=()
   git_config_environment_settings=()
+  git_global_words=()
   split_git_words "$1"
   word_count=${#words[@]}
   while [ "$i" -lt "$word_count" ]; do
     current_word="${words[$i]}"
     if [ "$globals" -eq 1 ]; then
       case "$current_word" in
-        -C) git_cwd="${words[$((i + 1))]:-}"; i=$((i + 2)); continue ;;
+        -C) git_cwd="${words[$((i + 1))]:-}"; git_global_words+=(-C "$git_cwd"); i=$((i + 2)); continue ;;
         # Every global git takes a SEPARATED value for. An option missing here
         # falls to the `-*` arm and its value reaches the catch-all that assigns
         # the subcommand, which is the disarm, so this table tracking git's own
@@ -292,9 +294,10 @@ parse_git_globals() {
             -c) git_config_settings+=("${words[$((i + 1))]:-}") ;;
             --config-env) git_config_environment_settings+=("${words[$((i + 1))]:-}") ;;
           esac
+          git_global_words+=("$current_word" "${words[$((i + 1))]:-}")
           kept+=("$current_word" "${words[$((i + 1))]:-}"); i=$((i + 2)); continue ;;
-        --config-env=*) git_config_environment_settings+=("${current_word#--config-env=}") ;;
-        -*) ;;
+        --config-env=*) git_config_environment_settings+=("${current_word#--config-env=}"); git_global_words+=("$current_word") ;;
+        -*) git_global_words+=("$current_word") ;;
         *) globals=2; git_subcommand="$current_word"; git_args=("${words[@]:$((i + 1))}") ;;
       esac
     elif [ "$globals" -eq 0 ] && [ "$current_word" = git ]; then

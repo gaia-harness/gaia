@@ -2,18 +2,18 @@
 # PreToolUse Bash hook: block commits on main/master, force-push naming main/master,
 # any push from main/master or with a main/master/HEAD refspec source or destination,
 # a `git reset --hard` that moves HEAD to another commit on any branch,
-# the history rules lib/main-git-guard-history.sh owns (GAIA allows `Bash(git *)`),
+# the history rules lib/main-git-guard-history.sh owns,
 # a `-c`, `--config-env` or `git config` write of a key git runs as a command
 # (lib/git-command-config.sh), and block a peer session moving the main
 # checkout's HEAD off a branch another session holds there with an open pull
 # request.
 #
-# Honest limits of the command-config rule: a file edit of `.git/config` or of
-# `.git/hooks/*` is not a git invocation, and the environment forms
-# (`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>`,
-# `GIT_CONFIG_PARAMETERS`, `GIT_SSH_COMMAND` and the like) ride an env-var
-# prefix, which `Bash(git *)` does not auto-approve, so a permission prompt
-# still meets them.
+# Honest limits of the command-config rule: a file edit inside `.git/` is not a
+# git invocation (block-git-internals-write.sh denies the edit-tool route), and
+# the environment forms (`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/
+# `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, `GIT_SSH_COMMAND` and the
+# like) ride an env-var prefix, which classify-git-command.sh never approves,
+# so a permission prompt still meets them.
 #
 # Command-position anchoring: the rules fire only when `git` is the command word
 # of a pipeline segment (start of command, after a `| & ; ( )` separator, or

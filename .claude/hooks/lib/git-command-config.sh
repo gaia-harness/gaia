@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# The git config keys whose value git runs as a program or a shell command, the
-# one list both git deny guards read: block-main-destructive-git.sh (through
-# lib/main-git-guard-history.sh) denies setting one, inline or persisted, and
-# block-no-verify.sh reads core.hooksPath through the same classifier. Defines
-# functions and data and does no other work at source time.
+# The git config keys whose value git runs as a program or a shell command, and
+# the keys an approved `-c` may set. One list each, read by every git guard:
+# block-main-destructive-git.sh (through lib/main-git-guard-history.sh) denies
+# setting a command key, inline or persisted, block-no-verify.sh reads
+# core.hooksPath through the same classifier, and classify-git-command.sh falls
+# through on either and approves only the safe keys. Defines functions and data
+# and does no other work at source time.
 #
-# Why. GAIA's settings allow every `git` invocation, so a key in this list is an
-# unprompted shell: `git -c 'alias.x=!cmd' x`, or `git config core.sshCommand
-# cmd` followed by any fetch. An include pulls in a file that can set any of
-# them, so the include keys are listed too.
+# Why. classify-git-command.sh approves ordinary git calls without a prompt, so
+# a key in this list would be an unprompted shell: `git -c 'alias.x=!cmd' x`,
+# or `git config core.sshCommand cmd` followed by any fetch. An include pulls in
+# a file that can set any of them, so the include keys are listed too.
 #
 # Matching. Keys are compared lowercased, since git's section and variable names
 # are case-insensitive (a subsection is not, but lowercasing only widens the
@@ -32,6 +34,12 @@ GAIA_GIT_COMMAND_CONFIG_KEYS=(
   include.path 'includeif.*.path'
   'browser.*.cmd' 'man.*.cmd'
   interactive.difffilter
+)
+
+# The keys classify-git-command.sh approves on an inline `-c`, lowercased and
+# matched whole. None names a program; a `-c` of any other key falls through.
+GAIA_GIT_SAFE_CONFIG_KEYS=(
+  core.quotepath user.name user.email core.filemode commit.gpgsign color.ui
 )
 
 # gaia_git_config_key_class <key> [<value>]: print `hookspath` for

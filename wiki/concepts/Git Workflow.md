@@ -36,9 +36,27 @@ The hook denies several independent conditions on `git push`, each with its own 
 
 They answer in that order, and the order is by how much of the verdict each message can stand behind. Standing on `main` answers first, since its repair settles the refspec too. The refspec answers ahead of the unreadable directory because it holds whatever checkout the push turns out to run from, where the unreadable-directory message reports an unanswered question and offers repairs that do nothing for a refspec.
 
-## 4. Allowed by permission, bounded by hooks
+## 4. Approved by a classifier, bounded by hooks
 
-`.claude/settings.json` allows every `git` invocation (`Bash(git *)`) and the `gh` pull-request and issue verbs GAIA's workflows run, so a session, interactive or driven unattended by `/loop`, never stalls on a permission prompt for an ordinary commit, push, rebase, branch or merge. The allow list carries no safety of its own. The safety is the PreToolUse hooks, because a hook's deny overrides an allow: this guard, `block-no-verify.sh` for the commit floor, `block-rm-rf.sh`, and `pr-merge-audit-check.sh`, which still gates every `gh pr merge` on the audit. The narrower `deny` rows in the settings file stay as a second layer.
+`.claude/settings.json` carries no blanket `Bash(git *)` rule, and must not: git runs programs named in its config, so a blanket rule is an unprompted shell (`git -c 'alias.x=!cmd' x` runs `cmd`). Its narrower `git ...` allow entries stay as they are. Instead `classify-git-command.sh`, a PreToolUse Bash hook, approves the git commands it can vouch for, so a session, interactive or driven unattended by `/loop`, does not stall on an ordinary commit, push, rebase or merge. It returns an allow or nothing. Nothing leaves the normal permission flow: a settings rule, else the prompt.
+
+It approves a command only when all of these hold, and falls through otherwise:
+
+- **Structure.** Simple commands joined by `&&`, `||`, `;` or a newline. A pipe, a background `&`, a redirect other than one that discards or duplicates a stream (`2>&1`, `2>/dev/null`), a `$` or backtick, a glob, a brace list, a subshell, a backslash or a comment outside single quotes all fall through, as does a heredoc commit message (`-m "$(cat <<'EOF' …)"`): pass the message with `-F <file>` or a quoted `-m`.
+- **Every segment is git.** It starts with the bare word `git`. An env prefix, a wrapper (`command`, `env`), a path to git, or any other program in the command falls through.
+- **Globals.** Only one `-C <directory>`, `-c <key>=<value>` for a key on the safe list, `--no-pager`, `-P` and `--no-optional-locks`. Any `--config-env`, `--git-dir`, `--work-tree` or other global falls through.
+- **This repository.** The directory git runs in (the payload cwd, or `-C` read against it) belongs to this repository: the main checkout or a linked worktree. Git run anywhere else reads that repository's config and hooks, which nothing here has read.
+- **The allow list.** The subcommand is listed, and carries none of the entry's fall-through options: those that run a program (`--exec`, `--upload-pack`, `--receive-pack`, `rebase -x`, a merge strategy), open an editor or pager (`rebase -i`, `grep -O`), or write a named file (`--output`, `archive -o`). `config` and `remote` are approved only in their read forms.
+- **No deny rule.** No rule of the destructive-git guard matches: the history and command-config rules below, a commit or push from `main`, a push naming `main`, a hard reset that moves HEAD.
+
+Fail to fall-through, never fail to allow: a missing library, a missing jq, or a parse the hook cannot finish leaves the call to the prompt.
+
+The lists, one definition each:
+
+- **Allow list** (subcommands and their fall-through options): `.claude/hooks/lib/git-allow-list.sh`. Chosen from what GAIA's commands, skills, rules, agents and executed wiki pages tell Claude to run, plus a scan of real session transcripts.
+- **Command-running config keys** and the **safe `-c` keys**: `.claude/hooks/lib/git-command-config.sh`, read by this hook, the destructive-git guard and `block-no-verify.sh`.
+
+**Precedence.** A PreToolUse deny from any hook beats another hook's allow, and settings `deny` and `ask` rules still apply after a hook's allow (Claude Code hooks reference). So `block-main-destructive-git.sh`, `block-no-verify.sh`, `block-rm-rf.sh`, `pr-merge-audit-check.sh` and every other deny hook keep working beside it, and the settings file's `deny` rows stay a second layer.
 
 Beyond rules 1 to 3 and the hard-reset rule, the guard denies, on any branch, the operations whose damage reaches past the feature branch the session is working on. `.claude/hooks/lib/main-git-guard-history.sh` holds them, and each deny names its repair:
 
@@ -46,15 +64,18 @@ Beyond rules 1 to 3 and the hard-reset rule, the guard denies, on any branch, th
 | --- | --- | --- |
 | `git push --mirror`, `git push --all` / `--branches` | Overwrites or advances remote `main`, and `--mirror` deletes every remote branch the clone lacks | `git push -u origin <branch-name>` |
 | `git clean` with `-x` or `-X` | Deletes ignored files: the `.env` files, GAIA's local working state and the notebook, none of which git can restore | `git clean -fd` |
-| `git config` setting `core.hooksPath` to anything but `.githooks` (an empty value included), or unsetting it | Switches off GAIA's git hooks for every later commit, the persistent form of the inline `-c core.hooksPath=` override `block-no-verify.sh` denies | `git config core.hooksPath .githooks`, and reads |
+| `git config` setting `core.hooksPath` to anything but `.githooks` (an empty value included), or unsetting it | Switches off GAIA's git hooks for every later commit, the persistent form of the inline override `block-no-verify.sh` denies | `git config core.hooksPath .githooks`, and reads |
+| A `-c` or `--config-env` override, or a `git config` write in any scope (`--file`, `--global`, `--system` included), of a key git runs as a command: an `alias.*` with a `!` value, `core.sshCommand`, `core.pager`, `core.editor`, `core.fsmonitor`, `sequence.editor`, `diff.external`, `filter.*`, `*.textconv`, `credential.helper`, `gpg.program`, `include.path`, `includeIf.*.path` and the rest of the list | Plants a command the next approved git call runs with no prompt | Run the command directly, where its own permission rule applies; `git --no-pager` for a pager |
 | `git update-ref` naming `main`/`master` or writing `HEAD`, or `--stdin` | Moves or deletes the shared branch outside every guard | `git branch` / `git switch` on the feature branch |
 | `git branch` deleting, renaming, copying over or force-moving `main`/`master`, and `git checkout -B` / `git switch -C` onto it | The local base every branch, worktree and cleanup step reads | The same operations on any other branch |
 | `git reflog expire`, `delete` or `drop`, `git gc --prune…`, `git prune` | Erase the record or the objects that recover a dropped commit | `git reflog`, `git gc` |
 | `git filter-branch`, `git filter-repo` | Rewrite history across branches | Ask the user to run it |
 
+`block-no-verify.sh` reads the inline `core.hooksPath` override from the parsed globals, so a quoted `-c 'core.hooksPath=x'` and `--config-env=core.hooksPath=X` are denied as the plain spelling is. `block-git-internals-write.sh` denies an Edit, Write or MultiEdit anywhere in `.git/` and on a linked worktree's `.git` file: its config and hooks run commands, and its pointer files (`.git`, `commondir`, `gitdir`) decide which repository git reads.
+
 Allowed on purpose: a force-push of a feature branch (the rebase repair), deleting a tag, `git worktree remove --force`, and the commands that discard uncommitted work on the session's own branch (`git checkout -- .`, `git restore .`, `git stash drop`/`clear`), which stay ordinary editing.
 
-The rules read the parsed operands, never the raw text, so a flag quoted inside a commit message is not an invocation, and match a long option in any prefix git accepts (`--mirr`). They inherit the parser's honest limits (an unexpanded variable or an unlisted value-taking global option reads no subcommand and allows), and an edit of `.git/config` by any route other than `git config` is not read. A sub-agent inherits the same allow list, so the execution doctrine's rule that executors run no state-changing git is held by that doctrine, not by a permission prompt.
+The rules read the parsed operands, never the raw text, so a flag quoted inside a commit message is not an invocation, and match a long option in any prefix git accepts (`--mirr`). They inherit the parser's honest limits (an unexpanded variable or an unlisted value-taking global option reads no subcommand and allows), which the classifier does not: it falls through on both. Residuals: the env-prefixed config forms (`GIT_CONFIG_*`, `GIT_SSH_COMMAND`) are never approved, so they still prompt; an approved commit, push, merge or checkout runs the tracked hooks under `.githooks/` and whatever they call, which are the project's own reviewed code, so an edit to them is an ordinary file edit no rule here vouches for. A sub-agent runs the same hooks, so the execution doctrine's rule that executors run no state-changing git is held by that doctrine, not by a permission prompt.
 
 ## Setup standdown
 
