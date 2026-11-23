@@ -135,3 +135,19 @@ check_rows() {
   gaia_message_heredoc_view "$text"
   [ "$GAIA_MESSAGE_HEREDOC_VIEW" = "$text" ]
 }
+
+@test "a long plain body is masked within a time budget on /bin/bash" {
+  # The mask once used a per-character pattern substitution, quadratic on bash
+  # 3.2: a 16 KB body took minutes and the hook was cancelled at its deadline.
+  local line text view start elapsed
+  line=$(printf '%*s' 79 '' | tr ' ' a)
+  text="git commit -m \"\$(cat <<'EOF'"$'\n'
+  while [ "${#text}" -lt 15000 ]; do text+="$line"$'\n'; done
+  text+="EOF"$'\n'")\""
+  start=$SECONDS
+  view=$(/bin/bash -c '. "$1"; gaia_message_heredoc_view "$2"; printf "%s" "$GAIA_MESSAGE_HEREDOC_VIEW"' _ "$LIBRARY_FILE" "$text")
+  elapsed=$(( SECONDS - start ))
+  [ "$elapsed" -le 3 ]
+  [ "${#view}" -eq "${#text}" ]
+  [ "$view" != "$text" ]
+}

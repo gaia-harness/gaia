@@ -77,9 +77,39 @@ gaia_message_heredoc_view() {
 
   _gaia_message_heredoc_prefix_is_message_flag "$head" || return 0
 
+  _gaia_message_heredoc_mask "$body"
   # shellcheck disable=SC2034 # the view is this function's whole product, read by its caller
-  GAIA_MESSAGE_HEREDOC_VIEW="${text:0:$body_start}${body//[!$newline]/x}${text:$(( body_start + ${#body} ))}"
+  GAIA_MESSAGE_HEREDOC_VIEW="${text:0:$body_start}${_GAIA_MESSAGE_HEREDOC_MASK}${text:$(( body_start + ${#body} ))}"
   return 0
+}
+
+# The run every mask line is cut from, grown by doubling and reused for the
+# life of the process. `${body//[!$newline]/x}` rescans the body per
+# replacement, which is quadratic on bash 3.2 (a 16 KB body takes minutes and
+# the hook is cancelled at its deadline), so the mask is built per line.
+_gaia_message_heredoc_xrun=x
+_GAIA_MESSAGE_HEREDOC_MASK=""
+
+# _gaia_message_heredoc_mask <body>: ASSIGN _GAIA_MESSAGE_HEREDOC_MASK, <body>
+# with every character but a newline replaced by x, same character length.
+_gaia_message_heredoc_mask() {
+  local rest="$1" line line_length newline=$'\n'
+  _GAIA_MESSAGE_HEREDOC_MASK=""
+  while [ -n "$rest" ]; do
+    case "$rest" in
+      *"$newline"*) line="${rest%%"$newline"*}" ;;
+      *) line="$rest" ;;
+    esac
+    line_length=${#line}
+    while [ "${#_gaia_message_heredoc_xrun}" -lt "$line_length" ]; do
+      _gaia_message_heredoc_xrun="$_gaia_message_heredoc_xrun$_gaia_message_heredoc_xrun"
+    done
+    _GAIA_MESSAGE_HEREDOC_MASK+="${_gaia_message_heredoc_xrun:0:$line_length}"
+    rest="${rest:$line_length}"
+    case "$rest" in
+      "$newline"*) _GAIA_MESSAGE_HEREDOC_MASK+="$newline"; rest="${rest:1}" ;;
+    esac
+  done
 }
 
 # _gaia_message_heredoc_prefix_is_message_flag <prefix>: succeed when the last
