@@ -92,7 +92,9 @@
 #     scripts state-reaper.sh, state-reaper-lib.sh, state-reaper-classes.sh and
 #     state-reaper-session-start.sh. Naming them stays allowed, and so does
 #     running a bats suite whose path merely contains `state-reaper`, since the
-#     suite path is not one of those four file names.
+#     suite path is not one of those four file names. A heredoc body the
+#     verb-arming walker proves is data (a `cat` or `tee` into a file) is not
+#     read as commands, so a line of it naming a script is allowed.
 #   Shared rate-limit reading: the same quote-aware reading and unsound-reading
 #     fallback denies a command that redirects into the file or runs a write,
 #     move or delete verb over it (`>`, `rm`, `mv`, `cp`, `tee`, `ln`, `sed -i`
