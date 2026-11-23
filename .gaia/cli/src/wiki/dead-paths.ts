@@ -98,6 +98,8 @@ const RUNTIME_PREFIXES = ['.gaia/local/'] as const;
  * `/gaia-init` and `/setup-gaia`, not shipped by GAIA itself, so a checkout that has not opted in lacks it.
  * `.gaia/update-decisions.json` is the decision log `/update-gaia` writes, so a
  * checkout that has never recorded an update decision lacks it too.
+ * `.gaia/value-sets.json` is the duplicate value-set check's optional
+ * exclusion config, which an adopter writes and commits and GAIA never ships.
  *
  * `release/runtime-deps.ts` keeps its own `ADOPTER_OWNED_SENTINELS` naming the
  * same file. The two sets intersect on the runtime-created entries only: that
@@ -112,6 +114,7 @@ const RUNTIME_PREFIXES = ['.gaia/local/'] as const;
 export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
   '.gaia/project.json',
   '.gaia/update-decisions.json',
+  '.gaia/value-sets.json',
 ]);
 
 /**

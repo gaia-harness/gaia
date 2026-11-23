@@ -1,11 +1,12 @@
 # Required CI checks
 
-`/setup-gaia` Phase 5 (`standalone-features.md`) and `/update-gaia` Step 9c run this file for the `required-ci-checks` feature. It registers the two jobs of the shipped `.github/workflows/tests.yml` as required checks on the default branch, beside `GAIA-Audit`:
+`/setup-gaia` Phase 5 (`standalone-features.md`) and `/update-gaia` Step 9c run this file for the `required-ci-checks` feature. It registers the three jobs of the shipped `.github/workflows/tests.yml` as required checks on the default branch, beside `GAIA-Audit`:
 
 - `Vitest and Playwright`: typecheck, the changed-file lint, Vitest and Playwright.
 - `Shellcheck and bats`: shellcheck over the changed shell, and the bats suites when shell changed.
+- `Value sets`: the duplicate value-set check over the whole tree, on every pull request.
 
-`GAIA-Audit` alone gates the audit, not the code: a pull request whose lint or tests are red merges once the audit clears, and a commit that skipped the local Quality Gate reaches the default branch unchecked. Both jobs report on every pull request, green when nothing they cover changed, so requiring them never holds a pull request that has nothing to check.
+`GAIA-Audit` alone gates the audit, not the code: a pull request whose lint or tests are red merges once the audit clears, and a commit that skipped the local Quality Gate reaches the default branch unchecked. All three jobs report on every pull request, green when nothing they cover changed, so requiring them never holds a pull request that has nothing to check.
 
 `Run Chromatic` is never registered: Chromatic is optional, and a project that runs out of its plan's snapshots would have every merge blocked.
 
@@ -25,12 +26,12 @@ When it reports `found: false` or a `host` other than `github.com`, record `not-
 .gaia/cli/gaia setup check-admin --owner <owner> --repo <repo> --json
 ```
 
-When `admin` is not `true` or `auth_status` is not `"ok"`, record nothing, say `Registering the Vitest and Playwright and Shellcheck and bats required checks needs a repository admin: ask one to run /setup-gaia.`, and stop.
+When `admin` is not `true` or `auth_status` is not `"ok"`, record nothing, say `Registering the Vitest and Playwright, Shellcheck and bats, and Value sets required checks needs a repository admin: ask one to run /setup-gaia.`, and stop.
 
 List the contexts this checkout's workflow publishes:
 
 ```bash
-for context in 'Vitest and Playwright' 'Shellcheck and bats'; do
+for context in 'Vitest and Playwright' 'Shellcheck and bats' 'Value sets'; do
   grep -qxF "    name: $context" .github/workflows/tests.yml 2>/dev/null && printf '%s\n' "$context"
 done
 ```
@@ -74,9 +75,9 @@ Could not register the CI required checks. Once the default branch has a protect
 On success, tell the user once what changed for them:
 
 ```
-<contexts, comma-separated> now required on <default-branch>: a pull request with red lint, typecheck, tests or shellcheck can no longer merge. Both checks report green when nothing they cover changed.
+<contexts, comma-separated> now required on <default-branch>: a pull request with red lint, typecheck, tests, shellcheck or a duplicate value set can no longer merge. Vitest and Playwright and Shellcheck and bats report green when nothing they cover changed.
 ```
 
 ## Record
 
-Run the record line `standalone-features.md` (or `/update-gaia` Step 9c) names for the outcome: `.gaia/cli/gaia setup record required-ci-checks not-applicable` for a non-GitHub origin or a project that publishes neither context, otherwise `.gaia/cli/gaia setup record required-ci-checks applied` after the registration succeeds or finds nothing to add. A failed registration records nothing.
+Run the record line `standalone-features.md` (or `/update-gaia` Step 9c) names for the outcome: `.gaia/cli/gaia setup record required-ci-checks not-applicable` for a non-GitHub origin or a project that publishes none of the contexts, otherwise `.gaia/cli/gaia setup record required-ci-checks applied` after the registration succeeds or finds nothing to add. A failed registration records nothing.
