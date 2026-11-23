@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The destructive-git guard's history rules: the git subcommands that rewrite
 # or destroy shared history, the reflog that recovers it, or the ignored local
-# state GAIA keeps beside the checkout. Sourced only by
-# block-main-destructive-git.sh, after lib/main-git-guard-parse.sh, and reads
+# state GAIA keeps beside the checkout. Shared by the git
+# hooks (block-main-destructive-git.sh, classify-git-command.sh), after lib/main-git-guard-parse.sh, and reads
 # the globals parse_git_globals sets for the segment the walk is on
 # (git_subcommand, git_args). Defines functions and does no other work at
 # source time.

@@ -10,6 +10,8 @@
 #   -x            the short letter, alone or inside a bundle (`-ix`)
 #   @read-only    only the forms that write nothing: the classifier owns the
 #                 per-subcommand reading
+#   @guarded-paths  no path operand that names a hook, settings or other
+#                 edit-guarded path: the classifier reads the operands
 #
 # What earns a fall-through option: it makes git run a program (`--exec`,
 # `--upload-pack`, `--receive-pack`, a merge strategy, which git runs as
@@ -48,7 +50,7 @@ GAIA_GIT_ALLOWED_SUBCOMMANDS=(
   'merge --strategy -s'
   'merge-base'
   'merge-tree'
-  'mv'
+  'mv @guarded-paths'
   'patch-id'
   'pull --upload-pack --strategy --rebase=i -s'
   'push --receive-pack --exec'
@@ -59,7 +61,7 @@ GAIA_GIT_ALLOWED_SUBCOMMANDS=(
   'rev-list --output'
   'rev-parse'
   'revert --strategy -s'
-  'rm'
+  'rm @guarded-paths --pathspec-from-file'
   'shortlog --output'
   'show --output'
   'show-ref'

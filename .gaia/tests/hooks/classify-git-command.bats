@@ -99,7 +99,7 @@ read_only_form() {
       expect allow "git $name"
     fi
     for spec in ${specs[@]+"${specs[@]}"}; do
-      [ "$spec" = @read-only ] && continue
+      case "$spec" in @read-only | @guarded-paths) continue ;; esac
       spec_count=$((spec_count + 1))
       expect fall "git $name $(fall_through_neighbour "$spec") x"
     done
@@ -411,6 +411,40 @@ EOF
   expect fall 'git fetch -u origin feature:main'
   expect fall 'git fetch ext::sh'
   expect fall 'git pull origin feature:main'
+}
+
+@test "from main, a reset or a pull naming a branch falls through" {
+  git -C "$REPO" checkout --quiet main
+  expect fall 'git reset --soft feature'
+  expect fall 'git reset feature'
+  expect fall 'git reset --keep feature'
+  expect fall 'git pull --ff-only origin feature'
+  expect allow 'git reset'
+  expect allow 'git reset HEAD'
+  expect allow 'git reset -- file'
+  expect allow 'git pull --ff-only origin'
+  git -C "$REPO" checkout --quiet feature
+  expect allow 'git reset --soft HEAD~1'
+  expect allow 'git pull --ff-only origin feature'
+}
+
+@test "a fetch or pull --refmap, in any spelling, falls through" {
+  expect fall 'git fetch --refmap=+refs/heads/feature:refs/heads/main origin feature'
+  expect fall 'git fetch --refmap +refs/heads/feature:refs/heads/main origin feature'
+  expect fall 'git fetch --refm=x origin feature'
+  expect fall 'git pull --refmap=x origin feature'
+}
+
+@test "git rm and git mv of a hook or settings path fall through" {
+  expect fall 'git rm .claude/hooks/block-no-verify.sh'
+  expect fall 'git rm .claude/settings.json'
+  expect fall 'git rm -r .githooks'
+  expect fall 'git mv .claude/hooks/block-no-verify.sh x'
+  expect fall 'git mv x .claude/settings.json'
+  expect fall 'git rm -r .'
+  expect fall 'git rm --pathspec-from-file=list'
+  expect allow 'git rm old.txt'
+  expect allow 'git mv old.txt new.txt'
 }
 
 @test "apply, and a restore from another tree, fall through" {

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The main-branch destructive-git guard's denial, branch reads, and git word
-# parser. Sourced only by block-main-destructive-git.sh, which owns the walk
-# that calls these and reads the globals they set; defines functions and does
+# parser. Shared by the git hooks (block-main-destructive-git.sh,
+# classify-git-command.sh, block-no-verify.sh); block-main-destructive-git.sh
+# owns the walk that calls these and reads the globals they set; defines functions and does
 # no other work at source time.
 
 # shellcheck disable=SC2154,SC2034  # main_root comes from, and the parse globals go to, block-main-destructive-git.sh

@@ -65,8 +65,11 @@ case "$command" in git | git[[:space:]]* | *[[:space:]]git[[:space:]]* | *[\;\&\
 
 # main-root-lib.sh loads first, with its output discarded, so a function it also
 # defines is replaced by the hook library's definition below and nothing it
-# prints can reach this hook's stdout. `Edit(.gaia/**)` lets Claude rewrite it
-# unprompted, so it is not trusted to speak for this hook.
+# prints at the top level can reach this hook's stdout. That is all the order
+# buys: a function it defines under another name, such as `jq`, `git`, `tr` or
+# `type`, survives and can still speak for this hook. `Edit(.gaia/**)` lets
+# Claude rewrite that file unprompted, and the settings rules that allow
+# `bash .gaia/scripts/*` already reach the same code, so the limit is accepted.
 # shellcheck source=/dev/null
 . "$hook_root/.gaia/scripts/main-root-lib.sh" >/dev/null 2>&1 || exit 0
 # shellcheck source=lib/main-git-guard-parse.sh
@@ -146,14 +149,49 @@ directory_is_approved() {
 # pull_fast_forwards_only: 0 when the `git pull` segment carries `--ff-only` and
 # no option that lets it merge or rebase instead.
 pull_fast_forwards_only() {
-  local argument fast_forward_only=0
+  local argument fast_forward_only=0 operand_count=0
   for argument in ${git_args[@]+"${git_args[@]}"}; do
     case "$argument" in
       --ff-only) fast_forward_only=1 ;;
       --ff | --no-ff | --rebase* | -r) return 1 ;;
+      -*) ;;
+      *) operand_count=$((operand_count + 1)) ;;
     esac
   done
-  [ "$fast_forward_only" -eq 1 ]
+  # A remote followed by a branch fast-forwards the current branch onto that
+  # branch, so on main it is a branch question; a bare remote follows upstream.
+  [ "$operand_count" -le 1 ] && [ "$fast_forward_only" -eq 1 ]
+}
+
+# reset_names_commit: 0 when the `git reset` segment carries an operand before
+# any `--` other than HEAD or @, so it may move HEAD onto another commit.
+reset_names_commit() {
+  local argument
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    case "$argument" in
+      --) return 1 ;;
+      -*) ;;
+      HEAD | @) ;;
+      *) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# paths_are_guarded: 0 when a path operand of the `git rm` or `git mv` segment
+# could be a hook, a settings file or other edit-guarded path: one that names
+# `.claude`, `.githooks` or `.gaia`, or a directory that holds them (`.`,
+# `..`, or an absolute or home path).
+paths_are_guarded() {
+  local argument lowered
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    case "$argument" in -- | -*) continue ;; esac
+    lowered=$(printf '%s' "$argument" | tr '[:upper:]' '[:lower:]')
+    case "$lowered" in
+      *.claude* | *.githooks* | *.gaia* | . | .. | ./ | ../ | */. | */.. | /* | '~'*) return 0 ;;
+    esac
+  done
+  return 1
 }
 
 # main_branch_rule_matches: 0 when the segment must not be approved on a branch
@@ -161,14 +199,18 @@ pull_fast_forwards_only() {
 # an earlier checkout, switch or symbolic-ref segment of this command may have
 # changed, since HEAD is read once before any segment runs), a push whose
 # refspec names main as source or destination, a hard reset that moves HEAD, or
-# a fetch or pull refspec, whose destination can force-move local main.
+# a fetch or pull refspec or --refmap, whose destination can force-move local
+# main, or, from main, a reset or a pull naming a branch, which moves it onto
+# another commit.
 # block-main-destructive-git.sh denies some of these itself; reading them here
 # keeps this file from ever returning an allow beside its deny.
 main_branch_rule_matches() {
   local branch argument
   case "$git_subcommand" in
-    commit | push | merge | cherry-pick | revert | rebase | pull)
-      if [ "$git_subcommand" != pull ] || ! pull_fast_forwards_only; then
+    commit | push | merge | cherry-pick | revert | rebase | pull | reset)
+      if [ "$git_subcommand" = reset ] && ! reset_names_commit; then
+        :
+      elif [ "$git_subcommand" != pull ] || ! pull_fast_forwards_only; then
         [ "$branch_may_have_changed" -eq 1 ] && return 0
         branch=$(git -C "$segment_run_directory" symbolic-ref --short HEAD 2>/dev/null) || branch=""
         case "$branch" in main | master) return 0 ;; esac
@@ -178,6 +220,7 @@ main_branch_rule_matches() {
   case "$git_subcommand" in
     fetch | pull)
       for argument in ${git_args[@]+"${git_args[@]}"}; do
+        _history_option_is "$argument" --refmap && return 0
         case "$argument" in -*) ;; *:*) return 0 ;; esac
       done
       return 1 ;;
@@ -268,6 +311,9 @@ subcommand_is_approved() {
     read -r -a specs <<<"${entry#"$name"}"
     for spec in ${specs[@]+"${specs[@]}"}; do
       case "$spec" in
+        @guarded-paths)
+          paths_are_guarded && return 1
+          continue ;;
         @read-only)
           case "$git_subcommand" in
             config) config_is_read_only || return 1 ;;
