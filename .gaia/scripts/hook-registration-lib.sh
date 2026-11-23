@@ -53,8 +53,10 @@ gaia_pretooluse_hooks() {
 
 # gaia_hook_blocks <hook_script_path>
 #
-# Succeed when the script can stop a tool call: it emits a permissionDecision,
-# or it exits 2. Full-line comments are excluded, which is load-bearing rather
+# Succeed when the script can stop a tool call: it emits a permissionDecision
+# other than "allow", or it exits 2. An allow-only hook cannot stop a call, and
+# when it fails the call falls through to the prompt, so it is advisory here.
+# Full-line comments are excluded, which is load-bearing rather
 # than tidy -- at least one advisory hook here carries the string `exit 2` in a
 # paragraph of its header explaining a failure mode it does NOT cause, and
 # grading that as a block would misfile a correctly-filed advisory hook.
@@ -83,7 +85,7 @@ gaia_hook_blocks() {
       line = $0
       sub(/^[[:space:]]+/, "", line)
       if (line ~ /^#/) next
-      if (index(line, "permissionDecision")) { found = 1; exit }
+      if (index(line, "permissionDecision") && line !~ /permissionDecision"?[[:space:]]*:[[:space:]]*"allow"/) { found = 1; exit }
       probe = " " line " "
       if (probe ~ /[^A-Za-z0-9_]exit 2[^0-9]/) { found = 1; exit }
     }
