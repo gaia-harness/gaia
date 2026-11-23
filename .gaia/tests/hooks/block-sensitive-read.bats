@@ -205,6 +205,7 @@ run_settings_row() {
     "deny|eval \"\$(cat <<'EOF'\ncat .env\nEOF\n)\"" \
     "deny|cat <<'EOF' > >(sh)\nenv\nEOF" \
     "deny|cat <<'EOF' \\\\\n  | sh\nenv\nEOF" \
+    "deny|git commit -m \"\$(cat <<'EOF'\nx\nEOF\n) tail\ncat > f <<'EOF2'\nenv\nEOF2\n)\"" \
     "allow|cat > out.txt <<'EOF'\nenv\nEOF"; do
     verdict=${row%%|*}
     payload=$(printf "${row#*|}")

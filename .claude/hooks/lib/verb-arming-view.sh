@@ -21,7 +21,7 @@ gaia_verb_arm_view() {
   local newline=$'\n'
   local remaining_text view_text opener_line quote_character character prefix prefix_length chunk blanks ok word_start work line_start
   local heredoc_count strip_tabs delimiter delimiter_unreadable delimiter_quoted data first delimiter_offset body delimiter_line body_index heredoc_prefix
-  local heredoc_delimiters heredoc_strip_tabs heredoc_quoted argument_quote_open=0 argument_quote_regex
+  local heredoc_delimiters heredoc_strip_tabs heredoc_quoted argument_quote_open=0 argument_quote_regex argument_prefix_regex
   heredoc_delimiters=()
   heredoc_strip_tabs=()
   heredoc_quoted=()
@@ -96,13 +96,17 @@ gaia_verb_arm_view() {
     esac
 
     # Opt-in only (see _gaia_va_opener_is_data): a double quote opening
-    # `"$(cat <<` is not a quoted span, since the shell runs the substitution as
-    # a command context, so the heredoc inside it is a real one. The matching
-    # `)"` after the body closes it. A caller that does not set the opt-in never
-    # reaches this, and the quote opens a span as always.
+    # `"$(cat <<` after a git commit or gh pr/issue command is not a quoted span,
+    # since the shell runs the substitution as a command context, so the heredoc
+    # inside it is a real one. The matching `)"` after the body closes it, and
+    # anything else between the body and that `)"` leaves the shell inside the
+    # string while the walk reads unquoted text, so the walk gives up instead.
+    # A caller that does not set the opt-in never reaches this, and the quote
+    # opens a span as always.
     if [ -n "${GAIA_VERB_ARM_ARGUMENT_SUBSTITUTION_IS_DATA:-}" ] && [ "$character" = '"' ]; then
       argument_quote_regex='^"\$\(cat[[:space:]]+<<-?[[:space:]]*['"'"'"\\]'
-      if [ "$argument_quote_open" = 0 ] && [[ "$remaining_text" =~ $argument_quote_regex ]]; then
+      argument_prefix_regex='^[[:space:]]*(git[[:space:]]+commit|gh[[:space:]]+(pr|issue))[[:space:]][^$`|&;(<>]*$'
+      if [ "$argument_quote_open" = 0 ] && [[ "$remaining_text" =~ $argument_quote_regex ]] && [[ "${view_text:$line_start}" =~ $argument_prefix_regex ]]; then
         argument_quote_open=1
         view_text+="$character"
         remaining_text="${remaining_text:1}"
@@ -295,6 +299,12 @@ gaia_verb_arm_view() {
           esac
           view_text+="$delimiter_line"
           remaining_text="${remaining_text:${#delimiter_line}}"
+          if [ "$argument_quote_open" = 1 ]; then
+            case "${remaining_text#"$newline"}" in
+              ')"'*) ;;
+              *) ok=0; break ;;
+            esac
+          fi
           body_index=$(( body_index + 1 ))
           if [ "$body_index" -lt "$heredoc_count" ]; then
             case "$remaining_text" in
