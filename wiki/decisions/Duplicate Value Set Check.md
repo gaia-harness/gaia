@@ -54,7 +54,7 @@ The maintainer repo is recognized by `.claude/rules/maintainers/harness-triage-t
 
 ## Markers
 
-A literal set that must stay a copy, or a deliberately narrower one, carries a marker; the syntax and how each form is verified live in `.claude/rules/single-source-of-truth.md` `## Code`. The check resolves a marker only against named sets already collected in scope, never by opening the named file, so a marker naming an absolute or repository-escaping path, an excluded or out-of-scope file, an unnamed set or a case arm fails as source not found. A marker that matches more than one set, is malformed, conflicts with a second marker on the same set, sits above no set, or names a marked source fails with its own finding. A valid sanctioned copy is left out of the duplicate comparison; a subset marker exempts only the subset relation to its named source.
+A literal set that must stay a copy, or a deliberately narrower one, carries a marker; the syntax and how each form is verified live in `.claude/rules/single-source-of-truth.md` `## Code`. The check resolves a marker only against named sets already collected in scope, never by opening the named file, so a marker naming an absolute or repository-escaping path, an excluded or out-of-scope file, an unnamed set or a case arm fails as source not found. A marker that matches more than one set, is malformed, conflicts with a second marker on the same set, sits above no set, or names a marked source fails with its own finding. A valid sanctioned copy is left out of the duplicate comparison; a valid subset marker exempts the set from every subset finding, whichever set holds its values, but not from a duplicate finding.
 
 ## Exit codes
 
