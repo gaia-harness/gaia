@@ -15,8 +15,8 @@
 # split the recorder makes.
 #
 # Every string in tool_input is read, not one named field, so a prompt nested in
-# a RemoteTrigger body reaches the check. SendMessage is covered because a
-# message to this session arrives as a prompt; its delivery wrapper keeps that
+# a RemoteTrigger body reaches the check. SendMessage is covered because a sent
+# message arrives at the receiving session as a prompt; its delivery wrapper keeps that
 # prompt from being the bare line today (audit-loop-grant.bats pins it), and
 # this guard still holds if the wrapper changes.
 #
