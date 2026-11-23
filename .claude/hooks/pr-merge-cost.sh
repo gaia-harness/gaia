@@ -83,7 +83,7 @@ fi
 # A merge can end a recorded run (a `/gaia-debt` drain) that nothing else
 # closes: no hook or gate requires the run-end record, so a session that stops
 # at the merge leaves the run unrecorded. This advisory puts the owed command
-# in front of Claude, and never blocks: a PostToolUse hook runs after the merge command.
+# in front of Claude as a PostToolUse advisory that never blocks.
 # The line also prints for a merge still queued behind `--auto`: the record is
 # owed once it lands, and the wording says so.
 [ "${GAIA_USAGE_HOOKS_DISABLE:-}" = 1 ] && exit 0
@@ -110,7 +110,7 @@ case "$merged_reference" in
     merged_reference="$GAIA_HOME_PR_NUMBER"
     ;;
 esac
-# A branch name as the reference names no number, so it carries no --pr.
+# A branch name, or no reference at all, names no number, so the line carries no --pr.
 if [[ $merged_reference =~ ^[1-9][0-9]{0,9}$ && $closing_step == *'usage.sh record '* ]]; then
   closing_step="$closing_step --pr $merged_reference"
 fi
