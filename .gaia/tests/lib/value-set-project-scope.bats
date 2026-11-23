@@ -7,8 +7,12 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  . "$BATS_TEST_DIRNAME/../hooks/helpers/require-node-typescript.sh"
+  require_node_typescript "$REPO_ROOT/.gaia/cli"
   GAIA_CLI="$REPO_ROOT/.gaia/cli/gaia"
   TREE="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$TREE/.gaia" "$TREE/.claude/hooks" "$TREE/apps/web/app" "$TREE/node_modules"

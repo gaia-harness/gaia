@@ -4,8 +4,12 @@
 # its source and fails once it drifts. The work tree is built at run time inside
 # $BATS_TEST_TMPDIR, so no literal value set lives in this file.
 
+# bats file_tags=installed-dependencies
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  . "$BATS_TEST_DIRNAME/../hooks/helpers/require-node-typescript.sh"
+  require_node_typescript "$REPO_ROOT"
   TREE="$BATS_TEST_TMPDIR/tree"
   mkdir -p "$TREE/.gaia/cli" "$TREE/src"
   cp "$REPO_ROOT/.gaia/cli/gaia" "$TREE/.gaia/cli/gaia"
