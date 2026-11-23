@@ -415,6 +415,7 @@ EOF
   expect fall 'git rebase --onto feature feature main'
   expect fall 'git rebase -X ours feature main'
   expect fall 'git rebase --root main'
+  expect fall 'git rebase - main'
 }
 
 @test "a fetch or pull refspec falls through" {

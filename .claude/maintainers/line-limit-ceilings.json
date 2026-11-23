@@ -3,7 +3,7 @@
     ".claude/hooks/audit-loop-bound.sh": 855,
     ".claude/hooks/block-main-destructive-git.sh": 526,
     ".claude/hooks/block-rm-rf.sh": 820,
-    ".claude/hooks/classify-git-command.sh": 405,
+    ".claude/hooks/classify-git-command.sh": 406,
     ".claude/hooks/lib/audit-base-provenance.sh": 417,
     ".claude/hooks/lib/audit-branch-patch.sh": 564,
     ".claude/hooks/lib/audit-scope.sh": 528,

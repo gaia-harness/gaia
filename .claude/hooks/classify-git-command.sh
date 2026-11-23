@@ -172,6 +172,7 @@ rebase_names_branch() {
     if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
     case "$argument" in
       -X | -s | -x) skip_next=1 ;;
+      -) operand_count=$((operand_count + 1)) ;;
       --*=*) ;;
       --*)
         _history_option_is "$argument" --onto --strategy-option --strategy --exec && skip_next=1
