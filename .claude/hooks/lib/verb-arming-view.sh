@@ -113,6 +113,10 @@ gaia_verb_arm_view() {
         word_start=0
         continue
       elif [ "$argument_quote_open" = 1 ] && [ "${view_text: -1}" = ')' ]; then
+        # A `)"` on the opener line closes the argument while its heredoc body
+        # is still pending: zsh and bash 3.2 end the substitution at the `)`
+        # and run the following lines, so they are not a body. Give up.
+        if [ "$heredoc_count" -gt 0 ]; then ok=0; break; fi
         argument_quote_open=0
         view_text+="$character"
         remaining_text="${remaining_text:1}"
