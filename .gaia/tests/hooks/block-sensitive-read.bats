@@ -165,9 +165,7 @@ run_settings_row() {
 
 # --- Bash: heredoc bodies and the dump reason ---
 #
-# Built with printf so each payload carries real newlines and tabs. A cat or
-# tee heredoc with a quoted delimiter and no pipe only writes data; anything a
-# shell runs, or whose body cannot be proven closed, keeps its body judged.
+# Built with printf so each payload carries real newlines and tabs.
 @test "a data heredoc is allowed and a runnable or unproven body is denied" {
   local row verdict payload
   for row in \

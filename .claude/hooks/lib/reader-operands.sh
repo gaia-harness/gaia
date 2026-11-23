@@ -264,9 +264,9 @@ gaia_reader_strip_env_prefix() {
 # heredoc with no closing line keeps its body, the direction that fails closed.
 #
 # HONEST LIMIT. The opener is matched in raw text, so an opener spelled inside
-# a quoted string (`echo "cat <<'X'"`) is read as a real one and hides the
-# lines down to a matching X line. That takes a deliberate spelling, the
-# obfuscation class this guard already does not claim to stop.
+# a quoted string after a separator (`echo "a; cat <<'X'"`) is read as a real
+# one and hides the lines down to a matching X line. That takes a deliberate
+# spelling, the obfuscation class this guard already does not claim to stop.
 gaia_reader_drop_data_heredoc_bodies() {
   local command_text="$1"
   local quote="'" tab=$'\t'
