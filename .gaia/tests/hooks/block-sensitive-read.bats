@@ -163,6 +163,67 @@ run_settings_row() {
   assert_denied_by_json
 }
 
+# --- Bash: heredoc bodies and the dump reason ---
+#
+# Built with printf so each payload carries real newlines and tabs.
+@test "a data heredoc is allowed and a runnable or unproven body is denied" {
+  local row verdict payload
+  for row in \
+    "allow|cat > notes.md <<'EOF'\n(env) plus the transcript\nEOF" \
+    "allow|tee notes.md <<-\"END\"\n\tprintenv\n\tEND" \
+    "deny|git commit -m \"\$(cat <<'EOF'\nenv\nEOF\n)\"" \
+    "deny|cat > notes.md <<'EOF'\nx\nEOF\nprintenv" \
+    "deny|bash <<'EOF'\ncat .env\nEOF" \
+    "deny|cat <<'EOF' | sh\nprintenv\nEOF" \
+    "deny|cat > notes.md <<EOF\n\$(printenv)\nEOF" \
+    "deny|cat > notes.md <<'EOF'\nprintenv" \
+    "deny|cat <<<'EOF'\nprintenv\nEOF" \
+    "deny|eval \"\$(cat <<'EOF'\ncat .env\nEOF\n)\"" \
+    "deny|bash -c \"\$(cat <<'EOF'\nprintenv\nEOF\n)\"" \
+    "deny|source <(cat <<'EOF'\ncat .env\nEOF\n)" \
+    "deny|cat <<'EOF' > >(sh)\nprintenv\nEOF" \
+    "deny|cat <<'EOF' | sh \\\\\n  -x\nprintenv\nEOF" \
+    "deny|cat > notes.md <<'EOF' \\\\\n  && bash <<X\nprintenv\nEOF\nX" \
+    "deny|cat > notes.md <<'A'B\nprintenv\nAB" \
+    "deny|cat > notes.md <<'EOF' <<X\nprintenv\nEOF\nX"; do
+    verdict=${row%%|*}
+    payload=$(printf "${row#*|}")
+    run_hook_bash "$payload"
+    if [ "$verdict" = allow ]; then
+      assert_allowed_by_json || { echo "not allowed: ${row#*|}"; return 1; }
+    else
+      assert_denied_by_json || { echo "not denied: ${row#*|}"; return 1; }
+    fi
+  done
+}
+
+# bats test_tags=protected
+@test "a heredoc body that a shell or interpreter runs, or whose data status cannot be proven, is still judged for env dumps and dotenv reads" {
+  local row verdict payload
+  for row in \
+    "deny|cat <<'EOF' | sh\nenv\nEOF" \
+    "deny|eval \"\$(cat <<'EOF'\ncat .env\nEOF\n)\"" \
+    "deny|cat <<'EOF' > >(sh)\nenv\nEOF" \
+    "deny|cat <<'EOF' \\\\\n  | sh\nenv\nEOF" \
+    "allow|cat > out.txt <<'EOF'\nenv\nEOF"; do
+    verdict=${row%%|*}
+    payload=$(printf "${row#*|}")
+    run_hook_bash "$payload"
+    if [ "$verdict" = allow ]; then
+      assert_allowed_by_json || { echo "not allowed: ${row#*|}"; return 1; }
+    else
+      assert_denied_by_json || { echo "not denied: ${row#*|}"; return 1; }
+    fi
+  done
+}
+
+@test "a regex alternation naming the dump words is denied with a reason naming the split and the -e spelling" {
+  run_hook_bash "grep -n -E '(env|printenv)' notes.md"
+  assert_denied_by_json
+  grep -qF -- "without regard for quotes" <<<"$output"
+  grep -qF -- "own -e operand" <<<"$output"
+}
+
 # --- allows: env as a runner, false-positive guards, non-reading uses ---
 #
 # `grep '.env' .gitignore` names .env as a pattern, not a file read; `ls` reads
@@ -427,12 +488,12 @@ run_settings_row() {
     "dotenv-next-step-cat|Bash|cat .env.local|Next step: refer to the variable by its name^read '.env.example' for the list of keys|" \
     "secret-next-step-read|Read|credentials.json|Next step:|" \
     "secret-next-step-cat|Bash|cat credentials.json|Next step:|" \
-    "bare-env-dump|Bash|env|a bare environment dump|key, certificate, or credential" \
+    "bare-env-dump|Bash|env|reads as an environment dump|key, certificate, or credential" \
     "dotenv-tool-reason|Read|.env.local|reading '.env' / '.env.*' files is denied to protect local secrets. Only '.env.example' is readable.|" \
     "secret-tool-reason|Read|id_rsa.pem|reading key, certificate, and credential files is denied to protect local secrets.|" \
     "dotenv-reader-reason|Bash|cat .env|reading a .env / .env.* file (a reader, sourcing, or redirection) is denied|" \
     "secret-reader-reason|Bash|cat certs/server.key|a command here reads a key, certificate, or credential path|" \
-    "printenv-dump-reason|Bash|printenv|a bare environment dump (env/printenv) is denied|" \
+    "printenv-dump-reason|Bash|printenv|begins with env or printenv and names no command to run|" \
     "grep-secrets-directory|GrepPath|secrets/|reading key, certificate, and credential files is denied|" \
     "dotenv-wins-read|Read|secrets/.env|reading '.env' / '.env.*' files is denied|reading key, certificate, and credential files" \
     "dotenv-wins-command|Bash|cat certs/server.key; cat .env.local|reading a .env / .env.* file|reads a key, certificate, or credential path"; do

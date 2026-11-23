@@ -40,6 +40,7 @@
     ".claude/hooks/block-no-verify.sh": "owned",
     ".claude/hooks/block-pr-create-without-draft.sh": "owned",
     ".claude/hooks/block-rm-rf.sh": "owned",
+    ".claude/hooks/block-scheduled-audit-line.sh": "owned",
     ".claude/hooks/block-secrets-write.sh": "owned",
     ".claude/hooks/block-sensitive-read.sh": "owned",
     ".claude/hooks/block-settings-write.sh": "owned",
@@ -893,7 +894,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-23T19:13:44.666Z",
+  "generated": "2026-11-23T19:43:25.831Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
