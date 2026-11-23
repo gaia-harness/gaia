@@ -80,6 +80,7 @@
     ".claude/hooks/lib/gate-input-paths-guard.sh": "owned",
     ".claude/hooks/lib/git-allow-list.sh": "owned",
     ".claude/hooks/lib/git-command-config.sh": "owned",
+    ".claude/hooks/lib/git-command-segments.sh": "owned",
     ".claude/hooks/lib/git-segments.sh": "owned",
     ".claude/hooks/lib/hook-only-scripts-guard.sh": "owned",
     ".claude/hooks/lib/hook-payload.sh": "owned",
@@ -897,7 +898,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-23T18:09:38.969Z",
+  "generated": "2026-11-23T18:52:02.896Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

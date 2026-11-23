@@ -151,10 +151,9 @@ read_only_form() {
     'allow|git rev-parse HEAD^{tree}'
     'allow|git diff --stat 2>&1'
     'allow|git fetch origin 2>/dev/null && git status >/dev/null'
-    'fall|git status | head'
+    'fall|git status | sh'
     'fall|git status > out.txt'
     'fall|git log 2>x'
-    'fall|git status 2>&1 | head'
     'fall|git status &'
     'fall|git diff $(cat f)'
     'fall|git diff "$REF"'
@@ -179,6 +178,90 @@ read_only_form() {
   for row in "${rows[@]}"; do
     expect "${row%%|*}" "${row#*|}"
   done
+}
+
+# bats test_tags=protected
+@test "one pipe into head, tail or wc -l allows; any other filter, flag or stage falls through" {
+  local row
+  local rows=(
+    'allow|git status | head'
+    'allow|git log --oneline | head -5'
+    'allow|git log | head -n 5'
+    'allow|git log | tail -n3'
+    'allow|git push 2>&1 | tail -1'
+    'allow|git diff --stat | wc -l'
+    'allow|git status | tail -3 && git log -1'
+    'allow|git status | head || git log -1'
+    'fall|git status | tail -f'
+    'fall|git status | tail -F'
+    'fall|git status | tail -n +2'
+    'fall|git status | head -c 5'
+    'fall|git status | head | tail'
+    'fall|git status 2>&1 | head | wc -l'
+    'fall|git status | head > out'
+    'fall|git status | head 2>&1'
+    'fall|git status | headx'
+    'fall|git status | wc'
+    'fall|git status | wc -lc'
+    'fall|git status | grep x'
+    'fall|git status | head &'
+    'fall|git status | head; rm -rf x'
+  )
+  for row in "${rows[@]}"; do
+    expect "${row%%|*}" "${row#*|}"
+  done
+  expect allow "git status | head
+git log -1"
+  expect fall "git status |
+git log -1"
+}
+
+# bats test_tags=protected
+@test "a quoted-delimiter heredoc allows only into git commit -F -" {
+  expect allow "git commit -F - <<'EOF'
+fix: a \$(rm -rf ~) \`id\` body stays literal
+EOF"
+  expect allow 'git commit -q -F - <<"EOF"
+msg
+EOF'
+  expect allow "git commit --file - <<'EOF'
+msg
+EOF
+git push -u origin feature"
+  expect allow "git commit --file=- <<'EOF'
+msg
+EOF"
+  expect fall 'git commit -F - <<EOF
+msg
+EOF'
+  expect fall "git commit -F - <<'EOF\"
+msg
+EOF"
+  expect fall "git commit -F - <<-'EOF'
+msg
+EOF"
+  expect fall "git commit -F - <<'EOF'
+msg
+EOFX"
+  expect fall "git commit -F - <<'EOF' && git push
+msg
+EOF"
+  expect fall "git commit -m x <<'EOF'
+msg
+EOF"
+  expect fall "git commit -- -F - <<'EOF'
+msg
+EOF"
+  expect fall "git tag -a v1 -F - <<'EOF'
+msg
+EOF"
+  expect fall "git update-ref --stdin <<'EOF'
+x
+EOF"
+  expect fall "git commit -F - <<'EOF'
+msg
+EOF
+rm -rf x"
 }
 
 @test "a commit message built by a heredoc substitution falls through" {

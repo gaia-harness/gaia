@@ -10,10 +10,13 @@
 #
 # A command is approved only when every one of these holds:
 #   - its structure is a list of simple commands joined by `&&`, `||`, `;` or a
-#     newline, with no pipe, no background `&`, no redirect other than one that
-#     discards or duplicates a stream (`2>&1`, `2>/dev/null`), no substitution,
-#     no expansion (`$`, a backtick, a glob, a brace list), no subshell, no
-#     backslash and no comment outside single quotes;
+#     newline, with no background `&`, no redirect other than one that discards
+#     or duplicates a stream (`2>&1`, `2>/dev/null`), no substitution, no
+#     expansion (`$`, a backtick, a glob, a brace list), no subshell, no
+#     backslash and no comment outside single quotes. Two exceptions: a command
+#     may end in one pipe into `head` or `tail` (with at most a numeric `-N` or
+#     `-n N`) or `wc -l`, and `git commit -F -` may read a heredoc whose
+#     delimiter is quoted, so its body never expands;
 #   - every segment begins with the bare word `git`: an env prefix, a wrapper,
 #     a path to git, or any other program falls through;
 #   - its global options are only `-C <directory>` (once), `-c <key>=<value>`
@@ -66,89 +69,16 @@ case "$command" in git | git[[:space:]]* | *[[:space:]]git[[:space:]]* | *[\;\&\
 . "$library_directory/git-command-config.sh" 2>/dev/null || exit 0
 # shellcheck source=lib/git-allow-list.sh
 . "$library_directory/git-allow-list.sh" 2>/dev/null || exit 0
+# shellcheck source=lib/git-command-segments.sh
+. "$library_directory/git-command-segments.sh" 2>/dev/null || exit 0
 # shellcheck source=/dev/null
 . "$hook_root/.gaia/scripts/main-root-lib.sh" 2>/dev/null || exit 0
 for required_function in parse_git_globals history_rule_reason \
     _history_option_is push_refspec_names_main push_refspec_targets_main reset_hard_moves_head \
-    gaia_resolve_common_directory; do
+    gaia_resolve_common_directory split_command_segments; do
   type "$required_function" >/dev/null 2>&1 || exit 0
 done
 [ "${#GAIA_GIT_ALLOWED_SUBCOMMANDS[@]}" -gt 0 ] && [ "${#GAIA_GIT_SAFE_CONFIG_KEYS[@]}" -gt 0 ] || exit 0
-
-# split_command_segments <text>: put each simple command of <text> in the array
-# `segments`, or return 1 when the text carries anything but simple commands
-# joined by a list operator. A character walk rather than a pattern, because a
-# separator or an expansion inside single quotes is text and outside them is
-# shell, and a commit subject routinely carries `;`, `(` or `&` in quotes.
-#
-# Inside double quotes `$` and a backtick still expand, so they fall through
-# there too. A backslash falls through wherever the shell reads it, because the
-# word parser and the shell disagree on what it escapes inside double quotes.
-# A brace list (`{a,b}`, `{1..3}`) expands to several words the parser reads as
-# one, so an unquoted `{` whose span to the next `}` holds `,` or `..` falls
-# through; `@{u}` and `HEAD^{tree}` hold neither and do not expand.
-split_command_segments() {
-  local text="$1" length index=0 copy_from=0 character next quote="" segment="" lookahead token span
-  length=${#text}
-  segments=()
-  while [ "$index" -lt "$length" ]; do
-    character="${text:$index:1}"
-    if [ "$quote" = "'" ]; then
-      [ "$character" = "'" ] && quote=""
-      index=$((index + 1)); continue
-    fi
-    case "$character" in
-      '$' | '`' | \\) return 1 ;;
-    esac
-    if [ "$quote" = '"' ]; then
-      [ "$character" = '"' ] && quote=""
-      index=$((index + 1)); continue
-    fi
-    # A stream redirect that writes no file, standing as its own word, is
-    # dropped from the segment so the word parser never reads it as an operand.
-    case "$character" in
-      1 | 2 | '>' | '&')
-        if [ "$index" -eq "$copy_from" ] || [[ "${text:$((index - 1)):1}" == [[:space:]] ]]; then
-          lookahead="${text:$index:12}"
-          for token in '2>&1' '2>/dev/null' '>/dev/null' '1>/dev/null' '&>/dev/null'; do
-            case "$lookahead" in
-              "$token" | "$token"[[:space:]\;]* | "$token&&"* | "$token||"*)
-                segment="$segment${text:$copy_from:$((index - copy_from))} "
-                index=$((index + ${#token}))
-                copy_from=$index
-                continue 2 ;;
-            esac
-          done
-        fi
-        ;;
-    esac
-    next="${text:$((index + 1)):1}"
-    case "$character" in
-      "'" | '"') quote="$character" ;;
-      ';' | $'\n')
-        segments+=("$segment${text:$copy_from:$((index - copy_from))}")
-        segment=""; index=$((index + 1)); copy_from=$index; continue ;;
-      '&' | '|')
-        [ "$next" = "$character" ] || return 1
-        segments+=("$segment${text:$copy_from:$((index - copy_from))}")
-        segment=""; index=$((index + 2)); copy_from=$index; continue ;;
-      '<' | '>' | '(' | ')' | '*' | '?' | '[' | '#') return 1 ;;
-      '{')
-        span="${text:$((index + 1))}"
-        case "$span" in
-          *'}'*)
-            span="${span%%\}*}"
-            case "$span" in *,* | *..*) return 1 ;; esac
-            ;;
-        esac
-        ;;
-    esac
-    index=$((index + 1))
-  done
-  [ -z "$quote" ] || return 1
-  segments+=("$segment${text:$copy_from:$((index - copy_from))}")
-  return 0
-}
 
 # in_this_repository <directory>: 0 when git run in <directory> discovers the
 # repository this hook belongs to, through any of its checkouts.
@@ -317,14 +247,31 @@ subcommand_is_approved() {
   return 1
 }
 
+# commit_reads_stdin: 0 when the segment is a `git commit` whose message is
+# `-F -` or `--file -`, the only reader a heredoc may feed.
+commit_reads_stdin() {
+  local argument previous=""
+  [ "$git_subcommand" = commit ] || return 1
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    [ "$argument" = -- ] && return 1
+    case "$previous|$argument" in
+      '-F|-' | '--file|-' | '|-F-' | '|--file=-') return 0 ;;
+    esac
+    case "$argument" in -F | --file) previous="$argument" ;; *) previous="" ;; esac
+  done
+  return 1
+}
+
 split_command_segments "$command" || exit 0
 approved=0
-for segment in ${segments[@]+"${segments[@]}"}; do
+for segment_index in "${!segments[@]}"; do
+  segment="${segments[$segment_index]}"
   segment="${segment#"${segment%%[![:space:]]*}"}"
   [ -n "$segment" ] || continue
   case "$segment" in git | git[[:space:]]*) ;; *) exit 0 ;; esac
   parse_git_globals "$segment"
   [ -n "$git_subcommand" ] || exit 0
+  if [ "${segment_heredocs[$segment_index]}" = 1 ]; then commit_reads_stdin || exit 0; fi
   globals_are_approved || exit 0
   directory_is_approved || exit 0
   subcommand_is_approved || exit 0
