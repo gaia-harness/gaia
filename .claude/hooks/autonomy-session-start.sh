@@ -3,12 +3,12 @@
 # unattended while the autonomy switch is live. The switch is checkout-wide, so
 # this notice is the only way a session learns it. It goes out as
 # systemMessage, which only the person sees, and as additionalContext for
-# Claude. Silent when the switch is off; autonomy-lib.sh decides which.
+# Claude. Silent when autonomy-lib.sh reads the switch as off.
 #
-# The checkout comes from the payload cwd; with no jq to read the payload, the
-# hook's own working directory stands in (autonomy-lib.sh then reads the
-# switch as off anyway). Every path exits 0: a notice that cannot be shown
-# never blocks a session.
+# The checkout comes from the payload cwd; when the payload has no absolute
+# cwd, or no jq can read it, the hook's own working directory stands in (with
+# no jq, autonomy-lib.sh reads the switch as off anyway). Every path exits 0:
+# a notice that cannot be shown never blocks a session.
 
 set -uo pipefail
 trap 'exit 0' ERR

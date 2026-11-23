@@ -29,8 +29,8 @@ live_switch() {
   jq -n "{enabled: true, expires_at: (now + 3600 | todate), may_merge: false, audit_extra_units_per_pr: 1, audit_units_pool: 3} ${1:-}" >"$SWITCH"
 }
 
-# reads_as <on|off> [directory]: autonomy_active's answer for the directory
-# (default: the main checkout), in a fresh shell.
+# reads_as <on|off> [directory]: assert autonomy_active's answer, and no
+# output, for the directory (default: the main checkout), in a fresh shell.
 reads_as() {
   run bash -c '. "$1" && autonomy_active "$2"' _ "$LIBRARY" "${2:-$MAIN}"
   case "$1" in
