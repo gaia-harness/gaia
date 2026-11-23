@@ -7,8 +7,8 @@
 # Each row is `mask|<payload>` or `keep|<payload>`, the payload written with
 # printf escapes so it carries real newlines and tabs. `mask` asserts the body
 # is overwritten and the view keeps the text's length; `keep` asserts the view
-# is the text unchanged. Every `keep` row is one departure from a `mask` row,
-# so each pins the condition it breaks.
+# is the text unchanged. Each `keep` row departs from a `mask` row on the
+# condition it pins.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -68,10 +68,11 @@ check_rows() {
 }
 
 # bats test_tags=protected
-@test "a body bash 3.2 reads differently from a newer shell is kept" {
-  # bash 3.2 scans a substitution's body as shell text: a ) ends it early and
-  # runs the lines after it, and a quote, backtick, ( or $ changes what that
-  # scan pairs. Every one of these keeps the body judged.
+@test "a body holding a quote, parenthesis, backtick, backslash or \$ is kept" {
+  # bash 3.2 scans a substitution's body as shell text: a ) ends it early, and
+  # an unpaired quote, backtick, (, $( or trailing backslash changes what that
+  # scan pairs. The view refuses each character whole, so every row keeps the
+  # body judged.
   check_rows \
     "keep|git commit -m \"\$(cat <<'EOF'\nx ) y\nenv\nEOF\n)\"" \
     "keep|git commit -m \"\$(cat <<'EOF'\nfix (scope)\nenv\nEOF\n)\"" \
@@ -84,7 +85,7 @@ check_rows() {
 }
 
 # bats test_tags=protected
-@test "an opener, delimiter or closing line outside the one shape is kept" {
+@test "an opener, delimiter, closing line or second heredoc outside the shape is kept" {
   check_rows \
     "keep|git commit -m \"\$(cat <<EOF\nenv\nEOF\n)\"" \
     "keep|git commit -m \"\$(cat <<-'EOF'\nenv\nEOF\n)\"" \
@@ -100,7 +101,7 @@ check_rows() {
 }
 
 # bats test_tags=protected
-@test "a substitution handed to anything but a git commit or gh pr/issue message flag is kept" {
+@test "a substitution handed to anything but a git commit or gh pr/issue create, edit or comment message flag is kept" {
   check_rows \
     "keep|bash -c \"\$(cat <<'EOF'\nprintenv\nEOF\n)\"" \
     "keep|eval \"\$(cat <<'EOF'\nenv\nEOF\n)\"" \

@@ -257,8 +257,8 @@ gaia_reader_strip_env_prefix() {
 # is data belongs to gaia_verb_arm_view (lib/verb-arming-walk.sh's header lists
 # the conditions) and, for a commit or PR message heredoc inside `"$(...)"`, to
 # gaia_message_heredoc_view (lib/message-heredoc.sh's header states the shape);
-# this function only asks them. Where either abstains its body stays as it is,
-# so it stays judged, the direction that fails closed. A missing library
+# this function only asks them. Where either abstains, the body stays judged,
+# the direction that fails closed. A missing library
 # degrades the same way; a non-zero return from gaia_verb_arm_view is returned
 # so the caller can deny.
 #

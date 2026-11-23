@@ -10,14 +10,14 @@
 # otherwise:
 #
 #   <prefix>git [-C <dir>|-c <setting>|--<option>]... commit <word>... -m|--message "$(cat <<'D'
-#   <prefix>gh pr|issue create|edit|comment <word>... -b|--body|-t|--title "$(cat <<'D'
+#   <prefix>gh [-R <repo>|--repo <repo>|--repo=<repo>]... pr|issue create|edit|comment <word>... -b|--body|-t|--title "$(cat <<'D'
 #   <body lines>
 #   D
 #   )"<rest of the command>
 #
-# The message flag may also be glued (`--message="$(cat`), the delimiter may be
-# double-quoted, and blanks may sit between `<<` and it. <prefix> is plain
-# commands joined by `&&`, `||`, `;`, `|` or newlines: words, quoted or not,
+# The message flag may also be glued (`--message="$(cat`), D is a shell name
+# that may be double-quoted instead, and blanks may sit between `<<` and it.
+# <prefix> is plain commands joined by `&&`, `||`, `;`, `&`, `|` or newlines: words, quoted or not,
 # with no expansion, substitution, escape, redirect, comment or grouping
 # anywhere. The text carries no other `<<`.
 #
