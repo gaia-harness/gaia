@@ -8,8 +8,8 @@
 # source time.
 #
 # Why these rules exist. classify-git-command.sh approves ordinary git calls
-# without a prompt, so an autonomous driver never stalls on a commit, push,
-# rebase or branch, and these rules deny what no approval may cover: a
+# without a prompt, so an autonomous driver does not stall on an ordinary commit,
+# push, rebase or branch, and these rules deny what no approval may cover: a
 # PreToolUse deny from any hook overrides that allow. Each rule
 # below names an operation whose damage reaches past the feature branch the
 # agent is working on: main itself, the remote, the means of recovery, or

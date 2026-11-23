@@ -771,8 +771,8 @@ degrade_staged_library() {
 
 # --- history rules: main, the remote, the reflog and ignored local state ---
 
-# GAIA allows every git invocation, so these denials are the only guard on
-# these forms. Every row runs from a feature branch, where rules 1 to 3 allow a push.
+# classify-git-command.sh approves ordinary git calls without a prompt, and a
+# deny here is the only guard that holds beside that allow. Every row runs from a feature branch, where rules 1 to 3 allow a push.
 # bats test_tags=protected
 @test "history rules deny what reaches main, the remote, the reflog or ignored state" {
   local row
@@ -922,7 +922,7 @@ degrade_staged_library() {
   assert_allowed_by_json
 }
 
-# A key git runs as a command is an unprompted shell under `Bash(git *)`,
+# A key git runs as a command turns any prompt-free git approval into an unprompted shell,
 # whether set inline, from the environment, or persisted by `git config`.
 # bats test_tags=protected
 @test "command-running config is denied inline, through --config-env and through git config" {

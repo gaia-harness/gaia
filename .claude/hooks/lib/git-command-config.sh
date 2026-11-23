@@ -43,7 +43,7 @@ GAIA_GIT_SAFE_CONFIG_KEYS=(
 )
 
 # gaia_git_config_key_class <key> [<value>]: print `hookspath` for
-# core.hooksPath, `runs-command` for a key in the list above that this value
+# core.hooksPath, `runs-command` for a key in GAIA_GIT_COMMAND_CONFIG_KEYS that this value
 # makes run something, and nothing otherwise. A caller that cannot know the
 # value (`--config-env` names an environment variable) passes `!`, the value
 # that runs a command for every key. Value exemptions:
@@ -81,8 +81,8 @@ gaia_git_config_key_class() {
   return 0
 }
 
-# gaia_git_config_section_runs_command <section>: 0 when a key in the list
-# above can live in <section>, so renaming another section to it can create one
+# gaia_git_config_section_runs_command <section>: 0 when a key in
+# GAIA_GIT_COMMAND_CONFIG_KEYS can live in <section>, so renaming another section to it can create one
 # (`git config --rename-section foo alias` turns `foo.x` into an alias).
 gaia_git_config_section_runs_command() {
   local section pattern

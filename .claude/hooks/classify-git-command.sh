@@ -28,7 +28,9 @@
 #     which nothing here has read;
 #   - the subcommand is on the list in lib/git-allow-list.sh and carries none of
 #     its fall-through options;
-#   - no deny rule the destructive-git guard owns matches the segment. Its
+#   - none of the destructive-git guard's history, main-branch or hard-reset
+#     rules matches the segment (its peer-session checkout rule is left to that
+#     hook, whose deny beats this allow). Its
 #     command-config rule needs no call here: only safe `-c` keys pass the
 #     globals check, `--config-env` never does, and `git config` passes only in
 #     its read forms.
