@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The data-proof walker behind the shared verb-arming decision, and the
 # liveness scan after it (verb-arming-live-helpers.sh states its contract).
-# Sourced by lib/verb-arming.sh, lazily, only once a raw arming match has
-# already hit or the text carries gh and a repository flag; sourced by nothing
-# else. Does no work at source time beyond
+# Sourced lazily by lib/verb-arming.sh, once a raw arming match has already hit
+# or the text carries gh and a repository flag, and by lib/reader-operands.sh
+# for the heredoc view. Does no work at source time beyond
 # loading its sibling files.
 #
 #   gaia_verb_arm_view <text>
@@ -262,6 +262,12 @@ _gaia_va_opener_is_data() {
   # condition 3 rejects it anywhere on the line.
   case "$text_before_operator" in
     *'&'*|*';'*|*'('*) return 1 ;;
+  esac
+  # An output process substitution (`cat <<'EOF' > >(sh)`) satisfies the
+  # redirect regex below while a shell reads what `cat` writes, so it is refused
+  # here: `>(` anywhere on the line is not a file word.
+  case "$line" in
+    *'>('*) return 1 ;;
   esac
   # Condition 3, read as "no `$` at all" rather than as a list of expansion
   # openers. Narrower than the whitelist's letter, and narrower is the safe
