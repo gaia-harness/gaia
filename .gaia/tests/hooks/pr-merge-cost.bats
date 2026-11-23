@@ -174,7 +174,7 @@ run_nojq() {
   open_run gaia-debt
   run_merge "gh pr merge 103 --squash"
   [ "$status" -eq 0 ]
-  has_line "[run cost] this session has an open run; once the merge has landed, close the run with: bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt --pr 103"
+  has_line "[run cost] this session has an open run; if its own skill never reaches its cost-record step, close the run with: bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt --pr 103"
 }
 
 @test "no run-cost line when the session never opened a run or the run already has its record" {
@@ -198,7 +198,7 @@ run_nojq() {
   for row in "gh pr merge -R acme/widgets 103 --squash" "gh -R acme/widgets pr merge 103 --squash" "gh pr merge 103 --repo=acme/widgets --squash"; do
     run_merge "$row"
     [ "$status" -eq 0 ] || return 1
-    has_line "[run cost] this session has an open run; once the merge has landed, close the run with: bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt --pr 103" || { echo "row $row: no line" >&2; return 1; }
+    has_line "[run cost] this session has an open run; if its own skill never reaches its cost-record step, close the run with: bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt --pr 103" || { echo "row $row: no line" >&2; return 1; }
   done
   run_merge "gh pr merge 103 -R other/project --squash"
   [ "$status" -eq 0 ]
@@ -210,5 +210,5 @@ run_nojq() {
   open_run gaia-plan
   run_merge "gh pr merge 103 --squash"
   [ "$status" -eq 0 ]
-  has_line "[run cost] this session has an open run; once the merge has landed, close the run with the record step of its own skill"
+  has_line "[run cost] this session has an open run; if its own skill never reaches its cost-record step, close the run with the record step of its own skill"
 }
