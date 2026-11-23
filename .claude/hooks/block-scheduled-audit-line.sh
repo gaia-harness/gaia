@@ -16,9 +16,9 @@
 #
 # Every string in tool_input is read, not one named field, so a prompt nested in
 # a RemoteTrigger body reaches the check. SendMessage is covered because a sent
-# message arrives at the receiving session as a prompt; its delivery wrapper keeps that
-# prompt from being the bare line today (audit-loop-grant.bats pins it), and
-# this guard still holds if the wrapper changes.
+# message arrives at the receiving session as a prompt; its delivery wrapper
+# keeps that prompt from being the bare line today (audit-loop-grant.bats pins
+# it), and this guard still holds if the wrapper changes.
 #
 # Fail closed: an unreadable payload, a missing library, or jq absent while the
 # tool input names a keyword exits 2. A payload naming neither keyword exits 0
