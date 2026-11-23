@@ -171,7 +171,15 @@ run_settings_row() {
   for row in \
     "allow|cat > notes.md <<'EOF'\n(env) plus the transcript\nEOF" \
     "allow|tee notes.md <<-\"END\"\n\tprintenv\n\tEND" \
-    "deny|git commit -m \"\$(cat <<'EOF'\nenv\nEOF\n)\"" \
+    "allow|git commit -m \"\$(cat <<'EOF'\nfix: tidy the output\n\nenv\nEOF\n)\"" \
+    "allow|gh pr create --draft --title t --body \"\$(cat <<'EOF'\nprintenv\nEOF\n)\"" \
+    "deny|git commit -m \"\$(cat <<'EOF'\nx ) y\nenv\nEOF\n)\"" \
+    "deny|git commit -m \"\$(cat <<'EOF'\nfix (scope)\nenv\nEOF\n)\"" \
+    "deny|git commit -m \"\$(cat <<'EOF'\ndon't\nenv\nEOF\n)\"" \
+    "deny|git commit -m \"\$(cat <<'EOF')\"\nenv\nEOF" \
+    "deny|git commit -m \"\$(cat <<EOF\nenv\nEOF\n)\"" \
+    "deny|git commit -m \"\$(cat <<'EOF'\nx\nEOF\n)\"\nprintenv" \
+    "deny|git commit -m \"\$(cat <<'EOF'\nenv\nEOF\n)\" && cat > f <<'X'\ny\nX" \
     "deny|cat > notes.md <<'EOF'\nx\nEOF\nprintenv" \
     "deny|bash <<'EOF'\ncat .env\nEOF" \
     "deny|cat <<'EOF' | sh\nprintenv\nEOF" \
