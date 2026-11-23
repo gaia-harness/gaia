@@ -101,7 +101,9 @@
 # One case needs no tokenizer and is repaired: a heredoc body that is plain data
 # for cat or tee is dropped before the split, so the text a command writes to a
 # file is never judged as commands. lib/reader-operands.sh owns which heredocs
-# qualify; a body that a shell or interpreter reads is still judged.
+# qualify; a body that a shell or interpreter reads directly as its own input is
+# still judged, and a script that a quoted cat heredoc writes and a later line
+# runs is not (lib/reader-operands.sh states that limit).
 #
 # THE PERMISSION RULES SHARED ALL OF THOSE LIMITS AT THE TOOL TIER, and they had
 # one this hook cannot have. A Read() deny merges into the OS sandbox boundary,
@@ -372,9 +374,12 @@ case "$tool_name" in
     command_line="$GAIA_HOOK_COMMAND"
     [[ -n "$command_line" ]] || exit 0
 
+    # Captured rather than piped from a process substitution, whose exit status
+    # nothing reads: a failed drop would leave the loop no input and allow.
+    command_view=$(gaia_reader_drop_data_heredoc_bodies "$command_line") || deny "$DENY_SECRET_READER"
     while IFS= read -r segment; do
       process_segment "$segment"
-    done < <(gaia_reader_drop_data_heredoc_bodies "$command_line" | tr '|&;()' '\n')
+    done < <(printf '%s\n' "$command_view" | tr '|&;()' '\n')
 
     [ "$secret_reader_hit" -eq 0 ] || deny "$DENY_SECRET_READER"
     exit 0

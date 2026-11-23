@@ -21,7 +21,7 @@ gaia_verb_arm_view() {
   local newline=$'\n'
   local remaining_text view_text opener_line quote_character character prefix prefix_length chunk blanks ok word_start work line_start
   local heredoc_count strip_tabs delimiter delimiter_unreadable delimiter_quoted data first delimiter_offset body delimiter_line body_index heredoc_prefix
-  local heredoc_delimiters heredoc_strip_tabs heredoc_quoted
+  local heredoc_delimiters heredoc_strip_tabs heredoc_quoted argument_quote_open=0 argument_quote_regex
   heredoc_delimiters=()
   heredoc_strip_tabs=()
   heredoc_quoted=()
@@ -94,6 +94,28 @@ gaia_verb_arm_view() {
       *$_GAIA_VA_WORD_SET) word_start=1 ;;
       *) word_start=0 ;;
     esac
+
+    # Opt-in only (see _gaia_va_opener_is_data): a double quote opening
+    # `"$(cat <<` is not a quoted span, since the shell runs the substitution as
+    # a command context, so the heredoc inside it is a real one. The matching
+    # `)"` after the body closes it. A caller that does not set the opt-in never
+    # reaches this, and the quote opens a span as always.
+    if [ -n "${GAIA_VERB_ARM_ARGUMENT_SUBSTITUTION_IS_DATA:-}" ] && [ "$character" = '"' ]; then
+      argument_quote_regex='^"\$\(cat[[:space:]]+<<-?[[:space:]]*['"'"'"\\]'
+      if [ "$argument_quote_open" = 0 ] && [[ "$remaining_text" =~ $argument_quote_regex ]]; then
+        argument_quote_open=1
+        view_text+="$character"
+        remaining_text="${remaining_text:1}"
+        word_start=0
+        continue
+      elif [ "$argument_quote_open" = 1 ] && [ "${view_text: -1}" = ')' ]; then
+        argument_quote_open=0
+        view_text+="$character"
+        remaining_text="${remaining_text:1}"
+        word_start=0
+        continue
+      fi
+    fi
 
     case "$character" in
       "'"|'"'|'`')

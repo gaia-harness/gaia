@@ -175,9 +175,37 @@ run_settings_row() {
     "deny|cat > notes.md <<'EOF'\nx\nEOF\nprintenv" \
     "deny|bash <<'EOF'\ncat .env\nEOF" \
     "deny|cat <<'EOF' | sh\nprintenv\nEOF" \
-    "deny|cat > notes.md <<EOF\nenv\nEOF" \
+    "deny|cat > notes.md <<EOF\n\$(printenv)\nEOF" \
     "deny|cat > notes.md <<'EOF'\nprintenv" \
-    "deny|cat <<<'EOF'\nprintenv\nEOF"; do
+    "deny|cat <<<'EOF'\nprintenv\nEOF" \
+    "deny|eval \"\$(cat <<'EOF'\ncat .env\nEOF\n)\"" \
+    "deny|bash -c \"\$(cat <<'EOF'\nprintenv\nEOF\n)\"" \
+    "deny|source <(cat <<'EOF'\ncat .env\nEOF\n)" \
+    "deny|cat <<'EOF' > >(sh)\nprintenv\nEOF" \
+    "deny|cat <<'EOF' | sh \\\\\n  -x\nprintenv\nEOF" \
+    "deny|cat > notes.md <<'EOF' \\\\\n  && bash <<X\nprintenv\nEOF\nX" \
+    "deny|cat > notes.md <<'A'B\nprintenv\nAB" \
+    "deny|cat > notes.md <<'EOF' <<X\nprintenv\nEOF\nX"; do
+    verdict=${row%%|*}
+    payload=$(printf "${row#*|}")
+    run_hook_bash "$payload"
+    if [ "$verdict" = allow ]; then
+      assert_allowed_by_json || { echo "not allowed: ${row#*|}"; return 1; }
+    else
+      assert_denied_by_json || { echo "not denied: ${row#*|}"; return 1; }
+    fi
+  done
+}
+
+# bats test_tags=protected
+@test "a heredoc body that a shell or interpreter runs, or whose data status cannot be proven, is still judged for env dumps and dotenv reads" {
+  local row verdict payload
+  for row in \
+    "deny|cat <<'EOF' | sh\nenv\nEOF" \
+    "deny|eval \"\$(cat <<'EOF'\ncat .env\nEOF\n)\"" \
+    "deny|cat <<'EOF' > >(sh)\nenv\nEOF" \
+    "deny|cat <<'EOF' \\\\\n  | sh\nenv\nEOF" \
+    "allow|cat > out.txt <<'EOF'\nenv\nEOF"; do
     verdict=${row%%|*}
     payload=$(printf "${row#*|}")
     run_hook_bash "$payload"

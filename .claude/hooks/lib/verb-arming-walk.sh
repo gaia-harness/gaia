@@ -43,6 +43,11 @@
 #      With an unquoted delimiter the shell runs a command substitution inside
 #      the body before `cat` ever sees it, so that body is not data.
 #
+# One opt-in widening exists for the read guard's dump split alone: with
+# GAIA_VERB_ARM_ARGUMENT_SUBSTITUTION_IS_DATA set, a commit-message or
+# pull-request-body argument (`git commit -m "$(cat <<'EOF'`, quoted delimiter)
+# is also data. Arming consumers never set it.
+#
 # The body runs from the newline ENDING the opener line, not from the heredoc
 # operator, so anything still on the opener line after the operator is ordinary
 # command text and keeps its arming power. That newline is masked with the body
@@ -249,6 +254,21 @@ _gaia_va_find_delimiter() {
 # where its line is located; this decides 1, 2, 3 and 6.
 _gaia_va_opener_is_data() {
   local line="$1" text_before_operator="$2"
+  # The one opt-in case, for the read guard's dump split alone: a commit-message
+  # or pull-request-body argument, `git commit -m "$(cat <<'EOF'`. The command
+  # word is git or gh, the only `$` is the `$(cat` that opens the argument, and
+  # the delimiter is quoted, so nothing ever expands or runs the body. Off unless
+  # the caller sets GAIA_VERB_ARM_ARGUMENT_SUBSTITUTION_IS_DATA, so every arming
+  # consumer keeps the strict reading above.
+  if [ -n "${GAIA_VERB_ARM_ARGUMENT_SUBSTITUTION_IS_DATA:-}" ]; then
+    local argument_prefix_regex argument_operator_regex operator_text
+    argument_prefix_regex='^[[:space:]]*(git[[:space:]]+commit|gh[[:space:]]+(pr|issue))[[:space:]][^$`|&;(<>]*\$\(cat[[:space:]]*$'
+    argument_operator_regex='^<<-?[[:space:]]*('"'"'[^'"'"']*'"'"'|"[^"]*"|\\[A-Za-z0-9_.-]+)[^$`|&;(<>]*$'
+    if [[ "$text_before_operator" =~ $argument_prefix_regex ]]; then
+      operator_text="${line:${#text_before_operator}}"
+      [[ "$operator_text" =~ $argument_operator_regex ]] && return 0
+    fi
+  fi
   # Condition 6. Conditions 1 and 2 each read the line as a whole, the command
   # word at its start and a redirect anywhere on it, so a line whose FIRST
   # command is `cat > f` and whose heredoc belongs to a SECOND command after a
@@ -262,6 +282,12 @@ _gaia_va_opener_is_data() {
   # condition 3 rejects it anywhere on the line.
   case "$text_before_operator" in
     *'&'*|*';'*|*'('*) return 1 ;;
+  esac
+  # An output process substitution (`cat <<'EOF' > >(sh)`) satisfies the
+  # redirect regex below while a shell reads what `cat` writes, so it is refused
+  # here: `>(` anywhere on the line is not a file word.
+  case "$line" in
+    *'>('*) return 1 ;;
   esac
   # Condition 3, read as "no `$` at all" rather than as a list of expansion
   # openers. Narrower than the whitelist's letter, and narrower is the safe
