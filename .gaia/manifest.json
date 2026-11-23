@@ -220,6 +220,7 @@
     ".claude/skills/update-gaia/SKILL.md": "owned",
     ".editorconfig": "owned",
     ".gaia/audit-ci.yml": "shared",
+    ".gaia/autonomy-park-reasons.json": "owned",
     ".gaia/cli/gaia": "owned",
     ".gaia/cli/templates/.gitkeep": "owned",
     ".gaia/cli/templates/component/index.stories.tsx.tmpl": "owned",
@@ -302,6 +303,7 @@
     ".gaia/scripts/audit-write-clearance-publish.sh": "owned",
     ".gaia/scripts/audit-write-clearance.sh": "owned",
     ".gaia/scripts/audit-write-findings.sh": "owned",
+    ".gaia/scripts/autonomy-park.sh": "owned",
     ".gaia/scripts/branch-authorship-lib.sh": "owned",
     ".gaia/scripts/branch-name-lib.sh": "owned",
     ".gaia/scripts/changelog-range.sh": "owned",
@@ -892,7 +894,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-21T13:00:07.884Z",
+  "generated": "2026-11-23T18:28:51.366Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
