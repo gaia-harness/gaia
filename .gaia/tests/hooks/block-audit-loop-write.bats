@@ -335,6 +335,46 @@ assert_denied_class() {
   assert_denied_class 'only a human edits the override'
 }
 
+# bats test_tags=protected
+@test "the autonomy switch is never written by an edit tool, Bash or Monitor, and reading it is allowed" {
+  local row
+  local switch="$MAIN/.gaia/local/protected/autonomy.json"
+  local worktree_switch="$WORKTREE/.gaia/local/protected/autonomy.json"
+  [ ! -e "$switch" ]
+  local rows=(
+    "Write~$switch~~"
+    "Write~$worktree_switch~$WORKTREE~"
+    "Write~.gaia/local/protected/autonomy.json~$WORKTREE~"
+    "MultiEdit~$switch~~"
+    "Bash~echo '{\"enabled\":true}' > $switch~~"
+    "Bash~echo '{\"enabled\":true}' > $worktree_switch~$WORKTREE~"
+    "Bash~printf '{}' >.gaia/local/protected/autonomy.json~$WORKTREE~"
+    "Bash~jq -n '{enabled: true}' | tee $switch~~"
+    "Bash~cp /tmp/autonomy.json $worktree_switch~$WORKTREE~"
+    "Bash~mv /tmp/autonomy.json $switch~~"
+    "Bash~rm -f $switch~~"
+    "Bash~touch $worktree_switch~$WORKTREE~"
+    "Monitor~echo '{}' > $switch~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_denied_class 'Claude never creates, writes, edits, moves or deletes anything in it'
+  done
+  [ ! -e "$switch" ]
+  printf '{}' >"$switch"
+  echo "case: Edit of an existing switch"
+  run_edit Edit "$worktree_switch" "$WORKTREE"
+  assert_denied_class 'Claude never creates, writes, edits, moves or deletes anything in it'
+  for row in "Bash~cat $switch~~" "Bash~jq . $worktree_switch~$WORKTREE~"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_row_allowed
+  done
+}
+
 @test "writes to settings files and the opt-ins file are allowed" {
   local row
   local rows=(
