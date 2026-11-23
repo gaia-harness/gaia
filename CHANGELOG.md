@@ -95,6 +95,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **An audit fix that changes after it is verified no longer reaches the commit:** a fixer that kept running after it returned could edit the tree or rewrite its result file between the verifier's pass and staging, landing an edit no check had judged. The round now re-checks both against what the verifier judged before it stages anything and stops for a human when either moved, and the fixer is told never to run work in the background or return while a command it started is still running (#3745)
 - **A vetoed audit finding reaches the fixer with the human's direction:** a `fix` decision's reason, or a `direction` written on a hand-recorded veto, now briefs the next round's fixer over the finding's original suggested fix, so a redirect no longer gets the rejected fix applied again or stalls the audit at another needs-human stop (#3675)
 - **`toSnakeCase` and `toCamelCase` convert objects inside nested arrays:** an object in an array nested inside a property's array, such as `{matrix: [[{cellValue: 1}]]}`, kept its keys unconverted, so the API service's snake_case layer sent and returned those keys in the wrong case (#3688)
 - **The Node upgrade guidance fits every setup:** a shell that switches Node per folder through asdf or mise is now told to select the new Node there, not to run an fnm or nvm command, and a machine with neither nvm nor fnm is told to install one first, or to get the new Node another way (#3705)

@@ -1041,3 +1041,112 @@ moved_library_paths() {
   do_check
   assert_fail_kind bad-input pinned
 }
+
+# --- settled: the tree the check judged is the tree the round stages ---
+
+do_settled() {
+  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" \
+    --verifier "$VERIFIER_OUTPUT_FILE" --result "$RESULT_FILE" "$@"
+}
+
+# passing_check: a clean pass over two declared edits, its judged record set.
+passing_check() {
+  prepare
+  edit a.txt
+  edit b.txt
+  default_result >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 0 ] || return 1
+  jq -e '.judged.paths | has("a.txt") and has("b.txt")' "$VERIFIER_OUTPUT_FILE" >/dev/null
+}
+
+# bats test_tags=protected
+@test "settled: an unchanged tree passes; a later edit, a new file, or a rewritten result each exit 1 naming it" {
+  passing_check
+  do_settled
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  # row: the fixer edits a judged path after the check
+  edit a.txt
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: a.txt"* ]] || return 1
+  # row: the fixer adds a file after the check
+  reset_case
+  passing_check
+  printf 'late\n' >"$REPO/late.txt"
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: late.txt"* ]] || return 1
+  # row: the fixer edits a file it created before the check
+  reset_case
+  passing_check
+  printf 'new\n' >"$REPO/new.txt"
+  jq '.changed_paths += ["new.txt"] | .results[0].changed_paths += ["new.txt"]' "$RESULT_FILE" >"$RESULT_FILE.n"
+  mv "$RESULT_FILE.n" "$RESULT_FILE"
+  do_check
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  printf 'edited later\n' >>"$REPO/new.txt"
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: new.txt"* ]] || return 1
+  # row: the fixer rewrites its result file after the check, tree unchanged
+  reset_case
+  passing_check
+  jq '.changed_paths += ["c.txt"]' "$RESULT_FILE" >"$RESULT_FILE.n"
+  mv "$RESULT_FILE.n" "$RESULT_FILE"
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"result-moved"* ]] || return 1
+  [[ "$output" == *"tree-moved"* ]] && return 1
+  true
+}
+
+@test "settled: a path in an --extra-declared file is exempt, every other moved path still fails" {
+  passing_check
+  printf 'security test\n' >"$REPO/sec.test.txt"
+  edit c.txt
+  printf 'sec.test.txt\n' >"$RUN_FOLDER/security-1.paths"
+  do_settled --extra-declared "$RUN_FOLDER/security-1.paths"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: c.txt"* ]] || return 1
+  [[ "$output" == *"sec.test.txt"* ]] && return 1
+  printf 'c.txt\n' >"$RUN_FOLDER/gate-1-1.paths"
+  do_settled --extra-declared "$RUN_FOLDER/security-1.paths" --extra-declared "$RUN_FOLDER/gate-1-1.paths"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+@test "settled refuses a failing verifier output, one with no judged record, a moved HEAD and a tampered pin" {
+  # row: a failing check records no judged tree, and settled refuses it
+  prepare
+  edit c.txt
+  default_result >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 1 ]
+  [ "$(jq -r '.judged' "$VERIFIER_OUTPUT_FILE")" = null ]
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bad-input"* ]] || return 1
+  # row: a passing output stripped of its judged record
+  reset_case
+  passing_check
+  jq 'del(.judged)' "$VERIFIER_OUTPUT_FILE" >"$VERIFIER_OUTPUT_FILE.n"
+  mv "$VERIFIER_OUTPUT_FILE.n" "$VERIFIER_OUTPUT_FILE"
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bad-input"* ]] || return 1
+  # row: HEAD moved after the check
+  reset_case
+  passing_check
+  git -C "$REPO" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m late
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"head-moved"* ]] || return 1
+  # row: settled from a tampered pinned copy
+  reset_case
+  passing_check
+  printf '# edited\n' >>"$RUN_FOLDER/verifier-bin-1/audit-fix-verify-check-lib.sh"
+  run bash "$RUN_FOLDER/verifier-bin-1/audit-fix-verify.sh" settled --root "$REPO" --baseline "$BASELINE_FILE" \
+    --verifier "$VERIFIER_OUTPUT_FILE" --result "$RESULT_FILE"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"pinned"* ]] || return 1
+}

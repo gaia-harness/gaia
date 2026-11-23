@@ -2,9 +2,10 @@
 #
 # The check and settled subcommands of audit-fix-verify.sh: input validation,
 # the judgment of the fixer's delta, the audit-artifact scan, the error log
-# every finding is written to, and the re-check that the judged tree has not
-# moved before the round stages it. Sourced only by audit-fix-verify.sh from its own
-# directory, so a pinned copy sources the pinned library. That script's header
+# every finding is written to, and the re-check that HEAD, the judged tree and
+# the fixer's result file have not moved before the round stages them. Sourced
+# only by audit-fix-verify.sh from its own directory, so a pinned copy sources
+# the pinned library. That script's header
 # owns the input and output shapes and the error kinds; FORBIDDEN_PATHS stays
 # in that script too, and ENFORCEMENT_PATHS is in audit-fix-verify-state-lib.sh.
 #
@@ -307,8 +308,8 @@ EOF
 # anything. A fixer can keep running after it returns (a background run that
 # finishes later) and edit the tree or rewrite its result file; staging reads
 # both, so either change would reach the round's commit unverified. Paths named
-# in --extra-declared files (the security writer's tests, written after the
-# check) may differ; nothing else may.
+# in --extra-declared files (the check's own, plus the security writer's tests
+# written after it) may differ; nothing else may.
 command_settled() {
   local exit_status=0 file_path extra_declared_file judged_sha current_sha
   if [ -z "$ROOT" ] || [ -z "$BASELINE_FILE" ] || [ -z "$VERIFIER_FILE" ] || [ -z "$RESULT" ]; then
@@ -336,10 +337,10 @@ command_settled() {
 $EXTRA_DECLARED_FILES
 EOF
   LC_ALL=C sort -u "$TEMPORARY_DIRECTORY/extra" -o "$TEMPORARY_DIRECTORY/extra"
-  snapshot_state "$TEMPORARY_DIRECTORY/cur" && judged_paths "$TEMPORARY_DIRECTORY/cur" || {
+  if ! snapshot_state "$TEMPORARY_DIRECTORY/cur" || ! judged_paths "$TEMPORARY_DIRECTORY/cur"; then
     printf 'bad-input: cannot read repo state in %s\n' "$ROOT" >&2
     exit 1
-  }
+  fi
   if [ "$(cat "$TEMPORARY_DIRECTORY/cur/head")" != "$(jq -r '.head' "$BASELINE_FILE" 2>/dev/null)" ]; then
     printf 'head-moved\n' >&2
     exit_status=1
