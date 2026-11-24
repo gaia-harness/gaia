@@ -43,3 +43,25 @@ has() {
   has "$DISPATCH_MD" "\`rm -rf <PLAN_DIR>/$folder\`, then \`mkdir -p <PLAN_DIR>/$folder\`" || return 1
 }
 
+@test "the test-stage lens column names the digest as artifact and first read and keeps the focus text and code-map slot" {
+  local digest='<PLAN_DIR>/test-stage-findings/digest.md' artifact first
+  artifact="$(grep -F '| Artifact under audit (`<ARTIFACT>`) |' "$DISPATCH_MD" | awk -F'|' '{ print $(NF - 1) }')"
+  first="$(grep -F '| First Read |' "$DISPATCH_MD" | awk -F'|' '{ print $(NF - 1) }')"
+  grep -qF -- "$digest" <<<"$artifact" || return 1
+  grep -qF -- "$digest" <<<"$first" || return 1
+  grep -qF -- 'only when judging whether a test proves a case' <<<"$first" || return 1
+  has "$DISPATCH_MD" '| Fallback artifact and First Read (digest unavailable) | n/a | n/a |' || return 1
+  has "$STAGE_MD" 'The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states and that the cap above holds. When it has a code map, it uses it only to locate existing test files and never derives an expected behavior from it.' || return 1
+  has "$DISPATCH_MD" '| Code map (`<CODE_MAP_PATH>`) |' || return 1
+  has "$DISPATCH_MD" 'When `<CODE_MAP_PATH>` is empty the caller drops the whole code-map bullet from the preamble.' || return 1
+  has "$DISPATCH_MD" 'removes only `rm -f <PLAN_DIR>/test-stage-findings/TST.json`' || return 1
+}
+
+@test "a failed, absent or changed digest prints the fallback line and dispatches the lens on the whole plan" {
+  has "$STAGE_MD" '--digest <PLAN_DIR>/test-stage-findings/digest.md' || return 1
+  has "$STAGE_MD" 'When the script exited non-zero, or the digest is gone or its hash differs, print `Test-stage digest unavailable; the lens reads the whole plan this run.` once' || return 1
+  has "$STAGE_MD" 'Before each dispatch, the re-dispatch after a no-op included, recompute' || return 1
+  has "$STAGE_MD" 'dispatch on the `Fallback artifact and First Read (digest unavailable)` cells' || return 1
+  has "$DISPATCH_MD" '| Fallback artifact and First Read (digest unavailable) |' || return 1
+}
+

@@ -423,6 +423,7 @@
     ".gaia/scripts/spec/spec-save.sh": "owned",
     ".gaia/scripts/spec/spec-session-lock.sh": "owned",
     ".gaia/scripts/spec/test-stage-check.mjs": "owned",
+    ".gaia/scripts/spec/test-stage-digest.mjs": "owned",
     ".gaia/scripts/spec/title-normalize.sh": "owned",
     ".gaia/scripts/spec/with-ledger-lock.sh": "owned",
     ".gaia/scripts/spec/working-doc-id-scan.sh": "owned",
@@ -917,7 +918,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T16:03:01.359Z",
+  "generated": "2026-11-24T17:04:29.638Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
