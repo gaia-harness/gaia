@@ -72,6 +72,11 @@
 # Bash 3.2 compatible, BWK awk safe. `cd` only inside a command substitution.
 set -uo pipefail
 
+# shellcheck disable=SC2034 # the source arrays the other copies of these sets name in their markers; no code reads them
+light_anchor_kinds=(full refusal merge-base)
+# shellcheck disable=SC2034 # see above
+light_review_outcomes=(clear escalate failed)
+
 _light_mark_usage() {
   printf 'usage: audit-light-mark.sh --root <abs-checkout-root> --member <name> --verdict <- | path> [--reviewer-tokens <int>] [--reviewer-duration-ms <int>] [--reviewer-dispatched-at <UTC timestamp>]\n' >&2
 }
@@ -106,6 +111,7 @@ _light_mark_record_outcome() {
     [ -z "$reviewer_tokens" ] || telemetry_arguments+=(--tokens "$reviewer_tokens")
     [ -z "$reviewer_duration" ] || telemetry_arguments+=(--duration-ms "$reviewer_duration")
     case "$anchor_kind" in
+      # sanctioned copy of .gaia/scripts/audit-light-mark.sh#light_anchor_kinds
       full | refusal | merge-base) telemetry_arguments+=(--anchor-kind "$anchor_kind") ;;
     esac
     bash "$root/.gaia/scripts/audit-light-telemetry.sh" ${telemetry_arguments[@]+"${telemetry_arguments[@]}"} >/dev/null 2>&1 || true

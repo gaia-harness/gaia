@@ -1,3 +1,4 @@
+import {PERMISSION_LISTS} from '../../packages/settings-transform.js';
 import type {RuleContext, SettingsFile} from '../context.js';
 import {isRecord, lineOfJsonKey} from '../json.js';
 import {lineOf} from '../markdown.js';
@@ -5,8 +6,6 @@ import {CREDENTIAL_PATTERNS, SECRET_KEY_PATTERN} from '../secrets.js';
 import type {RawFinding, RuleDefinition} from '../types.js';
 
 const LOCAL_SETTINGS_SUFFIX = '.claude/settings.local.json';
-
-const PERMISSION_LISTS = ['allow', 'ask', 'deny'] as const;
 
 const BARE_TOOL = /^[\w.]+$/;
 

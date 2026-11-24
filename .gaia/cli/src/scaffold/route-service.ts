@@ -13,7 +13,9 @@ import path from 'node:path';
 import {isSnakeCaseLayer} from './layer.js';
 import {deriveNames} from './service.js';
 
-export type DataVariant = 'client' | 'query' | 'server';
+export const DATA_VARIANTS = ['server', 'client', 'query'] as const;
+
+export type DataVariant = (typeof DATA_VARIANTS)[number];
 
 export type FieldKind = 'boolean' | 'datetime' | 'enum' | 'number' | 'string';
 

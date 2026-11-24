@@ -59,7 +59,7 @@ setup_file() {
   dependency_file="$(printf '# bats file_tags=%s' installed-dependencies)"
   mkdir -p "$seed/.gaia/tests/helpers" "$seed/.gaia/scripts" "$seed/.github/workflows"
   cp "$REAL_ROOT/.gaia/tests/bats-shards.sh" "$REAL_ROOT/.gaia/tests/bats-change-scope.sh" "$seed/.gaia/tests/"
-  cp "$REAL_ROOT/.gaia/scripts/bats-suites-for-change.sh" "$REAL_ROOT/.gaia/scripts/bats-selector-reach-lib.sh" "$REAL_ROOT/.gaia/scripts/bats-selector-helper-lib.sh" "$seed/.gaia/scripts/"
+  cp "$REAL_ROOT/.gaia/scripts/bats-suites-for-change.sh" "$REAL_ROOT/.gaia/scripts/bats-selector-reach-lib.sh" "$REAL_ROOT/.gaia/scripts/bats-selector-helper-lib.sh" "$REAL_ROOT/.gaia/scripts/react-doctor-version-lib.sh" "$seed/.gaia/scripts/"
   cp "$REAL_ROOT/.gaia/tests/helpers/verify-harness-bats-lib.sh" "$seed/.gaia/tests/helpers/"
   {
     printf 'name: fixture\njobs:\n  shards:\n    runs-on: ubuntu-latest\n    steps:\n'

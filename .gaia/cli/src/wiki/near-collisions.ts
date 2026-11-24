@@ -16,6 +16,7 @@ import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {takeValue} from '../util/argv.js';
 import {resolveRepoRoot} from '../util/repo-root.js';
+import {DOMAIN_DIRS as PAGE_INDEX_DOMAIN_DIRS} from './page-index.js';
 
 const HELP_TEXT = `Usage: gaia wiki near-collisions [--max-distance 3]
 
@@ -26,15 +27,7 @@ const HELP_TEXT = `Usage: gaia wiki near-collisions [--max-distance 3]
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 const DEFAULT_MAX_DISTANCE = 3;
 
-const DOMAIN_DIRS = [
-  'components',
-  'concepts',
-  'decisions',
-  'dependencies',
-  'entities',
-  'flows',
-  'modules',
-];
+const DOMAIN_DIRS = PAGE_INDEX_DOMAIN_DIRS.filter((name) => name !== 'meta');
 
 const SKIPPED_FILES = new Set(['_index.md', 'README.md']);
 

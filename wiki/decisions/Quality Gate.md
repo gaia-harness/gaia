@@ -10,9 +10,11 @@ tags: [decision, ci, quality]
 
 # Decision: Mandatory Quality Gate
 
-Every change must pass the Quality Gate. Pre-commit hooks enforce a subset; Claude runs the full pipeline below before any `git commit` that touches source, except that an audit fix round may run [the smaller gate](#the-smaller-gate); **unless the gate has nothing to check**.
+Every change must pass the Quality Gate. Pre-commit hooks enforce a subset; Claude runs the full pipeline below before any `git commit`, except that an audit fix round may run [the smaller gate](#the-smaller-gate); **when the gate has nothing to check**, only the value-set step runs.
 
 ## Steps
+
+**Value sets** runs on every commit, whatever is staged, before the skip decision below: `.gaia/cli/gaia value-sets`. Exit 1 (findings) or 2 (cannot run) blocks the commit. It reads the whole project, so a duplicate whose other half sits in a file the commit did not touch is still found. How to fix a finding and everything else about the check: [[Duplicate Value Set Check]].
 
 The contract lives at the repo root. Steps 3 to 5 are root scripts that run across every workspace member that defines the script, so a library or a second app is checked with no gate edit. Steps 6 to 8 exercise the web app only; each root `pnpm <script>` there is a proxy that forwards to the `pnpm -C apps/web <script>` shown beside it, and either spelling runs the same command.
 
@@ -41,6 +43,7 @@ The contract lives at the repo root. Steps 3 to 5 are root scripts that run acro
 
 | Step          | Result |
 | ------------- | ------ |
+| Value sets    | ...    |
 | Simplify      | ...    |
 | Localization  | ...    |
 | Type checking | ...    |
@@ -58,7 +61,7 @@ Skip the gate entirely if no staged file is something typecheck / lint / tests /
 - **Gate-affecting config**: `package.json`, `pnpm-lock.yaml`, `tsconfig*.json`, `vite.config.*`, `vitest.config.*`, `playwright.config.*`, `eslint.config.*`, each at the repo root or at any depth under a member folder such as `apps/web/`
 - **Package registry**: `.gaia/packages.json` and any member's `gaia.package.json`
 
-Pure markdown, `.claude/**`, `wiki/**`, image, or other non-source-affecting commits skip straight to the commit step.
+Pure markdown, `.claude/**`, `wiki/**`, image, or other non-source-affecting commits skip straight to the commit step. The value-set step runs even then: skipping the gate skips every other step, never that one.
 
 Quick check:
 
@@ -78,7 +81,7 @@ grep -vE '^\.gaia/(cli|tests|scripts)/'
 
 ## The smaller gate
 
-Inside an audit fix round whose `bash .gaia/scripts/audit-gate-owed.sh choose` prints `smaller`, run every step of this page except step 1, which a fix round skips, and steps 6, 7 and 8 (Playwright, the dev smoke test, the production build); the skip logic above still applies. Report each deferred step as owed in the result table, not as not run. Those three steps run once on the final tree before the audit status posts, and that run of step 7 passes and stops exactly as step 7 says. A Major, Critical or security fix, and a fix entry with no sidecar row, takes the full gate. `.gaia/scripts/audit-gate-owed.sh`'s header owns the owed record and the rule that picks the gate; [[PR Merge Workflow]] owns when the owed run happens.
+Inside an audit fix round whose `bash .gaia/scripts/audit-gate-owed.sh choose` prints `smaller`, run every step of this page, the value-set step included, except step 1, which a fix round skips, and steps 6, 7 and 8 (Playwright, the dev smoke test, the production build); the skip logic above still applies. Report each deferred step as owed in the result table, not as not run. Those three steps run once on the final tree before the audit status posts, and that run of step 7 passes and stops exactly as step 7 says. A Major, Critical or security fix, and a fix entry with no sidecar row, takes the full gate. `.gaia/scripts/audit-gate-owed.sh`'s header owns the owed record and the rule that picks the gate; [[PR Merge Workflow]] owns when the owed run happens.
 
 <!-- gaia:maintainer-only:start -->
 The maintainer `bash .gaia/tests/verify-harness.sh round` step is unchanged: the smaller gate does not shorten it.

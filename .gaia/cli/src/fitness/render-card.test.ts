@@ -1,24 +1,14 @@
 import {describe, expect, test} from 'vitest';
 import {renderCard} from './render-card.js';
 import type {FitnessReport} from './render-card.js';
-
-const CATEGORY_NAMES = [
-  'authoring',
-  'claudemd',
-  'frontmatter',
-  'hooks',
-  'prompt',
-  'rules',
-  'settings',
-  'wiki',
-] as const;
+import {CATEGORIES} from './types.js';
 
 const reportWith = (
   grades: Readonly<Record<string, string>>,
   overall: string,
   extra: Partial<Pick<FitnessReport, 'findings' | 'upstream'>> = {}
 ): FitnessReport => ({
-  categories: CATEGORY_NAMES.map((name) => ({
+  categories: CATEGORIES.map((name) => ({
     grade: grades[name] ?? 'A+',
     name,
   })),
@@ -85,7 +75,7 @@ describe('renderCard', () => {
 
   test('renders an all n/a report as categories and an overall n/a, no findings block', () => {
     const report = reportWith(
-      Object.fromEntries(CATEGORY_NAMES.map((name) => [name, 'n/a'])),
+      Object.fromEntries(CATEGORIES.map((name) => [name, 'n/a'])),
       'n/a'
     );
     const card = renderCard(report, 100);
@@ -199,7 +189,7 @@ describe('renderCard', () => {
     report.categories = reversed;
 
     const card = renderCard(report, 80);
-    const indices = CATEGORY_NAMES.map((name) =>
+    const indices = CATEGORIES.map((name) =>
       card.indexOf(`| ${name === 'claudemd' ? 'CLAUDE.md' : name}`)
     );
 

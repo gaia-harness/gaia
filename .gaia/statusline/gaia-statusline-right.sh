@@ -424,6 +424,7 @@ gaia_statusline_right() {
         fitness_large=""
         fitness_mid=""
         case "$fitness_grade" in
+          # subset of .gaia/cli/src/fitness/types.ts#Grade
           'A+'|A|A-|'B+'|B|B-|'C+'|C|C-|'D+'|D|D-|F)
             fitness_large="/gaia-fitness (grade $fitness_grade)"
             fitness_mid="$fitness_grade"

@@ -1,6 +1,7 @@
 import {describe, expect, test} from 'vitest';
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
+import {SETUP_STEPS} from '../../setup/util/state-file.js';
 import {resolveRepoRootFromImportMeta} from '../../util/repo-root-fixture.js';
 import {SetupFeatureSchema, SetupFeaturesSchema} from '../setup-features.js';
 import type {SetupFeature} from '../setup-features.js';
@@ -9,10 +10,7 @@ const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);
 
 // The set that shipped first. Every id outside it must declare `standalone`.
 const FROZEN_IDS = [
-  'install-tools',
-  'install-plugins',
-  'chmod-statusline',
-  'bootstrap-env',
+  ...SETUP_STEPS,
   'sandbox',
   'statusline-left',
   'github-repository',
