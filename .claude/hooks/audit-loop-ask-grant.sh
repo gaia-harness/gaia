@@ -283,7 +283,7 @@ _ag_check() {
     printf 'no the pending checkpoint carries no pinned question to match.\n'
     return 0
   fi
-  if ! printf '%s' "$payload" | jq -e --argjson pin "$pin" '(.tool_input | type == "object") and (.tool_input | del(.answers, .annotations)) == $pin' >/dev/null 2>&1; then
+  if ! gaia_loop_input_is_pin "$payload" "$pin"; then
     printf 'no the question asked is not the pinned checkpoint question (any difference in its text, header, options or settings declines).\n'
     return 0
   fi

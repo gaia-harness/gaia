@@ -472,6 +472,7 @@ cache-shared owned - - - - -
 state-reaper-state owned - - - - -
 checkpoint-override keep - - - - -
 autonomy-switch keep - - - - -
+autonomy-decision-log keep - - - - -
 local-settings keep - - - - -
 audit-light-review-ledger branch-spent 7 slug-glob - - -
 audit-light-review-state age 30 - - - -
