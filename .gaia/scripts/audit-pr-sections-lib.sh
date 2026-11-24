@@ -224,7 +224,7 @@ _command_pr_sections() {
 # _command_residual_count: {"total","ask"} over the accepted residuals
 # pr-sections renders, withheld ones included. ask counts what the residual
 # question lists: rows of a round whose default stop held with no human
-# accept (from its version-3 snapshot, else the live evaluator) and
+# accept (from its version-3 or later snapshot, else the live evaluator) and
 # filing-replay rows. Worthiness rows are out: no member owns them, so a veto
 # on one could never be cleared. ask is 0 after a closing latest round, since
 # a spent accept admits no unit to fix anything chosen. rc 3 when an input or
@@ -237,7 +237,7 @@ _command_residual_count() {
   for round in $(printf '%s' "$rows" | jq -r '[.[] | select(.section == "accept" and .round > 0) | .round] | unique | .[]'); do
     round_stop=""
     if _has_snapshot "$round"; then
-      round_stop="$(jq -c 'select(.version == 3) | [.default_stop == true, .human_accept == true]' <"$(_snapshot_path "$round")" 2>/dev/null)" || round_stop=""
+      round_stop="$(jq -c 'select(.version >= 3) | [.default_stop == true, .human_accept == true]' <"$(_snapshot_path "$round")" 2>/dev/null)" || round_stop=""
     fi
     if [ -z "$round_stop" ]; then
       round_stop="$(_evaluator evaluate-round --round "$round" | jq -c --argjson history "$history" --argjson round "$round" \
