@@ -23,6 +23,15 @@ type CandidateSite = {line: number; name: null | string; path: string};
 
 const STRICT_MINIMUM = 3;
 
+const NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/u;
+
+/**
+ * Small number lists (line numbers, counts, ports) coincide by chance, and no
+ * marker can say two sets are unrelated, so a set of only numbers is never compared.
+ */
+const isNumericOnly = (entry: Entry): boolean =>
+  entry.values.every((value) => NUMBER.test(value));
+
 const compareEntries = (left: Entry, right: Entry): number =>
   compareSites(left.set, right.set);
 
@@ -73,7 +82,9 @@ const prepare = (
   const verdicts = verifyMarkers(readings, entries);
 
   return {
-    compared: entries.filter((entry) => !verdicts.validCopies.has(entry)),
+    compared: entries.filter(
+      (entry) => !verdicts.validCopies.has(entry) && !isNumericOnly(entry)
+    ),
     markerFindings: verdicts.findings,
     subsetExempt: verdicts.validSubsets,
   };

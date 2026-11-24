@@ -590,4 +590,23 @@ describe('findStrict', () => {
       'value-sets: marked source: narrow (run.sh:3) names mid.sh#wide, which itself carries a marker',
     ]);
   });
+
+  test('a set of only numbers is never compared, while a set mixing numbers and words is', () => {
+    expect(
+      strict([
+        declaration('a.sh', 1, 'lines', ['4', '5', '6']),
+        declaration('b.sh', 1, 'numbers', ['1', '4', '5', '6', '-2.5']),
+        declaration('c.sh', 1, 'copy', ['4', '5', '6']),
+      ])
+    ).toEqual([]);
+
+    expect(
+      strict([
+        declaration('a.sh', 1, 'mixed', ['4', '5', 'six']),
+        declaration('b.sh', 1, 'copy', ['4', '5', 'six']),
+      ])
+    ).toEqual([
+      'value-sets: duplicate: mixed (a.sh:1) and copy (b.sh:1) hold 4, 5, six',
+    ]);
+  });
 });

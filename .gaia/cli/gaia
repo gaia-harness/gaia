@@ -51017,6 +51017,8 @@ var verifyMarkers = (readings, entries) => {
 
 // src/value-sets/compare.ts
 var STRICT_MINIMUM = 3;
+var NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/u;
+var isNumericOnly = (entry) => entry.values.every((value) => NUMBER.test(value));
 var compareEntries = (left, right) => compareSites(left.set, right.set);
 var isStrictSuperset = (superset, subset) => {
   if (superset.values.length <= subset.values.length) return false;
@@ -51037,7 +51039,9 @@ var prepare = (readings) => {
   const entries = collectEntries(readings);
   const verdicts = verifyMarkers(readings, entries);
   return {
-    compared: entries.filter((entry) => !verdicts.validCopies.has(entry)),
+    compared: entries.filter(
+      (entry) => !verdicts.validCopies.has(entry) && !isNumericOnly(entry)
+    ),
     markerFindings: verdicts.findings,
     subsetExempt: verdicts.validSubsets
   };
