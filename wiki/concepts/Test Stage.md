@@ -3,7 +3,7 @@ type: concept
 title: Test Stage
 status: active
 created: 2026-11-18
-updated: 2026-11-18
+updated: 2026-11-24
 tags: [concept, claude, skill, testing, plan]
 ---
 
@@ -15,7 +15,7 @@ The test stage designs a plan's tests after the plan is written: a short list of
 
 Plans stopped paying for test design. A test table inside the plan made the planner, the plan review and every later check carry a second artifact that had to agree with the task docs, and the checks around it cost more than the tests they protected. The planner now plans tasks only, from the SPEC's stated behaviors, and test design is its own step with its own target: at most one test per stated behavior, at the cheapest layer that proves it, with flow tests outside the cap. Measuring the stage on that target alone is what keeps it honest, because its output is a list a script can check against the SPEC rather than a table a judge must read.
 
-The SPEC owns the requirements. Its `## Behaviors` section states each behavior with an id, a kind and its cases (`.claude/skills/gaia/references/spec/spec-template.md`), and the stage reads those, never the code. A spec-less plan has no behavior ids, so the stage names each task's acceptance criteria instead.
+The SPEC owns the requirements. Its `## Behaviors` section states each behavior with an id, a kind and its cases (`.claude/skills/gaia/references/spec/spec-template.md`), and expected behaviors come only from those; when the SPEC folder holds a code map, it serves only to locate existing tests. A spec-less plan has no behavior ids, so the stage names each task's acceptance criteria instead.
 
 ## What it writes
 

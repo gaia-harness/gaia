@@ -813,6 +813,7 @@
     "wiki/concepts/Shared Rate-limit Reading And Dispatch Checkpoint.md": "wiki-owned",
     "wiki/concepts/Shell Testing and CI.md": "wiki-owned",
     "wiki/concepts/Single-session First-time Onboarding.md": "wiki-owned",
+    "wiki/concepts/Spec Code Map Handoff.md": "wiki-owned",
     "wiki/concepts/Task Orchestration.md": "wiki-owned",
     "wiki/concepts/Test Stage.md": "wiki-owned",
     "wiki/concepts/Token Cost Readout.md": "wiki-owned",
@@ -908,7 +909,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T06:15:59.542Z",
+  "generated": "2026-11-24T06:54:33.134Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

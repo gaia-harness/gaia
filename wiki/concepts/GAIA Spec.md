@@ -3,7 +3,7 @@ type: concept
 title: GAIA Spec
 status: active
 created: 2026-05-06
-updated: 2026-11-18
+updated: 2026-11-24
 tags: [concept, claude, skill, orchestration]
 ---
 
@@ -64,7 +64,7 @@ A hand-edited ledger can still hold an off-vocabulary status. `spec-reconcile.sh
 
 ## When a SPEC folder is deleted
 
-A merged SPEC's working folder is kept at merge, not removed. Consolidation reads `SPEC.md` → `AUDIT.md` → the colocated plan's `PROGRESS.md` (top wins) and produces a verified `SUMMARY.md` before the merge; once the merge is confirmed, the orchestrator's post-merge close removes `SPEC.md` and `AUDIT.md`: the folder reduces to `SUMMARY.md` and the never-edited `REQUIREMENTS.md`, which the retention window reaps with the folder; the run's durable cost lives in the usage ledger ([[Usage Ledger]]; see [[Task Orchestration]]). The ledger row stays at `merged`, the terminal lifecycle state; the whole folder is reaped later, once it clears the retention window.
+A merged SPEC's working folder is kept at merge, not removed. Consolidation reads `SPEC.md` → `AUDIT.md` → the colocated plan's `PROGRESS.md` (top wins) and produces a verified `SUMMARY.md` before the merge; once the merge is confirmed, the orchestrator's post-merge close removes `SPEC.md` and `AUDIT.md`: what the folder keeps after the close, until the retention window reaps it with the folder, is listed in `.claude/skills/gaia/references/spec/lifecycle.md` `## Post-merge close`; the run's durable cost lives in the usage ledger ([[Usage Ledger]]; see [[Task Orchestration]]). The ledger row stays at `merged`, the terminal lifecycle state; the whole folder is reaped later, once it clears the retention window.
 
 Two steps handle a merged folder:
 

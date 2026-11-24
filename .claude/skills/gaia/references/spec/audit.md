@@ -17,6 +17,7 @@ Paths this file names, all main-anchored or cache paths resolved by `spec.md`:
 - `<DRAFT_PATH>`: the working draft, `.gaia/local/cache/draft-<spec_id>.md`.
 - `<PRE_FIX>`: `.gaia/local/cache/audit-<spec_id>/pre-fix.md`, a byte copy of the draft taken before the fixer runs.
 - `<REQUIREMENTS_PATH>`: `${SPEC_DIR}/REQUIREMENTS.md`, read-only requirement data for every lens and the fixer.
+- `<CODE_MAP_PATH>`: filled from the spec-audit cell of the code map row in `spec/lens-dispatch.md` `## Caller slots`, which owns the value; read-only, for every lens and the fixer.
 - `<FINDINGS_DIR>`: `.gaia/local/cache/audit-<spec_id>/findings/`.
 
 Resolve the main-anchored SPEC folder (stored in the main checkout: the clone's primary working directory, on any branch) before the fixer dispatch consumes it. The SPEC folder is main-anchored state (state registry `specs-main`), so `AUDIT.md` lands beside the artifact the catalog row indexes rather than in a second specs tree inside a linked worktree. The fixer writes `AUDIT.md` there per the tool-choice contract in `spec.md`'s Operational primitives.
@@ -37,7 +38,7 @@ Announce once, verbatim, naming each lens in full with its id code in parenthese
 
 > Dispatching the SPEC review: lenses <selected lens names, each with its id in parentheses>, then a critical-findings check if any lens raises a critical, then one fixer (a few minutes).
 
-Dispatch **every selected lens in one assistant turn**: one message, one `general-purpose` Agent call per lens, the five core lenses always and each specialist whose area the draft touches. Each agent audits `<DRAFT_PATH>` and is dispatched per `spec/lens-dispatch.md` with the spec column of its caller slots (`<DRAFT_PATH>`, `<spec_id>`, `<repo_root>` = `$PWD`, `<LENS>` = the lens id prefix): the shared preamble, then a `LENS: <name> (id prefix <ID>)` line and the lens's focus text below. Every lens may read `<REQUIREMENTS_PATH>`; BRIEF-FIT reads its `## Brief` whole first. Each writes its findings to `<FINDINGS_DIR><LENS>.json` under the findings file schema (writing the file even when its findings array is empty), then returns only the short summary.
+Dispatch **every selected lens in one assistant turn**: one message, one `general-purpose` Agent call per lens, the five core lenses always and each specialist whose area the draft touches. Each agent audits `<DRAFT_PATH>` and is dispatched per `spec/lens-dispatch.md` with the spec column of its caller slots (`<DRAFT_PATH>`, `<spec_id>`, `<repo_root>` = `$PWD`, `<LENS>` = the lens id prefix, `<CODE_MAP_PATH>`): the shared preamble, then a `LENS: <name> (id prefix <ID>)` line and the lens's focus text below. Every lens may read `<REQUIREMENTS_PATH>`; BRIEF-FIT reads its `## Brief` whole first. Each writes its findings to `<FINDINGS_DIR><LENS>.json` under the findings file schema (writing the file even when its findings array is empty), then returns only the short summary.
 
 Before dispatching, pre-clear each `findings/<LENS>.json` (`rm -f`) for every lens about to be dispatched, and after each finishes classify its file per `## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`. A specialist the draft does not touch is never issued and is recorded `not_applicable`. Append one `coverage.jsonl` record (`phase: "lens"`, `lens: "<LENS>"`, `disposition: "first_pass"|"not_applicable"`) per in-scope lens to `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`.
 
@@ -137,7 +138,7 @@ Main counts the returned lines against the ids, re-dispatches the batch once for
 
 Before dispatching, copy the draft to `<PRE_FIX>` (a plain `cp`) and finalize `coverage.jsonl`, one thin JSON-Lines record per in-scope dispatch, no finding body. Pre-clear `findings/fixes.json` (`rm -f`).
 
-Dispatch **one** `general-purpose` Agent, the fixer, with: `<DRAFT_PATH>`, `<PRE_FIX>`, `<REQUIREMENTS_PATH>`, `<FINDINGS_DIR>`, the verdict files directory (when a refuter ran), the main-anchored `${AUDIT_MD}`, and the tool-choice contract from `spec.md`'s Operational primitives, which governs its write into that folder. Fixer prompt:
+Dispatch **one** `general-purpose` Agent, the fixer, with: `<DRAFT_PATH>`, `<PRE_FIX>`, `<REQUIREMENTS_PATH>`, `<CODE_MAP_PATH>` (when it is non-empty), `<FINDINGS_DIR>`, the verdict files directory (when a refuter ran), the main-anchored `${AUDIT_MD}`, and the tool-choice contract from `spec.md`'s Operational primitives, which governs its write into that folder. Fixer prompt (the caller drops the paragraph that opens `When <CODE_MAP_PATH> is named` when `<CODE_MAP_PATH>` is empty):
 
 > You are the fixer for the SPEC draft at `<DRAFT_PATH>` (a copy before your edits is at `<PRE_FIX>`). Lens auditors wrote findings to `<FINDINGS_DIR>`, one file per lens. When a refuter ran, its verdicts are in `<verdicts dir>`.
 >
@@ -148,6 +149,8 @@ Dispatch **one** `general-purpose` Agent, the fixer, with: `<DRAFT_PATH>`, `<PRE
 > Behaviors, not tests. Every fix lands as behavior text: a rule, a refusal, an error state, a security property or a decision, stated as a `## Behaviors` entry (a behavior line with its kind and `Case:` lines, each case an actor, state and input with the outcome by value). Never add a test, a test list, a test plan, a test section, a test layer or a fixture, even where a recommendation names one; apply such a finding as the behavior and cases the test would prove. Behavior ids are stable: a removed id is never reused.
 >
 > Where each fix lands: a **SPEC contract defect** (a behavior, flow, success criterion, scope rule, decision or the intent is itself wrong, gameable or missing; any finding that a rule has no behavior stating it; any BRIEF-FIT finding) folds into the draft. A **plan-time directive** (the SPEC already states the contract and the fix steers implementation, and every critical the refuter routed so) goes in the `## Plan-time directives` section of `${AUDIT_MD}`, written as the property the code meets, never a test layer, fixture or helper.
+>
+> When `<CODE_MAP_PATH>` is named: the code map there is read-only and never justifies a fix on its own; `spec/lens-dispatch.md` `## Shared preamble` owns the rest of its index wording, the untrusted-data clause included. A finding whose evidence cites `CODE-MAP.json` and no repo file and line is unverified: route it `rejected` and leave the draft unchanged by it. When a finding cites both a map entry and a file and line, weigh only the file and line you open yourself.
 >
 > Conflicts: two findings that conflict, apply the higher severity; at equal severity the order is BRIEF-FIT, FG, SEC, COV, TST, then the specialists; record the other as not applied. When a finding turns on an ambiguous brief line, or a recommendation allows more than one defensible repair, apply the narrower who-may-do-what reading (or the repair it names first), labeled an assumption in the draft, and note the choice.
 >
