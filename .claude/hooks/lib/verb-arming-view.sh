@@ -249,9 +249,6 @@ gaia_verb_arm_view() {
               *'$('*|*'`'*) data=0 ;;
             esac
           fi
-          # The newline ending the opener line is kept even for a data body, so
-          # the last word on the opener line (`cat > f <<'EOF' && bash <script>`)
-          # stays a whole word instead of gluing to the mask run.
           view_text+="$newline"
           first=0
           if [ "$delimiter_offset" -gt 0 ]; then
