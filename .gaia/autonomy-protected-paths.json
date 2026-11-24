@@ -1,0 +1,22 @@
+{
+  "root": [
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+    ".claude/hooks/**",
+    ".claude/rules/**",
+    ".claude/agents/**",
+    ".claude/skills/**",
+    ".claude/commands/**",
+    ".gaia/local/protected/**",
+    "CLAUDE.md"
+  ],
+  "package": [
+    ".claude/settings.json",
+    ".claude/settings.overlay.json",
+    ".claude/rules/**",
+    ".claude/agents/**",
+    ".claude/skills/**",
+    ".claude/commands/**",
+    "CLAUDE.md"
+  ]
+}

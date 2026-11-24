@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+# PreToolUse hook (AskUserQuestion, Edit, Write, MultiEdit, NotebookEdit,
+# Bash, Monitor): while the autonomy switch is live, deny every
+# AskUserQuestion with what to do instead, and deny every write to a file that
+# governs the harness itself. With the switch off it allows everything and
+# says nothing. The switch is read only through autonomy_active in
+# .gaia/scripts/autonomy-lib.sh.
+#
+# WHY DENY. An unattended run has nobody to answer a question, so the call
+# would stall the run; a denial reaches Claude at once with the answer or the
+# park command. A denied call never reaches PostToolUse, so
+# audit-loop-ask-grant.sh records no grant from it.
+#
+# ASKUSERQUESTION. In this order:
+#   1. A `tool_input` equal to the pinned question of a pending audit
+#      checkpoint on any branch (gaia_loop_input_is_pin, the comparison the
+#      grant hook makes; never by header) parks with reason audit-checkpoint.
+#   2. A question whose header is on the human-only list
+#      (autonomy_human_only_header) parks with reason question, as does an
+#      unreadable list.
+#   3. A question with no option ending ` (Recommended)`, or more than one,
+#      parks with reason question: the gate never guesses.
+#   4. Otherwise each question's one recommended label is appended to the
+#      decision log (autonomy_log_decision) before the deny, which tells Claude
+#      to take that label and continue. A failed append parks instead, so the
+#      log never misses a decision Claude was told to take.
+# A call with no readable `questions` array parks.
+#
+# SELF-GOVERNING EDITS. Edit, Write, MultiEdit (`file_path`), NotebookEdit
+# (`notebook_path`) and a Bash or Monitor command that writes a path in the
+# protected set (autonomy_protected_globs) are denied with the park command.
+# Each path is resolved physically (physical_path), then made relative to the
+# checkout holding it (autonomy_relative_path), so a linked worktree's copy of
+# a protected file is protected too. A Bash command is read with the scan
+# block-audit-loop-write.sh uses (a redirect into the path, or a write verb
+# outside quotes in a command naming it; on an unsound reading, any write
+# spelling) and with lib/bash-write-target.sh. An unreadable protected set
+# denies every write this arm reads.
+#
+# HONEST LIMITS. The Bash arm inherits both parsers' limits (their headers name
+# them): a path in a variable, built by substitution, reached by a `cd` and a
+# relative name, or written through `eval` or an interpreter script passes. A
+# word is considered only when its spelling names `.claude/`, `CLAUDE.md` or
+# `local/protected`, so a symlink alias to a protected file passes on every
+# arm. A `cp` or `mv` that only reads a protected path is denied: the verb is
+# armed and the direction is not parsed, the over-deny being the safe side.
+#
+# Fail mode: a missing library refuses with exit 2. A missing jq refuses only a
+# call whose tool_input names a guarded spelling; with jq absent the switch
+# reads as off anyway. A deny is JSON on stdout with exit 0.
+#
+# Bash 3.2 compatible.
+set -euo pipefail
+
+payload=$(cat)
+
+# Raw pre-filter, before any fork: every call this hook can bind names the
+# AskUserQuestion tool or one of the spellings is_protected arms on (JSON never
+# escapes those characters), so the ordinary Bash call stops here.
+case "$payload" in
+  *AskUserQuestion* | *.claude/* | *CLAUDE.md* | *local/protected*) ;;
+  *) exit 0 ;;
+esac
+
+_gate_directory="${BASH_SOURCE[0]%/*}"
+[ "$_gate_directory" != "${BASH_SOURCE[0]}" ] || _gate_directory=.
+_gate_scripts="$_gate_directory/../../.gaia/scripts"
+# The protected set's data file and the package registry it joins are read
+# from the tree this hook runs from, so both halves come from one checkout.
+_gate_tree=$(cd -P -- "$_gate_directory/../.." 2>/dev/null && pwd -P) || _gate_tree=''
+
+# load <file> <function>: source a library, refusing loudly when it is gone.
+load() {
+  set +e
+  # shellcheck source=/dev/null
+  [ -f "$1" ] && . "$1" 2>/dev/null
+  set -e
+  if ! type "$2" >/dev/null 2>&1; then
+    printf 'BLOCKED: autonomy-gate.sh cannot load %s, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' "${1##*/}" >&2
+    exit 2
+  fi
+}
+
+load "$_gate_directory/lib/jq-availability.sh" gaia_require_jq
+gaia_require_jq 'the autonomy gate' "$payload" tool_input 'questions' '.claude/' 'CLAUDE.md' 'local/protected'
+load "$_gate_directory/lib/hook-payload.sh" gaia_hook_payload_read
+load "$_gate_scripts/main-root-lib.sh" gaia_resolve_main_root
+load "$_gate_scripts/autonomy-lib.sh" autonomy_active
+
+gaia_hook_payload_read "$payload" || exit 0
+cwd="$GAIA_HOOK_CWD"
+case "$cwd" in /*) ;; *) cwd=$PWD ;; esac
+
+autonomy_active "$cwd" || exit 0
+
+
+deny() {
+  jq -n --arg reason "Unattended run (the autonomy switch is live): $1" '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: $reason
+    }
+  }'
+  exit 0
+}
+
+park_question() {
+  deny "$1 Park this run: $PARK_QUESTION (add --pr <n> when the branch has a pull request), then stop. Do not ask it again or work around it."
+}
+
+main_root=$(gaia_resolve_main_root "$cwd" 2>/dev/null) || main_root=''
+[ -z "$main_root" ] || main_root=$(cd -P -- "$main_root" 2>/dev/null && pwd -P) || main_root=''
+tree_root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || tree_root=''
+[ -z "$tree_root" ] || tree_root=$(cd -P -- "$tree_root" 2>/dev/null && pwd -P) || tree_root=''
+
+# The park command names the script by absolute path and parks the session's
+# own tree, so it runs from any working directory.
+PARK_SCRIPT="bash $_gate_tree/.gaia/scripts/autonomy-park.sh"
+PARK_ROOT="--root ${tree_root:-$cwd}"
+PARK_QUESTION="$PARK_SCRIPT --reason question --detail '<one line: what needs a human>' $PARK_ROOT"
+
+ask_gate() {
+  local tool_input state_file state pending pin pr questions count index header recommended labels='' branch
+  tool_input=$(jq -c '.tool_input' <<<"$payload" 2>/dev/null) || tool_input=null
+
+  if [ -n "$main_root" ] && [ -d "$main_root/.gaia/local/protected/audit-loop" ]; then
+    load "$_gate_scripts/audit-loop-state-lib.sh" gaia_loop_input_is_pin
+    while IFS= read -r state_file; do
+      state=$(gaia_loop_read_state "$state_file" 2>/dev/null) || continue
+      pending=$(gaia_loop_pending_checkpoint "$state")
+      [ -n "$pending" ] || continue
+      pin=$(jq -c '.question // empty' <<<"$pending" 2>/dev/null) || pin=''
+      [ -n "$pin" ] || continue
+      if gaia_loop_input_is_pin "$payload" "$pin"; then
+        pr=$(jq -r '.pr // empty' <<<"$state" 2>/dev/null) || pr=''
+        deny "this is the pinned audit checkpoint question, which only a human answers. Park this run: $PARK_SCRIPT --reason audit-checkpoint --pr ${pr:-<n>} $PARK_ROOT, then stop. Do not ask it again or dispatch another audit unit."
+      fi
+    done < <(find "$main_root/.gaia/local/protected/audit-loop" -name .closed -prune -o -type f -name '*.json' -print 2>/dev/null)
+  fi
+
+  questions=$(jq -c 'if (.questions | type) == "array" and (.questions | length) > 0 then .questions else empty end' <<<"$tool_input" 2>/dev/null) || questions=''
+  [ -n "$questions" ] || park_question "the call carries no readable question."
+  count=$(jq 'length' <<<"$questions")
+
+  index=0
+  while [ "$index" -lt "$count" ]; do
+    header=$(jq -r --argjson i "$index" '.[$i].header // "" | strings' <<<"$questions")
+    local status=0
+    autonomy_human_only_header "$header" || status=$?
+    case "$status" in
+      0) park_question "the question '$header' is on the human-only list, so only a human answers it." ;;
+      1) ;;
+      *) park_question "the human-only header list cannot be read, so no question can be answered unattended." ;;
+    esac
+    recommended=$(jq -r --argjson i "$index" '[.[$i].options // [] | .[]? | .label? | strings | select(endswith(" (Recommended)"))] | if length == 1 then .[0] else empty end' <<<"$questions")
+    [ -n "$recommended" ] || park_question "the question '$header' does not mark exactly one option (Recommended), and the gate never guesses."
+    labels="$labels$header"$'\t'"$recommended"$'\n'
+    index=$((index + 1))
+  done
+
+  branch=$(git -C "$cwd" branch --show-current 2>/dev/null) || branch=''
+  local take='' label
+  while IFS=$'\t' read -r header label; do
+    [ -n "$label" ] || continue
+    autonomy_log_decision "$GAIA_HOOK_SESSION_ID" "$branch" "$header" "$label" "$cwd" ||
+      park_question "the decision log could not be written, so the choice cannot be recorded."
+    take="$take '$label' for '$header';"
+  done <<<"$labels"
+  deny "this question was shown to nobody. Take${take%;} and continue as if it had been selected. The choice is in the decision log."
+}
+
+PROTECTED_GLOBS=''
+protected_globs() {
+  [ -z "$PROTECTED_GLOBS" ] || return 0
+  PROTECTED_GLOBS=$(autonomy_protected_globs "$_gate_tree" 2>/dev/null) || PROTECTED_GLOBS=''
+  [ -n "$PROTECTED_GLOBS" ] ||
+    park_question "the protected set (.gaia/autonomy-protected-paths.json) cannot be read, so no write is allowed unattended."
+}
+
+# is_protected <word>: rc 0 when the word, a path, resolves into the protected
+# set. Called by name from gaia_bash_command_writes_target too.
+is_protected() {
+  local word resolved relative
+  word=$(gaia_write_target_strip_quotes "${1-}")
+  case "$word" in
+    *.claude/* | *CLAUDE.md* | *local/protected*) ;;
+    *) return 1 ;;
+  esac
+  [ -n "$main_root" ] || return 0
+  resolved=$(physical_path "$word" "$cwd")
+  relative=$(autonomy_relative_path "$resolved" "$main_root" "$tree_root") || return 1
+  protected_globs
+  if autonomy_protected_match "$relative" "$PROTECTED_GLOBS"; then
+    PROTECTED_HIT="$relative"
+    return 0
+  fi
+  return 1
+}
+
+deny_protected() {
+  park_question "${PROTECTED_HIT:-this path} governs the harness itself (the protected set in .gaia/autonomy-protected-paths.json), so a change to it needs a human. Do not retry it by another tool, shell shape or path spelling."
+}
+
+bash_gate() {
+  local command_line="$1" word target
+  shell_scan "$command_line"
+  if [ "$SCAN_SOUND" -eq 1 ]; then
+    while IFS= read -r target; do
+      [ -n "$target" ] || continue
+      ! is_protected "$target" || deny_protected
+    done <<<"$SCAN_TARGETS"
+    if has_write_verb "$SCAN_BARE"; then
+      for word in "${SCAN_WORDS[@]+"${SCAN_WORDS[@]}"}"; do
+        ! is_protected "$word" || deny_protected
+      done
+    fi
+  elif has_write_spelling "$command_line"; then
+    # shellcheck disable=SC2086 # split into blank-separated words on purpose
+    for word in $command_line; do
+      ! is_protected "$word" || deny_protected
+    done
+  fi
+  ! gaia_bash_command_writes_target "$command_line" is_protected || deny_protected
+}
+
+PROTECTED_HIT=''
+case "$GAIA_HOOK_TOOL_NAME" in
+  AskUserQuestion)
+    ask_gate
+    ;;
+  Edit | Write | MultiEdit | NotebookEdit | Bash | Monitor)
+    load "$_gate_directory/lib/audit-loop-write-scan.sh" physical_path
+    load "$_gate_directory/lib/bash-write-target.sh" gaia_bash_command_writes_target
+    case "$GAIA_HOOK_TOOL_NAME" in
+      NotebookEdit)
+        target=$(jq -r '.tool_input["notebook_path"] // "" | strings' <<<"$payload" 2>/dev/null) || target=''
+        [ -z "$target" ] || ! is_protected "$target" || deny_protected
+        ;;
+      Bash | Monitor)
+        [ -z "$GAIA_HOOK_COMMAND" ] || bash_gate "$GAIA_HOOK_COMMAND"
+        ;;
+      *)
+        [ -z "$GAIA_HOOK_FILE_PATH" ] || ! is_protected "$GAIA_HOOK_FILE_PATH" || deny_protected
+        ;;
+    esac
+    ;;
+esac
+exit 0

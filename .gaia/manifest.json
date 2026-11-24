@@ -29,6 +29,7 @@
     ".claude/hooks/audit-loop-ask-grant.sh": "owned",
     ".claude/hooks/audit-loop-bound.sh": "owned",
     ".claude/hooks/audit-loop-grant.sh": "owned",
+    ".claude/hooks/autonomy-gate.sh": "owned",
     ".claude/hooks/autonomy-session-start.sh": "owned",
     ".claude/hooks/block-audit-loop-write.sh": "owned",
     ".claude/hooks/block-eslint-config-edit.sh": "owned",
@@ -229,7 +230,9 @@
     ".claude/skills/update-gaia/SKILL.md": "owned",
     ".editorconfig": "owned",
     ".gaia/audit-ci.yml": "shared",
+    ".gaia/autonomy-human-only-headers.json": "owned",
     ".gaia/autonomy-park-reasons.json": "owned",
+    ".gaia/autonomy-protected-paths.json": "owned",
     ".gaia/cli/gaia": "owned",
     ".gaia/cli/templates/.gitkeep": "owned",
     ".gaia/cli/templates/component/index.stories.tsx.tmpl": "owned",
@@ -908,7 +911,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T06:15:59.542Z",
+  "generated": "2026-11-24T07:11:38.770Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
