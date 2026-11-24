@@ -28,10 +28,13 @@
 #
 # The functions below serve the gate, .claude/hooks/autonomy-gate.sh.
 #
+# autonomy_log_file [directory]
+#   Prints the decision log's path, <main>/.gaia/local/protected/
+#   autonomy-log.jsonl, for the checkout holding `directory`. Returns 1 when
+#   the main checkout cannot be resolved.
 # autonomy_log_decision <session_id> <branch> <header> <option> [directory]
-#   Appends one line to the decision log, <main>/.gaia/local/protected/
-#   autonomy-log.jsonl: {time (ISO-8601 UTC), session_id, branch, header,
-#   option}. The gate is its only caller; the protected-folder guard denies
+#   Appends one line to the decision log: {time (ISO-8601 UTC), session_id,
+#   branch, header, option}. The gate is its only caller; the protected-folder guard denies
 #   Claude's own writes. Returns 1, writing nothing, when the main checkout
 #   cannot be resolved, jq is missing, the log or its folder is a symlink, or
 #   the append fails.
@@ -120,13 +123,18 @@ autonomy_field() {
 
 _autonomy_data_directory="$_autonomy_library_directory/.."
 
-autonomy_log_decision() {
-  local main_root log folder
-  main_root=$(gaia_resolve_main_root "${5:-$PWD}" 2>/dev/null) || return 1
+autonomy_log_file() {
+  local main_root
+  main_root=$(gaia_resolve_main_root "${1:-$PWD}" 2>/dev/null) || return 1
   [ -n "$main_root" ] || return 1
+  printf '%s/.gaia/local/protected/autonomy-log.jsonl\n' "$main_root"
+}
+
+autonomy_log_decision() {
+  local log folder
+  log=$(autonomy_log_file "${5:-$PWD}") || return 1
   command -v jq >/dev/null 2>&1 || return 1
-  folder="$main_root/.gaia/local/protected"
-  log="$folder/autonomy-log.jsonl"
+  folder="${log%/*}"
   # The placement rule the switch reader holds: a symlinked log or folder would
   # put the record where the protected-folder guard never looks.
   [ ! -L "$folder" ] && [ ! -L "$log" ] || return 1

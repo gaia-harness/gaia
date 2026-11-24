@@ -425,7 +425,7 @@ tree_state() {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
   printf 'case: %s\n' 'triage library missing' >&2
   mkdir -p "$copy"
-  cp "$SCRIPTS/audit-dispositions-check.sh" "$SCRIPTS/filing-outcomes-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$copy/"
+  cp "$SCRIPTS/audit-dispositions-check.sh" "$SCRIPTS/filing-outcomes-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$SCRIPTS/audit-decided-unattended-lib.sh" "$SCRIPTS/autonomy-lib.sh" "$SCRIPTS/main-root-lib.sh" "$SCRIPTS/branch-name-lib.sh" "$copy/"
   run bash "$copy/audit-dispositions-check.sh" check --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --round 1
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
   grep -qF -- 'audit-triage-lib.sh' <<<"$output" || { echo "$output"; return 1; }
@@ -556,7 +556,7 @@ tree_state() {
   count="$(find "$SNAPSHOT_DIRECTORY" -name 'dispositions-*.checked.json' | wc -l | tr -d ' ')"
   [ "$count" -eq 9 ] || { echo "snapshots: $count"; return 1; }
   mkdir -p "$shim"
-  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-dispositions-grade-lib.sh" "$SCRIPTS/audit-dispositions-snapshot-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$shim/"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-dispositions-grade-lib.sh" "$SCRIPTS/audit-dispositions-snapshot-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$SCRIPTS/audit-decided-unattended-lib.sh" "$SCRIPTS/autonomy-lib.sh" "$SCRIPTS/main-root-lib.sh" "$SCRIPTS/branch-name-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   start_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d\n", time*1000')"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
