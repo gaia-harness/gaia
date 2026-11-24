@@ -249,3 +249,11 @@ run_hook_in_home() {
   spawn_count=$(wc -c <"$spawn_log" | tr -d ' ')
   [ "$spawn_count" -eq 1 ]
 }
+
+@test "an allowed gh pr create form is still blocked when its title is invalid" {
+  # shellcheck source=../helpers/gh-allow-list.sh
+  . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
+  gh_command_is_allowed 'gh pr create --title "bogus: do a thing" --body x'
+  run_hook 'gh pr create --title "bogus: do a thing" --body x'
+  assert_blocked
+}
