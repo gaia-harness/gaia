@@ -556,7 +556,7 @@ tree_state() {
   count="$(find "$SNAPSHOT_DIRECTORY" -name 'dispositions-*.checked.json' | wc -l | tr -d ' ')"
   [ "$count" -eq 9 ] || { echo "snapshots: $count"; return 1; }
   mkdir -p "$shim"
-  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$shim/"
+  cp "$SCRIPT" "$SCRIPTS/audit-triage-lib.sh" "$SCRIPTS/audit-dispositions-grade-lib.sh" "$SCRIPTS/audit-dispositions-snapshot-lib.sh" "$SCRIPTS/audit-pr-sections-lib.sh" "$SCRIPTS/audit-recorded-decision-lib.sh" "$shim/"
   printf '#!/usr/bin/env bash\nprintf "called\\n" >>"%s/calls"\nexit 9\n' "$BATS_TEST_TMPDIR" >"$shim/audit-loop-eval.sh"
   start_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d\n", time*1000')"
   run bash "$shim/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --snapshot-dir "$SNAPSHOT_DIRECTORY"
@@ -652,7 +652,7 @@ run_sections() {
   run_outcomes 1
   red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
   grep -qF -- outcome-failed <<<"$output" && return 1
-  mutant_script audit-dispositions-check.sh -e '/elif \$outcome.outcome == "refused-authored"/d' \
+  mutant_script audit-dispositions-grade-lib.sh -e '/elif \$outcome.outcome == "refused-authored"/d' \
     -e 's/"absent", "transient"/"absent", "transient", "refused-authored"/' || return 1
   run_outcomes 1
   green || return 1
@@ -865,7 +865,7 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   green || return 1
   run_check 1
   green || return 1
-  mutant_script audit-dispositions-check.sh -e 's/"accept-residual" and \$version >= 3/"accept-residual" and $version >= 2/' || return 1
+  mutant_script audit-dispositions-grade-lib.sh -e 's/"accept-residual" and \$version >= 3/"accept-residual" and $version >= 2/' || return 1
   run_check_all
   red accept-residual-not-eligible "$(key_json c/sug f.txt 6)"
 }
@@ -906,7 +906,7 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
   run_check 2
   red undisposed "$(key_json c/oosimp base.txt 6)" || return 1
-  mutant_script audit-dispositions-check.sh -e 's/gaia_filing_refused_keys "$RUN_FOLDER"/printf "[]"/' || return 1
+  mutant_script audit-dispositions-grade-lib.sh -e 's/gaia_filing_refused_keys "$RUN_FOLDER"/printf "[]"/' || return 1
   run_check 2
   green || return 1
   reset_fixture
@@ -929,7 +929,7 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   write_dispositions 3 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "f.txt" or .line != 6)')"
   run_check 3
   green || return 1
-  mutant_script audit-dispositions-check.sh -e 's/select(\$version >= 3 and .disposition == "accept-residual")/select(false)/' || return 1
+  mutant_script audit-dispositions-grade-lib.sh -e 's/select(\$version >= 3 and .disposition == "accept-residual")/select(false)/' || return 1
   run_check 3
   red undisposed "$(key_json c/sug f.txt 6)" || return 1
   SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
@@ -950,7 +950,7 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
     run_check 3
     red undisposed "$(key_json c/sug f.txt 6)" || return 1
   done
-  mutant_script audit-dispositions-check.sh -e 's/ and (security_class | not))/)/' || return 1
+  mutant_script audit-dispositions-grade-lib.sh -e 's/ and (security_class | not))/)/' || return 1
   open_round 3 "$escalated"
   run_check 3
   green
@@ -1252,7 +1252,7 @@ run_residual_count() {
   accept_at 2
   run_check 2
   green || return 1
-  mutant_check_tree audit-dispositions-check.sh -e 's/(\$stop.human_accept or (\$stop.default_stop/(($stop.default_stop/' || return 1
+  mutant_check_tree audit-dispositions-grade-lib.sh -e 's/(\$stop.human_accept or (\$stop.default_stop/(($stop.default_stop/' || return 1
   run_check 2
   red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
   SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
@@ -1270,7 +1270,7 @@ run_residual_count() {
   run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
   green || return 1
   grep -F -- 'f.txt:1' <<<"$output" | grep -qF -- 'Human decision: ' || { echo "$output"; return 1; }
-  mutant_check_tree audit-dispositions-check.sh -e 's/(\$accept_allowed or (\$stop.accepted_keys \/\/ \[\] | any(. == \$key)) | not)/($accept_allowed | not)/' || return 1
+  mutant_check_tree audit-dispositions-grade-lib.sh -e 's/(\$accept_allowed or (\$stop.accepted_keys \/\/ \[\] | any(. == \$key)) | not)/($accept_allowed | not)/' || return 1
   run_check 2
   red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
   SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
@@ -1311,7 +1311,7 @@ run_residual_count() {
   mv "$RUN_FOLDER/claimed.json" "$RUN_FOLDER/dispositions-2.json"
   run_check 2
   red accept-residual-not-eligible "$(minor_key f.txt 1)" || return 1
-  mutant_check_tree audit-dispositions-check.sh \
+  mutant_check_tree audit-dispositions-grade-lib.sh \
     -e 's/and (\$accept_allowed or/and (.eligible == true or $accept_allowed or/' || return 1
   run_check 2
   green || return 1
@@ -1325,7 +1325,7 @@ run_residual_count() {
   run_check 3
   green || return 1
   accept_all 3 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 1 rule/x fix)]"
-  mutant_check_tree audit-dispositions-check.sh -e 's/ and (\$threshold_fix | not)//' || return 1
+  mutant_check_tree audit-dispositions-grade-lib.sh -e 's/ and (\$threshold_fix | not)//' || return 1
   run_check 3
   green
 }
@@ -1409,7 +1409,7 @@ fix_both() {
   run_check 2
   green || return 1
   fix_both 2
-  mutant_check_tree audit-dispositions-check.sh -e 's/\$version >= 4 and (\$is_vetoed/$version >= 5 and ($is_vetoed/' || return 1
+  mutant_check_tree audit-dispositions-grade-lib.sh -e 's/\$version >= 4 and (\$is_vetoed/$version >= 5 and ($is_vetoed/' || return 1
   run_check 2
   green || return 1
   SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
@@ -1426,7 +1426,8 @@ fix_both() {
   printf 'case: %s\n' 'a version-3 snapshot re-grades without the rule; the same snapshot read as version 4 is refused' >&2
   accepted_key_rounds || return 1
   fix_both 2
-  mutant_check_tree audit-dispositions-check.sh -e 's/\$version >= 4 and (\$is_vetoed/$version >= 5 and ($is_vetoed/' -e 's/{version: 4, round/{version: 3, round/' || return 1
+  mutant_check_tree audit-dispositions-grade-lib.sh -e 's/\$version >= 4 and (\$is_vetoed/$version >= 5 and ($is_vetoed/' || return 1
+  sed -e 's/{version: 4, round/{version: 3, round/' "$SCRIPTS/audit-dispositions-snapshot-lib.sh" >"${SCRIPT%/*}/audit-dispositions-snapshot-lib.sh"
   run_check 2 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
   SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
