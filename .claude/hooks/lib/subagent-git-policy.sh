@@ -3,10 +3,11 @@
 # shellcheck disable=SC2034,SC2154 # the lists are read by the sourcing hook; git_subcommand and git_args come from lib/main-git-guard-parse.sh
 #
 # subagent-git-policy.sh: which git a sub-agent may not run, and which agents
-# may. The one definition of the execution doctrine's "git that changes state"
-# for the sub-agent rule in block-main-destructive-git.sh
-# (.claude/doctrine/execution.md, `## Roles and git`). Sourced, never executed;
-# defines lists and one function, does no work at source time. Bash 3.2
+# may: the subcommands the sub-agent rule in block-main-destructive-git.sh
+# denies as the execution doctrine's "git that changes state"
+# (.claude/doctrine/execution.md, `## Roles and git`). The doctrine also names
+# stage and branch, which this list does not deny. Sourced, never executed;
+# defines lists and functions, does no work at source time. Bash 3.2
 # compatible.
 
 [ -n "${GAIA_SUBAGENT_GIT_POLICY_SH:-}" ] && return 0
@@ -19,7 +20,7 @@ GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS=(
 )
 
 # The `git stash` verbs that write nothing. Every other stash form, a bare
-# `git stash` included, pushes or drops an entry on the stack every checkout
+# `git stash` included, rewrites the working tree or the stack every checkout
 # shares.
 GAIA_SUBAGENT_GIT_STASH_READ_VERBS=(list show)
 

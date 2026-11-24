@@ -4,7 +4,7 @@
 # a sub-agent's git that changes state is denied, whatever
 # classify-git-command.sh would approve. The hook header states the outcome for
 # each payload shape; lib/subagent-git-policy.sh holds the subcommands and the
-# exempt agents, and every list here is read from it.
+# exempt agents, and the denied, stash-read and exempt lists here are read from it.
 #
 # Both hooks judge "this repository" from their own on-disk location, so each
 # test copies them and their libraries into a fresh fixture repository on a

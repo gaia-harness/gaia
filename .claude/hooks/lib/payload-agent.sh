@@ -4,7 +4,7 @@
 #
 # payload-agent.sh: the one reader of which agent made a hook call. Sourced,
 # never executed; defines one function and does no work at source time. Bash 3.2
-# compatible, bash only (no jq, no fork), so a hook every tool call pays can
+# compatible, bash only (no jq, no subprocess), so a hook every tool call pays can
 # afford it.
 #
 #   gaia_payload_agent_read <raw-payload>

@@ -12,7 +12,7 @@
 # lib/subagent-git-policy.sh holds the subcommands and the exempt agents. Its
 # outcome for each payload, read by lib/payload-agent.sh:
 #   - no `agent_id` key (the main thread): allowed;
-#   - `agent_type` on the exempt list: allowed;
+#   - a well-formed `agent_id` with an `agent_type` on the exempt list: allowed;
 #   - any other sub-agent, a fork included: a listed subcommand in this
 #     repository is denied; read-only git (`status`, `diff`, `log`,
 #     `stash list`, `stash show`) and git aimed at another repository are
@@ -20,7 +20,6 @@
 #   - an `agent_id` key whose value is malformed, or an `agent_type` that is
 #     missing or malformed: still a sub-agent and not exempt, so denied;
 #   - a payload that is not JSON: the whole guard stands down, so allowed.
-#
 #
 # Honest limits of the command-config rule: a file edit inside `.git/` is not a
 # git invocation (block-git-internals-write.sh denies the edit-tool route), and
@@ -351,7 +350,7 @@ while IFS= read -r segment; do
     [ -z "$git_cwd" ] || segment_kind=$(resolve_directory_kind "$git_cwd")
     case "$segment_kind" in
       'foreign '*) ;;
-      *) deny "Sub-agents never run git that changes state ('git $git_subcommand' here): .claude/doctrine/execution.md, \`## Roles and git\`. Sub-agents share one working tree, so one stray commit, checkout, reset or stash discards a sibling's edits. The main thread commits: leave your changes in the working tree and report them, and the main thread stages, commits and pushes. Read-only git (status, diff, log, show, stash list) stays allowed." ;;
+      *) deny "Sub-agents never run git that changes state ('git $git_subcommand' here): .claude/doctrine/execution.md, \`## Roles and git\`. Sub-agents share one working tree, so one stray commit, checkout, reset or stash discards a sibling's edits. The main thread commits: leave your changes in the working tree and report them. Read-only git (status, diff, log, show, stash list, stash show) stays allowed." ;;
     esac
   fi
 
