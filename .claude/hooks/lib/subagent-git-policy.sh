@@ -29,8 +29,8 @@ GAIA_SUBAGENT_GIT_STASH_READ_VERBS=(list show)
 GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 
 # The denied subcommands a sub-agent may still run from its own isolated
-# worktree: the two that isolated /gaia-plan and /gaia-debt runs use. commit writes
-# that tree's index and its own branch. push writes the remote and the shared
+# worktree, the ones isolated /gaia-plan and /gaia-debt runs use. commit
+# writes that tree's index and its own branch. push writes the remote and the shared
 # remote-tracking refs, and may reach any remote branch; the guard's main-branch
 # rules still deny a push onto main. Every other denied verb stays denied there
 # because nothing has checked it, and some are known to write shared state:
