@@ -72,7 +72,8 @@ Once `SPEC_ID` resolves:
 1. Cache `SPEC_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")"` and the absolute `SPEC_PATH="${SPEC_DIR}/SPEC.md"` for use in the planner prompt (step 4), the planner will reference it in `README.md`.
 2. Read `SPEC_PATH`. Its full content is the source-of-truth feature description; any dispatch summary in the original description is just a label.
 3. Check for a sibling audit: if `${SPEC_DIR}/AUDIT.md` exists, cache its absolute path as `AUDIT_PATH` for use in step 4, the planner reads it too. If absent, `AUDIT_PATH` is unset.
-4. Cache the lowercased SPEC id (`spec-NNN`) as `SPEC_SLUG_SEED` for use in step 4's branch-naming policy.
+4. When `${SPEC_DIR}/CODE-MAP.json` exists, apply the Usable test `.claude/skills/gaia/references/spec/clarify-loop.md` `## The code map` owns. When it fails, show `The code map no longer matches its record; the plan runs without it.` and continue. The map is then absent for the planner (which applies the same test itself), every plan lens and the test stage. Nothing here rewrites the map or its record.
+5. Cache the lowercased SPEC id (`spec-NNN`) as `SPEC_SLUG_SEED` for use in step 4's branch-naming policy.
 
 If no SPEC reference is detected, `SPEC_SLUG_SEED`, `SPEC_PATH`, and `AUDIT_PATH` are unset; step 3 allocates a `PLAN-NNN` id from the notebook catalog for the spec-less plan.
 
