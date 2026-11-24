@@ -165,3 +165,19 @@ field() {
     field audit_units_pool && [ "$output" = 0 ] || return 1
   done
 }
+
+# bats test_tags=protected
+@test "a forged live switch behind a symlinked main-checkout .gaia/local reads as off" {
+  local outside="$FIX/outside"
+  mkdir -p "$outside/protected"
+  jq -n '{enabled: true, expires_at: (now + 3600 | todate), may_merge: true, audit_extra_units_per_pr: 1, audit_units_pool: 3}' >"$outside/protected/autonomy.json"
+  rm -rf "$MAIN/.gaia/local"
+  ln -s "$outside" "$MAIN/.gaia/local"
+  # The forged file is valid and reachable at the documented path.
+  [ -f "$SWITCH" ]
+  reads_as off || return 1
+  field enabled
+  [ "$status" -eq 1 ] && [ -z "$output" ] || return 1
+  field may_merge
+  [ "$status" -eq 1 ] && [ -z "$output" ] || return 1
+}

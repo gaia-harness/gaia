@@ -68,3 +68,15 @@ start() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+# bats test_tags=protected
+@test "a symlinked .gaia/local in the main checkout reads as off" {
+  local outside="$FIX/outside"
+  mkdir -p "$outside/protected"
+  jq -n '{enabled: true, expires_at: (now + 3600 | todate), may_merge: true}' >"$outside/protected/autonomy.json"
+  rm -rf "$MAIN/.gaia/local"
+  ln -s "$outside" "$MAIN/.gaia/local"
+  start
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}

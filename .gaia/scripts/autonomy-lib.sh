@@ -7,7 +7,8 @@
 # denies Claude's writes to the protected folder. The file's fields and the
 # writer command: wiki/concepts/Autonomy Switch.md.
 #
-# Fail closed. A missing file, a symlinked file or folder, a file that is not
+# Fail closed. A missing file, a symlinked file or folder (or a symlinked
+# .gaia/local above it), a file that is not
 # exactly the documented object, `enabled: false`, a past `expires_at`, a main
 # checkout that cannot be resolved, and a missing jq all read as not
 # autonomous, never as an error. The two audit budget fields are the exception
@@ -45,6 +46,13 @@ _autonomy_read() {
   # A symlink would let the file's content live somewhere the guard's
   # placement rule never covers.
   [ ! -L "$file" ] && [ ! -L "${file%/*}" ] && [ -f "$file" ] || return 1
+  # A symlinked .gaia/local above the folder passes the test above but puts the
+  # file where block-audit-loop-write.sh's physical path resolution allows a
+  # Write, so the folder must also sit physically where the placement rule says.
+  local physical_folder physical_main
+  physical_folder=$(cd -P -- "${file%/*}" 2>/dev/null && pwd -P) || return 1
+  physical_main=$(cd -P -- "${file%/.gaia/local/protected/autonomy.json}" 2>/dev/null && pwd -P) || return 1
+  [ "$physical_folder" = "$physical_main/.gaia/local/protected" ] || return 1
   command -v jq >/dev/null 2>&1 || return 1
   # The round trip through todate rejects a well-shaped but impossible date.
   record=$(jq -r '
