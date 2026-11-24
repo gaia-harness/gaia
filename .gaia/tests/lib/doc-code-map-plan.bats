@@ -143,3 +143,16 @@ planner_dispatch() {
   grep -qE -- '(^|[^a-z])(rm|cp|mv) ' <<<"$item" && { echo "item runs a write command" >&2; return 1; }
   true
 }
+
+@test "the usable check accepts a valid map whose one-line record has no trailing newline" {
+  local dir block hash
+  dir="$(mktemp -d)"
+  printf '[]' >"$dir/CODE-MAP.json"
+  hash="$( { shasum -a 256 "$dir/CODE-MAP.json" 2>/dev/null || sha256sum "$dir/CODE-MAP.json"; } | cut -d' ' -f1)"
+  printf '0 %s' "$hash" >"$dir/CODE-MAP.sha256"
+  block="$(section_of "$CLARIFY_MD" '## The code map' | awk '/^MAP=<absolute/ { on = 1 } on && /^```/ { exit } on')"
+  [ -n "$block" ] || { echo "missing: usable block" >&2; return 1; }
+  block="${block/MAP=<absolute path of CODE-MAP.json>/MAP=\"$dir/CODE-MAP.json\"}"
+  run bash -c "$block"
+  [ "$status" -eq 0 ] || { echo "usable check refused a record with no trailing newline: $output" >&2; return 1; }
+}
