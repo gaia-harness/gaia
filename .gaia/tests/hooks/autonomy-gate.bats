@@ -139,6 +139,11 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
   denied
   [[ "$(reason)" == *"may_merge false"*"autonomy-park.sh --reason question"* ]]
   [ ! -e "$LOG" ]
+  echo "case: an uppercase MERGE label parks too"
+  ask "$(question 'Merge it' 'MERGE NOW (Recommended)' 'Hold the merge')"
+  denied
+  [[ "$(reason)" == *"may_merge false"*"autonomy-park.sh --reason question"* ]]
+  [ ! -e "$LOG" ]
   echo "case: may_merge true"
   jq -n '{enabled: true, expires_at: (now + 3600 | todate), may_merge: true}' >"$SWITCH"
   ask "$(question 'Merge it' 'Merge it (Recommended)' 'Hold the merge')"

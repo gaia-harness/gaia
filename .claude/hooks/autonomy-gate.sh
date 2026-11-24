@@ -19,7 +19,9 @@
 #      unreadable list.
 #   3. A question with no option ending ` (Recommended)`, or more than one,
 #      parks with reason question: the gate never guesses.
-#   4. Otherwise each question's one recommended label is appended to the
+#   4. A recommended label whose first word is Merge, in any case, parks with
+#      reason question unless the switch sets may_merge true.
+#   5. Otherwise each question's one recommended label is appended to the
 #      decision log (autonomy_log_decision) before the deny, which tells Claude
 #      to take that label and continue. A failed append parks instead, so the
 #      log never misses a decision Claude was told to take.
@@ -169,7 +171,7 @@ ask_gate() {
     [ -n "$recommended" ] || park_question "the question '$header' does not mark exactly one option (Recommended), and the gate never guesses."
     # A merge is the human's to allow: with may_merge not true, a recommended
     # label that leads to a merge parks instead of being taken.
-    if [[ "$recommended" =~ ^[Mm]erge([^[:alnum:]]|$) ]] && [ "$(autonomy_field may_merge "$cwd" 2>/dev/null || true)" != true ]; then
+    if [[ "$recommended" =~ ^[Mm][Ee][Rr][Gg][Ee]([^[:alnum:]]|$) ]] && [ "$(autonomy_field may_merge "$cwd" 2>/dev/null || true)" != true ]; then
       park_question "the question '$header' recommends a merge and the switch has may_merge false, so only a human allows the merge."
     fi
     labels="$labels$header"$'\t'"$recommended"$'\n'
