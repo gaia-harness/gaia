@@ -1,9 +1,11 @@
 # shellcheck shell=bash
 #
-# The check subcommand of audit-fix-verify.sh: input validation, the judgment
-# of the fixer's delta, the audit-artifact scan, and the error log every
-# finding is written to. Sourced only by audit-fix-verify.sh from its own
-# directory, so a pinned copy sources the pinned library. That script's header
+# The check and settled subcommands of audit-fix-verify.sh: input validation,
+# the judgment of the fixer's delta, the audit-artifact scan, the error log
+# every finding is written to, and the re-check that HEAD, the judged tree and
+# the fixer's result file have not moved before the round stages them. Sourced
+# only by audit-fix-verify.sh from its own directory, so a pinned copy sources
+# the pinned library. That script's header
 # owns the input and output shapes and the error kinds; FORBIDDEN_PATHS stays
 # in that script too, and ENFORCEMENT_PATHS is in audit-fix-verify-state-lib.sh.
 #
@@ -23,6 +25,17 @@ add_error() {
 
 has_errors() { [ -s "$ERRORS_FILE" ]; }
 
+# Prints a declared-paths file's non-empty lines. A file written without a
+# trailing newline (the Write tool's) still ends its last path, so two files
+# read in turn never fuse into one path.
+read_declared_paths() {
+  local declared_line
+  while IFS= read -r declared_line || [ -n "$declared_line" ]; do
+    [ -z "$declared_line" ] || printf '%s\n' "$declared_line"
+  done <"$1"
+  return 0
+}
+
 # Reads paths on stdin and reports each one that is empty, absolute, starts
 # with a dash, or carries a `..` segment.
 validate_paths() {
@@ -41,9 +54,10 @@ validate_paths() {
 }
 
 finish_check() {
-  jq -Rn --argjson round "$ROUND" --argjson attempt "$ATTEMPT" \
+  jq -Rn --argjson round "$ROUND" --argjson attempt "$ATTEMPT" --slurpfile judged "$TEMPORARY_DIRECTORY/judged.json" \
     '[inputs | split("\t") | {kind: .[0], detail: (.[1:] | join("\t"))}] as $errors
-     | {schema: 1, round: $round, attempt: $attempt, pass: ($errors | length == 0), errors: $errors}' \
+     | {schema: 1, round: $round, attempt: $attempt, pass: ($errors | length == 0), errors: $errors,
+        judged: (if ($errors | length == 0) then $judged[0] else null end)}' \
     <"$ERRORS_FILE" | _atomic_write "$OUTPUT_FILE" || {
     printf 'audit-fix-verify: cannot write %s\n' "$OUTPUT_FILE" >&2
     exit 1
@@ -53,7 +67,7 @@ finish_check() {
 }
 
 command_check() {
-  local file_path input_label dispositions_ok=1 result_ok=1 baseline_ok=1 input_spec extra_declared_file protected_path main_checkout_root sha
+  local file_path input_label dispositions_ok=1 result_ok=1 baseline_ok=1 input_spec extra_declared_file protected_path main_checkout_root sha result_sha
   if [ -z "$ROOT" ] || [ -z "$OUTPUT_FILE" ] || [ -z "$DISPOSITIONS_FILE" ] || [ -z "$DISPOSITIONS_SHA" ] || [ -z "$BASELINE_FILE" ] ||
     [ -z "$BASELINE_SHA" ] || [ -z "$RESULT" ] || ! _is_uint "$ROUND" || ! _is_uint "$ATTEMPT"; then
     die_usage 'check is missing a required option (or --round/--attempt is not an integer)'
@@ -61,6 +75,7 @@ command_check() {
   TEMPORARY_DIRECTORY="$(mktemp -d)" || exit 1
   ERRORS_FILE="$TEMPORARY_DIRECTORY/errs"
   : >"$ERRORS_FILE"
+  printf 'null\n' >"$TEMPORARY_DIRECTORY/judged.json"
 
   # Input validation. Anything wrong here ends the check before the delta is
   # computed: a file the fixer could have altered is never analysed.
@@ -157,8 +172,8 @@ command_check() {
       add_error bad-input "extra-declared file unreadable: $extra_declared_file"
       continue
     fi
-    grep -v '^$' "$extra_declared_file" | validate_paths extra-declared
-    grep -v '^$' "$extra_declared_file" >>"$TEMPORARY_DIRECTORY/extra"
+    read_declared_paths "$extra_declared_file" | validate_paths extra-declared
+    read_declared_paths "$extra_declared_file" >>"$TEMPORARY_DIRECTORY/extra"
   done <<EOF
 $EXTRA_DECLARED_FILES
 EOF
@@ -173,6 +188,16 @@ EOF
     add_error bad-input "cannot compute the delta from $BASELINE_FILE"
     finish_check
   }
+  # The record settled compares against: this snapshot's paths and the result
+  # file as read now. A record that cannot be made fails the check, so a pass
+  # always carries one.
+  result_sha="$(_sha256 <"$RESULT")" || result_sha=''
+  if [ -z "$result_sha" ] || ! judged_paths "$TEMPORARY_DIRECTORY/cur" ||
+    ! jq --arg result_sha "$result_sha" '{paths: ., result_sha: $result_sha}' \
+      "$TEMPORARY_DIRECTORY/cur/judged.json" >"$TEMPORARY_DIRECTORY/judged.json"; then
+    printf 'null\n' >"$TEMPORARY_DIRECTORY/judged.json"
+    add_error bad-input "cannot record the judged tree in $ROOT"
+  fi
 
   [ "$(cat "$TEMPORARY_DIRECTORY/cur/head")" = "$(jq -r '.head' "$BASELINE_FILE")" ] ||
     add_error head-moved "HEAD is $(cat "$TEMPORARY_DIRECTORY/cur/head"), baseline recorded $(jq -r '.head' "$BASELINE_FILE")"
@@ -288,4 +313,87 @@ EOF
   fi
 
   finish_check
+}
+
+# settled: the round runs it after a passing check, before it stages, and
+# again after a gate pass, before it re-stages. A fixer can keep running after
+# it returns (a background run that finishes later) and edit the tree or rewrite
+# its result file; staging reads both, so either change would reach the round's
+# commit unverified. The exempt paths, --baseline-sha and --verifier-sha are in
+# audit-fix-verify.sh's header.
+command_settled() {
+  local exit_status=0 file_path paths_file judged_sha current_sha
+  [ -z "$EXTRA_DECLARED_FILES" ] || die_usage 'settled takes --security-paths and --gate-paths, not --extra-declared'
+  if [ -z "$ROOT" ] || [ -z "$BASELINE_FILE" ] || [ -z "$BASELINE_SHA" ] || [ -z "$VERIFIER_FILE" ] || [ -z "$VERIFIER_SHA" ] ||
+    [ -z "$RESULT" ] || [ -z "$SECURITY_PATHS_FILE" ]; then
+    die_usage 'settled needs --root, --baseline, --baseline-sha, --verifier, --verifier-sha, --result and --security-paths'
+  fi
+  TEMPORARY_DIRECTORY="$(mktemp -d)" || exit 1
+  if [ ! -r "$BASELINE_FILE" ] || [ "$(_sha256 <"$BASELINE_FILE" 2>/dev/null)" != "$BASELINE_SHA" ]; then
+    printf 'bad-input: %s is unreadable or differs from the recorded baseline digest\n' "$BASELINE_FILE" >&2
+    exit 1
+  fi
+  _verify_pin "$BASELINE_FILE" || {
+    printf 'bad-input: the verifier files beside this script differ from the digest pinned in %s\n' "$BASELINE_FILE" >&2
+    exit 1
+  }
+  if [ ! -r "$VERIFIER_FILE" ] || [ "$(_sha256 <"$VERIFIER_FILE" 2>/dev/null)" != "$VERIFIER_SHA" ]; then
+    printf 'bad-input: %s is unreadable or differs from the recorded verifier digest\n' "$VERIFIER_FILE" >&2
+    exit 1
+  fi
+  jq -e '.pass == true and (.judged.paths | type == "object")
+    and (.judged.result_sha | type == "string" and length > 0)' "$VERIFIER_FILE" >/dev/null 2>&1 || {
+    printf 'bad-input: %s is not a passing verifier output with a judged record\n' "$VERIFIER_FILE" >&2
+    exit 1
+  }
+  : >"$TEMPORARY_DIRECTORY/extra"
+  for paths_file in "$SECURITY_PATHS_FILE" "$GATE_PATHS_FILE"; do
+    [ -n "$paths_file" ] || continue
+    [ -r "$paths_file" ] || {
+      printf 'bad-input: declared-paths file unreadable: %s\n' "$paths_file" >&2
+      exit 1
+    }
+    if [ "$paths_file" = "$SECURITY_PATHS_FILE" ]; then
+      read_declared_paths "$paths_file" >>"$TEMPORARY_DIRECTORY/extra" || exit 1
+    else
+      # A gate-paths entry is exempt only when the check already judged it: a
+      # path the gate window added (a late fixer edit to an undeclared file) is
+      # not, so it fails as tree-moved.
+      read_declared_paths "$paths_file" >"$TEMPORARY_DIRECTORY/gate-declared" || exit 1
+      jq -r '.judged.paths | keys[]' "$VERIFIER_FILE" >"$TEMPORARY_DIRECTORY/judged-keys" || exit 1
+      LC_ALL=C sort -u "$TEMPORARY_DIRECTORY/judged-keys" -o "$TEMPORARY_DIRECTORY/judged-keys"
+      LC_ALL=C sort -u "$TEMPORARY_DIRECTORY/gate-declared" | LC_ALL=C comm -12 - "$TEMPORARY_DIRECTORY/judged-keys" >>"$TEMPORARY_DIRECTORY/extra"
+    fi
+  done
+  LC_ALL=C sort -u "$TEMPORARY_DIRECTORY/extra" -o "$TEMPORARY_DIRECTORY/extra"
+  if ! snapshot_state "$TEMPORARY_DIRECTORY/cur" || ! judged_paths "$TEMPORARY_DIRECTORY/cur"; then
+    printf 'bad-input: cannot read repo state in %s\n' "$ROOT" >&2
+    exit 1
+  fi
+  if [ "$(cat "$TEMPORARY_DIRECTORY/cur/head")" != "$(jq -r '.head' "$BASELINE_FILE" 2>/dev/null)" ]; then
+    printf 'head-moved\n' >&2
+    exit_status=1
+  fi
+  judged_sha="$(jq -r '.judged.result_sha' "$VERIFIER_FILE")"
+  current_sha="$(_sha256 <"$RESULT" 2>/dev/null)" || current_sha=''
+  if [ "$current_sha" != "$judged_sha" ]; then
+    printf 'result-moved: %s\n' "$RESULT" >&2
+    exit_status=1
+  fi
+  # Not piped into sort: a pipe would report sort's status, and a jq failure
+  # would read as an unmoved tree.
+  jq -r --slurpfile now "$TEMPORARY_DIRECTORY/cur/judged.json" \
+    '.judged.paths as $judged_before | ($judged_before + $now[0]) | keys[] as $judged_path
+      | select($judged_before[$judged_path] != $now[0][$judged_path]) | $judged_path' \
+    "$VERIFIER_FILE" >"$TEMPORARY_DIRECTORY/moved.raw" || {
+    printf 'bad-input: cannot compare the tree with %s\n' "$VERIFIER_FILE" >&2
+    exit 1
+  }
+  LC_ALL=C sort -u "$TEMPORARY_DIRECTORY/moved.raw" >"$TEMPORARY_DIRECTORY/moved" || exit 1
+  while IFS= read -r file_path; do
+    [ -n "$file_path" ] || continue
+    printf 'tree-moved: %s\n' "$file_path" >&2
+    exit_status=1
+  done < <(LC_ALL=C comm -23 "$TEMPORARY_DIRECTORY/moved" "$TEMPORARY_DIRECTORY/extra")
+  exit "$exit_status"
 }

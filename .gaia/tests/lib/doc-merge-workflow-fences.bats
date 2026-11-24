@@ -108,6 +108,7 @@ loop-round-index|audit-loop-eval.sh current-round|exec|runs against a fixture br
 fix-baseline|audit-fix-verify.sh baseline --root|exec|runs against a clean fixture checkout, and against a dirty one it must refuse, writing into a fixture run folder
 fixer-classify|audit-noop-detect.sh --shape agent-report-file|exec|runs against fixture fixer results, one complete and one short
 fix-verify|audit-fix-verify.sh check --root|static|needs a live round's dispositions, baseline, fixer result and the digests recorded for them
+fix-settled|audit-fix-verify.sh settled --root|static|needs a live round's passing verifier output and the fixer result it judged
 fix-stage-delta|.changed_paths[], .reverted_paths[]|exec|runs against a fixture checkout and run folder, and the claim under test is which paths it stages
 gate-paths|gate_snapshot() {|exec|runs against a fixture checkout with a stand-in autofix substituted for the gate placeholder
 fix-round-check|audit-fix-verify.sh round-check|exec|runs against a fixture run folder with and without a passing verifier output
@@ -741,14 +742,14 @@ fix_fixture() {
   [ ! -e "${FIX_RUN_FOLDER}/baseline-1.json" ]
 }
 
-@test "fence fix-verify: check, round-check and drift run the pinned copy and no fence runs the working-tree verifier except baseline" {
+@test "fence fix-verify: check, settled, round-check and drift run the pinned copy and no fence runs the working-tree verifier except baseline" {
   local body runs
   body="$(all_fence_bodies)"
-  runs="$(grep -E 'audit-fix-verify\.sh (baseline|check|round-check|drift)' <<<"$body")"
-  [ "$(wc -l <<<"$runs" | tr -d ' ')" -eq 4 ]
-  [ "$(grep -c '^bash <RUN_FOLDER>/verifier-bin-<r>/audit-fix-verify.sh ' <<<"$runs")" -eq 3 ]
+  runs="$(grep -E 'audit-fix-verify\.sh (baseline|check|settled|round-check|drift)' <<<"$body")"
+  [ "$(wc -l <<<"$runs" | tr -d ' ')" -eq 5 ]
+  [ "$(grep -c '^bash <RUN_FOLDER>/verifier-bin-<r>/audit-fix-verify.sh ' <<<"$runs")" -eq 4 ]
   [ "$(grep -c '^bash .gaia/scripts/audit-fix-verify.sh baseline ' <<<"$runs")" -eq 1 ]
-  for sub in check round-check drift; do
+  for sub in check settled round-check drift; do
     grep -qE "^bash <RUN_FOLDER>/verifier-bin-<r>/audit-fix-verify.sh $sub " <<<"$runs"
   done
 }
