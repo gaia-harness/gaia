@@ -48,6 +48,13 @@
 #                       basename (`<base_sha>.<slug>.<rest>`).
 #     slug-glob         gaia_key_slug; the text the row path's single `*`
 #                       matched.
+#     line-branch       gaia_branch_normalize; an exact file row whose
+#                       entries are its lines, each a JSON object keyed by its
+#                       `branch` field and aged by its ISO-8601 `time` field.
+#                       A spent line is dropped by rewriting the file, never by
+#                       deleting it. An empty branch has no key and ages out
+#                       under `days`; a line that does not parse, or has no
+#                       readable time, is kept.
 #   session_days  Optional, branch-spent with key normalized-path only: the
 #                 window for a top-level `session-<id>` entry.
 #   types         Optional, age only: a subset of ["file","dir"], default
@@ -114,7 +121,7 @@ gaia_reaper_known_class() {
 }
 
 gaia_reaper_known_key() {
-  case "${1-}" in normalized-path | normalized-file | audit-loop | slug-dot-field | slug-glob) return 0 ;; esac
+  case "${1-}" in normalized-path | normalized-file | audit-loop | slug-dot-field | slug-glob | line-branch) return 0 ;; esac
   return 1
 }
 
@@ -135,7 +142,8 @@ def reasons:
        elif ($r | has("days")) then "days is not allowed on \($c)" else empty end),
       (if $c == "branch-spent" then
          (if ($r | has("key")) | not then "branch-spent needs key"
-          elif ($r.key | IN("normalized-path","normalized-file","audit-loop","slug-dot-field","slug-glob")) | not then "unknown key \($r.key | tojson)"
+          elif ($r.key | IN("normalized-path","normalized-file","audit-loop","slug-dot-field","slug-glob","line-branch")) | not then "unknown key \($r.key | tojson)"
+          elif $r.key == "line-branch" and (.match != "exact" or .kind != "file" or ($p | contains("|"))) then "line-branch needs an exact file row with one path"
           else empty end)
        elif ($r | has("key")) then "key is only allowed on branch-spent" else empty end),
       (if ($r | has("session_days")) then

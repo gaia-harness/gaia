@@ -60,8 +60,8 @@
     ".gaia/scripts/post-findings-block.sh": 494,
     ".gaia/scripts/spec/spec-allocator.sh": 625,
     ".gaia/scripts/spec/spec-session-lock.sh": 600,
-    ".gaia/scripts/state-reaper-classes.sh": 571,
-    ".gaia/scripts/state-reaper-lib.sh": 680,
+    ".gaia/scripts/state-reaper-classes.sh": 638,
+    ".gaia/scripts/state-reaper-lib.sh": 688,
     ".gaia/scripts/state-registry-lib.sh": 708,
     ".gaia/scripts/test-signals/extract-story-signals.mjs": 721,
     ".gaia/scripts/test-signals/extract-test-signals.mjs": 555,
@@ -76,8 +76,9 @@
     ".gaia/statusline/gaia-statusline-right.sh": 638,
     ".github/forensics/parse-issue-body.sh": 404,
     ".github/workflows/audit-ci-tests.yml": 1019,
+    ".github/workflows/cli-tests.yml": 413,
     ".github/workflows/forensics-triage.yml": 891,
-    ".github/workflows/tests.yml": 461
+    ".github/workflows/tests.yml": 476
   },
   "version": 1
 }

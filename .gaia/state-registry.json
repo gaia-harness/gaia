@@ -134,11 +134,13 @@
       "match": "exact",
       "kind": "file",
       "scope": "shared",
-      "keyed_by": "singleton per machine, one line per decision",
-      "why": "The decisions an unattended run took: the autonomy gate hook appends the recommended option it told Claude to take, with the session and branch. Lives in the protected folder, so Claude tool writes to it are denied by block-audit-loop-write.sh.",
+      "keyed_by": "singleton per machine, one line per decision, each line keyed by its branch",
+      "why": "The decisions an unattended run took: the autonomy gate hook appends the recommended option it told Claude to take, with the session and branch, and the audit renders a branch's lines into its pull request body. Lives in the protected folder, so Claude tool writes to it are denied by block-audit-loop-write.sh.",
       "writer": "code",
       "retention": {
-        "class": "keep"
+        "class": "branch-spent",
+        "days": 7,
+        "key": "line-branch"
       }
     },
     {
