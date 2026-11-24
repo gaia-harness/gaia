@@ -414,3 +414,15 @@ check_no_pr_edge() {
     || { echo "case unwritable-cache: ledger is $(cat "$(edge_file)")"; return 1; }
   check_no_breadcrumb unwritable-cache
 }
+
+# The allow list lets this form through without a prompt; the hook still captures it.
+@test "an allowed gh pr create form still writes the breadcrumb" {
+  . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
+  gh_command_is_allowed 'gh pr create --title x --body y'
+  build_repo
+  cd "$REPO"
+  git checkout -b feat/x --quiet
+  run_hook "gh pr create --title x --body y" "https://github.com/gaia-react/gaia/pull/712"
+  [ "$status" -eq 0 ]
+  [ -f "$(breadcrumb_path feat/x)" ]
+}
