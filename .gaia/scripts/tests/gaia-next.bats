@@ -290,3 +290,55 @@ comment_fixtures() {
   [ "$status" -eq 0 ]
   jq -e '.job == "backlog" and (.skipped | length) == 1' <<<"$output"
 }
+
+# lock_worktree <branch> <pid>: a worktree on the branch locked the way Claude
+# Code locks a session's worktree.
+lock_worktree() {
+  local directory="$BATS_TEST_TMPDIR/wt-${1//\//-}"
+  if [ ! -d "$directory" ]; then
+    git -C "$WORK" worktree add -q "$directory" "$1"
+  else
+    git -C "$WORK" worktree unlock "$directory"
+  fi
+  git -C "$WORK" worktree lock --reason "claude session $1 (pid $2 start Tue Nov 24 15:12:16 2026)" "$directory"
+}
+
+@test "a plan or pull request whose worktree a live foreign session locks is skipped with its pid; a dead-pid lock and the run's own ancestor's lock are picked" {
+  running_plan PLAN-001 feat/1-plan-work
+  GH_PRS='2\tfeat/2-pr-work\n'
+  sleep 300 3>&- &
+  foreign=$!
+  lock_worktree feat/1-plan-work "$foreign"
+  lock_worktree feat/2-pr-work "$foreign"
+  pick
+  [ "$status" -eq 0 ]
+  jq -e --arg pid "$foreign" '.job == "backlog"
+    and .skipped == [{item: "plan .notebook/plans/PLAN-001", reason: "its worktree is locked by a live Claude session (pid \($pid))"},
+                     {item: "pr #2", reason: "its worktree is locked by a live Claude session (pid \($pid))"}]' <<<"$output"
+  kill "$foreign"
+  wait "$foreign" 2>/dev/null || true
+  pick
+  jq -e '.job == "plan" and .branch == "feat/1-plan-work"' <<<"$output"
+  lock_worktree feat/1-plan-work "$$"
+  sleep 300 3>&- &
+  other=$!
+  lock_worktree feat/2-pr-work "$other"
+  rm "$WORK/.notebook/plans/PLAN-001/RUNNING"
+  pick
+  kill "$other"
+  jq -e '.job == "backlog" and (.skipped | length) == 1' <<<"$output"
+  rm -f "$WORK/.notebook/plans/PLAN-001"/*
+  running_plan PLAN-001 feat/1-plan-work
+  pick
+  jq -e '.job == "plan" and .branch == "feat/1-plan-work"' <<<"$output"
+}
+
+@test "a stuck pull request is picked once, then skipped once its park marker stands" {
+  autonomy_on
+  GH_PRS='2\tfeat/2-pr-work\n'
+  pick
+  jq -e '.job == "pr" and .pr == 2' <<<"$output"
+  park feat/2-pr-work question
+  pick
+  jq -e '.job == "backlog" and .skipped == [{item: "pr #2", reason: "parked (question)"}]' <<<"$output"
+}

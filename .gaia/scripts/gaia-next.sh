@@ -24,8 +24,9 @@
 # printed to stderr as `gaia-next: skipped <item>: <reason>`. A plan or pr job
 # whose branch holds a parked marker carries "parked": <its reason code>.
 #
-# Skips apply under autonomy (autonomy_active in autonomy-lib.sh) only; the
-# skip rules are in wiki/concepts/GAIA Next.md (## Skips under autonomy).
+# Skips apply under autonomy (autonomy_active in autonomy-lib.sh) only, except
+# a branch another live Claude session holds, which is skipped always; the
+# skip rules are in wiki/concepts/GAIA Next.md (## Skips under autonomy, ## Skips in every run).
 #
 # comments prints
 #   {"pr":<n>,"comments":[{kind,author,permission,created_at,url,body}],
@@ -158,6 +159,41 @@ parked_reason() {
   printf '%s\n' "${reason:-unreadable marker}"
 }
 
+# OWN_PROCESS_CHAIN holds this script's pid and its ancestors (pid 1 and up
+# excluded), read once.
+OWN_PROCESS_CHAIN=""
+own_process_chain() {
+  local pid=$$
+  while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+    OWN_PROCESS_CHAIN="$OWN_PROCESS_CHAIN $pid "
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
+  done
+}
+
+# foreign_session_pid <branch>: prints the pid of another live Claude session
+# that locks the branch's worktree (`locked claude session <branch> (pid N ...)`
+# in `git worktree list --porcelain`) and returns 0. Returns 1 when there is no
+# such lock, its pid is dead (a stale lock), or the pid is this run's own
+# process or one of its ancestors.
+foreign_session_pid() {
+  local lock pid
+  lock="$(git -C "$tree_root" worktree list --porcelain 2>/dev/null | awk -v ref="refs/heads/$1" '
+    BEGIN { RS = ""; FS = "\n" }
+    { found = 0; locked = ""
+      for (i = 1; i <= NF; i++) {
+        if ($i == "branch " ref) found = 1
+        if ($i ~ /^locked claude session /) locked = $i
+      }
+      if (found && locked != "") { print locked; exit } }')"
+  [ -n "$lock" ] || return 1
+  pid="$(printf '%s' "$lock" | sed -n 's/.*(pid \([0-9][0-9]*\)[ )].*/\1/p')"
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  [ -n "$OWN_PROCESS_CHAIN" ] || own_process_chain
+  case "$OWN_PROCESS_CHAIN" in *" $pid "*) return 1 ;; esac
+  printf '%s\n' "$pid"
+}
+
 # running_plans: prints `<plan directory>\t<branch>` for each plan folder whose
 # RUNNING sentinel stands, spec-less plans first, each group sorted.
 running_plans() {
@@ -183,7 +219,7 @@ running_plans() {
 }
 
 pick() {
-  local plans plan_directory branch reason hit plan_branches="" prs number spec item
+  local plans plan_directory branch reason hit plan_branches="" prs number spec item holder
   read_park_marker_name
   plans="$(running_plans)" || next_fail "cannot list the notebook's plan folders"
   while IFS=$'\t' read -r plan_directory branch; do
@@ -199,6 +235,10 @@ pick() {
         skip "$item" "its branch $branch is not in this clone"
         continue
       fi
+    fi
+    if [ -n "$branch" ] && holder="$(foreign_session_pid "$branch")"; then
+      skip "$item" "its worktree is locked by a live Claude session (pid $holder)"
+      continue
     fi
     reason="$( [ -z "$branch" ] || parked_reason "$branch")" || reason=""
     if [ "$autonomous" = 1 ] && [ -n "$reason" ]; then
@@ -221,6 +261,10 @@ pick() {
     [ -n "$number" ] || continue
     git -C "$tree_root" show-ref --verify --quiet "refs/heads/$branch" || continue
     printf '%s' "$plan_branches" | grep -qxF -- "$branch" && continue
+    if holder="$(foreign_session_pid "$branch")"; then
+      skip "pr #$number" "its worktree is locked by a live Claude session (pid $holder)"
+      continue
+    fi
     reason="$(parked_reason "$branch")" || reason=""
     if [ "$autonomous" = 1 ] && [ -n "$reason" ]; then
       skip "pr #$number" "parked ($reason)"
