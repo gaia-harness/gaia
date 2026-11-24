@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The main-branch destructive-git guard's denial, branch reads, and git word
-# parser. Sourced only by block-main-destructive-git.sh, which owns the walk
-# that calls these and reads the globals they set; defines functions and does
+# parser. Shared by the git hooks (block-main-destructive-git.sh,
+# classify-git-command.sh, block-no-verify.sh); block-main-destructive-git.sh
+# owns the walk that calls these and reads the globals they set; defines functions and does
 # no other work at source time.
 
 # shellcheck disable=SC2154,SC2034  # main_root comes from, and the parse globals go to, block-main-destructive-git.sh
@@ -246,8 +247,11 @@ split_git_words() {
 # a commit, so both of those passed. Sets git_cwd (the last global `-C` path, so
 # `git -C <a> -C <b> commit` cannot slip past the commit and push rules on the
 # first one), normalized_segment (the segment minus its global `-C` pairs, for the commit and
-# push regexes), git_subcommand (the subcommand word), and git_args (the words after
-# it).
+# push regexes), git_subcommand (the subcommand word), git_args (the words after
+# it), the global config overrides: git_config_settings (each `-c` value,
+# `key=value`) and git_config_environment_settings (each `--config-env` value,
+# `key=VARIABLE`), and git_global_words (every word between `git` and the
+# subcommand, values included, for a caller that must vouch for each one).
 #
 # Honest limits, and they bind every rule the hook arms on git_subcommand rather than any
 # one of them. These spellings reach the subcommand slot carrying something
@@ -269,13 +273,16 @@ parse_git_globals() {
   local i=0 word_count current_word globals=0
   git_cwd="" git_subcommand=""
   git_args=()
+  git_config_settings=()
+  git_config_environment_settings=()
+  git_global_words=()
   split_git_words "$1"
   word_count=${#words[@]}
   while [ "$i" -lt "$word_count" ]; do
     current_word="${words[$i]}"
     if [ "$globals" -eq 1 ]; then
       case "$current_word" in
-        -C) git_cwd="${words[$((i + 1))]:-}"; i=$((i + 2)); continue ;;
+        -C) git_cwd="${words[$((i + 1))]:-}"; git_global_words+=(-C "$git_cwd"); i=$((i + 2)); continue ;;
         # Every global git takes a SEPARATED value for. An option missing here
         # falls to the `-*` arm and its value reaches the catch-all that assigns
         # the subcommand, which is the disarm, so this table tracking git's own
@@ -284,8 +291,14 @@ parse_git_globals() {
         # `--exec-path` is deliberately absent: without `=` it takes no value,
         # git prints its exec path and exits, and nothing after it runs.
         -c | --git-dir | --work-tree | --namespace | --config-env | --attr-source)
+          case "$current_word" in
+            -c) git_config_settings+=("${words[$((i + 1))]:-}") ;;
+            --config-env) git_config_environment_settings+=("${words[$((i + 1))]:-}") ;;
+          esac
+          git_global_words+=("$current_word" "${words[$((i + 1))]:-}")
           kept+=("$current_word" "${words[$((i + 1))]:-}"); i=$((i + 2)); continue ;;
-        -*) ;;
+        --config-env=*) git_config_environment_settings+=("${current_word#--config-env=}"); git_global_words+=("$current_word") ;;
+        -*) git_global_words+=("$current_word") ;;
         *) globals=2; git_subcommand="$current_word"; git_args=("${words[@]:$((i + 1))}") ;;
       esac
     elif [ "$globals" -eq 0 ] && [ "$current_word" = git ]; then
@@ -315,9 +328,8 @@ parse_git_globals() {
 # where that value happens to spell a branch the result is a false deny rather
 # than a false allow, which is the safe direction for a guard whose escape is
 # running the command with the `!` prefix. A refspec naming main only as its
-# DESTINATION (`feature:main`) is not read here: that is the reading this rule
-# has always had, and narrowing or widening it is a separate question from where
-# the ref sits.
+# DESTINATION (`feature:main`) is not read here: push_refspec_targets_main in
+# lib/main-git-guard-history.sh reads it, and the hook denies on either.
 push_refspec_names_main() {
   local argument seen_remote=0 skip_next=0 refspec
   for argument in ${git_args[@]+"${git_args[@]}"}; do
@@ -362,8 +374,8 @@ reset_hard_moves_head() {
   [ -n "$directory" ] && in_directory=(-C "$directory")
   for argument in ${git_args[@]+"${git_args[@]}"}; do
     if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
+    if _history_option_is "$argument" --hard; then hard=1; continue; fi
     case "$argument" in
-      --hard) hard=1; continue ;;
       --) break ;;
       *'>' | *'<') skip_next=1; continue ;;
       *[\<\>]*) continue ;;
