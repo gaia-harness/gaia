@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # GAIA usage ledger: carries a recorded run across a session change.
 #
-#   handoff
+#   handoff    prints the join line, then a line naming how the run closes
 #   join --workflow <w> --session <origin session id> --start <origin start>
 #
 # A run's start row is keyed by the session that started it, so a run continued
@@ -69,7 +69,11 @@ _handoff_main() {
       | sort_by(._t) | last
       | select(. != null)
       | (.run // {session_id: .session_id, ts: .ts}) as $origin
-      | "bash .gaia/scripts/usage.sh join --workflow \(.workflow) --session \($origin.session_id) --start \($origin.ts)"' 2>/dev/null
+      | "bash .gaia/scripts/usage.sh join --workflow \(.workflow) --session \($origin.session_id) --start \($origin.ts)",
+        # A spec, plan or test run closes on its own ref, which only its skill knows.
+        (if (.workflow | IN("gaia-spec", "gaia-plan", "gaia-test"))
+          then "close the run with the record step of its own skill"
+          else "close the run with: bash .gaia/scripts/usage.sh record command:\(.workflow) --workflow \(.workflow)" end)' 2>/dev/null
   return 0
 }
 
