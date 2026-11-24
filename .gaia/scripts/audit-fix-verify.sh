@@ -28,8 +28,8 @@
 #                                   --baseline <f> --baseline-sha <hex>
 #                                   --result <fixer-file> --out <verifier-file>
 #                                   [--extra-declared <paths-file>]...
-#   audit-fix-verify.sh settled     --root <R> --baseline <f> --verifier <verifier-file>
-#                                   --verifier-sha <hex> --result <fixer-file>
+#   audit-fix-verify.sh settled     --root <R> --baseline <f> --baseline-sha <hex>
+#                                   --verifier <verifier-file> --verifier-sha <hex> --result <fixer-file>
 #                                   --security-paths <paths-file> [--gate-paths <paths-file>]
 #   audit-fix-verify.sh drift       --root <R> --baseline <f>
 #   audit-fix-verify.sh round-check --run-folder <dir> --round <r>
@@ -132,9 +132,16 @@
 #     exempts only --security-paths (the security writer's tests, required,
 #     empty when none ran), never gate-<r>-<j>.paths, whose content the check
 #     already judged; only the post-gate re-check passes --gate-paths, that
-#     attempt's gate-<r>-<k>.paths. --verifier-sha (required) is the sha256 the
-#     main thread records of the verifier file right after check, so a verifier
-#     output rewritten afterwards is refused as bad-input.
+#     attempt's gate-<r>-<k>.paths, and it exempts only the entries that are
+#     already keys of the judged record. A gate-paths entry outside it (a late
+#     fixer edit to an undeclared file during the gate window) is not exempt and
+#     fails as tree-moved. The one case settled cannot catch: a judged path that
+#     both the gate autofix and a still-running fixer rewrote, since the gate's
+#     snapshot cannot tell the two writes apart.
+#     --baseline-sha and --verifier-sha (both required) are the sha256 the main
+#     thread records of the baseline file when it writes it and of the verifier
+#     file right after check, so a baseline or verifier output rewritten
+#     afterwards is refused as bad-input.
 #     kinds: missing-disposition, undeclared-path, undeclared-revert,
 #     forbidden-path, enforcement-path, head-moved, index-changed,
 #     audit-artifact-written, bad-input.
@@ -179,7 +186,7 @@ usage() {
 usage:
   audit-fix-verify.sh baseline    --root <R> --round <r> --out <baseline-file>
   audit-fix-verify.sh check       --root <R> --round <r> --attempt <k> --dispositions <f> --dispositions-sha <hex> --baseline <f> --baseline-sha <hex> --result <f> --out <f> [--extra-declared <paths-file>]...
-  audit-fix-verify.sh settled     --root <R> --baseline <f> --verifier <f> --verifier-sha <hex> --result <f> --security-paths <paths-file> [--gate-paths <paths-file>]
+  audit-fix-verify.sh settled     --root <R> --baseline <f> --baseline-sha <hex> --verifier <f> --verifier-sha <hex> --result <f> --security-paths <paths-file> [--gate-paths <paths-file>]
   audit-fix-verify.sh drift       --root <R> --baseline <f>
   audit-fix-verify.sh round-check --run-folder <dir> --round <r>
 EOF

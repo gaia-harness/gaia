@@ -319,16 +319,20 @@ EOF
 # again after a gate pass, before it re-stages. A fixer can keep running after
 # it returns (a background run that finishes later) and edit the tree or rewrite
 # its result file; staging reads both, so either change would reach the round's
-# commit unverified. The exempt paths and --verifier-sha are in
+# commit unverified. The exempt paths, --baseline-sha and --verifier-sha are in
 # audit-fix-verify.sh's header.
 command_settled() {
   local exit_status=0 file_path paths_file judged_sha current_sha
   [ -z "$EXTRA_DECLARED_FILES" ] || die_usage 'settled takes --security-paths and --gate-paths, not --extra-declared'
-  if [ -z "$ROOT" ] || [ -z "$BASELINE_FILE" ] || [ -z "$VERIFIER_FILE" ] || [ -z "$VERIFIER_SHA" ] ||
+  if [ -z "$ROOT" ] || [ -z "$BASELINE_FILE" ] || [ -z "$BASELINE_SHA" ] || [ -z "$VERIFIER_FILE" ] || [ -z "$VERIFIER_SHA" ] ||
     [ -z "$RESULT" ] || [ -z "$SECURITY_PATHS_FILE" ]; then
-    die_usage 'settled needs --root, --baseline, --verifier, --verifier-sha, --result and --security-paths'
+    die_usage 'settled needs --root, --baseline, --baseline-sha, --verifier, --verifier-sha, --result and --security-paths'
   fi
   TEMPORARY_DIRECTORY="$(mktemp -d)" || exit 1
+  if [ ! -r "$BASELINE_FILE" ] || [ "$(_sha256 <"$BASELINE_FILE" 2>/dev/null)" != "$BASELINE_SHA" ]; then
+    printf 'bad-input: %s is unreadable or differs from the recorded baseline digest\n' "$BASELINE_FILE" >&2
+    exit 1
+  fi
   _verify_pin "$BASELINE_FILE" || {
     printf 'bad-input: the verifier files beside this script differ from the digest pinned in %s\n' "$BASELINE_FILE" >&2
     exit 1
@@ -349,7 +353,17 @@ command_settled() {
       printf 'bad-input: declared-paths file unreadable: %s\n' "$paths_file" >&2
       exit 1
     }
-    read_declared_paths "$paths_file" >>"$TEMPORARY_DIRECTORY/extra" || exit 1
+    if [ "$paths_file" = "$SECURITY_PATHS_FILE" ]; then
+      read_declared_paths "$paths_file" >>"$TEMPORARY_DIRECTORY/extra" || exit 1
+    else
+      # A gate-paths entry is exempt only when the check already judged it: a
+      # path the gate window added (a late fixer edit to an undeclared file) is
+      # not, so it fails as tree-moved.
+      read_declared_paths "$paths_file" >"$TEMPORARY_DIRECTORY/gate-declared" || exit 1
+      jq -r '.judged.paths | keys[]' "$VERIFIER_FILE" >"$TEMPORARY_DIRECTORY/judged-keys" || exit 1
+      LC_ALL=C sort -u "$TEMPORARY_DIRECTORY/judged-keys" -o "$TEMPORARY_DIRECTORY/judged-keys"
+      LC_ALL=C sort -u "$TEMPORARY_DIRECTORY/gate-declared" | LC_ALL=C comm -12 - "$TEMPORARY_DIRECTORY/judged-keys" >>"$TEMPORARY_DIRECTORY/extra"
+    fi
   done
   LC_ALL=C sort -u "$TEMPORARY_DIRECTORY/extra" -o "$TEMPORARY_DIRECTORY/extra"
   if ! snapshot_state "$TEMPORARY_DIRECTORY/cur" || ! judged_paths "$TEMPORARY_DIRECTORY/cur"; then

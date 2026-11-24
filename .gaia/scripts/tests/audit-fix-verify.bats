@@ -1050,7 +1050,7 @@ do_settled() {
     : >"$RUN_FOLDER/security-none.paths"
     security_args=(--security-paths "$RUN_FOLDER/security-none.paths")
   fi
-  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" \
+  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$(sha "$BASELINE_FILE")" \
     --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$(sha "$VERIFIER_OUTPUT_FILE")" \
     --result "$RESULT_FILE" "${security_args[@]}" "$@"
 }
@@ -1110,15 +1110,15 @@ passing_check() {
 @test "settled: --security-paths exempts only the writer's tests, --gate-paths only the post-gate re-check's, --extra-declared is a usage error" {
   passing_check
   printf 'security test\n' >"$REPO/sec.test.txt"
-  edit c.txt
+  edit a.txt
   printf 'sec.test.txt' >"$RUN_FOLDER/security-1.paths"
   do_settled --security-paths "$RUN_FOLDER/security-1.paths"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"tree-moved: c.txt"* ]] || return 1
+  [[ "$output" == *"tree-moved: a.txt"* ]] || return 1
   [[ "$output" == *"sec.test.txt"* ]] && return 1
   # row: a gate path is exempt only through --gate-paths, and a file with no
   # trailing newline does not fuse with the next one
-  printf 'c.txt\n' >"$RUN_FOLDER/gate-1-1.paths"
+  printf 'a.txt\n' >"$RUN_FOLDER/gate-1-1.paths"
   do_settled --security-paths "$RUN_FOLDER/security-1.paths" --gate-paths "$RUN_FOLDER/gate-1-1.paths"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   # row: a path the check already judged and a gate autofix rewrote is not exempt before the gate
@@ -1129,12 +1129,35 @@ passing_check() {
   do_settled
   [ "$status" -eq 1 ]
   [[ "$output" == *"tree-moved: a.txt"* ]] || return 1
+  # row: a gate path outside the judged record (a late fixer file) is not exempt
+  reset_case
+  passing_check
+  printf 'late\n' >"$REPO/late.txt"
+  printf 'late.txt\n' >"$RUN_FOLDER/gate-1-1.paths"
+  do_settled --gate-paths "$RUN_FOLDER/gate-1-1.paths"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: late.txt"* ]] || return 1
   # row: the removed option is refused, and so is a run without --security-paths
   do_settled --extra-declared "$RUN_FOLDER/security-1.paths"
   [ "$status" -eq 2 ]
-  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" \
+  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$(sha "$BASELINE_FILE")" \
     --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$(sha "$VERIFIER_OUTPUT_FILE")" --result "$RESULT_FILE"
   [ "$status" -eq 2 ]
+}
+
+@test "settled refuses a baseline file rewritten after it was recorded" {
+  passing_check
+  local recorded_sha
+  recorded_sha="$(sha "$BASELINE_FILE")"
+  jq '.untracked += ["forged"]' "$BASELINE_FILE" >"$BASELINE_FILE.n"
+  mv "$BASELINE_FILE.n" "$BASELINE_FILE"
+  : >"$RUN_FOLDER/security-none.paths"
+  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$recorded_sha" \
+    --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$(sha "$VERIFIER_OUTPUT_FILE")" \
+    --result "$RESULT_FILE" --security-paths "$RUN_FOLDER/security-none.paths"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bad-input"* ]] || return 1
+  [[ "$output" == *"baseline digest"* ]] || return 1
 }
 
 @test "settled refuses a verifier output rewritten after the check" {
@@ -1146,7 +1169,7 @@ passing_check() {
     '.judged.paths = $paths' "$VERIFIER_OUTPUT_FILE" >"$VERIFIER_OUTPUT_FILE.n"
   mv "$VERIFIER_OUTPUT_FILE.n" "$VERIFIER_OUTPUT_FILE"
   : >"$RUN_FOLDER/security-none.paths"
-  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" \
+  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$(sha "$BASELINE_FILE")" \
     --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$recorded_sha" \
     --result "$RESULT_FILE" --security-paths "$RUN_FOLDER/security-none.paths"
   [ "$status" -eq 1 ]
@@ -1184,7 +1207,7 @@ passing_check() {
   passing_check
   printf '# edited\n' >>"$RUN_FOLDER/verifier-bin-1/audit-fix-verify-check-lib.sh"
   : >"$RUN_FOLDER/security-none.paths"
-  run bash "$RUN_FOLDER/verifier-bin-1/audit-fix-verify.sh" settled --root "$REPO" --baseline "$BASELINE_FILE" \
+  run bash "$RUN_FOLDER/verifier-bin-1/audit-fix-verify.sh" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$(sha "$BASELINE_FILE")" \
     --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$(sha "$VERIFIER_OUTPUT_FILE")" \
     --result "$RESULT_FILE" --security-paths "$RUN_FOLDER/security-none.paths"
   [ "$status" -eq 1 ]

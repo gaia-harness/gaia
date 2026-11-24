@@ -229,8 +229,8 @@ After a gate repair or a code change by the security writer arm's code owner, ad
 
 ```bash
 bash <RUN_FOLDER>/verifier-bin-<r>/audit-fix-verify.sh settled --root <RESOLVED_ROOT> \
-  --baseline <RUN_FOLDER>/baseline-<r>.json --verifier <RUN_FOLDER>/verifier-<r>-<k>.json \
-  --verifier-sha <VERIFIER_SHA> --result <RUN_FOLDER>/fixer-<r>-audit.json \
+  --baseline <RUN_FOLDER>/baseline-<r>.json --baseline-sha <BASELINE_SHA> \
+  --verifier <RUN_FOLDER>/verifier-<r>-<k>.json --verifier-sha <VERIFIER_SHA> --result <RUN_FOLDER>/fixer-<r>-audit.json \
   --security-paths <RUN_FOLDER>/security-<r>.paths
 ```
 
