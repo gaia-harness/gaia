@@ -303,9 +303,9 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
 }
 
 # conflicted_lane [<path>]: a copy of the hook's tree in which a lane worktree
-# merges a branch that rewrote the same line 2 of <path> (default
-# .gaia/scripts/autonomy-lib.sh) the lane did, so the file holds conflict markers. Sets TREE, LANE and
-# HOOK (the lane's own copy).
+# merges a branch that rewrote line 2 of <path> (default
+# .gaia/scripts/autonomy-lib.sh) as the lane did, so the file holds conflict
+# markers. Sets TREE, LANE and HOOK (the lane's own copy).
 conflicted_lane() {
   local conflicted="${1:-.gaia/scripts/autonomy-lib.sh}"
   local other="$BATS_TEST_TMPDIR/other"
@@ -342,7 +342,7 @@ library_conflicted_lane() {
   jq -n '{enabled: true, expires_at: (now + 3600 | todate), may_merge: false}' >"$TREE/.gaia/local/protected/autonomy.json"
 }
 
-# repair_allowed <library>: the abort and each checkout or restore of one
+# repair_allowed <library>: the abort and a checkout or restore of one
 # conflicted library pass silently: the git -C <lane> form from any cwd, the
 # plain form from inside the lane.
 repair_allowed() {
