@@ -91,6 +91,7 @@
     ".claude/hooks/lib/main-git-guard-history.sh": "owned",
     ".claude/hooks/lib/main-git-guard-parse.sh": "owned",
     ".claude/hooks/lib/message-heredoc.sh": "owned",
+    ".claude/hooks/lib/payload-agent.sh": "owned",
     ".claude/hooks/lib/post-audit-status-gates.sh": "owned",
     ".claude/hooks/lib/pr-body-stamp.sh": "owned",
     ".claude/hooks/lib/rate-limits-guard.sh": "owned",
@@ -99,6 +100,7 @@
     ".claude/hooks/lib/repo-scope-scan.sh": "owned",
     ".claude/hooks/lib/repo-scope-segment.sh": "owned",
     ".claude/hooks/lib/repo-scope.sh": "owned",
+    ".claude/hooks/lib/subagent-git-policy.sh": "owned",
     ".claude/hooks/lib/test-signals.sh": "owned",
     ".claude/hooks/lib/verb-arming-live-helpers.sh": "owned",
     ".claude/hooks/lib/verb-arming-live-view.sh": "owned",
@@ -909,7 +911,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T06:54:33.134Z",
+  "generated": "2026-11-24T10:46:54.285Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

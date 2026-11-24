@@ -219,7 +219,7 @@ main_branch_rule_matches() {
   local branch argument
   [ "$git_subcommand" = rebase ] && rebase_names_branch && return 0
   case "$git_subcommand" in
-    commit | push | merge | cherry-pick | revert | rebase | pull | reset)
+    commit | push | merge | cherry-pick | revert | rebase | pull | reset) # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
       if [ "$git_subcommand" = reset ] && ! reset_names_commit; then
         :
       elif [ "$git_subcommand" != pull ] || ! pull_fast_forwards_only; then

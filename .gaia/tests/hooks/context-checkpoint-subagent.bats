@@ -55,8 +55,9 @@ setup() {
 # install_hook <root>: the hook, its libraries and the real doctrine under <root>.
 install_hook() {
   local root="$1" library_file
-  mkdir -p "$root/.claude/hooks" "$root/.claude/doctrine" "$root/.gaia/scripts"
+  mkdir -p "$root/.claude/hooks/lib" "$root/.claude/doctrine" "$root/.gaia/scripts"
   cp "$HOOK_SOURCE_PATH" "$root/.claude/hooks/context-checkpoint-subagent.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/payload-agent.sh" "$root/.claude/hooks/lib/payload-agent.sh"
   chmod 755 "$root/.claude/hooks/context-checkpoint-subagent.sh"
   for library_file in context-checkpoint-lib.sh main-root-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$library_file" "$root/.gaia/scripts/$library_file"
