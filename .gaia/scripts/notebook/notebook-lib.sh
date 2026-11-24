@@ -158,7 +158,9 @@ _gaia_notebook_kind_valid() {
 
 _gaia_notebook_status_allowed() {
   case "${1:-}:${2:-}" in
+    # sanctioned copy of .gaia/scripts/spec/ledger-lib.sh#_GAIA_LEDGER_SPEC_STATUS_KEYS
     spec:draft | spec:ready | spec:merged | spec:abandoned) return 0 ;;
+    # sanctioned copy of .gaia/scripts/spec/ledger-lib.sh#_GAIA_LEDGER_PLAN_STATUS_KEYS
     plan:ready | plan:merged | plan:abandoned) return 0 ;;
     research:untagged | research:active | research:pending | research:closed) return 0 ;;
   esac

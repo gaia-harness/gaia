@@ -8,6 +8,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {writeBuiltinDescriptor} from '../util/package-fixture.js';
+import {STEP_ORDER} from './util/state.js';
 import {run} from './index.js';
 
 type Sandbox = {
@@ -118,16 +119,7 @@ describe('gaia init router target guard', () => {
   });
 
   test('guards every step, not only rename', async () => {
-    const steps = [
-      'strip-branding',
-      'configure-i18n',
-      'configure-data-layer',
-      'rename',
-      'wire-statusline',
-      'write-project-config',
-      'finalize',
-      'resume',
-    ];
+    const steps = [...STEP_ORDER, 'resume'];
 
     const codes: string[][] = [];
 

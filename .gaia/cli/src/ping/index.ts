@@ -7,7 +7,7 @@
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {takeNonFlagValue} from '../util/argv.js';
-import {postPing} from './send.js';
+import {PING_EVENTS, postPing} from './send.js';
 import type {PingEvent, PingPayload} from './send.js';
 
 const HELP_TEXT = String.raw`Usage: gaia ping --event <init|setup|update> [--field value ...]
@@ -31,8 +31,6 @@ const HELP_TEXT = String.raw`Usage: gaia ping --event <init|setup|update> [--fie
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 const SUBCOMMAND = 'ping';
-
-const PING_EVENTS = ['init', 'setup', 'update'] as const;
 
 const isPingEvent = (value: string): value is PingEvent =>
   (PING_EVENTS as readonly string[]).includes(value);

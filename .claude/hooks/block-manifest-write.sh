@@ -85,6 +85,7 @@ is_guarded_path() {
 }
 
 case "$tool_name" in
+  # sanctioned copy of .claude/hooks/lib/hook-payload.sh#GAIA_HOOK_EDIT_TOOLS
   Edit | Write | MultiEdit)
     file_path="$GAIA_HOOK_FILE_PATH"
     [[ -n "$file_path" ]] || exit 0

@@ -319,7 +319,10 @@ label="$(printf '%s' "$verdict" | cut -f2)"
 unit_rounds="$GAIA_CONTEXT_UNIT_ROUNDS"
 kind=""
 base="${label% (Recommended)}"
+# shellcheck disable=SC2034 # the source array the grant-label arm below is tested against; no code reads it
+grant_labels=("Continue audit in this session" "Continue audit in a new session" "State the rule, then continue")
 case "$base" in
+  # sanctioned copy of .claude/hooks/audit-loop-ask-grant.sh#grant_labels
   "Continue audit in this session" | "Continue audit in a new session" | "State the rule, then continue") kind=grant ;;
   "Accept the remainder") kind=accept ;;
   "Stop and file the remainder")

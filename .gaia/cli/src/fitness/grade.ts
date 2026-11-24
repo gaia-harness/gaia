@@ -1,3 +1,4 @@
+import {GRADES} from './types.js';
 import type {Grade} from './types.js';
 
 export type FindingCounts = {
@@ -7,25 +8,12 @@ export type FindingCounts = {
   warnings: number;
 };
 
-const ERROR_GRADES: readonly Grade[] = ['C+', 'C', 'C-', 'D+', 'D', 'D-'];
-const WARNING_GRADES: readonly Grade[] = ['B+', 'B', 'B-'];
-
 /** Worst last; the overall grade is the highest index among graded categories. */
-const GRADE_ORDER: readonly Grade[] = [
-  'A+',
-  'A',
-  'A-',
-  'B+',
-  'B',
-  'B-',
-  'C+',
-  'C',
-  'C-',
-  'D+',
-  'D',
-  'D-',
-  'F',
-];
+export const GRADE_ORDER: readonly Grade[] = GRADES.filter(
+  (grade) => grade !== 'n/a'
+);
+const ERROR_GRADES: readonly Grade[] = GRADE_ORDER.slice(6, 12);
+const WARNING_GRADES: readonly Grade[] = GRADE_ORDER.slice(3, 6);
 
 const bandGrade = (bands: readonly Grade[], count: number): Grade =>
   bands[Math.min(count, bands.length) - 1] ?? 'F';

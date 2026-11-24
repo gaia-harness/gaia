@@ -1,6 +1,9 @@
 import type {RuleContext} from './context.js';
 
-export type Severity = 'error' | 'info' | 'warning';
+// subset of apps/web/app/utils/notify.ts#NOTIFY_TYPES
+export const SEVERITIES = ['error', 'warning', 'info'] as const;
+
+export type Severity = (typeof SEVERITIES)[number];
 
 export const CATEGORIES = [
   'authoring',
@@ -90,6 +93,24 @@ export type Grade =
   | 'D-'
   | 'F'
   | 'n/a';
+
+// sanctioned copy of .gaia/cli/src/fitness/types.ts#Grade
+export const GRADES = [
+  'A+',
+  'A',
+  'A-',
+  'B+',
+  'B',
+  'B-',
+  'C+',
+  'C',
+  'C-',
+  'D+',
+  'D',
+  'D-',
+  'F',
+  'n/a',
+] as const;
 
 export type ModelFamily = 'fable' | 'haiku' | 'opus' | 'sonnet' | 'unresolved';
 

@@ -61,6 +61,8 @@ _GAIA_PKG_ERE_emergentTests=''
 _GAIA_PKG_ERE_preCommitSource=''
 _GAIA_PKG_ERE_doctorConfigs=''
 _GAIA_PKG_ERE_dependencyManifests=''
+# shellcheck disable=SC2034 # the source array the TypeScript reader's marker names; no code reads it
+_GAIA_PKG_GLOB_KEYS=(tddUnitTests tddStrictCandidates emergentTests preCommitSource doctorConfigs dependencyManifests)
 
 # The built-in default registry, used when `.gaia/packages.json` is absent. Its
 # package's descriptor is read from disk like any registered package's, so the
@@ -217,6 +219,7 @@ _gaia_packages_append_ere() {
   local key="$1" body="$2" current
   if [ -z "$body" ]; then
     case "$key" in
+      # sanctioned copy of .claude/hooks/lib/gaia-packages.sh#_GAIA_PKG_GLOB_KEYS
       tddUnitTests | tddStrictCandidates | emergentTests | preCommitSource | doctorConfigs | dependencyManifests) return 0 ;;
     esac
   fi

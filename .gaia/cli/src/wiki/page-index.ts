@@ -49,7 +49,7 @@ type PageEntry = {
   type: null | string;
 };
 
-const DOMAIN_DIRS = [
+export const DOMAIN_DIRS = [
   'components',
   'concepts',
   'decisions',

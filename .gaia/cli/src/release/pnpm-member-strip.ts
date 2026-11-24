@@ -74,7 +74,8 @@ type Stripped = Extract<PnpmMemberStripOutcome, {kind: 'stripped'}>;
 const SUPPORTED_LOCKFILE_VERSION = '9.0';
 const DOCUMENT_START = '---';
 const ENTRY_SECTIONS = ['importers', 'packages', 'snapshots'] as const;
-const IMPORTER_DEPENDENCY_FIELDS = [
+
+export const IMPORTER_DEPENDENCY_FIELDS = [
   'dependencies',
   'devDependencies',
   'optionalDependencies',

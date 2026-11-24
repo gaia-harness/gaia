@@ -458,12 +458,14 @@ case "$subcommand" in
   outcome)
     [ -n "$member" ] && [ -n "$digest" ] && [ -n "$tree" ] || swallow "--member, --digest and --tree are required"
     case "$verdict" in
+      # sanctioned copy of .gaia/scripts/audit-light-mark.sh#light_review_outcomes
       clear | escalate | failed) ;;
       *) swallow "--verdict must be clear, escalate or failed" ;;
     esac
     anchor_kind_value=""
     if [ "$anchor_kind_given" -eq 1 ]; then
       case "$anchor_kind" in
+        # sanctioned copy of .gaia/scripts/audit-light-mark.sh#light_anchor_kinds
         full | refusal | merge-base) anchor_kind_value="$anchor_kind" ;;
         *) swallow "--anchor-kind must be full, refusal or merge-base" ;;
       esac

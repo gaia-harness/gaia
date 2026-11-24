@@ -192,6 +192,7 @@ const resolveLinkTarget = (
   return resolution.status === 'found' ? resolution.relative : undefined;
 };
 
+// subset of .gaia/cli/src/fitness/types.ts#FileKind
 const GRAPH_KINDS: readonly FileKind[] = [
   'skill',
   'command',
