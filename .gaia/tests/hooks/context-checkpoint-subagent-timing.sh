@@ -117,8 +117,9 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 fixture="$(cd -P "$work" && pwd)/fixture"
 
-mkdir -p "$fixture/.claude/hooks" "$fixture/.claude/doctrine" "$fixture/.gaia/scripts"
+mkdir -p "$fixture/.claude/hooks/lib" "$fixture/.claude/doctrine" "$fixture/.gaia/scripts"
 cp "$repo/.claude/hooks/context-checkpoint-subagent.sh" "$fixture/.claude/hooks/"
+cp "$repo/.claude/hooks/lib/payload-agent.sh" "$fixture/.claude/hooks/lib/"
 cp "$repo/.claude/doctrine/context-yield.md" "$fixture/.claude/doctrine/"
 cp "$settings_source" "$fixture/.claude/settings.json"
 for library_file in "$repo"/.gaia/scripts/*.sh; do
