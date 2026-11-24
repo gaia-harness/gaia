@@ -242,10 +242,7 @@ subagent_git_restricted=0
 if [ "$GAIA_PAYLOAD_AGENT_PRESENT" -eq 1 ]; then
   if [ -z "$GAIA_PAYLOAD_AGENT_ID" ] || ! subagent_git_exempt "$GAIA_PAYLOAD_AGENT_TYPE"; then
     subagent_git_restricted=1
-    # Honest limit: subagent_git_own_worktree reads the hook's own checkout
-    # root, so a `-C` or `cd` from that worktree into another tree still passes
-    # this rule; the main-branch rules below still apply to it.
-    if subagent_git_own_worktree "${repository_root:-}" "$GAIA_PAYLOAD_AGENT_ID"; then
+    if subagent_git_own_tree_command "$GAIA_PAYLOAD_AGENT_ID" "$command"; then
       subagent_git_restricted=0
     fi
   fi

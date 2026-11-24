@@ -215,29 +215,6 @@ policy_list() {
   done
 }
 
-# isolated_run <worktree name> <command>: the guard copied into a linked worktree
-# of the fixture repository with that name, run there as the executor.
-isolated_run() {
-  local worktree="$BATS_TEST_TMPDIR/$1"
-  git -C "$REPO" worktree add --quiet -b "branch-$1" "$worktree"
-  mkdir -p "$worktree/.claude/hooks" "$worktree/.gaia/scripts"
-  cp -R "$REPO/.claude/hooks/." "$worktree/.claude/hooks/"
-  cp "$REPO/.gaia/scripts/main-root-lib.sh" "$worktree/.gaia/scripts/"
-  run bash -c 'cd "$1" && printf %s "$2" | bash "$1/.claude/hooks/block-main-destructive-git.sh"' _ "$worktree" \
-    "$(jq -cn --arg c "$2" --arg d "$worktree" --argjson a "$EXECUTOR" \
-      '{tool_name: "Bash", cwd: $d, tool_input: {command: $c}} + $a')"
-}
-
-@test "a sub-agent may commit in the linked worktree named for its own agent id" {
-  isolated_run agent-a65f5edc2f422ae00 'git commit -m change'
-  assert_allowed
-}
-
-@test "a sub-agent is still denied in a linked worktree named for another agent id" {
-  isolated_run agent-b0000000000000000 'git commit -m change'
-  assert_subagent_denied
-}
-
 @test "the deny text names the Write tool for text that only mentions a commit" {
   guard 'git commit -m x' "$EXECUTOR"
   assert_subagent_denied

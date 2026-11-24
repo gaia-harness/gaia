@@ -80,7 +80,7 @@ The rules read the parsed operands, never the raw text, so a flag quoted inside 
 
 ## 5. Sub-agents never run git that changes state
 
-Only the main thread runs git that changes state (`.claude/doctrine/execution.md`; why: [[Workflow Doctrine]]). The guard denies a sub-agent, a fork included, any subcommand `.claude/hooks/lib/subagent-git-policy.sh` lists, in this repository; `git stash` is denied except its read verbs. The deny beats the classifier's allow (**Precedence** above), so a commit section 4 approves for the main thread is refused for an executor. The agents on that file's exempt list pass, as do a sub-agent's read-only git, its git aimed at another repository, and its git in the linked worktree isolation made for it (named `agent-<its agent id>`), which no sibling shares. The hook's header states the outcome for each payload shape, a garbled one included.
+Only the main thread runs git that changes state (`.claude/doctrine/execution.md`; why: [[Workflow Doctrine]]). The guard denies a sub-agent, a fork included, any subcommand `.claude/hooks/lib/subagent-git-policy.sh` lists, in this repository; `git stash` is denied except its read verbs. The deny beats the classifier's allow (**Precedence** above), so a commit section 4 approves for the main thread is refused for an executor. The agents on that file's exempt list pass, as do a sub-agent's read-only git, its git aimed at another repository, and its git in the linked worktree isolation made for it (named `agent-<its agent id>`), which no sibling shares, when every segment is plain git that cannot reach another tree (`subagent_git_own_tree_command` in that file owns the test). The hook's header states the outcome for each payload shape, a garbled one included.
 
 ## Setup standdown
 

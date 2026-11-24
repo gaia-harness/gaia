@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
 
 # Access rule of .claude/hooks/block-main-destructive-git.sh: a non-exempt
-# sub-agent's denied git subcommand in this repository is allowed only when the
-# hook runs in the linked worktree named agent-<its own agent id>. Commands
-# reach the hook as payload text and never run, so a refusal is the deny
-# decision itself.
+# sub-agent's denied git subcommand in this repository is allowed only from the
+# linked worktree named agent-<its own agent id>, and only in a command that
+# cannot reach another tree. Commands reach the hook as payload text and never
+# run, so a refusal is the deny decision itself.
 
 # shellcheck disable=SC2016  # jq programs are single-quoted so their `$` reaches jq
 
@@ -50,10 +50,49 @@ assert_denied() {
   grep -qF -- 'Sub-agents never run git that changes state' <<<"$output"
 }
 
-@test "a sub-agent may commit in the linked worktree named for its own agent id" {
+@test "a sub-agent may commit and push in the linked worktree named for its own agent id" {
+  local own="$BATS_TEST_TMPDIR/agent-$AGENT_ID" command
   run_in_worktree "agent-$AGENT_ID" 'git commit -m change'
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+  for command in \
+    'git add -A && git commit -F message.txt && git push -u origin feature' \
+    "git -C $own commit -m change" \
+    'git -C . commit -m change'; do
+    echo "case: $command"
+    run_in_tree "$own" "$command"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+  done
+}
+
+# bats test_tags=protected
+@test "from its own worktree, a sub-agent is denied any command that could reach another tree" {
+  local own="$BATS_TEST_TMPDIR/agent-$AGENT_ID" command
+  git -C "$REPO" worktree add --quiet -b "branch-agent-$AGENT_ID" "$own"
+  # A directory literally named `$X` in the own tree: the shell would expand
+  # the quoted word to wherever X points, so it must not read as the own tree.
+  mkdir -p "$own/\$X"
+  for command in \
+    "git -C $REPO commit -m change" \
+    "git -C $REPO reset --hard HEAD~1" \
+    'git -C "$X" commit -m change' \
+    "cd $REPO && git checkout -- file" \
+    "pushd $REPO && git commit -m change" \
+    "sh -c 'cd $REPO && git reset --hard'" \
+    "GIT_DIR=$REPO/.git git commit -m change" \
+    "git --git-dir=$REPO/.git commit -m change" \
+    "git --work-tree $REPO commit -m change" \
+    "git -c core.worktree=$REPO commit -m change" \
+    "git -C $own -C $REPO commit -m change" \
+    "git -C $own -c core.worktree=$REPO commit -m change" \
+    "git -C $own --git-dir=$REPO/.git commit -m change" \
+    "git commit -m \"\$(cd $REPO && git reset --hard)\"" \
+    "git commit -m \"\`cd $REPO; git reset --hard\`\""; do
+    echo "case: $command"
+    run_in_tree "$own" "$command"
+    assert_denied
+  done
 }
 
 # bats test_tags=protected
@@ -67,5 +106,13 @@ assert_denied() {
   done
   echo "case: main checkout"
   run_in_tree "$REPO" 'git commit -m change'
+  assert_denied
+  # A main checkout (a `.git` directory, not a linked worktree) that happens to
+  # carry the agent's name.
+  echo "case: main checkout named agent-$AGENT_ID"
+  local named="$BATS_TEST_TMPDIR/agent-$AGENT_ID"
+  git clone --quiet "$REPO" "$named"
+  git -C "$named" checkout --quiet -b feature-copy
+  run_in_tree "$named" 'git commit -m change'
   assert_denied
 }
