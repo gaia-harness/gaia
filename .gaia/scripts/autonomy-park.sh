@@ -10,9 +10,9 @@
 #
 # Reason codes, and what each requires, are defined once in
 # .gaia/autonomy-park-reasons.json; a code it does not list is refused. It
-# parks the working tree named by --root; without --root, the checkout that
-# holds this script, never the shell's working directory, so an invocation by
-# absolute path parks that tree from any cwd. In order, it:
+# parks the working tree named by --root, else the checkout that holds this
+# script, so an invocation by absolute path parks that tree from any working
+# directory. In order, it:
 #
 #   1. saves resumable state: a `## Parked` section in the run folder's
 #      STATE.md (.gaia/local/runs/<branch key>/), replacing any earlier one
