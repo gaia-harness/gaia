@@ -3188,6 +3188,34 @@ merge_log_lines() {
   [ ! -e "$BATS_TEST_TMPDIR/elsewhere.jsonl" ]
 }
 
+# The question gate parks only a recommended label that starts with "Merge";
+# an "Apply ..." option whose path ends in a merge is taken. The merge gate is
+# the enforcement point: with may_merge false the merge that follows parks.
+# bats test_tags=protected
+@test "unattended: a taken non-Merge option whose path ends in a merge parks at the merge gate with may_merge false" {
+  local gate_hook question_payload
+  gate_hook="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.claude/hooks/autonomy-gate.sh"
+  commit_files "Makefile" "all:"
+  write_marker "code-audit-frontend"
+  # Positive control: attended, the cleared merge is allowed.
+  run_merge_hook 'gh pr merge 30 --squash'
+  assert_allowed_by_json
+  write_switch false
+  question_payload=$(jq -nc --arg cwd "$REPO" '{session_id: "s1", cwd: $cwd, hook_event_name: "PreToolUse", tool_name: "AskUserQuestion",
+    tool_input: {questions: [{question: "Apply the fixes, then merge the pull request?", header: "Finish", multiSelect: false,
+      options: [{label: "Apply and finish (Recommended)", description: "applies the fixes, then runs gh pr merge"}, {label: "Hold", description: "stops"}]}]}}')
+  invoke_hook_in "$REPO" "$question_payload" "$gate_hook"
+  assert_denied_by_json
+  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- "Take 'Apply and finish (Recommended)' for 'Finish'"
+  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'autonomy-park.sh' && return 1
+  [ "$(merge_log_lines)" -eq 1 ]
+  run_merge_hook 'gh pr merge 30 --squash'
+  assert_denied_by_json
+  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'autonomy-park.sh --reason merge-ready --pr <n> --root'
+  [ "$(merge_log_lines)" -eq 1 ]
+  [ "$(jq -r '.header' "$REPO/.gaia/local/protected/autonomy-log.jsonl")" = 'Finish' ]
+}
+
 @test "unattended: a missing, expired or malformed switch leaves the gate exactly as attended" {
   local row
   commit_files "Makefile" "all:"
