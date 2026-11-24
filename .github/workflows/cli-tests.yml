@@ -399,7 +399,7 @@ jobs:
         run: bash .gaia/scripts/verify-vendored-skills.sh
       # The other end of the supported Node range (engines.node is
       # `^24.15.0 || >=26.0.0`): the pinned Node above is 24, so the same
-      # suite runs once more under Node 26 after a fresh install. It runs
+      # suite runs once more under Node 26 after a reinstall. It runs
       # last so every other step stays on the pinned Node.
       - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
         name: Setup Node 26 and install the CLI member
