@@ -27,7 +27,7 @@ Never read: a set computed from another (filtered, sliced, spread), a set holdin
 - A set of three or more values strictly contained in a set in a different file fails, once, against the smallest set holding it (ties go to the site that sorts first by path then line). A subset pair inside one file is only a candidate.
 - A case arm is a use site: it is reported as the copy when it repeats a declaration, as the subset when it is a strict subset of a declared set, and it is never the superset in a subset finding or the source a marker names.
 - Sets of fewer than two values are never compared, and two-value sets never fail strict mode.
-- A set whose every value is a decimal number (`4`, `-2`, `0.5`) is never compared, in strict mode or `--candidates`: small number lists such as line numbers and counts coincide by chance, and no marker can say two sets are unrelated. A set mixing numbers and words is compared.
+- A set whose every value is a decimal number (`4`, `-2`, `0.5`) is never compared, in strict mode or `--candidates`: small number lists such as line numbers and counts coincide by chance, and no marker can say two sets are unrelated. Such a set needs no marker, though one it carries is still verified, and it can still be a marker's source. A set mixing numbers and words is compared.
 
 ## Scope
 
