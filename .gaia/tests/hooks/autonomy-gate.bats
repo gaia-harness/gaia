@@ -302,9 +302,9 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
   done
 }
 
-# conflicted_lane: a copy of the hook's tree in which a lane worktree merges a
-# branch that rewrote the same autonomy-lib.sh header line the lane did, so the
-# library holds conflict markers ahead of every function. Sets TREE, LANE and
+# conflicted_lane [<path>]: a copy of the hook's tree in which a lane worktree
+# merges a branch that rewrote the same line 2 of <path> (default
+# .gaia/scripts/autonomy-lib.sh) the lane did, so the file holds conflict markers. Sets TREE, LANE and
 # HOOK (the lane's own copy).
 conflicted_lane() {
   local conflicted="${1:-.gaia/scripts/autonomy-lib.sh}"
@@ -342,8 +342,9 @@ library_conflicted_lane() {
   jq -n '{enabled: true, expires_at: (now + 3600 | todate), may_merge: false}' >"$TREE/.gaia/local/protected/autonomy.json"
 }
 
-# repair_allowed <library>: the abort and the side pick of one conflicted
-# library pass silently in the git -C <lane> form and from inside the lane.
+# repair_allowed <library>: the abort and each checkout or restore of one
+# conflicted library pass silently: the git -C <lane> form from any cwd, the
+# plain form from inside the lane.
 repair_allowed() {
   local library="$1" command
   for command in \
@@ -514,7 +515,7 @@ not_repair_commands() {
 }
 
 # bats test_tags=whole-tree
-@test "every library the gate sources before it reads the payload is in the repair set, or has its own arm" {
+@test "every library the gate loads is in the repair set, or has its own arm" {
   local hook="$REPO_ROOT/.claude/hooks/autonomy-gate.sh" listed sourced name path
   listed=$(awk "/^_gate_conflict_libraries='/{on=1; next} on && /^'/{exit} on{print}" "$hook")
   [ -n "$listed" ]

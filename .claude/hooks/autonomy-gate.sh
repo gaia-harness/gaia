@@ -51,10 +51,8 @@
 #
 # Fail mode: a missing library refuses with exit 2; the one exception is a merge,
 # rebase, cherry-pick or revert that conflicts in a library this hook sources,
-# which allows a fixed repair set: before any library loads for the libraries
-# in _gate_conflict_libraries (allow_library_conflict_repair, which reads the
-# payload with no library), and in load_autonomy_library for autonomy-lib.sh.
-# A missing jq refuses
+# where allow_library_conflict_repair or load_autonomy_library allows a fixed
+# repair set. A missing jq refuses
 # only a call whose tool_input names a guarded spelling (never a bare
 # AskUserQuestion: with jq absent the switch reads as off, so it is allowed). A
 # deny is JSON on stdout with exit 0.
@@ -117,10 +115,9 @@ _gate_conflict_libraries='
 # allow_library_conflict_repair: exit 0 when the call is exactly the repair of a
 # merge, rebase, cherry-pick or revert that conflicts in a library above: its
 # own `--abort`, or a `checkout|restore [--ours|--theirs] -- <path>` of one
-# unmerged library path. The payload is read by raw pattern, never by a sourced
-# helper, and a spelling with a quote, a backslash or any other word falls
-# through to the ordinary load. The operation is looked up in the tree the
-# command names (`git -C <path>`), not only the session's cwd.
+# unmerged library path. A spelling with a quote, a backslash or any other word
+# falls through to the ordinary load. The operation is looked up in the tree
+# `git -C <path>` names, else the session's cwd.
 allow_library_conflict_repair() {
   local cwd_pattern='"cwd": ?"([^"\\]+)"' command_pattern='"command": ?"([^"\\]+)"'
   local tool_pattern='"tool_name": ?"Bash"'
