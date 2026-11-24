@@ -20,7 +20,7 @@ Fields, all required unless marked:
 - `expires_at` (UTC timestamp, `YYYY-MM-DDTHH:MM:SSZ`): from then on the file reads as off.
 - `may_merge` (boolean): whether an unattended run may merge an audited pull request.
 - `audit_extra_units_per_pr` (whole number, optional): the most extra audit units the budget may answer for a single pull request. One unit is one grant window ([[PR Merge Workflow#The branch checkpoint]]).
-- `audit_units_pool` (whole number, optional): audit units shared by every pull request under this file. The audit loop records the spend; nothing writes it here.
+- `audit_units_pool` (whole number, optional): audit units shared by every pull request under this file. The audit loop records the spend ([[#The audit budget]]); nothing writes it here.
 
 ## Turning it on and off
 
@@ -74,7 +74,15 @@ Under the switch, a write to a file that governs the harness itself parks too. A
 
 ### The decision log
 
-`<main checkout>/.gaia/local/protected/autonomy-log.jsonl` records every option the gate told Claude to take, one JSON object per line: `time`, `session_id`, `branch`, `header`, `option`. The gate writes the entry before it denies, so the record never depends on Claude. A failed write parks instead. The log is main-anchored, so every worktree's decisions land in one file, and it sits in the protected folder, so Claude cannot rewrite it.
+`<main checkout>/.gaia/local/protected/autonomy-log.jsonl` records every option the gate told Claude to take, every audit unit the budget spent (header `Audit budget`) and every merge the merge gate allowed (header `Unattended merge`), one JSON object per line: `time`, `session_id`, `branch`, `header`, `option`. Each hook writes its entry before it lets the action through, so the record never depends on Claude. A failed write parks or denies instead.
+
+## The audit budget
+
+The two `audit_*` fields let an unattended audit loop past a checkpoint a human would otherwise answer: `.claude/hooks/audit-loop-bound.sh` spends one unit in place of a grant, under the rule its header states (`THE AUTONOMY BUDGET`), and [[PR Merge Workflow#The branch checkpoint]] says which checkpoints stay human. The spend lives in `<main checkout>/.gaia/local/protected/audit-budget/`, one record per switch content, written only by that hook (`.gaia/scripts/audit-budget-lib.sh`). The pool is shared by every branch under one switch, and rewriting the switch starts a fresh budget. The PR body's `## Audit rounds` line reports the units spent as `budget grants:`, apart from `human grants:`.
+
+## The merge
+
+With `may_merge` not `true`, `.claude/hooks/pr-merge-audit-check.sh` denies every `gh pr merge` while the switch is live and the run parks with reason `merge-ready`; with `true`, the audit gate decides as it does attended ([[PR Merge Workflow#4. Merge]]). The log is main-anchored, so every worktree's decisions land in one file, and it sits in the protected folder, so Claude cannot rewrite it.
 
 ## The guard and its accepted residuals
 

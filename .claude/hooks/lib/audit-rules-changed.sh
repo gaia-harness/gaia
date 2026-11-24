@@ -80,6 +80,7 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 .claude/hooks/pr-merge-audit-check-signals.sh
 .claude/hooks/pr-merge-audit-check-binding.sh
 .claude/hooks/pr-merge-audit-check-bypass.sh
+.claude/hooks/pr-merge-audit-check-unattended.sh
 .claude/hooks/pr-merge-audit-check-dispatch.sh
 .github/audit/resolve-audit-base.sh
 .github/audit/resolve-audit-base-context.sh

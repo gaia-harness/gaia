@@ -117,7 +117,8 @@ def hex16: type == "string" and test("^[0-9a-f]{16}$");
 def unit_ok:
   type == "object" and (.unit | is_integer) and .unit >= 1 and (.start_round | is_integer)
   and (.k | is_integer) and (.through_round | is_integer) and (.after_checkpoint | is_integer)
-  and (.admitted_on == "context" or .admitted_on == "grant" or .admitted_on == "accept" or .admitted_on == "fallback");
+  and (.admitted_on == "context" or .admitted_on == "grant" or .admitted_on == "accept" or .admitted_on == "fallback")
+  and optional("budget"; . == true);
 def config_ok:
   type == "object" and (.ask_tokens | is_integer) and .ask_tokens >= 0
   and (.ask_window_pct | is_integer) and .ask_window_pct >= 1 and .ask_window_pct <= 100;

@@ -119,6 +119,7 @@
     ".claude/hooks/pr-merge-audit-check-context.sh": "owned",
     ".claude/hooks/pr-merge-audit-check-dispatch.sh": "owned",
     ".claude/hooks/pr-merge-audit-check-signals.sh": "owned",
+    ".claude/hooks/pr-merge-audit-check-unattended.sh": "owned",
     ".claude/hooks/pr-merge-audit-check.sh": "owned",
     ".claude/hooks/pr-merge-cost.sh": "owned",
     ".claude/hooks/provision-worktree.sh": "owned",
@@ -277,6 +278,7 @@
     ".gaia/migrations/2.3.0.md": "owned",
     ".gaia/migrations/2.4.0.md": "owned",
     ".gaia/react-doctor-version": "owned",
+    ".gaia/scripts/audit-budget-lib.sh": "owned",
     ".gaia/scripts/audit-code-review-child.sh": "owned",
     ".gaia/scripts/audit-code-review-decide.sh": "owned",
     ".gaia/scripts/audit-code-review-guard.sh": "owned",
@@ -914,7 +916,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T12:05:54.331Z",
+  "generated": "2026-11-24T14:33:54.799Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

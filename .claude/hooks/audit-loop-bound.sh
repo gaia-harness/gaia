@@ -25,8 +25,24 @@
 # thread's context still grows with every unit it reads back, which is why
 # the gate reads that context. Prose cannot hold a boundary an agent has a
 # standing reason to cross. The only ways past a checkpoint are a selection of
-# the pinned question recorded by audit-loop-ask-grant.sh and a line a human
-# types (audit-loop-grant.sh).
+# the pinned question recorded by audit-loop-ask-grant.sh, a line a human
+# types (audit-loop-grant.sh), and a unit a human pre-granted in the autonomy
+# switch (THE AUTONOMY BUDGET).
+#
+# THE AUTONOMY BUDGET. While the autonomy switch is live (autonomy_active), a
+# unit dispatch the decision would deny at a checkpoint is admitted as if a
+# grant of K had answered it, spending one unit from the budget
+# (.gaia/scripts/audit-budget-lib.sh owns the record and the limits), only
+# when the trigger is the round-count fallback or a signal a grant window
+# lifts (enriching, stalled, nitpicky, small-tail), the dispatch is below the
+# hard cap, and the latest answer is not an accept. Never from the budget: the
+# context trigger (its answer is a new session), reintroduced, waiver-drift,
+# the cap, a member dispatch, and an accept, which only a human gives. Every
+# spend is appended to the decision log (autonomy_log_decision) before the
+# unit is recorded; the unit carries `budget: true` and admitted_on `grant`,
+# so its window lifts the same signals a human grant's does. Anything else
+# denies as an unanswered checkpoint, which an unattended run parks on, and
+# the deny names why no unit was spent.
 #
 # WHAT IS BOUNDED. The branch, not the session. The history lives in one
 # state file under the main checkout's local state directory, keyed by the
@@ -341,6 +357,7 @@ checkpoint_message() {
   printf 'The human may instead type one of these lines as the whole prompt, in this same session (the grant hook resolves the checkpoint by this session id when the session working directory is on another branch):\n'
   printf 'Grant (type exactly as the whole prompt): %s\n' "$(gaia_loop_grant_line "$grant_round_count")"
   printf 'Accept (type exactly as the whole prompt): %s\n' "$(gaia_loop_accept_line)"
+  [ -z "${BUDGET_NOTE-}" ] || printf 'Autonomy budget: no unit spent, because %s.\n' "$BUDGET_NOTE"
   # shellcheck disable=SC2016 # the backticks are literal text in the message
   printf 'Unattended run (no human in the session: a headless, scheduled, or /loop run): never ask; park with `bash %s/autonomy-park.sh --reason audit-checkpoint --pr <n> --root %s`; when the park exits non-zero, print the Grant line above before stopping so the grant still reaches the human; print no continuation prompt.\n' "$scripts" "$root"
   printf '\nClaude never writes the state file and never types or simulates these lines. A dispatch on an already-audited tree is still allowed.\n'
@@ -357,6 +374,68 @@ window_message() {
       else "unit \($latest_unit.unit) was admitted for rounds \($latest_unit.start_round) through \($latest_unit.through_round)" end' <<<"$1")
   printf 'BLOCKED: audit window on branch %s: %s, and this wave would open round %s. Inside an audit-loop-unit: do not dispatch this wave; stop with stop_reason window-end and return, and the main thread admits the next unit. No round and no checkpoint were recorded.\n' \
     "$BRANCH_KEY" "$window" "$(($2 + 1))"
+}
+
+# budget_answer <trigger> <cap> <used>: THE AUTONOMY BUDGET, for a unit deny.
+# On a spend it turns the caller's deny into a grant admission (verb, trigger
+# and the two decision fields, run_decision's locals) and sets BUDGET_SPENT;
+# while the switch is live and nothing was spent it sets BUDGET_NOTE to why.
+budget_answer() {
+  local budget_trigger="$1" at_cap="$2" rounds_used="$3" spend_key result status=0 key_spent pool_left
+  # shellcheck source=/dev/null
+  . "$scripts/autonomy-lib.sh" 2>/dev/null || return 0
+  type autonomy_log_decision >/dev/null 2>&1 && type gaia_audit_budget_spend >/dev/null 2>&1 || return 0
+  autonomy_active "$main" || return 0
+  case "$budget_trigger" in
+    fallback | rubric:enriching | rubric:stalled | rubric:nitpicky | rubric:small-tail) ;;
+    *)
+      BUDGET_NOTE="the $budget_trigger trigger is never answered from the budget"
+      return 0
+      ;;
+  esac
+  if [ "$at_cap" != false ] || [ "$rounds_used" -ge "$_GAIA_LOOP_HARD_CAP" ]; then
+    BUDGET_NOTE='the hard round cap is never answered from the budget'
+    return 0
+  fi
+  if [ "$(jq -r '(.allowance.answers | last | .kind?) // ""' <<<"$WORKING_STATE")" = accept ]; then
+    BUDGET_NOTE='a human accepted the remainder, and the budget never reopens the loop after an accept'
+    return 0
+  fi
+  spend_key="${BRANCH_PR_NUMBER:-$(jq -r '.pr // empty' <<<"$WORKING_STATE")}"
+  if [ -n "$spend_key" ]; then spend_key="pr:$spend_key"; else spend_key="branch:$BRANCH_KEY"; fi
+  result=$(gaia_audit_budget_spend "$main" "$spend_key") || status=$?
+  case "$status:$result" in
+    0:spent\ *) ;;
+    1:'refused per-pr-limit')
+      BUDGET_NOTE="$spend_key has spent its audit_extra_units_per_pr units"
+      return 0
+      ;;
+    1:'refused pool-empty')
+      BUDGET_NOTE='the audit_units_pool is spent'
+      return 0
+      ;;
+    1:*)
+      BUDGET_NOTE='the autonomy switch went off before the budget was read'
+      return 0
+      ;;
+    *)
+      BUDGET_NOTE="the budget record could not be used: $result"
+      return 0
+      ;;
+  esac
+  read -r _ key_spent pool_left <<<"$result"
+  # The unit is spent before the log is written, so a failed append costs a
+  # unit and admits nothing: the log never misses an admission.
+  autonomy_log_decision "$session" "$BRANCH_KEY" 'Audit budget' \
+    "Spent 1 audit unit at round $rounds_used ($budget_trigger) for $spend_key: $key_spent spent there, $pool_left left in the pool" "$main" || {
+    BUDGET_NOTE='the decision log could not be written, so the unit spent admits nothing'
+    return 0
+  }
+  verb=allow
+  trigger=grant
+  decision_third_field=$((rounds_used + 1))
+  decision_fourth_field=$(_gaia_loop_minimum $((rounds_used + GAIA_CONTEXT_UNIT_ROUNDS)) "$_GAIA_LOOP_HARD_CAP")
+  BUDGET_SPENT=true
 }
 
 # add_member <state-json> <index> : append $member to round <index> when absent.
@@ -737,6 +816,9 @@ run_decision() {
   read -r verb trigger decision_third_field decision_fourth_field extra <<<"$decision"
   [ -z "$extra" ] ||
     finish_deny 'BLOCKED: the audit loop checkpoint got an unreadable decision. Fail-loud, not fail-open: retry the dispatch.'
+  BUDGET_SPENT=false
+  BUDGET_NOTE=''
+  [ "$verb" != deny ] || [ "$kind" != unit ] || budget_answer "$trigger" "$decision_fourth_field" "$used"
   case "$verb" in
     allow) ;;
     deny)
@@ -796,10 +878,11 @@ run_decision() {
         finish_deny "BLOCKED: the audit loop checkpoint could not record reopened round $start_round. Fail-loud, not fail-open: check the checkout and retry."
     fi
     NEXT_STATE=$(jq -c --arg admitted_on_trigger "$admitted_on" --argjson start_round "$start_round" --argjson through_round "$through_round" --argjson unit_rounds "$GAIA_CONTEXT_UNIT_ROUNDS" \
-      --arg now "$now" --arg session_id "$session" \
+      --arg now "$now" --arg session_id "$session" --argjson budget "$BUDGET_SPENT" \
       '.history.units = ((.history.units // []) + [{unit: (((.history.units // []) | length) + 1),
         start_round: $start_round, k: $unit_rounds, through_round: $through_round, admitted_on: $admitted_on_trigger,
-        after_checkpoint: (.history.checkpoints | length), recorded_at: $now, session_id: $session_id}])' <<<"$WORKING_STATE") ||
+        after_checkpoint: (.history.checkpoints | length), recorded_at: $now, session_id: $session_id}
+        + (if $budget then {budget: true} else {} end)])' <<<"$WORKING_STATE") ||
       finish_deny 'BLOCKED: the audit loop checkpoint could not build the unit record. Fail-loud, not fail-open: retry the dispatch.'
     gaia_loop_write_state "$file" "$NEXT_STATE" ||
       finish_deny "BLOCKED: the audit loop checkpoint could not write $file. Fail-loud, not fail-open: check the directory and retry."

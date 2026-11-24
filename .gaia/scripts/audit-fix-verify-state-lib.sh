@@ -33,6 +33,8 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/audit-loop-allowance-lib.sh' # the allowance fold and the gate decision
   '.gaia/scripts/audit-loop-round-lib.sh'     # the finding set and the round snapshot
   '.gaia/scripts/audit-loop-report-lib.sh'    # the checkpoint brief and the record values
+  '.gaia/scripts/audit-budget-lib.sh'         # the unattended audit budget's limits and spend record
+  '.gaia/scripts/autonomy-lib.sh'             # whether the run is unattended, so whether the budget answers
   '.gaia/scripts/audit-fix-verify.sh'         # this verifier
   '.gaia/scripts/branch-name-lib.sh'          # branch key every state path derives from
   '.gaia/scripts/main-root-lib.sh'            # main-checkout resolution for every state path
