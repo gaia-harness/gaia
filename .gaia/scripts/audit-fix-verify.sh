@@ -135,9 +135,10 @@
 #     attempt's gate-<r>-<k>.paths, and it exempts only the entries that are
 #     already keys of the judged record. A gate-paths entry outside it (a late
 #     fixer edit to an undeclared file during the gate window) is not exempt and
-#     fails as tree-moved. The one case settled cannot catch: a judged path that
-#     both the gate autofix and a still-running fixer rewrote, since the gate's
-#     snapshot cannot tell the two writes apart.
+#     fails as tree-moved. What settled cannot catch: a late fixer edit to a
+#     --security-paths entry, or to a judged path that changed during the gate
+#     window, since the gate's snapshot records any write there, the autofix's
+#     or the fixer's, as a gate path.
 #     --baseline-sha and --verifier-sha (both required) are the sha256 the main
 #     thread records of the baseline file when it writes it and of the verifier
 #     file right after check, so a baseline or verifier output rewritten
