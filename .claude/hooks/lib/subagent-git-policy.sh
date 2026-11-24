@@ -98,10 +98,10 @@ subagent_git_own_tree_command() {
 # rebase parse_git_globals last read names only `origin/<default branch>`, with
 # the default branch read from origin/HEAD in that checkout (never a literal
 # `main`; unset fails closed), or is `--abort` or `--continue`, which a
-# conflicted run needs to leave its tree usable. Anything else returns 1: a
-# second operand (`rebase origin/main other-branch` switches branches),
-# `--autostash` (writes the shared stash stack) and every other option. `merge`
-# also takes a leading `--no-edit`, so no editor opens.
+# conflicted run needs to leave its tree usable. `merge` also takes a leading
+# `--no-edit`, so no editor opens. Anything else returns 1: a second operand
+# (`rebase origin/main other-branch` switches branches), `--autostash` (writes
+# the shared stash stack) and every other option.
 subagent_git_catch_up_arguments_ok() {
   local default_ref default_branch
   case "${#git_args[@]}:${git_args[0]:-}" in 1:--abort | 1:--continue) return 0 ;; esac
