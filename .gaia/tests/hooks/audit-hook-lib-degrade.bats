@@ -133,8 +133,9 @@ library_degrade_members() {
 # Every entry shares one warrant, stated per line so a reader sees which
 # directory each one resolves: none of them resolves a `lib` CHILD, which is the
 # subdirectory that can genuinely be absent. A hook's own directory was read to
-# run it, and an ancestor of that directory contains it, so both exist by
-# construction and neither substitution has a reachable failure to degrade from.
+# run it, and an ancestor of that directory contains it, so a cd to either
+# cannot fail; any other cd an entry names catches its own failure, which the
+# entry states.
 #
 # That warrant is RE-CHECKED rather than trusted. An exclusion matched on its
 # basename alone would be permanent: a listed hook that later grows a lib-child
@@ -157,7 +158,7 @@ library_degrade_members() {
 # hand-rolled pattern guessing at how far the indirection runs, which is the
 # cost this file has already paid twice. It is named rather than closed, and an
 # author adding an indirected resolve to a listed hook owes this list an edit.
-NOT_MEMBERS=""
+NOT_MEMBERS="autonomy-gate.sh \$(cd substitutions resolve only \$_gate_directory/../.., an ancestor of its directory, and \$main_root and \$tree_root, each ending || <var>='' so a failed cd leaves it empty"
 
 # The loose candidate set: a hook that `library_degrade_errexit_armed` reads as
 # armed and untrapped, and whose text opens a command substitution with a `cd`
