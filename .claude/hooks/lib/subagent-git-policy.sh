@@ -21,7 +21,7 @@ GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS=(
 
 # The `git stash` verbs that write nothing. Every other stash form, a bare
 # `git stash` included, writes to the working tree, the stack every checkout
-# shares, or (`create`) the object store.
+# shares, the object store or a ref.
 GAIA_SUBAGENT_GIT_STASH_READ_VERBS=(list show)
 
 # The `agent_type` values the rule exempts. audit-loop-unit commits and pushes
