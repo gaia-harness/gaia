@@ -252,3 +252,41 @@ comment_fixtures() {
   [ "$status" -eq 1 ]
   [ "$output" = "gaia-next: --backlog is not a readable JSON array: $BATS_TEST_TMPDIR/missing.json" ]
 }
+
+@test "an unreadable park-reasons file fails the pick with exit 1 rather than reading as not parked" {
+  running_plan PLAN-001 feat/1-plan-work
+  GAIA_NEXT_PARK_REASONS_FILE="$BATS_TEST_TMPDIR/missing.json" pick
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"cannot read the parked marker name"* ]]
+}
+
+# bats test_tags=protected
+@test "under autonomy a plan whose RUNNING names no local branch is skipped so the loop moves past it; an interactive run takes it" {
+  running_plan PLAN-001 feat/9-gone
+  pick
+  jq -e '.job == "plan" and .skipped == []' <<<"$output"
+  running_plan PLAN-002 ""
+  rm "$WORK/.notebook/plans/PLAN-001/RUNNING"
+  pick
+  jq -e '.job == "plan" and .branch == ""' <<<"$output"
+  running_plan PLAN-001 feat/9-gone
+  autonomy_on
+  pick
+  [ "$status" -eq 0 ]
+  jq -e '.job == "backlog"
+    and .skipped == [{item: "plan .notebook/plans/PLAN-001", reason: "its branch feat/9-gone is not in this clone"},
+                     {item: "plan .notebook/plans/PLAN-002", reason: "its RUNNING sentinel names no branch"}]' <<<"$output"
+}
+
+@test "an allocator failure shows its stderr and fails an interactive pick, while an unattended pick goes on to the backlog" {
+  printf 'not json\n' > "$WORK/.notebook/catalog.json"
+  pick
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"spec-allocator.sh in_progress failed"* ]]
+  [ "${#stderr_lines[@]}" -gt 1 ]
+  autonomy_on
+  pick
+  [ "$status" -eq 0 ]
+  jq -e '.job == "backlog" and (.skipped | length) == 1' <<<"$output"
+}

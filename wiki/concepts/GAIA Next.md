@@ -27,7 +27,8 @@ While the [[Autonomy Switch]] is live, the picker skips, printing one `gaia-next
 
 - **A parked item**: its branch's run folder holds the parked marker that `.gaia/scripts/autonomy-park.sh` writes, and the branch head is still the head the marker records. A new commit on the branch releases it. An interactive run takes a parked item and resumes it with the user from the `## Parked` section of the run's `STATE.md`.
 - **A self-governing item**: a plan whose task docs, or a debt issue whose body, names a path in the protected set the question gate enforces ([[Autonomy Switch#Self-governing files]]). The gate would deny the edit and the run would park mid-work, so the item stays in the queue for an interactive run, which takes it. An unreadable set skips every such item.
-- **A draft spec**, as above.
+- **A plan that cannot be resumed here**: its `RUNNING` sentinel names no branch, or a branch absent from this clone. An interactive run takes it.
+- **A draft spec**, as above. An allocator failure in that tier also skips it, so the pick reaches the backlog; an interactive run fails with the allocator's own message.
 
 ## Untrusted input
 

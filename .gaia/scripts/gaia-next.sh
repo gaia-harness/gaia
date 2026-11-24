@@ -44,7 +44,7 @@ set -u
 
 NEXT_SCRIPT_DIRECTORY="${BASH_SOURCE[0]%/*}"
 [ "$NEXT_SCRIPT_DIRECTORY" = "${BASH_SOURCE[0]}" ] && NEXT_SCRIPT_DIRECTORY="."
-NEXT_PARK_REASONS_FILE="$NEXT_SCRIPT_DIRECTORY/../autonomy-park-reasons.json"
+NEXT_PARK_REASONS_FILE="${GAIA_NEXT_PARK_REASONS_FILE:-$NEXT_SCRIPT_DIRECTORY/../autonomy-park-reasons.json}"
 
 next_fail() {
   printf 'gaia-next: %s\n' "$1" >&2
@@ -132,15 +132,22 @@ protected_path_named() {
   return 1
 }
 
+# read_park_marker_name: sets PARK_MARKER_NAME from the park-reasons file. It
+# runs at the top level of pick, never inside $( ... ), so a failed read exits
+# the script instead of only a subshell.
+PARK_MARKER_NAME=""
+read_park_marker_name() {
+  PARK_MARKER_NAME="$(jq -r '.marker_file // empty' "$NEXT_PARK_REASONS_FILE" 2>/dev/null)"
+  [[ "$PARK_MARKER_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || next_fail "cannot read the parked marker name from $NEXT_PARK_REASONS_FILE"
+}
+
 # parked_reason <branch>: prints the reason code of the branch's parked marker
 # and returns 0 while the marker stands; returns 1 when there is none or a new
 # commit on the branch released it.
 parked_reason() {
-  local branch="$1" marker_name key marker marker_head reason branch_head
-  marker_name="$(jq -r '.marker_file // empty' "$NEXT_PARK_REASONS_FILE" 2>/dev/null)"
-  [[ "$marker_name" =~ ^[A-Za-z0-9._-]+$ ]] || next_fail "cannot read the parked marker name from $NEXT_PARK_REASONS_FILE"
+  local branch="$1" key marker marker_head reason branch_head
   key="$(gaia_branch_normalize "$branch")"
-  marker="$main_root/.gaia/local/runs/$key/$marker_name"
+  marker="$main_root/.gaia/local/runs/$key/$PARK_MARKER_NAME"
   [ -e "$marker" ] || return 1
   # An unreadable marker still stands: only a readable head can release it.
   reason="$(jq -r '.reason // empty' "$marker" 2>/dev/null)" || reason=""
@@ -178,11 +185,22 @@ running_plans() {
 
 pick() {
   local plans plan_directory branch reason hit plan_branches="" prs number spec item
+  read_park_marker_name
   plans="$(running_plans)" || next_fail "cannot list the notebook's plan folders"
   while IFS=$'\t' read -r plan_directory branch; do
     [ -n "$plan_directory" ] || continue
     plan_branches="$plan_branches$branch"$'\n'
     item="plan ${plan_directory#"$main_root/"}"
+    if [ "$autonomous" = 1 ]; then
+      if [ -z "$branch" ]; then
+        skip "$item" "its RUNNING sentinel names no branch"
+        continue
+      fi
+      if ! git -C "$tree_root" show-ref --verify --quiet "refs/heads/$branch"; then
+        skip "$item" "its branch $branch is not in this clone"
+        continue
+      fi
+    fi
     reason="$( [ -z "$branch" ] || parked_reason "$branch")" || reason=""
     if [ "$autonomous" = 1 ] && [ -n "$reason" ]; then
       skip "$item" "parked ($reason)"
@@ -213,8 +231,14 @@ pick() {
       '{job: "pr", pr: $pr, branch: $branch} + (if $parked == "" then {} else {parked: $parked} end)')"
   done <<<"$prs"
 
-  spec="$(bash "$NEXT_SCRIPT_DIRECTORY/spec/spec-allocator.sh" in_progress "$main_root" 2>/dev/null)" ||
-    next_fail "spec-allocator.sh in_progress failed"
+  # The allocator's stderr, the one-time notebook move command, reaches the
+  # operator. Under autonomy the spec tier is skipped anyway, so a failure
+  # there does not end the pick before the backlog tier.
+  if ! spec="$(bash "$NEXT_SCRIPT_DIRECTORY/spec/spec-allocator.sh" in_progress "$main_root")"; then
+    [ "$autonomous" = 1 ] || next_fail "spec-allocator.sh in_progress failed"
+    skip "the draft-spec tier" "spec-allocator.sh in_progress failed"
+    spec=""
+  fi
   if [ -n "$spec" ] && [ "$spec" != none ]; then
     if [ "$autonomous" = 1 ]; then
       skip "spec $spec" "a draft spec is interactive only"
