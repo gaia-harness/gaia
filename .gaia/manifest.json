@@ -379,6 +379,7 @@
     ".gaia/scripts/provision-wait.sh": "owned",
     ".gaia/scripts/rate-limit-main-root-probe-lib.sh": "owned",
     ".gaia/scripts/rate-limits-lib.sh": "owned",
+    ".gaia/scripts/rate-limits-programs-lib.sh": "owned",
     ".gaia/scripts/rate-limits.sh": "owned",
     ".gaia/scripts/react-doctor-version-lib.sh": "owned",
     ".gaia/scripts/resolve-audit-members.sh": "owned",
@@ -911,7 +912,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T10:46:54.285Z",
+  "generated": "2026-11-24T12:08:26.656Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

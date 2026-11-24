@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Flow test: a statusline render whose payload holds the five-hour window at the
-# warning band writes the shared rate-limit reading, and a main session's Agent
+# warning band writes the session's own rate-limit reading, and a main session's Agent
 # dispatch, sent through the command registered in .claude/settings.json,
 # receives that reading as additional context. Only the journey is asserted; the
 # injection's text, once-per-band silence, the critical band, new windows,
@@ -9,8 +9,7 @@
 # suites.
 #
 # The fixture checkout carries copies of the statusline, the libraries and the
-# hook. The shared file's name is assembled from parts so no command line here
-# names it whole.
+# hook. HOME and CLAUDE_CONFIG_DIR point at scratch folders.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/rate-limit-checkpoint-inject.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -38,10 +37,12 @@ setup() {
   cp "$REPO_ROOT/.claude/hooks/rate-limit-checkpoint-inject.sh" "$MAIN/.claude/hooks/"
   chmod 755 "$MAIN/.claude/hooks/rate-limit-checkpoint-inject.sh"
   printf '{"completed_at":"2026-01-01T00:00:00Z"}' >"$MAIN/.gaia/local/setup-state.json"
-  READING_NAME=rate-limits
-  READING="$MAIN/.gaia/local/cache/shared/$READING_NAME.json"
+  . "$REPO_ROOT/.gaia/scripts/rate-limits-lib.sh"
+  READING="$(gaia_rate_limits_file "$MAIN" "$SESSION")"
   TEMPORARY_HOME="$TEMPORARY_DIRECTORY/home"
-  mkdir -p "$TEMPORARY_HOME"
+  mkdir -p "$TEMPORARY_HOME" "$TEMPORARY_DIRECTORY/config"
+  unset CLAUDE_CODE_SESSION_ID
+  export HOME="$TEMPORARY_HOME" CLAUDE_CONFIG_DIR="$TEMPORARY_DIRECTORY/config"
 }
 
 # registered_command: the command string of the settings entry whose matcher is
@@ -66,7 +67,7 @@ registered_command() {
   run env HOME="$TEMPORARY_HOME" COLUMNS=200 TZ=UTC GAIA_RATE_LIMITS_NOW="$NOW" \
     bash "$MAIN/.gaia/statusline/gaia-statusline.sh" <<<"$render_payload"
   [ "$status" -eq 0 ] || return 1
-  [ -f "$READING" ] || { echo "the render wrote no shared reading"; return 1; }
+  [ -f "$READING" ] || { echo "the render wrote no reading for the session"; return 1; }
 
   dispatch_payload="$(jq -nc --arg session_id "$SESSION" --arg cwd "$MAIN" \
     '{hook_event_name: "PreToolUse", session_id: $session_id, cwd: $cwd, tool_name: "Agent", tool_input: {}}')"

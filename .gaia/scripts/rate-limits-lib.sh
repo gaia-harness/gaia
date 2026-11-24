@@ -1,43 +1,70 @@
 # shellcheck shell=bash
 #
-# Shared rate-limit reading lib. The ONE place the account's rate-limit windows
-# (the 5-hour and 7-day usage figures, and any other named window) are stored,
-# merged and rendered as text, and the ONE definition of the warning and
-# critical bands the statusline and the dispatch checkpoint both use.
+# Rate-limit reading lib. The ONE place the account's 5-hour and 7-day usage
+# windows are stored per session, chosen across sessions and rendered as text,
+# and the ONE definition of the warning and critical bands, the 7-day band sets
+# and the tier map the statusline and the dispatch checkpoint both use.
 #
-# Owns: the shared file (<main>/.gaia/local/cache/shared/rate-limits.json, one
-# per checkout, reached from every linked worktree), its one writer
-# (gaia_rate_limits_write: validate, merge, atomic replace), its one reader
-# (gaia_rate_limits_report: reader lines, due bands, the merged marker body),
-# the bands, the merge and staleness windows, and the clock override.
+# Owns: one reading file per session (<main>/.gaia/local/cache/shared/rate-limits/<session_id>.json,
+# reached from every linked worktree, only for a UUID-shaped id), its one
+# writer (gaia_rate_limits_write), its one reader (gaia_rate_limits_report:
+# reader lines, due bands, the marker body), the latest-change choice, the
+# bands, the tier map and the clock override.
 # Does not own: turning a statusline payload into a reading (the statusline
 # does that and calls the writer), drawing the usage segments, the dispatch
 # checkpoint's marker file (its hook writes the body this lib computes), or
-# the policy for acting on a reading.
+# the policy for acting on a reading. The jq program text lives in
+# rate-limits-programs-lib.sh, sourced from this file's folder.
 #
-# Record shape, producer-neutral. A producer normalizes its source into
-#   {"producer":"statusline","windows":{"five_hour":{"used_percentage":80,"resets_at":1795449600}}}
-# where each window name is lowercase letters, digits and underscores (1-32),
-# used_percentage is a number in 0..999 and resets_at is epoch seconds. A
-# window the source has no reading for is left out, never sent as 0. The
-# stored file is
-#   {"version":1,"windows":{"five_hour":{"used_percentage":80,"resets_at":1795449600,
-#     "observed_at":1795440000,"producer":"statusline",
-#     "history":[{"used_percentage":80,"observed_at":1795440000,"producer":"statusline"}]}}}
-# `producer` is `statusline` or `mod` and is provenance only: it never decides
-# a merge, staleness or anything a reader does. `observed_at` is stamped by the
-# writer from its caller's clock; an `observed_at` in the input is ignored.
+# Input and stored shape. The writer takes
+#   {"windows":{"five_hour":{"used_percentage":80,"resets_at":1795449600},"seven_day":{"used_percentage":40}}}
+# (resets_at may be absent; any other key or window name is ignored) and stores
+#   {"version":2,"windows":{"five_hour":{"used_percentage":80,"resets_at":1795449600,
+#     "changed_at":1795440000,"confirmed":true,"history":[{"used_percentage":80,"changed_at":1795440000}]}}}
+# History holds changes only, the newest GAIA_RATE_LIMITS_HISTORY_LIMIT.
 #
-# Merge rule per window name, no timestamp trusted for ordering: reset times
-# within GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS are one window (the higher
-# percentage wins, the later reset is kept); a reset more than that later
-# replaces the window, history included; one more than that earlier is ignored.
-# A lower reading of the same window moves only a later reset time; it never
-# marks the stored figure freshly observed.
+# Writer rules per window, on the session's own file alone:
+#   - first reading of the window: stored with confirmed false, changed_at now;
+#   - a reset time more than GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS away, earlier
+#     or later (a new window or another account): the window, history
+#     included, is replaced, confirmed true, changed_at now;
+#   - same window, a different figure, in either direction: the figure and the
+#     incoming reset time replace the stored ones, one history entry is
+#     appended, confirmed true, changed_at now;
+#   - same window, equal figure: nothing is rewritten, reset drift included,
+#     so a file's modification time moves only on a change;
+#   - no reset time: stored against the stored reset time, else nothing.
+# A session's figures are account-wide and change only when it receives a new
+# API response, so an idle session repeating an old figure never moves its file.
 #
-# No lock. Two writers racing can drop the higher value for one render; the
-# next render of the session holding it restores it. Each write is atomic
-# (<file>.tmp.<pid>, then mv -f), so the file is never partial.
+# Latest-change choice, per window, over the GAIA_RATE_LIMITS_SCAN_LIMIT most
+# recently modified UUID-named regular files, each parsed on its own. An entry
+# counts only when its file is version 2, its figure a number in 0..999, its
+# changed_at an integer from 0 to now plus GAIA_RATE_LIMITS_FUTURE_SKEW_SECONDS
+# and its confirmed a boolean. Ranking: unexpired over expired, confirmed over
+# unconfirmed, newest changed_at among confirmed, oldest among unconfirmed (a
+# new session's first figure may predate its first response, so it never
+# displaces a confirmed one), then the lower session id. The statusline always shows this choice;
+# the reader shows the session's own entry per window when it has one.
+#
+# Bands. The 5-hour window uses the standard set on every tier: warning late
+# costs a limit hit mid-task, warning early costs one question. The 7-day
+# window uses the account tier's set, compared on the whole (rounded) figure.
+# The tier is read only when the chosen whole 7-day figure reaches the lowest
+# 7-day warning of any set, so the large account profile is never opened on
+# the statusline's path, and only one string key is extracted from it. Band-set
+# names stay internal; only the band word reaches output.
+#
+# Reader line:
+#   <name> <P>%[ <warning|critical>] resets <when> (in <countdown>) projected <100% at <when>[ after reset]|unknown> changed <age> ago[ unconfirmed]
+#   <name> reset
+# <when> is HH:MM on today's local date, else `Ddd HH:MM`; <age> is <m>m, or
+# past an hour <h>h<m>m. The projection is the slope from the oldest history
+# entry changed within the last GAIA_RATE_LIMITS_BURN_SECONDS to the newest,
+# carried forward from now, on the chosen entry's own history only.
+#
+# No lock: each file has one writer, the session that owns it, and each write
+# is atomic (<file>.tmp.<pid>, then mv -f), so a file is never partial.
 #
 # Clock and time zone. Every function takes `now` from its caller;
 # gaia_rate_limits_now honours GAIA_RATE_LIMITS_NOW (^[0-9]{1,12}$) so a test
@@ -45,183 +72,65 @@
 #
 # Sourcing defines constants and functions only and runs no external command,
 # so it is safe in the statusline's hot path, under `set -u`, and with PATH
-# empty. Bash 3.2 compatible, never `cd`s, and has no `set -e`. Each writer and
-# reader call runs exactly one jq process. Double-sourcing is a no-op.
-
-# shellcheck disable=SC2016 # jq programs are single-quoted on purpose
+# empty. Bash 3.2 compatible, never `cd`s, and has no `set -e`. A writer call
+# runs exactly one jq process; a report call at most two, the report program
+# and, only past the tier threshold, the profile read. Double-sourcing is a
+# no-op. When a sibling lib cannot be sourced, every session-keyed function
+# returns 1 with no output, so every caller fails open.
 
 [ -n "${_GAIA_RATE_LIMITS_LIBRARY_LOADED:-}" ] && return 0
 _GAIA_RATE_LIMITS_LIBRARY_LOADED=1
 
+# Standard set: the 5-hour window on every tier, the 7-day window on an
+# unmapped tier, and the statusline colors.
 GAIA_RATE_LIMIT_WARNING_PERCENTAGE=75
 GAIA_RATE_LIMIT_CRITICAL_PERCENTAGE=90
-GAIA_RATE_LIMITS_FILE_VERSION=1
+# 7-day sets of the larger plans, starting estimates ordered by plan size.
+GAIA_RATE_LIMIT_MAX_WARNING_PERCENTAGE=80
+GAIA_RATE_LIMIT_MAX_CRITICAL_PERCENTAGE=92
+GAIA_RATE_LIMIT_ULTRA_WARNING_PERCENTAGE=85
+GAIA_RATE_LIMIT_ULTRA_CRITICAL_PERCENTAGE=95
+GAIA_RATE_LIMITS_FILE_VERSION=2
 GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS=600
-GAIA_RATE_LIMITS_STALE_SECONDS=900
-GAIA_RATE_LIMITS_REWRITE_SKIP_SECONDS=60
 GAIA_RATE_LIMITS_HISTORY_LIMIT=48
-GAIA_RATE_LIMITS_WINDOW_LIMIT=8
 GAIA_RATE_LIMITS_BURN_SECONDS=3600
+# Bounds the files one render or reader parses; idle sessions' files are the
+# oldest and drop out first.
+GAIA_RATE_LIMITS_SCAN_LIMIT=32
+# The writer (statusline) and readers are separate processes whose clocks may
+# differ slightly; a changed_at further ahead than this is forged or broken.
+GAIA_RATE_LIMITS_FUTURE_SKEW_SECONDS=60
 # The longest a window of each name can run: a reset later than now plus this
 # (plus the same-window slack) is refused, and a reset earlier than now minus
 # this is ignored.
 GAIA_RATE_LIMITS_FIVE_HOUR_MAXIMUM_SECONDS=18000
 GAIA_RATE_LIMITS_WINDOW_MAXIMUM_SECONDS=604800
 
-_GAIA_RATE_LIMITS_RELATIVE_PATH=.gaia/local/cache/shared/rate-limits.json
+# The checkpoint hook's fast pre-check text-parses this line: keep it NAME=value.
+_GAIA_RATE_LIMITS_RELATIVE_PATH=.gaia/local/cache/shared/rate-limits
 
-# Definitions both jq programs share: the window name rule and the bounds a
-# window must meet, in the writer and in every reader.
-_GAIA_RATE_LIMITS_JQ_DEFINITIONS='
-  def maximum_length($name): if $name == "five_hour" then $five_hour_maximum else $window_maximum end;
-  def is_name: type == "string" and test("^[a-z0-9_]{1,32}$");
-  def is_percentage: type == "number" and (isnan | not) and . >= 0 and . <= 999;
-  def is_epoch: type == "number" and (isnan | not) and . == floor;
-  def is_reset($name): is_epoch and . >= 1 and . <= ($now + maximum_length($name) + $same_window);
-  def well_formed($name): ($name | is_name) and type == "object"
-    and (.used_percentage | is_percentage) and (.resets_at | is_reset($name));
-  def stored_valid($name): well_formed($name) and (.observed_at | is_epoch and . >= 0);
-  def whole: (. + 0.5) | floor;
-  def first_windows: to_entries | sort_by(.key) | .[:$window_limit];
-'
+_gaia_rate_limits_library_directory="${BASH_SOURCE[0]%/*}"
+[ "$_gaia_rate_limits_library_directory" = "${BASH_SOURCE[0]}" ] && _gaia_rate_limits_library_directory=.
+_GAIA_RATE_LIMITS_SIBLINGS_LOADED=""
+# shellcheck source=.gaia/scripts/context-checkpoint-lib.sh
+if . "$_gaia_rate_limits_library_directory/context-checkpoint-lib.sh" 2>/dev/null \
+  && command -v gaia_context_is_session_id >/dev/null 2>&1; then
+  # shellcheck source=.gaia/scripts/rate-limits-programs-lib.sh
+  . "$_gaia_rate_limits_library_directory/rate-limits-programs-lib.sh" 2>/dev/null \
+    && [ -n "${_GAIA_RATE_LIMITS_REPORT_PROGRAM:-}" ] && _GAIA_RATE_LIMITS_SIBLINGS_LOADED=1
+fi
 
-# The writer: validate the input, read the stored file, merge, decide whether
-# to rewrite, and emit "<status>", "<new file body or empty>", then the display
-# records. Status is invalid, foreign (a version other than 1, left alone),
-# unchanged (rewrite skipped) or write.
-_GAIA_RATE_LIMITS_WRITE_PROGRAM='
-  def record: "\(.key)\t\(.value.used_percentage | whole)\t\(.value.resets_at)\t\(if .value.resets_at <= $now then "reset" else "live" end)";
-  def records: first_windows[] | record;
-  def distance($a; $b): if $a > $b then $a - $b else $b - $a end;
-  (try fromjson catch null) as $file
-  | (if ($file | type) == "object" then $file else {} end) as $base
-  | (($file | type) == "object" and ($file | has("version")) and $file.version != $version) as $foreign
-  | (if ($foreign | not) and ($base.windows | type) == "object"
-     then $base.windows | with_entries(select(.key as $name | .value | stored_valid($name)))
-     else {} end) as $current
-  | ($input | try fromjson catch null) as $reading
-  | (if ($reading | type) == "object" and ($reading.windows | type) == "object"
-     then $reading.windows | with_entries(select(.key as $name | .value | well_formed($name)))
-     else {} end) as $input_windows
-  | (($reading | type) == "object"
-     and ($reading.producer == "statusline" or $reading.producer == "mod")
-     and ($reading.windows | type) == "object"
-     and ($reading.windows | length) >= 1
-     and ($reading.windows | length) <= $window_limit
-     and ($reading.windows | length) == ($input_windows | length)) as $valid
-  | if ($valid | not) then
-      "invalid", "",
-      (reduce ($input_windows | to_entries[]) as $entry ($current;
-        .[$entry.key] as $stored
-        | if $stored == null then .[$entry.key] = $entry.value
-          elif distance($entry.value.resets_at; $stored.resets_at) <= $same_window then
-            .[$entry.key].used_percentage = ([$stored.used_percentage, $entry.value.used_percentage] | max)
-            | .[$entry.key].resets_at = ([$stored.resets_at, $entry.value.resets_at] | max)
-          else . end)
-       | records)
-    elif $foreign then
-      "foreign", "", ($input_windows | records)
-    else
-      $reading.producer as $producer
-      | (reduce ($input_windows | to_entries[] | select(.value.resets_at >= ($now - maximum_length(.key)))) as $entry ($current;
-          $entry.key as $name
-          | $entry.value as $incoming
-          | .[$name] as $stored
-          | {used_percentage: $incoming.used_percentage, observed_at: $now, producer: $producer} as $observation
-          | if $stored == null or $incoming.resets_at > ($stored.resets_at + $same_window) then
-              .[$name] = {used_percentage: $incoming.used_percentage, resets_at: $incoming.resets_at,
-                          observed_at: $now, producer: $producer, history: [$observation]}
-            elif $incoming.resets_at < ($stored.resets_at - $same_window) then .
-            else
-              ([$stored.resets_at, $incoming.resets_at] | max) as $resets_at
-              | if $incoming.used_percentage > $stored.used_percentage then
-                  .[$name] = ($stored + {used_percentage: $incoming.used_percentage, resets_at: $resets_at,
-                    observed_at: $now, producer: $producer,
-                    history: ((($stored.history | if type == "array" then . else [] end) + [$observation]) | .[-$history_limit:])})
-                elif $incoming.used_percentage == $stored.used_percentage then
-                  .[$name] = ($stored + {resets_at: $resets_at, observed_at: $now})
-                else
-                  .[$name] = ($stored + {resets_at: $resets_at})
-                end
-            end)) as $merged
-      | ({version: $version} + $base | .version = $version | .windows = $merged) as $body
-      | ($body | .windows |= with_entries(
-          .key as $name
-          | ($base.windows | if type == "object" then .[$name] else null end) as $previous
-          | if ($previous | type) == "object" and ($previous.observed_at | type) == "number"
-               and (.value.observed_at - $previous.observed_at) >= 0
-               and (.value.observed_at - $previous.observed_at) < $rewrite_skip
-            then .value.observed_at = $previous.observed_at else . end)) as $comparable
-      | (if $comparable == $file then "unchanged", "" else "write", ($body | tojson) end),
-        ($merged | records)
-    end
-'
-
-# The reader: "ok" for a readable version-1 file, then the line records, the
-# due records and, when a marker was given and anything is due, the merged
-# marker body. Nothing at all for a file no reader may trust.
-_GAIA_RATE_LIMITS_REPORT_PROGRAM='
-  def clock($time): ($time | floor) as $seconds
-    | if ($seconds | strflocaltime("%Y-%m-%d")) == ($now | strflocaltime("%Y-%m-%d"))
-      then $seconds | strflocaltime("%H:%M") else $seconds | strflocaltime("%a %H:%M") end;
-  def countdown($seconds): ((($seconds + 59) / 60) | floor) as $minutes
-    | (($minutes / 1440) | floor) as $days | ((($minutes % 1440) / 60) | floor) as $hours
-    | if $days > 0 then "\($days)d\($hours)h"
-      elif $hours > 0 then "\($hours)h\($minutes % 60)m"
-      else "\($minutes % 60)m" end;
-  def age($seconds): (if $seconds > 0 then $seconds else 0 end) as $elapsed
-    | (($elapsed / 60) | floor) as $minutes
-    | if $elapsed >= 3600 then "\(($elapsed / 3600) | floor)h\($minutes % 60)m" else "\($minutes)m" end;
-  def projection:
-    [ (.history | if type == "array" then .[] else empty end)
-      | select(type == "object" and (.used_percentage | is_percentage) and (.observed_at | is_epoch)
-               and .observed_at >= ($now - $burn_seconds)) ] as $recent
-    | if ($recent | length) < 2 then null
-      else ($recent | min_by(.observed_at)) as $oldest | ($recent | max_by(.observed_at)) as $newest
-        | if $newest.observed_at > $oldest.observed_at and $newest.used_percentage > $oldest.used_percentage
-          then ((100 - .used_percentage) * ($newest.observed_at - $oldest.observed_at)
-                / ($newest.used_percentage - $oldest.used_percentage)) as $remaining
-            | $now + (if $remaining > 0 then ($remaining | ceil) else 0 end)
-          else null end
-      end;
-  def band_rank: if . == "critical" then 2 elif . == "warning" then 1 else 0 end;
-  def line:
-    .key as $name | .value as $window | ($window.used_percentage | whole) as $percentage
-    | if $window.resets_at <= $now then "\($name) reset"
-      else ($window | projection) as $full_at
-        | ($now - $window.observed_at) as $elapsed
-        | "\($name) \($percentage)% resets \(clock($window.resets_at)) (in \(countdown($window.resets_at - $now))) projected "
-          + (if $full_at == null then "unknown"
-             else "100% at \(clock($full_at))" + (if $full_at > $window.resets_at then " after reset" else "" end) end)
-          + " as of \(age($elapsed)) ago" + (if $elapsed > $stale_seconds then " stale" else "" end)
-      end;
-  (try fromjson catch null) as $file
-  | if ($file | type) == "object" and $file.version == $version and ($file.windows | type) == "object" then
-      ($file.windows | with_entries(select(.key as $name | .value | stored_valid($name))) | first_windows) as $windows
-      | ($marker | try fromjson catch null | if type == "object" then . else {} end) as $marker_entries
-      | [ $windows[]
-          | select($has_marker)
-          | .key as $name | .value as $window | ($window.used_percentage | whole) as $percentage
-          | select($window.resets_at > $now and $percentage >= $warning)
-          | (if $percentage >= $critical then "critical" else "warning" end) as $band
-          | ($marker_entries[$name]) as $told
-          | (if ($told | type) == "object" and ($told.resets_at | type) == "number"
-                and (($told.resets_at - $window.resets_at) | if . < 0 then -. else . end) <= $same_window
-             then ($told.band | band_rank) else 0 end) as $told_rank
-          | select(($band | band_rank) > $told_rank)
-          | {name: $name, band: $band, percentage: $percentage, resets_at: $window.resets_at} ] as $due
-      | "ok",
-        ($windows[] | "line\t\(line)"),
-        ($due[] | "due\t\(.name)\t\(.band)\t\(.percentage)\t\(clock(.resets_at))\t\(.resets_at)"),
-        (if ($due | length) > 0
-         then "marker\t\($marker_entries + ($due | map({(.name): {resets_at: .resets_at, band: .band}}) | add) | tojson)"
-         else empty end)
-    else empty end
-'
-
-# gaia_rate_limits_file <main-root>: print the shared file path.
-gaia_rate_limits_file() {
+# gaia_rate_limits_directory <main-root>: print the reading folder.
+gaia_rate_limits_directory() {
   printf '%s/%s\n' "${1:-}" "$_GAIA_RATE_LIMITS_RELATIVE_PATH"
+}
+
+# gaia_rate_limits_file <main-root> <session-id>: print the session's reading
+# file; rc 1 and no output for an id that is not UUID-shaped.
+gaia_rate_limits_file() {
+  [ -n "$_GAIA_RATE_LIMITS_SIBLINGS_LOADED" ] || return 1
+  gaia_context_is_session_id "${2:-}" || return 1
+  printf '%s/%s/%s.json\n' "${1:-}" "$_GAIA_RATE_LIMITS_RELATIVE_PATH" "$2"
 }
 
 # gaia_rate_limits_now: print the epoch seconds to use. GAIA_RATE_LIMITS_NOW
@@ -249,50 +158,110 @@ gaia_rate_limits_is_window_name() {
   [[ ${1:-} =~ $pattern ]]
 }
 
-# _gaia_rate_limits_jq <now> <program> [jq arguments...]: run the one jq call
-# with every constant bound, reading stdin raw. LC_ALL=C keeps weekday names
-# English whatever the locale.
+# gaia_rate_limits_seven_day_set: set _GAIA_RATE_LIMITS_SEVEN_DAY_SET to the
+# 7-day band set of the account tier (standard, max or ultra), never printed.
+# The profile is $CLAUDE_CONFIG_DIR/.claude.json when that variable is set and
+# non-empty, with no fallback, else $HOME/.claude.json. Exactly one jq that
+# emits only a string value of the one key, its stderr discarded, so no other
+# profile field can reach output; anything unreadable or unmapped is standard,
+# so a guess never loosens a band. Only tier strings read off real profiles
+# are mapped.
+gaia_rate_limits_seven_day_set() {
+  local profile tier=""
+  _GAIA_RATE_LIMITS_SEVEN_DAY_SET=standard
+  if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
+    profile="$CLAUDE_CONFIG_DIR/.claude.json"
+  elif [ -n "${HOME:-}" ]; then
+    profile="$HOME/.claude.json"
+  else
+    return 0
+  fi
+  [ -f "$profile" ] && [ -r "$profile" ] || return 0
+  tier=$(jq -r 'try (.oauthAccount.organizationRateLimitTier | strings) // empty' "$profile" 2>/dev/null) || tier=""
+  case $tier in
+    default_claude_max_20x) _GAIA_RATE_LIMITS_SEVEN_DAY_SET=ultra ;;
+    default_claude_max_5x) _GAIA_RATE_LIMITS_SEVEN_DAY_SET=max ;;
+    default_raven) _GAIA_RATE_LIMITS_SEVEN_DAY_SET=standard ;;
+    *) _GAIA_RATE_LIMITS_SEVEN_DAY_SET=standard ;;
+  esac
+  return 0
+}
+
+# _gaia_rate_limits_scan <directory>: set
+# _GAIA_RATE_LIMITS_SCANNED to the newest GAIA_RATE_LIMITS_SCAN_LIMIT
+# UUID-named regular readable files, newest first. Builtins only: `-nt`
+# compares modification times, so no `ls` or `stat` runs on the render path.
+_gaia_rate_limits_scan() {
+  local path name index count
+  _GAIA_RATE_LIMITS_SCANNED=()
+  for path in "${1:-}"/*.json; do
+    [ -f "$path" ] && [ -r "$path" ] && [ ! -L "$path" ] || continue
+    name="${path##*/}"
+    gaia_context_is_session_id "${name%.json}" || continue
+    count=${#_GAIA_RATE_LIMITS_SCANNED[@]}
+    index=$count
+    while [ "$index" -gt 0 ] && [ "$path" -nt "${_GAIA_RATE_LIMITS_SCANNED[index - 1]}" ]; do
+      _GAIA_RATE_LIMITS_SCANNED[index]="${_GAIA_RATE_LIMITS_SCANNED[index - 1]}"
+      index=$((index - 1))
+    done
+    _GAIA_RATE_LIMITS_SCANNED[index]="$path"
+    [ "$count" -lt "$GAIA_RATE_LIMITS_SCAN_LIMIT" ] || unset "_GAIA_RATE_LIMITS_SCANNED[$count]"
+  done
+}
+
+# _gaia_rate_limits_jq <now> <program> [jq options...]: run one jq call with
+# every constant bound, reading stdin raw, and the scanned files as
+# reading_<index> with their session ids positional. LC_ALL=C keeps weekday
+# names English whatever the locale.
 _gaia_rate_limits_jq() {
-  local now="$1" program="$2"
+  local now="$1" program="$2" index=0 path name
+  local -a files=() sessions=()
   shift 2
+  for path in ${_GAIA_RATE_LIMITS_SCANNED[@]+"${_GAIA_RATE_LIMITS_SCANNED[@]}"}; do
+    name="${path##*/}"
+    files+=(--rawfile "reading_$index" "$path")
+    sessions+=("${name%.json}")
+    index=$((index + 1))
+  done
   LC_ALL=C jq -rRs \
     --argjson now "$now" \
     --argjson version "$GAIA_RATE_LIMITS_FILE_VERSION" \
     --argjson same_window "$GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS" \
-    --argjson stale_seconds "$GAIA_RATE_LIMITS_STALE_SECONDS" \
-    --argjson rewrite_skip "$GAIA_RATE_LIMITS_REWRITE_SKIP_SECONDS" \
     --argjson history_limit "$GAIA_RATE_LIMITS_HISTORY_LIMIT" \
-    --argjson window_limit "$GAIA_RATE_LIMITS_WINDOW_LIMIT" \
     --argjson burn_seconds "$GAIA_RATE_LIMITS_BURN_SECONDS" \
+    --argjson scan_limit "$GAIA_RATE_LIMITS_SCAN_LIMIT" \
+    --argjson future_skew "$GAIA_RATE_LIMITS_FUTURE_SKEW_SECONDS" \
     --argjson five_hour_maximum "$GAIA_RATE_LIMITS_FIVE_HOUR_MAXIMUM_SECONDS" \
     --argjson window_maximum "$GAIA_RATE_LIMITS_WINDOW_MAXIMUM_SECONDS" \
-    --argjson warning "$GAIA_RATE_LIMIT_WARNING_PERCENTAGE" \
-    --argjson critical "$GAIA_RATE_LIMIT_CRITICAL_PERCENTAGE" \
-    "$@" "$_GAIA_RATE_LIMITS_JQ_DEFINITIONS $program"
+    --argjson sets "[[$GAIA_RATE_LIMIT_WARNING_PERCENTAGE,$GAIA_RATE_LIMIT_CRITICAL_PERCENTAGE],[$GAIA_RATE_LIMIT_MAX_WARNING_PERCENTAGE,$GAIA_RATE_LIMIT_MAX_CRITICAL_PERCENTAGE],[$GAIA_RATE_LIMIT_ULTRA_WARNING_PERCENTAGE,$GAIA_RATE_LIMIT_ULTRA_CRITICAL_PERCENTAGE]]" \
+    ${files[@]+"${files[@]}"} "$@" \
+    "$_GAIA_RATE_LIMITS_JQ_DEFINITIONS $program" --args ${sessions[@]+"${sessions[@]}"}
 }
 
-# gaia_rate_limits_write <main-root> <now> <input-json>: the one writer.
-# rc 0 accepted (written, rewrite skipped, or a stored version other than 1
-# left alone); rc 2 invalid reading (stderr exactly `rate-limits: invalid
-# reading`, file untouched); rc 1 the write failed (no temporary file left;
-# also a bad `now` or no jq, with no output). Stdout on every rc: one display
-# record per window, sorted by name, at most GAIA_RATE_LIMITS_WINDOW_LIMIT:
+# gaia_rate_limits_write <main-root> <now> <session-id> <input-json>: the one
+# writer, used by the statusline and the CLI's write verb. rc 0 written or
+# unchanged; rc 2 invalid input (stderr exactly `rate-limits: invalid
+# reading`, the file untouched); rc 1 the write failed, a bad `now`, no jq or
+# a session id that is not UUID-shaped (the last three with no output and
+# nothing created). Stdout on rc 0, 1 and 2: at most one display record per
+# window, five_hour before seven_day, each the latest-change choice after this
+# write:
 #   <name><TAB><whole percentage><TAB><resets_at><TAB><live|reset>
-# On rc 0 and rc 1 the records are the merged result, so a failed write still
-# shows the higher of file and input. On rc 2 they are the file's valid
-# windows, each raised by a well-formed same-window input window, plus each
-# well-formed input window the file lacks. With a foreign version they are the
-# input's well-formed windows. Never prints to stderr except on rc 2.
 gaia_rate_limits_write() {
-  local root="${1:-}" now="${2:-}" input="${3:-}" pattern='^[0-9]{1,12}$'
-  local file source output status body records="" directory temporary_file
+  local root="${1:-}" now="${2:-}" session_id="${3:-}" input="${4:-}" pattern='^[0-9]{1,12}$'
+  local directory file source output status body records="" temporary_file
+  [ -n "$_GAIA_RATE_LIMITS_SIBLINGS_LOADED" ] || return 1
   [[ $now =~ $pattern ]] || return 1
   now=$((10#$now))
+  gaia_context_is_session_id "$session_id" || return 1
   command -v jq >/dev/null 2>&1 || return 1
-  file="$root/$_GAIA_RATE_LIMITS_RELATIVE_PATH"
+  directory="$root/$_GAIA_RATE_LIMITS_RELATIVE_PATH"
+  file="$directory/$session_id.json"
   source=/dev/null
   [ -f "$file" ] && [ -r "$file" ] && source="$file"
-  output=$(_gaia_rate_limits_jq "$now" "$_GAIA_RATE_LIMITS_WRITE_PROGRAM" --arg input "$input" 2>/dev/null <"$source") || return 1
+  _gaia_rate_limits_scan "$directory"
+  output=$(_gaia_rate_limits_jq "$now" "$_GAIA_RATE_LIMITS_WRITE_PROGRAM" \
+    --arg input "$input" --arg own "$session_id" 2>/dev/null <"$source") || return 1
   status="${output%%$'\n'*}"
   case $output in
     *$'\n'*) output="${output#*$'\n'}" ;;
@@ -308,11 +277,10 @@ gaia_rate_limits_write() {
       printf 'rate-limits: invalid reading\n' >&2
       return 2
       ;;
-    foreign | unchanged) return 0 ;;
+    unchanged) return 0 ;;
     write) ;;
     *) return 1 ;;
   esac
-  directory="${file%/*}"
   [ -d "$directory" ] || mkdir -p "$directory" 2>/dev/null || return 1
   temporary_file="$file.tmp.$$"
   printf '%s\n' "$body" 2>/dev/null >"$temporary_file" || {
@@ -326,45 +294,77 @@ gaia_rate_limits_write() {
   return 0
 }
 
-# gaia_rate_limits_report <main-root> <now> [<marker-file>]: the one reader.
-# Stdout, windows sorted by name, the first GAIA_RATE_LIMITS_WINDOW_LIMIT
-# valid ones only:
+# gaia_rate_limits_report <main-root> <now> <own|reader> <session-id> [<marker-file>]:
+# the one reader, used by the CLI (reader) and the dispatch hook (own, with
+# its marker file). `own` reads only the session's own file: rc 1 and no
+# output when the id is not UUID-shaped or the file is missing, unreadable,
+# unparseable or not version 2. `reader` takes, per window, the own entry when
+# the id is UUID-shaped and its file holds a valid one, else the latest-change
+# choice. Stdout, windows sorted by name:
 #   line<TAB><reader line>
 #   due<TAB><name><TAB><warning|critical><TAB><whole percentage><TAB><resets label><TAB><resets_at>
 #   marker<TAB><compact JSON marker body>
-# `due` and `marker` only when a marker-file argument is given (a missing or
-# unparseable marker counts as empty): a window is due when it is unexpired, at
-# or above the warning band, and above the band the marker holds for the same
-# window (its resets_at within GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS). `marker`
-# comes last, at most once, only with a due record: the marker's entries with
-# each due window set to {"resets_at":<epoch>,"band":"<band>"}.
-# Reader line:
-#   <name> <P>% resets <when> (in <countdown>) projected <100% at <when>[ after reset]|unknown> as of <age> ago[ stale]
-#   <name> reset
-# <when> is HH:MM on today's local date, else `Ddd HH:MM`. The projection is
-# the slope from the oldest history entry observed within the last
-# GAIA_RATE_LIMITS_BURN_SECONDS to the newest, carried forward from now.
-# rc 0 with records; rc 0 and no output when the file holds no valid window;
-# rc 1 and no output for a missing, unparseable or foreign-version file, a bad
-# `now`, or no jq.
+# `due` and `marker` only with a marker-file argument (a missing or
+# unparseable marker counts as empty). A window is due when it is unexpired
+# and its band is above the band the marker holds for it, a marker entry
+# counting only when its resets_at is within the same-window slack (a new
+# window starts from clear). `marker` comes last, at most once, only when the
+# body changes: each due window raised to its band, each window whose band
+# fell below the marked one lowered to the new band (clear included), so the
+# next climb speaks again; other entries are kept. rc 0 with records; rc 0 and
+# no output when no window is chosen; rc 1 and no output on a bad `now`, no jq
+# or any failure.
 gaia_rate_limits_report() {
-  local root="${1:-}" now="${2:-}" pattern='^[0-9]{1,12}$' file output has_marker=false
+  local root="${1:-}" now="${2:-}" mode="${3:-}" session_id="${4:-}" pattern='^[0-9]{1,12}$'
+  local directory file source=/dev/null output first set_index=0 has_marker=false record tab=$'\t'
   local -a marker_arguments
+  [ -n "$_GAIA_RATE_LIMITS_SIBLINGS_LOADED" ] || return 1
   [[ $now =~ $pattern ]] || return 1
   now=$((10#$now))
-  file="$root/$_GAIA_RATE_LIMITS_RELATIVE_PATH"
-  [ -f "$file" ] && [ -r "$file" ] || return 1
   command -v jq >/dev/null 2>&1 || return 1
-  marker_arguments=(--arg marker "")
-  if [ $# -ge 3 ]; then
-    has_marker=true
-    [ -f "$3" ] && [ -r "$3" ] && marker_arguments=(--rawfile marker "$3")
-  fi
-  output=$(_gaia_rate_limits_jq "$now" "$_GAIA_RATE_LIMITS_REPORT_PROGRAM" \
-    --argjson has_marker "$has_marker" ${marker_arguments[@]+"${marker_arguments[@]}"} 2>/dev/null <"$file") || return 1
-  case $output in
-    ok) return 0 ;;
-    ok$'\n'*) printf '%s\n' "${output#ok$'\n'}" ;;
+  directory="$root/$_GAIA_RATE_LIMITS_RELATIVE_PATH"
+  file=""
+  gaia_context_is_session_id "$session_id" && file="$directory/$session_id.json"
+  _GAIA_RATE_LIMITS_SCANNED=()
+  case $mode in
+    own)
+      [ -n "$file" ] && [ -f "$file" ] && [ -r "$file" ] || return 1
+      source="$file"
+      ;;
+    reader)
+      [ -n "$file" ] && [ -f "$file" ] && [ -r "$file" ] && source="$file"
+      _gaia_rate_limits_scan "$directory"
+      ;;
     *) return 1 ;;
   esac
+  marker_arguments=(--arg marker "")
+  if [ $# -ge 5 ]; then
+    has_marker=true
+    [ -f "$5" ] && [ -r "$5" ] && marker_arguments=(--rawfile marker "$5")
+  fi
+  output=$(_gaia_rate_limits_jq "$now" "$_GAIA_RATE_LIMITS_REPORT_PROGRAM" --arg mode "$mode" \
+    --argjson has_marker "$has_marker" ${marker_arguments[@]+"${marker_arguments[@]}"} 2>/dev/null <"$source") || return 1
+  first="${output%%$'\n'*}"
+  case $first in
+    "ok${tab}0") ;;
+    "ok${tab}1")
+      gaia_rate_limits_seven_day_set
+      case $_GAIA_RATE_LIMITS_SEVEN_DAY_SET in
+        max) set_index=1 ;;
+        ultra) set_index=2 ;;
+        *) set_index=0 ;;
+      esac
+      ;;
+    *) return 1 ;;
+  esac
+  case $output in
+    *$'\n'*) output="${output#*$'\n'}" ;;
+    *) return 0 ;;
+  esac
+  while IFS= read -r record; do
+    case $record in
+      "$set_index$tab"*) printf '%s\n' "${record#"$set_index$tab"}" ;;
+    esac
+  done <<<"$output"
+  return 0
 }
