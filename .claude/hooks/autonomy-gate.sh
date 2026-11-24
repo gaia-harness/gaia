@@ -49,9 +49,10 @@
 # carries no redirect and no write verb, so it passes too. A `cp` or `mv` that only reads a protected path is denied: the verb is
 # armed and the direction is not parsed, the over-deny being the safe side.
 #
-# Fail mode: a missing library refuses with exit 2; the one exception is an
-# unloadable autonomy-lib.sh during a merge, rebase, cherry-pick or revert,
-# which allows a fixed repair set (load_autonomy_library). A missing jq refuses
+# Fail mode: a missing library refuses with exit 2; the one exception is a merge,
+# rebase, cherry-pick or revert that conflicts in a library this hook sources,
+# where allow_library_conflict_repair or load_autonomy_library allows a fixed
+# repair set. A missing jq refuses
 # only a call whose tool_input names a guarded spelling (never a bare
 # AskUserQuestion: with jq absent the switch reads as off, so it is allowed). A
 # deny is JSON on stdout with exit 0.
@@ -92,11 +93,86 @@ load() {
   # shellcheck source=/dev/null
   [ -f "$1" ] && . "$1" 2>/dev/null
   set -e
-  if ! type "$2" >/dev/null 2>&1; then
-    printf 'BLOCKED: autonomy-gate.sh cannot load %s, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' "${1##*/}" >&2
-    exit 2
-  fi
+  type "$2" >/dev/null 2>&1 && return 0
+  local cwd_pattern='"cwd": ?"([^"\\]+)"' operation='' library
+  library=$(grep -F "/${1##*/}" <<<"$_gate_conflict_libraries") || library=''
+  if [ -n "$library" ] && [[ "$payload" =~ $cwd_pattern ]]; then operation=$(operation_in_progress "${BASH_REMATCH[1]}"); fi
+  refuse_unloadable "$1" "$operation" "$library"
 }
+
+# operation_in_progress <tree>: print the merge, rebase, cherry-pick or revert
+# in progress in the tree, nothing when none is.
+operation_in_progress() {
+  local candidate
+  for candidate in merge:MERGE_HEAD rebase:REBASE_HEAD cherry-pick:CHERRY_PICK_HEAD revert:REVERT_HEAD; do
+    ! git -C "$1" rev-parse -q --verify "${candidate#*:}" >/dev/null 2>&1 || { printf '%s' "${candidate%%:*}"; return 0; }
+  done
+}
+
+# refuse_unloadable <file> <operation> <library>: the fail-loud refusal; when
+# an operation is in progress it names the repair commands the repair arms allow.
+refuse_unloadable() {
+  printf 'BLOCKED: autonomy-gate.sh cannot load %s, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.' "${1##*/}" >&2
+  [ -z "$2" ] || printf ' A %s is in progress: from the tree root run exactly one of: git %s --abort, git checkout --ours|--theirs -- %s, git restore --ours|--theirs -- %s. Choosing a side drops the other side'"'"'s changes to the library: re-apply them once it loads, before git add.' "$2" "$2" "$3" "$3" >&2
+  printf '\n' >&2
+  exit 2
+}
+
+# Every library the hook sources before it can gate a call, relative to a tree
+# root. A conflict in one leaves a library that cannot load, and every repair
+# route is itself a gated call, so allow_library_conflict_repair reads the
+# payload with none of them. autonomy-lib.sh has its own repair arm below.
+_gate_conflict_libraries='
+.claude/hooks/lib/jq-availability.sh
+.claude/hooks/lib/hook-payload.sh
+.claude/hooks/lib/audit-loop-write-scan.sh
+.claude/hooks/lib/bash-write-target.sh
+.gaia/scripts/main-root-lib.sh
+.gaia/scripts/audit-loop-state-lib.sh
+'
+
+# allow_library_conflict_repair: exit 0 when the call is exactly the repair of a
+# merge, rebase, cherry-pick or revert that conflicts in a library above: its
+# own `--abort`, or a `checkout|restore [--ours|--theirs] -- <path>` of one
+# unmerged library path. A spelling with a quote, a backslash or any other word
+# falls through to the ordinary load. The operation is looked up in the tree
+# `git -C <path>` names, else the session's cwd.
+allow_library_conflict_repair() {
+  local cwd_pattern='"cwd": ?"([^"\\]+)"' command_pattern='"command": ?"([^"\\]+)"'
+  local tool_pattern='"tool_name": ?"Bash"'
+  local abort_pattern='^git( -C ([A-Za-z0-9_./+@:-]+))? (merge|rebase|cherry-pick|revert) --abort$'
+  local pick_pattern='^git( -C ([A-Za-z0-9_./+@:-]+))? (checkout|restore) (--ours |--theirs )?-- ([A-Za-z0-9_./+-]+)$'
+  local directory='' verb='' file='' command_line target operation='' unmerged_path found=0
+  [[ "$payload" =~ $tool_pattern ]] || return 0
+  [[ "$payload" =~ $cwd_pattern ]] || return 0
+  target=${BASH_REMATCH[1]}
+  [[ "$payload" =~ $command_pattern ]] || return 0
+  command_line=${BASH_REMATCH[1]}
+  case "$target" in /*) ;; *) return 0 ;; esac
+  if [[ "$command_line" =~ $abort_pattern ]]; then
+    directory=${BASH_REMATCH[2]}
+    verb=${BASH_REMATCH[3]}
+  elif [[ "$command_line" =~ $pick_pattern ]]; then
+    directory=${BASH_REMATCH[2]}
+    file=${BASH_REMATCH[5]}
+  else
+    return 0
+  fi
+  case "$directory" in '') ;; /*) target=$directory ;; *) target=$target/$directory ;; esac
+  operation=$(operation_in_progress "$target")
+  [ -n "$operation" ] || return 0
+  # A path in the command is relative to the directory git runs in, so only a
+  # tree root names a library path unambiguously.
+  [ -z "$file" ] || [ -z "$(git -C "$target" rev-parse --show-prefix 2>/dev/null)" ] || return 0
+  [ -n "$file" ] || [ "$verb" = "$operation" ] || return 0
+  while IFS=$'\t' read -r -d '' _ unmerged_path; do
+    case $'\n'"$_gate_conflict_libraries" in *$'\n'"$unmerged_path"$'\n'*) ;; *) continue ;; esac
+    if [ -z "$file" ] || [ "$unmerged_path" = "$file" ]; then found=1; fi
+  done < <(git -C "$target" ls-files -u -z 2>/dev/null)
+  [ "$found" -eq 1 ] || return 0
+  exit 0
+}
+allow_library_conflict_repair
 
 load "$_gate_directory/lib/jq-availability.sh" gaia_require_jq
 gaia_require_jq 'the autonomy gate' "$payload" tool_input '.claude/' 'CLAUDE.md' 'CLAUDE.local.md' 'local/protected' 'autonomy-' '.gaia/scripts/'
@@ -128,14 +204,9 @@ load_autonomy_library() {
   [ -f "$1" ] && . "$1" 2>/dev/null
   set -e
   ! library_is_loaded || return 0
-  local operation='' candidate library=".gaia/scripts/${1##*/}" pattern
+  local operation='' library=".gaia/scripts/${1##*/}" pattern
   if gaia_hook_payload_read "$payload" && [ "$GAIA_HOOK_TOOL_NAME" = Bash ]; then
-    for candidate in merge:MERGE_HEAD rebase:REBASE_HEAD cherry-pick:CHERRY_PICK_HEAD revert:REVERT_HEAD; do
-      if git -C "$GAIA_HOOK_CWD" rev-parse -q --verify "${candidate#*:}" >/dev/null 2>&1; then
-        operation=${candidate%%:*}
-        break
-      fi
-    done
+    operation=$(operation_in_progress "$GAIA_HOOK_CWD")
     if [ -n "$operation" ]; then
       pattern="^git( -C [A-Za-z0-9_./+@:-]+)? ($operation --abort|(checkout|restore) (--ours |--theirs )?-- ${library//./\\.})\$"
       if [[ "$GAIA_HOOK_COMMAND" =~ $pattern ]]; then
@@ -143,12 +214,7 @@ load_autonomy_library() {
       fi
     fi
   fi
-  printf 'BLOCKED: autonomy-gate.sh cannot load %s, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.' "${1##*/}" >&2
-  if [ -n "$operation" ]; then
-    printf ' A %s is in progress: run exactly one of: git %s --abort, git checkout --ours|--theirs -- %s, git restore --ours|--theirs -- %s. Choosing a side drops the other side'"'"'s changes to the library: re-apply them once it loads, before git add.' "$operation" "$operation" "$library" "$library" >&2
-  fi
-  printf '\n' >&2
-  exit 2
+  refuse_unloadable "$1" "$operation" "$library"
 }
 
 load_autonomy_library "$_gate_scripts/autonomy-lib.sh"
