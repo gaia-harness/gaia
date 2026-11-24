@@ -13,7 +13,7 @@
 # names (Claude Code exports it to Bash tool commands) when that session's file
 # holds the window, else the reading whose figure changed most recently across
 # sessions; a value that is not UUID-shaped reads as absent. `write` refuses a
-# session id that is not UUID-shaped, since the id forms the file's path.
+# session id that is not UUID-shaped (usage, exit 2), since the id forms the file's path.
 #
 # Any other verb or argument count prints usage on stderr and exits 2. The
 # main checkout comes from the working directory, so a linked worktree reads

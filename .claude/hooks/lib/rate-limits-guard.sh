@@ -13,18 +13,18 @@
 # profile. A session that could write a reading or a marker through its own
 # tools, run the CLI's write verb, or change the tier the bands follow could
 # silence or forge the checkpoint. The statusline writes a reading on each
-# render through the CLI's library and the hooks write the markers; a session's
+# render through the CLI's library and the dispatch checkpoint hook writes the markers; a session's
 # Write, Edit, MultiEdit, Bash or Monitor call never does. The guard refuses the
 # natural spellings only; its header names the spellings it does not read.
 #
-# Four classes. The readings folder and the marker folder (the folder itself and
+# The readings folder and the marker folder (the folder itself and
 # anything in it), and the legacy shared file, are guarded as paths, read the
 # way the guard reads every other guarded path. `rate-limits.sh` run with the
 # `write` verb is refused. The tier is guarded two ways: an Edit, Write or
 # MultiEdit of a `.claude.json` whose new text names the tier field, or a command
-# that writes a `.claude.json` and names it; and a command that points
-# CLAUDE_CONFIG_DIR at another folder while running `rate-limits.sh`, which would
-# read another profile's tier. Reading stays allowed.
+# that writes a `.claude.json` and names it; and a command that sets
+# CLAUDE_CONFIG_DIR while running `rate-limits.sh`, which could point it at
+# another profile's tier (any assignment is denied, whatever folder it names). Reading stays allowed.
 #
 # The root comes from the caller, so this file holds no bare local-state path.
 #
@@ -41,7 +41,7 @@ GAIA_RATE_LIMITS_GUARD_TIER_FIELD='organizationRateLimitTier'
 DENY_RATE_LIMITS_MESSAGE="BLOCKED: block-audit-loop-write.sh: a session's rate-limit reading (<main>/.gaia/local/cache/shared/rate-limits/<session>.json) is written by the statusline on each render, and the dispatch checkpoint trusts it, as it trusts the checkpoint markers under <main>/.gaia/local/cache/rate-limit-checkpoint/. Claude never writes, edits, moves or deletes a reading, a marker or the folder holding them, and never runs rate-limits.sh with the write verb. A human clears a wrong reading by deleting the file in their own shell outside Claude Code. Reading it (rate-limits.sh read, cat, jq) is allowed."
 
 # shellcheck disable=SC2034 # read by the sourcing guard's deny
-DENY_RATE_LIMITS_TIER_MESSAGE="BLOCKED: block-audit-loop-write.sh: the 7-day bands of the rate-limit readings (<main>/.gaia/local/cache/shared/rate-limits/) follow the plan tier in Claude Code's account profile, so Claude never writes a .claude.json that names organizationRateLimitTier, and never runs rate-limits.sh with CLAUDE_CONFIG_DIR set to another folder. A human changes the tier in their own shell outside Claude Code. Reading it (jq of .claude.json) is allowed."
+DENY_RATE_LIMITS_TIER_MESSAGE="BLOCKED: block-audit-loop-write.sh: the 7-day bands of the rate-limit readings (<main>/.gaia/local/cache/shared/rate-limits/) follow the plan tier in Claude Code's account profile, so Claude never writes a .claude.json that names organizationRateLimitTier, and never runs rate-limits.sh while setting CLAUDE_CONFIG_DIR. A human changes the tier in their own shell outside Claude Code. Reading it (jq of .claude.json) is allowed."
 
 # gaia_rate_limits_guard_path <literal-path> <resolved-path>
 # rc 0 when the path names a reading, a marker, either folder or the legacy

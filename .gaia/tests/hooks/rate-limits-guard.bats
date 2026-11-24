@@ -3,8 +3,8 @@
 # Security test for the per-session rate-limit reading arm of
 # .claude/hooks/block-audit-loop-write.sh.
 #
-# The statusline writes each session's reading and the hooks write its
-# checkpoint marker, and the dispatch checkpoint trusts both; the 7-day bands
+# The statusline writes each session's reading and the dispatch checkpoint hook writes its
+# marker, and the dispatch checkpoint trusts both; the 7-day bands
 # trust the plan tier in the account profile. A session's own tools must not
 # write, move, delete or forge a reading or a marker, run the CLI's write verb,
 # or change the tier. The guard refuses the natural spellings and allows
