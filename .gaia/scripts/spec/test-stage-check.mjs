@@ -32,9 +32,10 @@
 //   - a security kind other than the one the behavior's kind derives.
 //
 // Spec-less mode (no --spec): the behavior id is `<task stem>:AC<n>`, the n-th
-// acceptance-criterion bullet (1-based) under the `## Acceptance criteria`
-// heading of that task doc. It checks the form, that the named bullet exists,
-// and the same-layer rule; no Flow test line is required.
+// top-level acceptance-criterion bullet or numbered item (1-based) under the
+// `## Acceptance criteria` heading of that task doc. It checks the form, that
+// the named criterion exists, and the same-layer rule; no Flow test line is
+// required.
 //
 // The same-layer refusal is the deterministic floor only. The stage's own cap,
 // at most one test per stated behavior at the cheapest layer that proves it,
@@ -43,6 +44,7 @@
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {parseBehaviors, SECURITY_KINDS} from './behaviors.mjs';
+import {LIST_ITEM_MARKER} from './drop-check-lib.mjs';
 
 const LAYERS = ['unit', 'story', 'route', 'real-server', 'browser', 'shell'];
 const MUST_BE_TESTED_KINDS = [...SECURITY_KINDS, 'refusal', 'data-loss'];
@@ -127,7 +129,7 @@ function sectionLines(text, headingPattern) {
 
 function countCriteria(taskText) {
   return sectionLines(taskText, CRITERIA_HEADING).filter((line) =>
-    /^[-*] /.test(line),
+    LIST_ITEM_MARKER.test(line) && !/^\s/.test(line),
   ).length;
 }
 

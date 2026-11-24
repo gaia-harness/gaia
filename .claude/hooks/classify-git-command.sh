@@ -167,21 +167,8 @@ pull_fast_forwards_only() {
 # out first, so HEAD read before the segment says nothing about which branch
 # moves or what a later segment runs on.
 rebase_names_branch() {
-  local argument operand_count=0 root=0 skip_next=0
-  for argument in ${git_args[@]+"${git_args[@]}"}; do
-    if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
-    case "$argument" in
-      -X | -s | -x) skip_next=1 ;;
-      -) operand_count=$((operand_count + 1)) ;;
-      --*=*) ;;
-      --*)
-        _history_option_is "$argument" --onto --strategy-option --strategy --exec && skip_next=1
-        _history_option_is "$argument" --root && root=1 ;;
-      -*) ;;
-      *) operand_count=$((operand_count + 1)) ;;
-    esac
-  done
-  [ "$operand_count" -ge 2 ] || { [ "$root" -eq 1 ] && [ "$operand_count" -ge 1 ]; }
+  rebase_branch_operands
+  [ "${#rebase_branch_words[@]}" -gt 0 ]
 }
 
 # reset_names_commit: 0 when the `git reset` segment carries an operand before

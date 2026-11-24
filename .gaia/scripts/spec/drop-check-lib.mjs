@@ -60,7 +60,12 @@ function behaviorSentences(markdownText) {
   return sentences;
 }
 
-// Each bullet (wrapped lines joined) under `## Acceptance criteria`.
+// The marker opening a bullet or numbered list item; the one definition the
+// drop check and the test-stage check share.
+export const LIST_ITEM_MARKER = /^\s*(?:[-*]|\d+[.)])\s+/;
+
+// Each bullet or numbered item (wrapped lines joined, marker stripped so a
+// renumber is not a change) under `## Acceptance criteria`.
 function acceptanceBullets(markdownText) {
   const bullets = [];
   let inSection = false;
@@ -73,7 +78,7 @@ function acceptanceBullets(markdownText) {
       continue;
     }
     if (!inSection) continue;
-    if (/^\s*[-*] /.test(line)) bullets.push(line);
+    if (LIST_ITEM_MARKER.test(line)) bullets.push(line.replace(LIST_ITEM_MARKER, ''));
     else if (/^\s+\S/.test(line) && bullets.length > 0) {
       bullets[bullets.length - 1] += ` ${line}`;
     }
@@ -81,7 +86,7 @@ function acceptanceBullets(markdownText) {
   return bullets.map(normalizeWhitespace);
 }
 
-// Each `<file name>: <bullet>` of the acceptance criteria of a plan directory.
+// Each `<file name>: <item>` of the acceptance criteria of a plan directory.
 function planBullets(directory) {
   return markdownFilesIn(directory).flatMap((name) =>
     acceptanceBullets(readText(join(directory, name))).map(
@@ -131,9 +136,10 @@ export function destinationFiles(options) {
   return byBasename;
 }
 
-// How many cases (spec mode, keyed by behavior id) or acceptance bullets
-// (plan mode, keyed by file name) the fix removed beyond any it replaced. A
-// reworded case is a removal plus an addition and nets to zero.
+// How many cases (spec mode, keyed by behavior id) or acceptance items
+// (bullets or numbered items; plan mode, keyed by file name) the fix removed
+// beyond any it replaced. A reworded case is a removal plus an addition and
+// nets to zero.
 export function removedCounts(options) {
   const counts = new Map();
   const add = (key, removed, added) => {

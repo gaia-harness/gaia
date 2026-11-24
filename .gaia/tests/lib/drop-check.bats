@@ -366,6 +366,40 @@ check_plan() {
   run node "$CLI" --mode plan --fixes "$FIXES" --findings "$FINDINGS" --pre "$PLAN_PRE" --post "$PLAN_POST"
 }
 
+@test "plan mode refuses an untraced change to or removal of a numbered acceptance criterion" {
+  make_plan_dirs
+  printf '# task-a\n\n## Acceptance criteria\n\n1. The server answers 403 with the text Forbidden for another\n   member'"'"'s page.\n2) The page shows Settings to the owner.\n' >"$PLAN_PRE/task-a.md"
+  cp "$PLAN_PRE/task-a.md" "$PLAN_POST/task-a.md"
+  write_findings DP-001
+  printf '{"fixes":[{"finding":"DP-001","route":"rejected"}]}\n' >"$FIXES"
+  check_plan
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+
+  sed -i.bak "s/for another/for any other/; s/to the owner/to everyone/" "$PLAN_POST/task-a.md"
+  check_plan
+  [ "$status" -eq 1 ]
+  has_output "member's page" || return 1
+  has_output "Settings to the owner" || return 1
+
+  grep -vF "Settings to the owner" "$PLAN_PRE/task-a.md" >"$PLAN_POST/task-a.md"
+  check_plan
+  [ "$status" -eq 1 ]
+  has_output "untraced drop: 1 acceptance criteria were removed" || return 1
+}
+
+@test "plan mode refuses only the removal when a numbered list is renumbered by it" {
+  make_plan_dirs
+  printf '# task-a\n\n## Acceptance criteria\n\n1. The server answers 403 with the text Forbidden for another member.\n2. The page shows Settings to the owner.\n3. The page shows Billing to the owner.\n' >"$PLAN_PRE/task-a.md"
+  printf '# task-a\n\n## Acceptance criteria\n\n1. The page shows Settings to the owner.\n2. The page shows Billing to the owner.\n' >"$PLAN_POST/task-a.md"
+  write_findings DP-001
+  printf '{"fixes":[{"finding":"DP-001","route":"rejected"}]}\n' >"$FIXES"
+  check_plan
+  [ "$status" -eq 1 ]
+  has_output "untraced drop: 1 acceptance criteria were removed" || return 1
+  ! has_output "Settings to the owner" || return 1
+  ! has_output "Billing to the owner" || return 1
+}
+
 @test "every spec and plan lens prefix is accepted and an unknown one refused" {
   write_pre
   cp "$PRE" "$POST"

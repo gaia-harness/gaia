@@ -1041,3 +1041,175 @@ moved_library_paths() {
   do_check
   assert_fail_kind bad-input pinned
 }
+
+# --- settled: the tree the check judged is the tree the round stages ---
+
+do_settled() {
+  local security_args=()
+  if [[ " $* " != *" --security-paths "* ]]; then
+    : >"$RUN_FOLDER/security-none.paths"
+    security_args=(--security-paths "$RUN_FOLDER/security-none.paths")
+  fi
+  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$(sha "$BASELINE_FILE")" \
+    --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$(sha "$VERIFIER_OUTPUT_FILE")" \
+    --result "$RESULT_FILE" "${security_args[@]}" "$@"
+}
+
+# passing_check: a clean pass over two declared edits, its judged record set.
+passing_check() {
+  prepare
+  edit a.txt
+  edit b.txt
+  default_result >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 0 ] || return 1
+  jq -e '.judged.paths | has("a.txt") and has("b.txt")' "$VERIFIER_OUTPUT_FILE" >/dev/null
+}
+
+# bats test_tags=protected
+@test "settled: an unchanged tree passes; a later edit, a new file, or a rewritten result each exit 1 naming it" {
+  passing_check
+  do_settled
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  # row: the fixer edits a judged path after the check
+  edit a.txt
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: a.txt"* ]] || return 1
+  # row: the fixer adds a file after the check
+  reset_case
+  passing_check
+  printf 'late\n' >"$REPO/late.txt"
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: late.txt"* ]] || return 1
+  # row: the fixer edits a file it created before the check
+  reset_case
+  passing_check
+  printf 'new\n' >"$REPO/new.txt"
+  jq '.changed_paths += ["new.txt"] | .results[0].changed_paths += ["new.txt"]' "$RESULT_FILE" >"$RESULT_FILE.n"
+  mv "$RESULT_FILE.n" "$RESULT_FILE"
+  do_check
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  printf 'edited later\n' >>"$REPO/new.txt"
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: new.txt"* ]] || return 1
+  # row: the fixer rewrites its result file after the check, tree unchanged
+  reset_case
+  passing_check
+  jq '.changed_paths += ["c.txt"]' "$RESULT_FILE" >"$RESULT_FILE.n"
+  mv "$RESULT_FILE.n" "$RESULT_FILE"
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"result-moved"* ]] || return 1
+  [[ "$output" == *"tree-moved"* ]] && return 1
+  true
+}
+
+@test "settled: --security-paths exempts only the writer's tests, --gate-paths only the post-gate re-check's, --extra-declared is a usage error" {
+  passing_check
+  printf 'security test\n' >"$REPO/sec.test.txt"
+  edit a.txt
+  printf 'sec.test.txt' >"$RUN_FOLDER/security-1.paths"
+  do_settled --security-paths "$RUN_FOLDER/security-1.paths"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: a.txt"* ]] || return 1
+  [[ "$output" == *"sec.test.txt"* ]] && return 1
+  # row: a gate path is exempt only through --gate-paths, and a file with no
+  # trailing newline does not fuse with the next one
+  printf 'a.txt\n' >"$RUN_FOLDER/gate-1-1.paths"
+  do_settled --security-paths "$RUN_FOLDER/security-1.paths" --gate-paths "$RUN_FOLDER/gate-1-1.paths"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  # row: a path the check already judged and a gate autofix rewrote is not exempt before the gate
+  reset_case
+  passing_check
+  edit a.txt
+  printf 'a.txt\n' >"$RUN_FOLDER/gate-1-1.paths"
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: a.txt"* ]] || return 1
+  # row: a gate path outside the judged record (a late fixer file) is not exempt
+  reset_case
+  passing_check
+  printf 'late\n' >"$REPO/late.txt"
+  printf 'late.txt\n' >"$RUN_FOLDER/gate-1-1.paths"
+  do_settled --gate-paths "$RUN_FOLDER/gate-1-1.paths"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"tree-moved: late.txt"* ]] || return 1
+  # row: the removed option is refused, and so is a run without --security-paths
+  do_settled --extra-declared "$RUN_FOLDER/security-1.paths"
+  [ "$status" -eq 2 ]
+  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$(sha "$BASELINE_FILE")" \
+    --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$(sha "$VERIFIER_OUTPUT_FILE")" --result "$RESULT_FILE"
+  [ "$status" -eq 2 ]
+}
+
+@test "settled refuses a baseline file rewritten after it was recorded" {
+  passing_check
+  local recorded_sha
+  recorded_sha="$(sha "$BASELINE_FILE")"
+  jq '.untracked += ["forged"]' "$BASELINE_FILE" >"$BASELINE_FILE.n"
+  mv "$BASELINE_FILE.n" "$BASELINE_FILE"
+  : >"$RUN_FOLDER/security-none.paths"
+  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$recorded_sha" \
+    --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$(sha "$VERIFIER_OUTPUT_FILE")" \
+    --result "$RESULT_FILE" --security-paths "$RUN_FOLDER/security-none.paths"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bad-input"* ]] || return 1
+  [[ "$output" == *"baseline digest"* ]] || return 1
+}
+
+@test "settled refuses a verifier output rewritten after the check" {
+  passing_check
+  local recorded_sha
+  recorded_sha="$(sha "$VERIFIER_OUTPUT_FILE")"
+  edit a.txt
+  jq --argjson paths "$(jq -c '.judged.paths' "$VERIFIER_OUTPUT_FILE" | jq -c '.["a.txt"] = "forged"')" \
+    '.judged.paths = $paths' "$VERIFIER_OUTPUT_FILE" >"$VERIFIER_OUTPUT_FILE.n"
+  mv "$VERIFIER_OUTPUT_FILE.n" "$VERIFIER_OUTPUT_FILE"
+  : >"$RUN_FOLDER/security-none.paths"
+  run bash "$SCRIPT" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$(sha "$BASELINE_FILE")" \
+    --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$recorded_sha" \
+    --result "$RESULT_FILE" --security-paths "$RUN_FOLDER/security-none.paths"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bad-input"* ]] || return 1
+}
+
+@test "settled refuses a failing verifier output, one with no judged record, a moved HEAD and a tampered pin" {
+  # row: a failing check records no judged tree, and settled refuses it
+  prepare
+  edit c.txt
+  default_result >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 1 ]
+  [ "$(jq -r '.judged' "$VERIFIER_OUTPUT_FILE")" = null ]
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bad-input"* ]] || return 1
+  # row: a passing output stripped of its judged record
+  reset_case
+  passing_check
+  jq 'del(.judged)' "$VERIFIER_OUTPUT_FILE" >"$VERIFIER_OUTPUT_FILE.n"
+  mv "$VERIFIER_OUTPUT_FILE.n" "$VERIFIER_OUTPUT_FILE"
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"bad-input"* ]] || return 1
+  # row: HEAD moved after the check
+  reset_case
+  passing_check
+  git -C "$REPO" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m late
+  do_settled
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"head-moved"* ]] || return 1
+  # row: settled from a tampered pinned copy
+  reset_case
+  passing_check
+  printf '# edited\n' >>"$RUN_FOLDER/verifier-bin-1/audit-fix-verify-check-lib.sh"
+  : >"$RUN_FOLDER/security-none.paths"
+  run bash "$RUN_FOLDER/verifier-bin-1/audit-fix-verify.sh" settled --root "$REPO" --baseline "$BASELINE_FILE" --baseline-sha "$(sha "$BASELINE_FILE")" \
+    --verifier "$VERIFIER_OUTPUT_FILE" --verifier-sha "$(sha "$VERIFIER_OUTPUT_FILE")" \
+    --result "$RESULT_FILE" --security-paths "$RUN_FOLDER/security-none.paths"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"pinned"* ]] || return 1
+}
