@@ -29,14 +29,17 @@ GAIA_SUBAGENT_GIT_STASH_READ_VERBS=(list show)
 GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 
 # The denied subcommands a sub-agent may still run from its own isolated
-# worktree. commit writes that tree's index and its own branch; push writes the
-# remote. Every other denied verb can reach state the linked worktrees share
-# (the stash stack, another tree's branch), so it stays denied there too.
+# worktree: the two the documented isolated orchestrator runs. commit writes
+# that tree's index and its own branch. push writes the remote and the shared
+# remote-tracking refs, and may reach any remote branch; the guard's main-branch
+# rules still deny a push onto main. Every other denied verb stays denied there
+# because nothing has checked it, and some are known to write shared state:
+# stash the stash stack, checkout and switch another tree's branch.
 GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS=(commit push) # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
 
 # subagent_git_own_tree_command <agent id> <command>: 0 when the command runs
 # only GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS among the denied verbs, and
-# only on the sub-agent's own isolated worktree. The commit rule's reason
+# only on the sub-agent's own isolated worktree. The sub-agent rule's reason
 # (siblings share one tree) does not hold for a tree only this agent uses.
 #   - The acting directory's checkout root is a linked worktree (a `.git` file)
 #     named `agent-<agent id>`, the name isolation gives the worktree it makes

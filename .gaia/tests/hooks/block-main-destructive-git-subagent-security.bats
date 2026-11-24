@@ -112,6 +112,22 @@ assert_denied() {
     run_in_tree "$own" "$command"
     assert_denied
   done
+  # Every denied verb outside the own-worktree list, read from the policy, with
+  # the count checked against both lists so a short read cannot pass.
+  local verbs verb count=0 expected
+  verbs=$(bash -c '. "$1"
+    for verb in "${GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS[@]}"; do
+      case " ${GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS[*]} " in *" $verb "*) ;; *) printf "%s\n" "$verb" ;; esac
+    done' _ "$REPO/.claude/hooks/lib/subagent-git-policy.sh")
+  expected=$(bash -c '. "$1"; echo $(( ${#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS[@]} - ${#GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS[@]} ))' _ "$REPO/.claude/hooks/lib/subagent-git-policy.sh")
+  for verb in $verbs; do
+    echo "case: git $verb"
+    run_in_tree "$own" "git $verb"
+    assert_denied
+    count=$((count + 1))
+  done
+  [ "$expected" -gt 0 ]
+  [ "$count" -eq "$expected" ]
 }
 
 # bats test_tags=protected
