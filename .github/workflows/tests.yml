@@ -19,7 +19,7 @@ jobs:
   tests:
     name: Vitest and Playwright
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    # 25 minutes bounds execution: a job that hits the cap is cancelled and
+    # 30 minutes bounds execution: a job that hits the cap is cancelled and
     # reports an ordinary red check to re-run rather than hanging. A full run
     # here is a few minutes: typecheck, lint, Vitest (whose storybook and
     # storybook-dark projects run the a11y scan over every story in light and
@@ -28,7 +28,7 @@ jobs:
     # system-dependency install below spends most of its own 10-minute bound on
     # a slow apt mirror. The browser install below fetches one engine rather
     # than every engine Playwright ships.
-    timeout-minutes: 25
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -271,6 +271,21 @@ jobs:
           name: playwright-traces
           path: apps/web/.playwright/output
           retention-days: 5
+      # The other end of the supported Node range (engines.node is
+      # `^24.15.0 || >=26.0.0`): the pinned Node above is 24, so Vitest runs
+      # once more under Node 26 with a fresh install. It runs last so the
+      # Storybook and Playwright steps stay on the pinned Node.
+      - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
+        name: Setup Node 26 and install
+        uses: ./.github/actions/gaia-setup-node
+        with:
+          node-version: '26'
+      - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
+        name: Run Vitest tests on Node 26
+        run: pnpm test:ci
+        env:
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          npm_package_version: ${{ steps.package-version.outputs.current-version}}
 
   # Lints the shell a pull request changes and runs the project's bats suite
   # when shell changed. It has no paths filter so it always reports, which is

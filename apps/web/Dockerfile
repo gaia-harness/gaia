@@ -7,7 +7,7 @@
 # container start needs no registry. The pin's sha512 is the hash of pnpm's npm tarball, which is a
 # launcher: the check covers that tarball only, and the platform @pnpm/exe.* binary npm then fetches
 # is vouched for by registry integrity alone.
-FROM node:26.13-alpine AS pnpm-env
+FROM node:24.22-alpine AS pnpm-env
 WORKDIR /pin
 COPY package.json ./
 RUN pin="$(node -p "require('./package.json').packageManager")" \

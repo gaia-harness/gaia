@@ -38,7 +38,7 @@ jobs:
     # because the install step does; see the advisory-arm note further down,
     # which turns on how little of this cap is actually spare at the worst
     # observed prefix.
-    timeout-minutes: 15
+    timeout-minutes: 20
     # Checkout needs it to clone, and paths-filter and setup-node both default
     # their `token` input to `github.token` for the compare API and the
     # node-versions download. Only the release fast-path step passes it on, to its composite action.
@@ -300,6 +300,19 @@ jobs:
         run: pnpm -C .gaia/cli knip
       - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
         name: Run Vitest tests
+        run: pnpm -C .gaia/cli test --run
+      # The other end of the supported Node range (engines.node is
+      # `^24.15.0 || >=26.0.0`): the pinned Node above is 24, so the same
+      # suite runs once more under Node 26 with a fresh install.
+      - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+        name: Setup Node 26 and install the CLI member
+        uses: ./.github/actions/gaia-setup-node
+        with:
+          install: cli
+          node-version: '26'
+          cache-dependency-path: 'pnpm-lock.yaml'
+      - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+        name: Run Vitest tests on Node 26
         run: pnpm -C .gaia/cli test --run
       # The region-marker conformance suite drives the real TypeScript parser
       # through tsx, so it needs .gaia/cli/node_modules and skips itself wherever
