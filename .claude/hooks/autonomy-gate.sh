@@ -50,8 +50,8 @@
 # armed and the direction is not parsed, the over-deny being the safe side.
 #
 # Fail mode: a missing library refuses with exit 2; the one exception is an
-# unloadable autonomy-lib.sh during a merge, rebase, cherry-pick or revert, which allows a fixed repair set
-# (load_autonomy_library). A missing jq refuses only a
+# unloadable autonomy-lib.sh during a merge, rebase, cherry-pick or revert,
+# which allows a fixed repair set (load_autonomy_library). A missing jq refuses only a
 # call whose tool_input names a guarded spelling (never a bare AskUserQuestion:
 # with jq absent the switch reads as off, so it is allowed). A deny is JSON on stdout with exit 0.
 #
@@ -107,11 +107,11 @@ load "$_gate_scripts/main-root-lib.sh" gaia_resolve_main_root
 # and the library unloadable) exactly the commands below pass; widening the set
 # opens the gate. The pattern admits only an optional `git -C <path>` prefix and
 # these fixed words, so no shell metacharacter can ride along. A call naming no
-# harness path never reaches this check (the raw pre-filter exits first), and a
-# refused call exits 2 with the message below rather than a JSON deny.
-# Bash runs a sourced file up to its first syntax error, so a conflict hunk late
-# in the library still defines the early functions: loadable means every function
-# the gate calls, or the protected-write arm fails open on a half-loaded library.
+# harness path never reaches this check (the raw pre-filter exits first).
+# Bash runs a sourced file up to its first syntax error, so a conflict hunk
+# late in the library still defines the early functions: loadable means every
+# function the gate calls, or the protected-write arm fails open on a
+# half-loaded library.
 library_is_loaded() {
   local function_name
   for function_name in autonomy_active autonomy_field autonomy_log_decision \
