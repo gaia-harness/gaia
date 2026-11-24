@@ -32,7 +32,8 @@
 //   - a security kind other than the one the behavior's kind derives.
 //
 // Spec-less mode (no --spec): the behavior id is `<task stem>:AC<n>`, the n-th
-// acceptance-criterion bullet (1-based) under the `## Acceptance criteria`
+// top-level acceptance-criterion bullet or
+// numbered item (1-based; nested sub-items do not count) under the `## Acceptance criteria`
 // heading of that task doc. It checks the form, that the named bullet exists,
 // and the same-layer rule; no Flow test line is required.
 //
@@ -128,7 +129,7 @@ function sectionLines(text, headingPattern) {
 
 function countCriteria(taskText) {
   return sectionLines(taskText, CRITERIA_HEADING).filter((line) =>
-    LIST_ITEM_MARKER.test(line),
+    LIST_ITEM_MARKER.test(line) && !/^\s/.test(line),
   ).length;
 }
 
