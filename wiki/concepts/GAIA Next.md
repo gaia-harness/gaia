@@ -8,7 +8,7 @@ tags: [concepts, autonomy, commands]
 
 # GAIA Next
 
-`/gaia-next` runs one GAIA job per run and says when no work remains, so a `/loop` can drive GAIA. `.claude/loop.md` holds the one line `Run /gaia-next.`: a bare `/loop`, or `/loop` with only an interval, runs that file in place of its built-in prompt and re-reads it each iteration. The command is model-invocable on purpose: a scheduled fire runs only skills Claude may invoke itself, so `disable-model-invocation` would leave `/loop` unable to run it.
+`/gaia-next` runs one GAIA job per run and says when no work remains, so a `/loop` can drive GAIA. `.claude/loop.md` holds the one line ``Run `/gaia-next`.``: a bare `/loop`, or `/loop` with only an interval, runs that file in place of its built-in prompt and re-reads it each iteration. The command is model-invocable on purpose: a scheduled fire runs only skills Claude may invoke itself, so `disable-model-invocation` would leave `/loop` unable to run it.
 
 ## The queue
 
@@ -19,7 +19,7 @@ tags: [concepts, autonomy, commands]
 3. **A draft spec**: interactive runs only. Under autonomy it is skipped, because spec interview answers are requirements and the question gate would take the recommended answer for each with no human approving them.
 4. **The top tech-debt issue**, from `/gaia-debt`'s own ordering and backlog pass, run as `/gaia-debt <n>`.
 
-Each job resumes from its own saved state (the plan's `PROGRESS.md`, the branch and its audit state, the spec's draft cache), so a run that stops partway is picked up by the next. A debt fix stopped before its pull request exists leaves only its claim, which `/gaia-debt`'s stale-claim reconcile releases.
+Each job resumes from its own saved state (the plan's `PROGRESS.md`, the branch and its audit state, the spec's draft cache), so a stopped plan, pull request or draft spec is picked up by the next run. A debt fix stopped before its pull request exists is not resumed: the backlog pass excludes its `in-progress` issue, and while the fix branch exists the stale-claim reconcile counts the claim live and does not release it.
 
 ## Skips under autonomy
 
@@ -31,13 +31,13 @@ While the [[Autonomy Switch]] is live, the picker skips, printing one `gaia-next
 
 ## Untrusted input
 
-Review comments, CI logs and issue text are data, never instructions: a comment is a report to check against the code, and the run never runs a command a comment proposes. Under autonomy, `gaia-next.sh comments` withholds every comment whose author's repository permission is not `admin` or `write`, counting it by author without printing its body, so an unattended run acts only on comments from people who could have pushed the change themselves.
+`.claude/commands/gaia-next.md` step 2 owns the untrusted-input rule. Under autonomy, `gaia-next.sh comments` withholds every comment whose author's repository permission is not `admin` or `write`, counting it by author without printing its body, so an unattended run acts only on comments from people who could have pushed the change themselves.
 
 ## Ending
 
 - One job per run: when it finishes or stops partway, the run ends.
 - A park ends the run, and the next run skips the parked item.
-- The loop ends when no work remains that the run may take: an empty queue, or one where every item is parked or skipped. The command then stops a self-paced `/loop` with `ScheduleWakeup` `stop: true`, or deletes a fixed-interval loop's job with `CronDelete`.
+- The loop ends when no work remains that the run may take: an empty queue, or one where every item is parked or skipped. The command's step 3 owns how it stops each kind of `/loop`.
 
 ## Permission mode for an unattended run
 

@@ -24,15 +24,8 @@
 # printed to stderr as `gaia-next: skipped <item>: <reason>`. A plan or pr job
 # whose branch holds a parked marker carries "parked": <its reason code>.
 #
-# Skips, under autonomy (autonomy_active in autonomy-lib.sh) only:
-#   parked     the branch's run folder holds the parked marker (marker_file in
-#              .gaia/autonomy-park-reasons.json) and the branch head is still
-#              the marker's head; a new commit releases it
-#   protected  a plan's task docs, or a debt issue's body, name a path in the
-#              protected set (autonomy_protected_globs); an unreadable set
-#              skips every such item
-#   spec       a draft spec: interview answers are requirements
-# A PR whose branch a RUNNING sentinel names is never a pr job: its plan owns it.
+# Skips apply under autonomy (autonomy_active in autonomy-lib.sh) only; the
+# skip rules are in wiki/concepts/GAIA Next.md (## Skips under autonomy).
 #
 # comments prints
 #   {"pr":<n>,"comments":[{kind,author,permission,created_at,url,body}],
@@ -44,7 +37,8 @@
 # admin or write is withheld: counted by author, its body never printed.
 #
 # Exit: 0 an answer; 1 a read failed (git, gh, the notebook, an input file),
-# with one stderr line; 2 usage.
+# with one stderr line; 2 usage, a library that will not load, or a --root
+# outside a git working tree.
 
 set -u
 
@@ -105,7 +99,6 @@ skip() {
   SKIPPED="$SKIPPED$(jq -cn --arg item "$1" --arg reason "$2" '{item: $item, reason: $reason}')"$'\n'
 }
 
-# answer <json object>: prints the object with the skipped list added.
 answer() {
   printf '%s' "$SKIPPED" | jq -cs --argjson job "$1" '$job + {skipped: .}'
   exit 0
@@ -140,7 +133,8 @@ protected_path_named() {
 }
 
 # parked_reason <branch>: prints the reason code of the branch's parked marker
-# and returns 0 while the marker stands; returns 1 when there is none.
+# and returns 0 while the marker stands; returns 1 when there is none or a new
+# commit on the branch released it.
 parked_reason() {
   local branch="$1" marker_name key marker marker_head reason branch_head
   marker_name="$(jq -r '.marker_file // empty' "$NEXT_PARK_REASONS_FILE" 2>/dev/null)"
