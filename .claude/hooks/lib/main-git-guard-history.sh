@@ -218,8 +218,9 @@ _history_names_main() {
 # rebase_branch_operands: set rebase_branch_words to the operands of the
 # `git rebase` segment that name the branch to rebase: the second operand
 # (`<upstream> <branch>`), or every operand under `--root`. The values of
-# `--onto`, `-X`, `-s` and `-x` and their long forms are skipped. A `-` operand is the previous
-# branch, which this walk cannot resolve, so it is counted but never read as main.
+# `--onto`, `-X`/`--strategy-option`, `-s`/`--strategy` and `-x`/`--exec` are
+# skipped. A `-` operand is the previous branch, which this walk cannot
+# resolve, so it is counted but never read as main.
 rebase_branch_operands() {
   local argument skip_next=0 operand_index=0 first_branch_index=1
   rebase_branch_words=()
@@ -432,7 +433,7 @@ history_rule_reason() {
       ;;
     rebase)
       if _history_rebase_names_main_branch; then
-        history_reason="This rebase names main or master as the branch to rebase, and git checks that branch out first, so it rewrites local main and leaves later commands in the same call standing on it. Commits to main are forbidden (wiki/concepts/Git Workflow.md). Work reaches main only through a pull request, where the audit gate reviews it before it merges. Rebase the feature branch onto main instead: check out the feature branch and run 'git rebase origin/main'."
+        history_reason="This rebase names main or master as the branch to rebase, and git checks that branch out first, so it rewrites local main and leaves later commands in the same call standing on it. Main changes only through a merged pull request (wiki/concepts/Git Workflow.md). Rebase the feature branch onto main instead: check out the feature branch and run 'git rebase origin/main'."
       fi
       ;;
     reflog)
