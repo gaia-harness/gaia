@@ -746,3 +746,37 @@ broken JSON after the email|91|seven_day critical band (91%)|"emailAddress":"$em
 EOF
   true
 }
+
+@test "after a limit reset the dispatch, the reader and an idle session's statusline all follow the lower figure" {
+  local now=1795440000 reset=1795449600 five_hour
+  prepare_render
+
+  # Both sessions render a climb, so both readings are confirmed.
+  for five_hour in 98 99; do
+    render "$now" "$SESSION_A" "{\"five_hour\":{\"used_percentage\":$five_hour,\"resets_at\":$reset}}"
+    now=$((now + 60))
+    render "$now" "$SESSION_B" "{\"five_hour\":{\"used_percentage\":$five_hour,\"resets_at\":$reset}}"
+    now=$((now + 60))
+  done
+
+  dispatch_hook "$now" "$SESSION_A"
+  grep -qF 'Rate-limit checkpoint: five_hour critical band (99%), ' <<<"$output" || { echo "first dispatch: $output"; return 1; }
+
+  # The limit resets: A's next response carries the lower figure.
+  now=$((now + 60))
+  render "$now" "$SESSION_A" "{\"five_hour\":{\"used_percentage\":3,\"resets_at\":$reset}}"
+  now=$((now + 60))
+  dispatch_hook "$now" "$SESSION_A"
+  [ -z "$output" ] || { echo "dispatch after the reset spoke: $output"; return 1; }
+
+  # Idle B repeats its old figure; that changes nothing, and its own statusline follows A.
+  now=$((now + 60))
+  render "$now" "$SESSION_B" "{\"five_hour\":{\"used_percentage\":99,\"resets_at\":$reset}}"
+  grep -qF "🕔 3%" <<<"$PLAIN_OUTPUT" || { echo "B's left side: $PLAIN_OUTPUT"; return 1; }
+  run rate_limits "$now" read
+  [ "$status" -eq 0 ] || return 1
+  case ${lines[0]:-} in
+    "five_hour 3% "*) ;;
+    *) echo "reader: $output"; return 1 ;;
+  esac
+}

@@ -82,3 +82,49 @@ registered_command() {
     return 1
   }
 }
+
+# render_seven_day: one statusline render of the session carrying only a seven-day figure.
+render_seven_day() {
+  local percentage="$1" render_payload
+  render_payload="$(jq -nc --arg current_directory "$MAIN" --arg session_id "$SESSION" \
+    --argjson percentage "$percentage" --argjson resets_at "$((NOW + 259200))" \
+    '{session_id: $session_id, workspace: {current_dir: $current_directory}, cwd: $current_directory,
+      model: {display_name: "Claude Opus"}, effort: {level: "high"},
+      rate_limits: {seven_day: {used_percentage: $percentage, resets_at: $resets_at}}}')"
+  run env HOME="$TEMPORARY_HOME" COLUMNS=200 TZ=UTC GAIA_RATE_LIMITS_NOW="$NOW" \
+    bash "$MAIN/.gaia/statusline/gaia-statusline.sh" <<<"$render_payload"
+  # shellcheck disable=SC2031
+  [ "$status" -eq 0 ]
+}
+
+# dispatch_agent: an Agent dispatch through the registered command; the hook output lands in $output.
+dispatch_agent() {
+  local command_string dispatch_payload
+  command_string="$(registered_command)"
+  dispatch_payload="$(jq -nc --arg session_id "$SESSION" --arg cwd "$MAIN" \
+    '{hook_event_name: "PreToolUse", session_id: $session_id, cwd: $cwd, tool_name: "Agent", tool_input: {}}')"
+  # shellcheck disable=SC2016
+  run --separate-stderr env GAIA_RATE_LIMITS_NOW="$NOW" TZ=UTC \
+    bash -c 'cd "$1" && shift && eval "$1"' _ "$MAIN" "$command_string" <<<"$dispatch_payload"
+  # shellcheck disable=SC2031
+  [ "$status" -eq 0 ]
+}
+
+@test "a max-tier account's seven-day figure stays silent at 78 percent and warns at 91 percent" {
+  jq -nc '{oauthAccount: {organizationRateLimitTier: "default_claude_max_5x"}}' >"$CLAUDE_CONFIG_DIR/.claude.json"
+
+  render_seven_day 78 || return 1
+  [ -f "$READING" ] || { echo "the render wrote no reading for the session"; return 1; }
+  dispatch_agent || { echo "status $status"; return 1; }
+  [ -z "$output" ] || { echo "the checkpoint spoke below the tier's warning band: $output"; return 1; }
+
+  render_seven_day 91 || return 1
+  dispatch_agent || { echo "status $status"; return 1; }
+  jq -e '.hookSpecificOutput.additionalContext | type == "string" and contains("seven_day warning band")' \
+    <<<"$output" >/dev/null || {
+    echo "no seven_day warning band: $output"
+    return 1
+  }
+  jq -e '.hookSpecificOutput.additionalContext | contains("critical band")' <<<"$output" >/dev/null && return 1
+  true
+}
