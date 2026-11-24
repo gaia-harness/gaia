@@ -12,6 +12,7 @@
 #   -n                              COMMIT ONLY (= --no-verify). On `push`, -n
 #                                   means --dry-run and is harmless, never block it.
 #   -c core.hooksPath=<path>        redirects hooks to a path with no floor
+#   --config-env core.hooksPath=<v> the same, from an environment variable
 #
 # Command-position anchoring: a token is only a bypass when it belongs to a
 # real `git commit` / `git push` INVOCATION, i.e. `git` is the command word of
@@ -78,6 +79,23 @@ if ! type gaia_collapsed_substitutions >/dev/null 2>&1 || ! type gaia_segment_co
   printf 'BLOCKED: block-no-verify.sh cannot load lib/git-segments.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
+
+# The destructive-git guard's word parser reads a `-c` or `--config-env` value
+# the way git receives it (quotes removed, `=`-joined or separate), and the
+# config-key classifier is the one list of what core.hooksPath and its siblings
+# are. This hook's own deny, defined below, replaces the parser's.
+set +e
+# shellcheck source=lib/main-git-guard-parse.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/main-git-guard-parse.sh" ] && . "$_jq_library_directory/main-git-guard-parse.sh" 2>/dev/null
+# shellcheck source=lib/git-command-config.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/git-command-config.sh" ] && . "$_jq_library_directory/git-command-config.sh" 2>/dev/null
+set -e
+for _required in parse_git_globals:main-git-guard-parse gaia_git_config_key_class:git-command-config; do
+  if ! type "${_required%%:*}" >/dev/null 2>&1; then
+    printf 'BLOCKED: block-no-verify.sh cannot load lib/%s.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' "${_required#*:}" >&2
+    exit 2
+  fi
+done
 
 # Repo-scope: this repo's commit-floor policy governs this repo only. A git
 # command aimed at a different repo (e.g. `git -C ../other commit --no-verify`)
@@ -163,11 +181,17 @@ while IFS= read -r segment; do
     deny "$(floor_message '--no-verify')"
   fi
 
-  # -c core.hooksPath=<path> override, both. Git config keys are
-  # case-insensitive, so match the key case-insensitively.
-  if grep -iqE -- '-c[[:space:]]+core\.hookspath=' <<<"$segment"; then
-    deny "$(floor_message '-c core.hooksPath override')"
-  fi
+  # -c or --config-env core.hooksPath override, both, read from the parsed
+  # globals so a quoted (`-c 'core.hooksPath=x'`) or `--config-env` spelling
+  # cannot slip past a text match.
+  parse_git_globals "$segment"
+  # shellcheck disable=SC2154  # both arrays are set by parse_git_globals
+  for config_setting in ${git_config_settings[@]+"${git_config_settings[@]}"} \
+                        ${git_config_environment_settings[@]+"${git_config_environment_settings[@]}"}; do
+    if [ "$(gaia_git_config_key_class "${config_setting%%=*}")" = hookspath ]; then
+      deny "$(floor_message '-c core.hooksPath override')"
+    fi
+  done
 
   # -n short flag = --no-verify, COMMIT ONLY. `git push -n` is --dry-run and
   # must pass. Matches a single-dash short-flag bundle containing n (-n, -nm,

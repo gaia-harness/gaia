@@ -131,6 +131,10 @@ git commit --no-verify -m y" \
     'hookspath-camel~~git -c core.hooksPath=/dev/null commit -m x' \
     'hookspath-lower-push~~git -c core.hookspath=/dev/null push origin feature' \
     'env-hookspath~~HUSKY=0 git -c core.hooksPath=/dev/null commit -m x' \
+    "hookspath-single-quoted~~git -c 'core.hooksPath=/tmp' commit -m x" \
+    'hookspath-double-quoted~~git -c "core.hooksPath=/tmp" push origin feature' \
+    'hookspath-config-env-joined~~git --config-env=core.hooksPath=HOOKS commit -m x' \
+    'hookspath-config-env-separate~~git --config-env core.hooksPath=HOOKS push origin feature' \
     'env-no-verify~~HUSKY=0 git commit --no-verify -m x' \
     'after-pipe~~echo hi | git commit -n -m "x"' \
     'orphaned-by-pipe~~git commit -m "a|b" --no-verify'; do
@@ -149,6 +153,8 @@ git commit --no-verify -m y" \
     'push-n-dry-run~~git push -n origin feature' \
     'push-dry-run~~git push --dry-run origin feature' \
     'plain-push~~git push origin feature' \
+    'other-config-override~~git -c user.name=x commit -m x' \
+    'other-config-env~~git --config-env=user.name=NAME commit -m x' \
     'config-hookspath~~git config core.hooksPath .githooks' \
     "home-git-C-commit~~git -C $REPO commit -m \"x\"" \
     'hookspath-status~~git -c core.hooksPath=/dev/null status' \
@@ -360,7 +366,9 @@ run_staged() {
     'git-segments-absent-refuse~~git-segments.sh~~absent~~refuse~~git commit --no-verify -m x' \
     'git-segments-conflicted-refuse~~git-segments.sh~~conflict~~refuse~~git commit --no-verify -m x' \
     'git-segments-absent-non-git~~git-segments.sh~~absent~~silent~~ls' \
-    'hook-payload-absent-refuse~~hook-payload.sh~~absent~~refuse~~git commit --no-verify -m x'; do
+    'hook-payload-absent-refuse~~hook-payload.sh~~absent~~refuse~~git commit --no-verify -m x' \
+    'parse-absent-refuse~~main-git-guard-parse.sh~~absent~~refuse~~git commit -m x' \
+    'command-config-conflicted-refuse~~git-command-config.sh~~conflict~~refuse~~git commit -m x'; do
     label=${row%%~~*}; rest=${row#*~~}
     library=${rest%%~~*}; rest=${rest#*~~}
     damage=${rest%%~~*}; rest=${rest#*~~}

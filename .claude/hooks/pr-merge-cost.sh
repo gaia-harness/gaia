@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # PostToolUse Bash hook on `gh pr merge`. Runs .gaia/scripts/usage-merge.sh with
 # the payload on stdin, so the session's context gets the per-PR usage-ledger
-# block, its cost split into Execute and Code Audit Team rows, and nothing else.
+# block, its cost split into Execute and Code Audit Team rows, plus one
+# `[run cost]` line when the session has an open recorded run that the merge
+# leaves to close.
 #
 # Exit contract: 0 on every path except a missing library, which exits non-zero
 # with stderr naming the file. That is the one documented exception to
@@ -38,6 +40,8 @@ case "$hook_script_path" in */*) hook_directory="${hook_script_path%/*}" ;; *) h
 . "$hook_directory/lib/hook-payload.sh"
 # shellcheck source=/dev/null
 . "$hook_directory/lib/verb-arming.sh"
+# shellcheck source=/dev/null
+. "$hook_directory/lib/repo-scope.sh"
 
 gaia_hook_payload_read "$payload" || exit 0
 [ "$GAIA_HOOK_TOOL_NAME" = "Bash" ] || exit 0
@@ -77,5 +81,36 @@ if [ "$usage_merge_exit_code" -ne 0 ]; then
   # is passed as data rather than spelled after `bash` in the format.
   printf '[PR cost] unavailable: usage-merge.sh exited %s; rerun: bash %s pr %s\n' "$usage_merge_exit_code" '.gaia/scripts/usage.sh' "$rerun_target"
 fi
+
+# A merge can end a recorded run (a `/gaia-debt` drain) that nothing else
+# closes: no hook or gate requires the run-end record, so a session that stops
+# at the merge leaves the run unrecorded. This advisory puts the owed command
+# in front of Claude after the merge has run; it never blocks.
+# The line also prints for a merge still queued behind `--auto`; the fallback
+# record is owed once the queued merge lands.
+[ "${GAIA_USAGE_HOOKS_DISABLE:-}" = 1 ] && exit 0
+[ -n "$GAIA_HOOK_SESSION_ID" ] || exit 0
+# `handoff` is the one reader of "this session's newest open run": its second
+# line is the closing step, so the command is not spelled a second time here.
+handoff_output="$(CLAUDE_CODE_SESSION_ID="$GAIA_HOOK_SESSION_ID" GAIA_USAGE_BOX_FLUSH_CAP_SECONDS=5 \
+  bash "$hook_directory/../../.gaia/scripts/usage.sh" handoff </dev/null 2>/dev/null)" || exit 0
+closing_step="$(sed -n '2p' <<<"$handoff_output")"
+[ -n "$closing_step" ] || exit 0
+# The scan below reads `gh`, so it runs only for a session with an open run.
+# A merge of another repository's pull request closes none of this run.
+gaia_scan_gh_merge "$GAIA_HOOK_COMMAND" || exit 0
+repo_slug_is_foreign "$GAIA_GH_MERGE_REPO" && exit 0
+merged_reference="$GAIA_GH_MERGE_REFERENCE"
+case "$merged_reference" in
+  *://*)
+    gaia_gh_merge_reference_to_home_pr "$merged_reference" || exit 0
+    merged_reference="$GAIA_HOME_PR_NUMBER"
+    ;;
+esac
+# A branch name, or no reference at all, names no number, so the line carries no --pr.
+if [[ $merged_reference =~ ^[1-9][0-9]{0,9}$ && $closing_step == *'usage.sh record '* ]]; then
+  closing_step="$closing_step --pr $merged_reference"
+fi
+printf '[run cost] this session has an open run; if nothing else records it once the merge has landed, %s\n' "$closing_step"
 
 exit 0
