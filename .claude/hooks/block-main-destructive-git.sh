@@ -8,6 +8,20 @@
 # checkout's HEAD off a branch another session holds there with an open pull
 # request.
 #
+# The sub-agent rule denies a sub-agent the git that changes state;
+# lib/subagent-git-policy.sh holds the subcommands and the exempt agents. Its
+# outcome for each payload, read by lib/payload-agent.sh:
+#   - no `agent_id` key (the main thread): allowed;
+#   - `agent_type` on the exempt list: allowed;
+#   - any other sub-agent, a fork included: a listed subcommand in this
+#     repository is denied; read-only git (`status`, `diff`, `log`,
+#     `stash list`, `stash show`) and git aimed at another repository are
+#     allowed;
+#   - an `agent_id` key whose value is malformed, or an `agent_type` that is
+#     missing or malformed: still a sub-agent and not exempt, so denied;
+#   - a payload that is not JSON: the whole guard stands down, so allowed.
+#
+#
 # Honest limits of the command-config rule: a file edit inside `.git/` is not a
 # git invocation (block-git-internals-write.sh denies the edit-tool route), and
 # the environment forms (`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/
@@ -206,6 +220,30 @@ for _required in history_rule_reason:main-git-guard-history push_refspec_targets
     exit 2
   fi
 done
+set +e
+# shellcheck source=lib/payload-agent.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/payload-agent.sh" ] && . "$_jq_library_directory/payload-agent.sh" 2>/dev/null
+# shellcheck source=lib/subagent-git-policy.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/subagent-git-policy.sh" ] && . "$_jq_library_directory/subagent-git-policy.sh" 2>/dev/null
+set -e
+for _required in gaia_payload_agent_read:payload-agent subagent_git_segment_denied:subagent-git-policy subagent_git_exempt:subagent-git-policy; do
+  if ! type "${_required%%:*}" >/dev/null 2>&1; then
+    printf 'BLOCKED: block-main-destructive-git.sh cannot load lib/%s.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' "${_required#*:}" >&2
+    exit 2
+  fi
+done
+
+# The sub-agent rule (outcomes in the header). A PreToolUse deny from any hook
+# beats classify-git-command.sh's allow (wiki/concepts/Git Workflow.md,
+# `**Precedence.**`), so a sub-agent's commit that hook approves is still
+# refused here.
+gaia_payload_agent_read "$payload"
+subagent_git_restricted=0
+if [ "$GAIA_PAYLOAD_AGENT_PRESENT" -eq 1 ]; then
+  if [ -z "$GAIA_PAYLOAD_AGENT_ID" ] || ! subagent_git_exempt "$GAIA_PAYLOAD_AGENT_TYPE"; then
+    subagent_git_restricted=1
+  fi
+fi
 
 # Walk each command-position segment. Separators (`| & ; ( )`, newlines) become
 # line breaks so every line begins at a command word; leading env-var
@@ -305,6 +343,18 @@ while IFS= read -r segment; do
   command_config_rule_reason
   [ -z "$history_reason" ] || deny "$history_reason"
 
+  # Git aimed at another repository is that repository's business, so a
+  # sub-agent may run it: the whole-call foreign verdict, or this segment's
+  # own `-C` naming a readable directory in another repository.
+  if [ "$subagent_git_restricted" -eq 1 ] && [ "$foreign_repo" -eq 0 ] && subagent_git_segment_denied; then
+    segment_kind=""
+    [ -z "$git_cwd" ] || segment_kind=$(resolve_directory_kind "$git_cwd")
+    case "$segment_kind" in
+      'foreign '*) ;;
+      *) deny "Sub-agents never run git that changes state ('git $git_subcommand' here): .claude/doctrine/execution.md, \`## Roles and git\`. Sub-agents share one working tree, so one stray commit, checkout, reset or stash discards a sibling's edits. The main thread commits: leave your changes in the working tree and report them, and the main thread stages, commits and pushes. Read-only git (status, diff, log, show, stash list) stays allowed." ;;
+    esac
+  fi
+
   # The hop check is the one arm here that can spend a bounded network lookup,
   # and the collapsed line re-emits the whole command, so a checkout whose
   # operand carries a `$( )` reaches this arm twice for one target: once
@@ -346,7 +396,7 @@ while IFS= read -r segment; do
   # spawns per `-C` segment, for a verdict nothing reads. Nothing carried to the
   # next segment is set below: `lead_cd` and `cd_ambiguous` belong to the `cd` arm.
   case "$git_subcommand" in
-    commit | push | reset) ;;
+    commit | push | reset) ;; # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
     *) continue ;;
   esac
 
