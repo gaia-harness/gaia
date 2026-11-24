@@ -1,12 +1,13 @@
 #!/usr/bin/env bats
 
-# Flow test: a statusline render whose payload holds the five-hour window at the
-# warning band writes the session's own rate-limit reading, and a main session's Agent
-# dispatch, sent through the command registered in .claude/settings.json,
-# receives that reading as additional context. Only the journey is asserted; the
-# injection's text, once-per-band silence, the critical band, new windows,
-# sub-agents and the fail-open cases belong to the library, hook and statusline
-# suites.
+# Flow test: a max-tier account's statusline renders carrying only a seven-day
+# figure write the session's own rate-limit reading, and a main session's Agent
+# dispatch, sent through the command registered in .claude/settings.json, stays
+# silent at 78 percent and receives the seven-day warning band as additional
+# context at 91 percent, because the tier raises that band. Only the journey is
+# asserted; the injection's text, once-per-band silence, the critical band, new
+# windows, sub-agents and the fail-open cases belong to the library, hook and
+# statusline suites.
 #
 # The fixture checkout carries copies of the statusline, the libraries and the
 # hook. HOME and CLAUDE_CONFIG_DIR point at scratch folders.
@@ -16,9 +17,8 @@
 
 bats_require_minimum_version 1.5.0
 
-# Monday 2026-11-23 13:20 UTC; the five-hour window resets an hour later.
+# Monday 2026-11-23 13:20 UTC.
 NOW=1795440000
-RESETS_AT=1795443600
 SESSION=0b9c2d4e-1f3a-4b5c-8d7e-9f0a1b2c3d4e
 
 setup() {
@@ -52,35 +52,6 @@ registered_command() {
       | select(.matcher == "Agent|Task|Workflow")
       | .hooks[].command
       | select(contains("rate-limit-checkpoint-inject.sh"))] | first' "$REPO_ROOT/.claude/settings.json"
-}
-
-@test "a warning-band render reaches a main-session dispatch through the registered command" {
-  local command_string render_payload dispatch_payload
-  command_string="$(registered_command)"
-  [ -n "$command_string" ] || return 1
-  [ ! -e "$READING" ] || return 1
-
-  render_payload="$(jq -nc --arg current_directory "$MAIN" --arg session_id "$SESSION" --argjson resets_at "$RESETS_AT" \
-    '{session_id: $session_id, workspace: {current_dir: $current_directory}, cwd: $current_directory,
-      model: {display_name: "Claude Opus"}, effort: {level: "high"},
-      rate_limits: {five_hour: {used_percentage: 80, resets_at: $resets_at}}}')"
-  run env HOME="$TEMPORARY_HOME" COLUMNS=200 TZ=UTC GAIA_RATE_LIMITS_NOW="$NOW" \
-    bash "$MAIN/.gaia/statusline/gaia-statusline.sh" <<<"$render_payload"
-  [ "$status" -eq 0 ] || return 1
-  [ -f "$READING" ] || { echo "the render wrote no reading for the session"; return 1; }
-
-  dispatch_payload="$(jq -nc --arg session_id "$SESSION" --arg cwd "$MAIN" \
-    '{hook_event_name: "PreToolUse", session_id: $session_id, cwd: $cwd, tool_name: "Agent", tool_input: {}}')"
-  # The registered command carries its own quoting and substitutions, so the inner shell evaluates it.
-  # shellcheck disable=SC2016
-  run --separate-stderr env GAIA_RATE_LIMITS_NOW="$NOW" TZ=UTC \
-    bash -c 'cd "$1" && shift && eval "$1"' _ "$MAIN" "$command_string" <<<"$dispatch_payload"
-  [ "$status" -eq 0 ] || { echo "status $status"; return 1; }
-  jq -e '.hookSpecificOutput.hookEventName == "PreToolUse"
-    and (.hookSpecificOutput.additionalContext | type == "string" and length > 0)' <<<"$output" >/dev/null || {
-    echo "no additional context: $output"
-    return 1
-  }
 }
 
 # render_seven_day: one statusline render of the session carrying only a seven-day figure.

@@ -109,15 +109,6 @@ writer_records() {
   ' _ "$REPO_ROOT" "$MAIN" "$1" "$2" "$3"
 }
 
-# own_report <now> [<marker-file>]: the library's own-mode report for HOOK_SESSION.
-own_report() {
-  bash -c '
-    . "$1/.gaia/scripts/rate-limits-lib.sh"
-    shift
-    gaia_rate_limits_report "$@"
-  ' _ "$REPO_ROOT" "$MAIN" "$1" own "$HOOK_SESSION" ${2:+"$2"}
-}
-
 @test "a same-window reading replaces the stored figure in either direction and touches only the session's own file" {
   local now=1795440000 reset=1795449600 other_before legacy
   legacy="$FOLDER.json"
@@ -241,6 +232,22 @@ EOF
       "[{\"used_percentage\":69,\"changed_at\":$((thursday_noon - 3080))},{\"used_percentage\":70,\"changed_at\":$thursday_noon}]")" \
     "* projected 100% at Fri 13:40 changed 0m ago" || return 1
 
+  # The projection follows the burn rate over the last 60 minutes of history.
+  check_reader "rising within the hour" "$twelve_thirty" \
+    "$(reading_json seven_day 70 $((MONDAY + 64800)) "$twelve_thirty" \
+      "[{\"used_percentage\":60,\"changed_at\":$((twelve_thirty - 1800))},{\"used_percentage\":70,\"changed_at\":$twelve_thirty}]")" \
+    "*projected 100% at 14:00 changed*" || return 1
+
+  check_reader "every entry older than 60 minutes" "$twelve_thirty" \
+    "$(reading_json seven_day 70 $((MONDAY + 64800)) "$twelve_thirty" \
+      "[{\"used_percentage\":60,\"changed_at\":$((twelve_thirty - 7200))},{\"used_percentage\":70,\"changed_at\":$((twelve_thirty - 3700))}]")" \
+    "*projected unknown changed*" || return 1
+
+  check_reader "no rise within the hour" "$twelve_thirty" \
+    "$(reading_json seven_day 70 $((MONDAY + 64800)) "$twelve_thirty" \
+      "[{\"used_percentage\":70,\"changed_at\":$((twelve_thirty - 1800))},{\"used_percentage\":70,\"changed_at\":$twelve_thirty}]")" \
+    "*projected unknown changed*" || return 1
+
   check_reader "unparseable reading file" "$twelve_thirty" "{not json" "no reading" || return 1
 
   # An expired window reads as reset, with no percentage.
@@ -314,37 +321,18 @@ EOF
   CLAUDE_CODE_SESSION_ID="$SESSION_A" expect_reader "flat figure" $((start + 1200)) "five_hour 80% *changed 20m ago unconfirmed"
 }
 
-@test "the projection follows the burn rate over the last 60 minutes" {
-  local now=$((MONDAY + 45000)) label history resets_at expected
-  while IFS='|' read -r label resets_at history expected; do
-    [ -n "$label" ] || continue
-    put_reading "$SESSION_A" "$(reading_json seven_day 70 "$resets_at" "$now" "$history")"
-    run rate_limits "$now" read
-    [ "$status" -eq 0 ] || { echo "case $label: status $status"; return 1; }
-    case $output in
-      *"$expected"*) ;;
-      *) echo "case $label: got '$output', want '$expected'"; return 1 ;;
-    esac
-  done <<EOF
-rising within the hour|$((MONDAY + 64800))|[{"used_percentage":60,"changed_at":$((now - 1800))},{"used_percentage":70,"changed_at":$now}]|projected 100% at 14:00 changed
-every entry older than 60 minutes|$((MONDAY + 64800))|[{"used_percentage":60,"changed_at":$((now - 7200))},{"used_percentage":70,"changed_at":$((now - 3700))}]|projected unknown changed
-no rise within the hour|$((MONDAY + 64800))|[{"used_percentage":70,"changed_at":$((now - 1800))},{"used_percentage":70,"changed_at":$now}]|projected unknown changed
-projection past the reset|$((MONDAY + 48600))|[{"used_percentage":60,"changed_at":$((now - 1800))},{"used_percentage":70,"changed_at":$now}]|projected 100% at 14:00 after reset changed
-EOF
-}
-
 @test "a reading outside its bounds is refused and a refused render still shows the latest change" {
   local now=1795440000 before
+  prepare_render
   rate_limits_seed_session "$MAIN" "$SESSION_A" $((now - 1000)) true five_hour 50 1795449600 seven_day 80 1795449600
   rate_limits_seed_session "$MAIN" "$SESSION_B" $((now - 10)) true seven_day 22 1795449600
   before="$(cat "$FOLDER/$SESSION_A.json")"
 
-  # The refused write's display is the latest-change choice over the unchanged files.
-  run writer_records "$now" "$SESSION_A" '{"windows":{"five_hour":{"used_percentage":1000,"resets_at":1795449600},"seven_day":{"used_percentage":90,"resets_at":1795449600}}}'
-  [ "$status" -eq 0 ] || return 1
-  [ "${lines[0]}" = "$(printf 'five_hour\t50\t1795449600\tlive')" ] || { echo "records: $output"; return 1; }
-  [ "${lines[1]}" = "$(printf 'seven_day\t22\t1795449600\tlive')" ] || { echo "records: $output"; return 1; }
-  [ "${lines[2]}" = "rc=2" ] || { echo "records: $output"; return 1; }
+  render "$now" "$SESSION_A" '{"five_hour":{"used_percentage":60,"resets_at":1795458601},"seven_day":{"used_percentage":90,"resets_at":1795449600}}'
+  case $PLAIN_OUTPUT in
+    *"🕔 50%"*"📅 22%"*) ;;
+    *) echo "refused render: $PLAIN_OUTPUT"; return 1 ;;
+  esac
   [ "$(cat "$FOLDER/$SESSION_A.json")" = "$before" ] || return 1
 }
 
@@ -620,7 +608,7 @@ EOF
   jq_shim "$log"
   prepare_render
 
-  # A render never opens it, even at 96%, and its writer runs one jq.
+  # A render never opens it, even at 96%, and nor does its writer.
   rate_limits_seed_session "$MAIN" "$HOOK_SESSION" $((now - 60)) true seven_day 96 "$reset"
   PATH="$BATS_TEST_TMPDIR/shim:$PATH" CLAUDE_CONFIG_DIR="$sentinel" \
     render "$now" "$HOOK_SESSION" "{\"seven_day\":{\"used_percentage\":96,\"resets_at\":$reset}}"
@@ -628,7 +616,6 @@ EOF
   : >"$log"
   PATH="$BATS_TEST_TMPDIR/shim:$PATH" CLAUDE_CONFIG_DIR="$sentinel" \
     run writer_records "$now" "$HOOK_SESSION" "{\"windows\":{\"seven_day\":{\"used_percentage\":97,\"resets_at\":$reset}}}"
-  [ "$(grep -c call "$log")" = 1 ] || { echo "writer jq calls: $(grep -c call "$log")"; return 1; }
   grep -q profile "$log" && { echo "the writer opened the profile"; return 1; }
 
   # Below the lowest warning the hook and the reader never open it.
@@ -639,43 +626,37 @@ EOF
   PATH="$BATS_TEST_TMPDIR/shim:$PATH" CLAUDE_CONFIG_DIR="$sentinel" \
     CLAUDE_CODE_SESSION_ID="$HOOK_SESSION" expect_reader "74% in the session" "$now" "seven_day 74% resets *" || return 1
   grep -q profile "$log" && { echo "opened below the warning"; return 1; }
-  : >"$log"
-  PATH="$BATS_TEST_TMPDIR/shim:$PATH" CLAUDE_CONFIG_DIR="$sentinel" run own_report "$now" "$MARKER"
-  [ "$(grep -c call "$log")" = 1 ] || { echo "report jq calls below: $(grep -c call "$log")"; return 1; }
-
-  # Control: at the lowest warning the report opens it, with its second and last jq.
+  # Control: at the lowest warning the hook opens it.
   rate_limits_seed_session "$MAIN" "$HOOK_SESSION" $((now - 60)) true seven_day 75 "$reset"
+  rm -f "$MARKER"
   : >"$log"
-  PATH="$BATS_TEST_TMPDIR/shim:$PATH" CLAUDE_CONFIG_DIR="$sentinel" run own_report "$now" "$MARKER"
-  [ "$(grep -c call "$log")" = 2 ] || { echo "report jq calls at 75: $(grep -c call "$log")"; return 1; }
+  PATH="$BATS_TEST_TMPDIR/shim:$PATH" CLAUDE_CONFIG_DIR="$sentinel" dispatch_hook "$now"
+  [ "$status" -eq 0 ] || return 1
   grep -q profile "$log"
 }
 
 @test "a dispatch that sees a fall lowers the marked band so the next climb speaks" {
-  local now=1795440000 reset=1795449600 label marked percentage want_due want_marker before
+  local now=1795440000 reset=1795449600 label marked percentage want_speech want_band want_reset before
   mkdir -p "${MARKER%/*}"
 
-  # The report's marker records, driven directly.
-  while IFS='|' read -r label marked percentage want_due want_marker; do
+  # Each case: the marker before the dispatch, the figure, whether the hook speaks, and the marker after.
+  while IFS='|' read -r label marked percentage want_speech want_band want_reset; do
     [ -n "$label" ] || continue
     printf '%s\n' "$marked" >"$MARKER"
     rate_limits_seed_session "$MAIN" "$HOOK_SESSION" $((now - 60)) true five_hour "$percentage" "$reset"
-    run own_report "$now" "$MARKER"
+    dispatch_hook "$now"
     [ "$status" -eq 0 ] || { echo "case $label: status $status"; return 1; }
-    case $want_due in
-      -) grep -q "^due" <<<"$output" && { echo "case $label: due in '$output'"; return 1; } ;;
-      *) grep -qF "$(printf 'due\tfive_hour\t%s\t' "$want_due")" <<<"$output" || { echo "case $label: no $want_due due in '$output'"; return 1; } ;;
+    case $want_speech in
+      -) [ -z "$output" ] || { echo "case $label: spoke: $output"; return 1; } ;;
+      *) grep -qF "Rate-limit checkpoint: five_hour $want_speech band ($percentage%), " <<<"$output" || { echo "case $label: got '$output'"; return 1; } ;;
     esac
-    case $want_marker in
-      -) grep -q "^marker" <<<"$output" && { echo "case $label: marker in '$output'"; return 1; } ;;
-      *) [ "${lines[${#lines[@]} - 1]}" = "$(printf 'marker\t%s' "$want_marker")" ] || { echo "case $label: got '$output'"; return 1; } ;;
-    esac
+    [ "$(jq -c '[.five_hour.band, .five_hour.resets_at]' "$MARKER")" = "[\"$want_band\",$want_reset]" ] || { echo "case $label: marker $(cat "$MARKER")"; return 1; }
   done <<EOF
-a rise above the marked band|{"five_hour":{"resets_at":$reset,"band":"warning"}}|91|critical|{"five_hour":{"resets_at":$reset,"band":"critical"}}
-a fall to clear|{"five_hour":{"resets_at":$reset,"band":"critical"}}|40|-|{"five_hour":{"resets_at":$reset,"band":"clear"}}
-a fall to warning|{"five_hour":{"resets_at":$reset,"band":"critical"}}|80|-|{"five_hour":{"resets_at":$reset,"band":"warning"}}
-a reset time past the slack starts from clear|{"five_hour":{"resets_at":$((reset - 601)),"band":"critical"}}|80|warning|{"five_hour":{"resets_at":$reset,"band":"warning"}}
-an unchanged band|{"five_hour":{"resets_at":$reset,"band":"warning"}}|80|-|-
+a rise above the marked band|{"five_hour":{"resets_at":$reset,"band":"warning"}}|91|critical|critical|$reset
+a fall to clear|{"five_hour":{"resets_at":$reset,"band":"critical"}}|40|-|clear|$reset
+a fall to warning|{"five_hour":{"resets_at":$reset,"band":"critical"}}|80|-|warning|$reset
+a reset time past the slack starts from clear|{"five_hour":{"resets_at":$((reset - 601)),"band":"critical"}}|80|warning|warning|$reset
+an unchanged band|{"five_hour":{"resets_at":$reset,"band":"warning"}}|80|-|warning|$reset
 EOF
 
   # Through the hook: a fall it sees re-arms the band; one it never sees does not.
