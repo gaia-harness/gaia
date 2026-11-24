@@ -176,3 +176,81 @@ assert_denied() {
   after=$(git -C "$REPO" rev-parse feature)
   [ "$before" = "$after" ]
 }
+
+# bats test_tags=protected
+@test "from its own worktree, a sub-agent may catch up with the remote default branch, read from origin/HEAD, and nothing wider" {
+  local own="$BATS_TEST_TMPDIR/agent-$AGENT_ID" command
+  git -C "$REPO" worktree add --quiet -b "branch-agent-$AGENT_ID" "$own"
+  # A default branch that is not `main`, so a literal `main` in the policy fails.
+  git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
+  for command in \
+    'git merge origin/trunk' \
+    'git merge --no-edit origin/trunk' \
+    'git rebase origin/trunk' \
+    "git -C $own merge origin/trunk" \
+    "git -C $own rebase origin/trunk" \
+    'git merge --abort' \
+    'git merge --continue' \
+    'git rebase --abort' \
+    'git rebase --continue' \
+    'git fetch origin && git merge origin/trunk'; do
+    echo "case: $command"
+    run_in_tree "$own" "$command"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+  done
+  for command in \
+    'git merge origin/main' \
+    'git rebase origin/main' \
+    'git merge main' \
+    'git merge FETCH_HEAD' \
+    'git rebase FETCH_HEAD' \
+    'git merge origin/other' \
+    'git merge origin/trunk~1' \
+    'git merge' \
+    'git rebase' \
+    'git merge origin/trunk origin/other' \
+    'git rebase origin/trunk branch-other' \
+    'git rebase origin/trunk feature' \
+    'git merge --autostash origin/trunk' \
+    'git rebase --autostash origin/trunk' \
+    'git rebase --exec "touch x" origin/trunk' \
+    'git rebase -x "touch x" origin/trunk' \
+    'git rebase --exec=true origin/trunk' \
+    'git rebase -i origin/trunk' \
+    'git merge --no-edit --autostash origin/trunk' \
+    'git rebase --no-edit origin/trunk' \
+    'git merge --abort origin/trunk' \
+    "git -C $REPO merge origin/trunk" \
+    "git -C $REPO rebase origin/trunk" \
+    "git -C $own -C $REPO merge origin/trunk" \
+    "cd $REPO && git merge origin/trunk" \
+    "GIT_DIR=$REPO/.git git merge origin/trunk" \
+    "git --git-dir=$REPO/.git merge origin/trunk" \
+    'git merge origin/trunk && git reset HEAD~1'; do
+    echo "case: $command"
+    run_in_tree "$own" "$command"
+    assert_denied
+  done
+  # Without origin/HEAD no default branch resolves, so a catch-up fails closed.
+  git -C "$REPO" symbolic-ref --delete refs/remotes/origin/HEAD
+  for command in 'git merge origin/trunk' 'git merge origin/main' 'git rebase origin/main'; do
+    echo "case without origin/HEAD: $command"
+    run_in_tree "$own" "$command"
+    assert_denied
+  done
+}
+
+# bats test_tags=protected
+@test "a catch-up merge or rebase is denied outside the worktree named for the agent's own id" {
+  local name
+  git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
+  for name in "agent-$OTHER_AGENT_ID" "xagent-$AGENT_ID"; do
+    echo "case: worktree $name"
+    run_in_worktree "$name" 'git merge origin/trunk'
+    assert_denied
+  done
+  echo "case: main checkout"
+  run_in_tree "$REPO" 'git rebase origin/trunk'
+  assert_denied
+}

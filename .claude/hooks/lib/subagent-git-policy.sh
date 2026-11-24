@@ -37,8 +37,16 @@ GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 # stash the stash stack, checkout and switch another tree's branch.
 GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS=(commit push) # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
 
+# The denied subcommands a sub-agent may also run from its own worktree, only
+# to bring the remote default branch into its own branch, or to abort or
+# continue that (see subagent_git_catch_up_arguments_ok): an isolated run must absorb a default
+# branch that moved while it worked.
+GAIA_SUBAGENT_OWN_WORKTREE_CATCH_UP_GIT_SUBCOMMANDS=(merge rebase) # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
+
 # subagent_git_own_tree_command <agent id> <command>: 0 when the command runs
-# only GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS among the denied verbs, and
+# only GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS, or
+# GAIA_SUBAGENT_OWN_WORKTREE_CATCH_UP_GIT_SUBCOMMANDS with arguments
+# subagent_git_catch_up_arguments_ok accepts, among the denied verbs, and
 # only on the sub-agent's own isolated worktree. The sub-agent rule's reason
 # (siblings share one tree) does not hold for a tree only this agent uses.
 #   - The acting directory's checkout root is a linked worktree (a `.git` file)
@@ -52,8 +60,8 @@ GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS=(commit push) # subset of .claude/hoo
 #     A `cd`, `pushd`, `sh -c`, env prefix (`GIT_DIR=`), `-c core.worktree=`,
 #     `--git-dir` or `--work-tree` could carry git into the parent's tree, so
 #     any of them fails this test.
-# Needs acting_directory, parse_git_globals, git_global_words, git_subcommand
-# and git_cwd from lib/main-git-guard-parse.sh.
+# Needs acting_directory, parse_git_globals, git_global_words, git_subcommand,
+# git_args and git_cwd from lib/main-git-guard-parse.sh.
 subagent_git_own_tree_command() {
   local agent_id="$1" command="$2" directory checkout_root segment target_root own_verb allowed
   [ -n "$agent_id" ] || return 1
@@ -71,6 +79,9 @@ subagent_git_own_tree_command() {
       for own_verb in ${GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS[@]+"${GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS[@]}"}; do
         [ "$git_subcommand" = "$own_verb" ] && allowed=1
       done
+      for own_verb in ${GAIA_SUBAGENT_OWN_WORKTREE_CATCH_UP_GIT_SUBCOMMANDS[@]+"${GAIA_SUBAGENT_OWN_WORKTREE_CATCH_UP_GIT_SUBCOMMANDS[@]}"}; do
+        [ "$git_subcommand" = "$own_verb" ] && subagent_git_catch_up_arguments_ok "$checkout_root" && allowed=1
+      done
       [ "$allowed" -eq 1 ] || return 1
     fi
     [ -n "${git_global_words[*]+set}" ] || continue
@@ -81,6 +92,27 @@ subagent_git_own_tree_command() {
     [ "$target_root" = "$checkout_root" ] || return 1
   done < <(printf '%s\n' "$command" | tr '|&;()' '\n')
   return 0
+}
+
+# subagent_git_catch_up_arguments_ok <checkout root>: 0 when the merge or
+# rebase parse_git_globals last read names only `origin/<default branch>`, with
+# the default branch read from origin/HEAD in that checkout (never a literal
+# `main`; unset fails closed), or is `--abort` or `--continue`, which a
+# conflicted run needs to leave its tree usable. `merge` also takes a leading
+# `--no-edit`, so no editor opens. Anything else returns 1: a second operand
+# (`rebase origin/main other-branch` switches branches), `--autostash` (writes
+# the shared stash stack) and every other option.
+subagent_git_catch_up_arguments_ok() {
+  local default_ref default_branch
+  case "${#git_args[@]}:${git_args[0]:-}" in 1:--abort | 1:--continue) return 0 ;; esac
+  default_ref=$(git -C "$1" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null) || return 1
+  default_branch="${default_ref#refs/remotes/origin/}"
+  [ -n "$default_branch" ] && [ "$default_branch" != "$default_ref" ] || return 1
+  if [ "$git_subcommand" = merge ] && [ "${#git_args[@]}" -eq 2 ] && [ "${git_args[0]}" = --no-edit ]; then
+    [ "${git_args[1]}" = "origin/$default_branch" ]
+    return
+  fi
+  [ "${#git_args[@]}" -eq 1 ] && [ "${git_args[0]}" = "origin/$default_branch" ]
 }
 
 # subagent_git_exempt <agent type>: 0 when that agent type may run state-changing git.

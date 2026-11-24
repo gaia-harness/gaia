@@ -71,6 +71,7 @@ denied() {
   [ "$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")" = deny ]
 }
 silent() { [ "$status" -eq 0 ] && [ -z "$output" ]; }
+blocked() { [ "$status" -eq 2 ] && [[ "$output" == *"BLOCKED: autonomy-gate.sh cannot load autonomy-lib.sh"* ]]; }
 
 ORDINARY_TOOLS='Edit Write MultiEdit'
 
@@ -300,4 +301,239 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
   for path in src/CLAUDE.md .claude/settings.jsonx .claude/doctrine/x.md .gaia/local/runs/x apps/web/src/a.ts README.md .gaia/scripts/other.sh; do
     ! autonomy_protected_match "$path" "$globs" || { echo "matched: $path"; return 1; }
   done
+}
+
+# conflicted_lane [<path>]: a copy of the hook's tree in which a lane worktree
+# merges a branch that rewrote line 2 of <path> (default
+# .gaia/scripts/autonomy-lib.sh) as the lane did, so the file holds conflict
+# markers. Sets TREE, LANE and HOOK (the lane's own copy).
+conflicted_lane() {
+  local conflicted="${1:-.gaia/scripts/autonomy-lib.sh}"
+  local other="$BATS_TEST_TMPDIR/other"
+  TREE="$BATS_TEST_TMPDIR/conflicted"
+  LANE="$TREE/.claude/worktrees/lane"
+  mkdir -p "$TREE/.claude/hooks" "$TREE/.gaia"
+  cp "$REPO_ROOT/.claude/hooks/autonomy-gate.sh" "$TREE/.claude/hooks/"
+  cp -R "$REPO_ROOT/.claude/hooks/lib" "$TREE/.claude/hooks/lib"
+  cp -R "$REPO_ROOT/.gaia/scripts" "$TREE/.gaia/scripts"
+  git -C "$TREE" init -q -b main
+  git -C "$TREE" config user.email t@example.com
+  git -C "$TREE" config user.name t
+  printf '.claude/worktrees/\n' >"$TREE/.gitignore"
+  git -C "$TREE" add -A
+  git -C "$TREE" commit -q -m base
+  git -C "$TREE" worktree add -q "$LANE" -b lane
+  git -C "$TREE" worktree add -q "$other" -b other main
+  sed -i.bak '2s/.*/# lane header/' "$LANE/$conflicted"
+  sed -i.bak '2s/.*/# other header/' "$other/$conflicted"
+  rm -f "$LANE/$conflicted.bak" "$other/$conflicted.bak"
+  git -C "$LANE" commit -q -am lane
+  git -C "$other" commit -q -am other
+  git -C "$LANE" merge -q other >/dev/null 2>&1 || true
+  [ -f "$(git -C "$LANE" rev-parse --git-path MERGE_HEAD)" ]
+  git -C "$LANE" ls-files -u -z | grep -qz .
+  HOOK="$LANE/.claude/hooks/autonomy-gate.sh"
+}
+
+# library_conflicted_lane <path>: conflicted_lane for another library the hook
+# sources, with the autonomy switch live so the gate does not stand down.
+library_conflicted_lane() {
+  conflicted_lane "$1"
+  mkdir -p "$TREE/.gaia/local/protected"
+  jq -n '{enabled: true, expires_at: (now + 3600 | todate), may_merge: false}' >"$TREE/.gaia/local/protected/autonomy.json"
+}
+
+# repair_allowed <library>: the abort and a checkout or restore of one
+# conflicted library pass silently: the git -C <lane> form from any cwd, the
+# plain form from inside the lane.
+repair_allowed() {
+  local library="$1" command
+  for command in \
+    "git -C $LANE merge --abort" \
+    "git -C $LANE checkout --ours -- $library" \
+    "git -C $LANE checkout --theirs -- $library" \
+    "git -C $LANE restore --theirs -- $library" \
+    "git -C $LANE restore -- $library"; do
+    echo "case allowed (git -C): $command"
+    call Bash "$(jq -nc --arg command "$command" '{command: $command}')" "$LANE" "$HOOK"
+    silent
+    call Bash "$(jq -nc --arg command "$command" '{command: $command}')" "$BATS_TEST_TMPDIR" "$HOOK"
+    silent
+  done
+  for command in "git merge --abort" "git checkout --theirs -- $library" "git restore -- $library"; do
+    echo "case allowed (cwd-relative): $command"
+    call Bash "$(jq -nc --arg command "$command" '{command: $command}')" "$LANE" "$HOOK"
+    silent
+  done
+}
+
+# library_blocked <file name>: the hook refused because that library cannot load.
+library_blocked() {
+  [ "$status" -eq 2 ] && [[ "$output" == *"BLOCKED: autonomy-gate.sh cannot load $1"* ]]
+}
+
+# not_repair_commands <library>: calls that look like a repair and are not one.
+not_repair_commands() {
+  printf '%s\n' \
+    "git -C $LANE checkout --theirs -- .gaia/scripts/other.sh" \
+    "git -C $LANE checkout --theirs -- $1 .claude/hooks/x.sh" \
+    "git -C $LANE merge --abort; rm -rf $LANE/.claude/hooks" \
+    "git -C $LANE merge --abort && printf x > $LANE/.claude/hooks/x.sh" \
+    "git -C $LANE rebase --abort" \
+    "git -C $LANE merge --continue" \
+    "git -C $LANE reset --hard" \
+    "ls $LANE/.claude"
+}
+
+@test "an unloadable autonomy library mid-merge allows only the narrow repair commands and names them" {
+  local library='.gaia/scripts/autonomy-lib.sh' command tool
+  conflicted_lane
+  for command in \
+    "git -C $LANE merge --abort" \
+    "git -C $LANE checkout --ours -- $library" \
+    "git -C $LANE checkout --theirs -- $library" \
+    "git -C $LANE restore --theirs -- $library" \
+    "git -C $LANE restore -- $library"; do
+    echo "case allowed: $command"
+    call Bash "$(jq -nc --arg command "$command" '{command: $command}')" "$LANE" "$HOOK"
+    silent
+  done
+  for command in \
+    "git -C $LANE checkout --theirs -- .gaia/scripts/other.sh" \
+    "git -C $LANE checkout --theirs -- $library .claude/hooks/x.sh" \
+    "git -C $LANE merge --abort; rm -rf $LANE/.claude/hooks" \
+    "git -C $LANE merge --abort && printf x > $LANE/.claude/hooks/x.sh" \
+    "git -C $LANE merge --continue" \
+    "git -C $LANE reset --hard" \
+    "ls $LANE/.claude"; do
+    echo "case denied: $command"
+    call Bash "$(jq -nc --arg command "$command" '{command: $command}')" "$LANE" "$HOOK"
+    blocked
+    [[ "$output" == *"git merge --abort"*"git checkout --ours|--theirs -- .gaia/scripts/autonomy-lib.sh"* ]]
+  done
+  for tool in Write Edit; do
+    echo "case denied: $tool"
+    call "$tool" "{\"file_path\":\"$LANE/README.md\"}" "$LANE" "$HOOK"
+    blocked
+    call "$tool" "{\"file_path\":\"$LANE/$library\"}" "$LANE" "$HOOK"
+    blocked
+  done
+}
+
+@test "an unloadable autonomy library with no merge in progress allows no repair and names none" {
+  conflicted_lane
+  git -C "$LANE" merge --abort
+  printf '<<<<<<< x\n' | cat - "$LANE/.gaia/scripts/autonomy-lib.sh" >"$BATS_TEST_TMPDIR/broken"
+  cp "$BATS_TEST_TMPDIR/broken" "$LANE/.gaia/scripts/autonomy-lib.sh"
+  call Bash "$(jq -nc --arg command "git -C $LANE merge --abort" '{command: $command}')" "$LANE" "$HOOK"
+  blocked
+  [[ "$output" != *"A merge is in progress"* ]]
+}
+
+@test "a conflict hunk late in the autonomy library blocks the call instead of half-loading it" {
+  conflicted_lane
+  git -C "$LANE" merge --abort
+  local library="$LANE/.gaia/scripts/autonomy-lib.sh"
+  awk '/^autonomy_protected_match\(\) \{/ { print "<<<<<<< x" } { print }' "$library" >"$BATS_TEST_TMPDIR/late"
+  cp "$BATS_TEST_TMPDIR/late" "$library"
+  bash -c '. "$1" 2>/dev/null; type autonomy_active' _ "$library" >/dev/null 2>&1
+  call Write "{\"file_path\":\"$LANE/.claude/settings.json\"}" "$LANE" "$HOOK"
+  blocked
+}
+
+@test "a rebase conflict in the autonomy library allows only its abort and the side pick, and warns about the dropped side" {
+  local library='.gaia/scripts/autonomy-lib.sh'
+  conflicted_lane
+  git -C "$LANE" merge --abort
+  git -C "$LANE" rebase other >/dev/null 2>&1 || true
+  [ -f "$(git -C "$LANE" rev-parse --git-path REBASE_HEAD)" ]
+  call Bash "$(jq -nc --arg command "git -C $LANE rebase --abort" '{command: $command}')" "$LANE" "$HOOK"
+  silent
+  call Bash "$(jq -nc --arg command "git -C $LANE merge --abort" '{command: $command}')" "$LANE" "$HOOK"
+  blocked
+  [[ "$output" == *"A rebase is in progress"*"git rebase --abort"*"drops the other side's changes"* ]]
+  call Bash "$(jq -nc --arg command "git -C $LANE checkout --ours -- $library" '{command: $command}')" "$LANE" "$HOOK"
+  silent
+}
+
+@test "a merge conflict in a hooks/lib library allows only its repair, in both spellings, and refuses everything else" {
+  local library='.claude/hooks/lib/hook-payload.sh' command tool
+  library_conflicted_lane "$library"
+  repair_allowed "$library"
+  while IFS= read -r command; do
+    echo "case denied: $command"
+    call Bash "$(jq -nc --arg command "$command" '{command: $command}')" "$LANE" "$HOOK"
+    library_blocked hook-payload.sh
+  done < <(
+    not_repair_commands "$library"
+    printf '%s\n' "git -C $LANE checkout --theirs -- .claude/hooks/lib/jq-availability.sh"
+  )
+  for tool in Write Edit; do
+    echo "case denied: $tool"
+    call "$tool" "{\"file_path\":\"$LANE/README.md\"}" "$LANE" "$HOOK"
+    library_blocked hook-payload.sh
+  done
+}
+
+@test "a rebase conflict in a hooks/lib library allows its abort and refuses a merge abort" {
+  local library='.claude/hooks/lib/hook-payload.sh'
+  library_conflicted_lane "$library"
+  git -C "$LANE" merge --abort
+  git -C "$LANE" rebase other >/dev/null 2>&1 || true
+  [ -f "$(git -C "$LANE" rev-parse --git-path REBASE_HEAD)" ]
+  call Bash "$(jq -nc --arg command "git -C $LANE rebase --abort" '{command: $command}')" "$LANE" "$HOOK"
+  silent
+  call Bash "$(jq -nc --arg command "git -C $LANE merge --abort" '{command: $command}')" "$LANE" "$HOOK"
+  library_blocked hook-payload.sh
+}
+
+@test "a hooks/lib conflict with no operation in progress allows no repair" {
+  library_conflicted_lane .claude/hooks/lib/hook-payload.sh
+  git -C "$LANE" merge --abort
+  printf '<<<<<<< x\n' | cat - "$LANE/.claude/hooks/lib/hook-payload.sh" >"$BATS_TEST_TMPDIR/broken"
+  cp "$BATS_TEST_TMPDIR/broken" "$LANE/.claude/hooks/lib/hook-payload.sh"
+  call Bash "$(jq -nc --arg command "git -C $LANE merge --abort" '{command: $command}')" "$LANE" "$HOOK"
+  library_blocked hook-payload.sh
+  [[ "$output" != *"is in progress"* ]]
+}
+
+@test "a refused call during a hooks/lib conflict names the repair commands" {
+  library_conflicted_lane .claude/hooks/lib/hook-payload.sh
+  call Bash "$(jq -nc --arg command "git -C $LANE checkout --theirs .claude/hooks/lib/hook-payload.sh" '{command: $command}')" "$LANE" "$HOOK"
+  library_blocked hook-payload.sh
+  [[ "$output" == *"A merge is in progress"*"git merge --abort"*"git checkout --ours|--theirs -- .claude/hooks/lib/hook-payload.sh"*"drops the other side's changes"* ]]
+}
+
+@test "a merge conflict in the audit-loop state library allows its repair and keeps the protected-write denials" {
+  local library='.gaia/scripts/audit-loop-state-lib.sh' command
+  library_conflicted_lane "$library"
+  mkdir -p "$TREE/.gaia/local/protected/audit-loop"
+  repair_allowed "$library"
+  echo "case: a question reaches the unloadable state library"
+  ask "$(question 'Pick' 'Take (Recommended)' 'Leave')" "$LANE"
+  library_blocked audit-loop-state-lib.sh
+  for command in \
+    "git -C $LANE merge --abort; rm -rf $LANE/.claude/hooks" \
+    "git -C $LANE merge --abort && printf x > $LANE/.claude/hooks/x.sh"; do
+    echo "case denied: $command"
+    call Bash "$(jq -nc --arg command "$command" '{command: $command}')" "$LANE" "$HOOK"
+    denied
+  done
+  call Write "{\"file_path\":\"$LANE/.claude/settings.json\"}" "$LANE" "$HOOK"
+  denied
+}
+
+# bats test_tags=whole-tree
+@test "every library the gate loads is in the repair set, or has its own arm" {
+  local hook="$REPO_ROOT/.claude/hooks/autonomy-gate.sh" listed sourced name path
+  listed=$(awk "/^_gate_conflict_libraries='/{on=1; next} on && /^'/{exit} on{print}" "$hook")
+  [ -n "$listed" ]
+  sourced=$(sed -n -E 's/^[[:space:]]*load "\$_gate_(directory|scripts)\/([^"]+)" .*/\1 \2/p' "$hook")
+  [ -n "$sourced" ]
+  while read -r name path; do
+    case "$name" in directory) path=".claude/hooks/$path" ;; *) path=".gaia/scripts/$path" ;; esac
+    echo "sourced: $path"
+    [ "$path" = .gaia/scripts/autonomy-lib.sh ] && continue
+    printf '%s\n' "$listed" | grep -qxF -- "$path" || return 1
+  done <<<"$sourced"
 }
