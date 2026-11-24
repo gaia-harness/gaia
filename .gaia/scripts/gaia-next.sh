@@ -159,8 +159,8 @@ parked_reason() {
   printf '%s\n' "${reason:-unreadable marker}"
 }
 
-# OWN_PROCESS_CHAIN holds this script's pid and its ancestors (pid 1 and up
-# excluded), read once.
+# OWN_PROCESS_CHAIN holds this script's pid and its ancestors, stopping before
+# pid 1, read once.
 OWN_PROCESS_CHAIN=""
 own_process_chain() {
   local pid=$$

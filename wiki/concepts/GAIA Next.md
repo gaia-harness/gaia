@@ -26,14 +26,14 @@ Each job resumes from its own saved state (the plan's `PROGRESS.md`, the branch 
 While the [[Autonomy Switch]] is live, the picker skips, printing one `gaia-next: skipped <item>: <reason>` line per skip:
 
 - **A parked item**: its branch's run folder holds the parked marker that `.gaia/scripts/autonomy-park.sh` writes, and the branch head is still the head the marker records. A new commit on the branch releases it. An interactive run takes a parked item and resumes it with the user from the `## Parked` section of the run's `STATE.md`.
-- **A stuck pull request**: a `pr` job that ends with no progress is parked by the command's step 3 with `autonomy-park.sh`, so the same marker skips it until a new commit moves its branch, and the debt tier is reachable.
+- **A stuck pull request**: a `pr` job that ends with no progress is parked by the command's step 3, so the parked-item skip holds it and the pick reaches the backlog.
 - **A self-governing item**: a plan whose task docs, or a debt issue whose body, names a path in the protected set the question gate enforces ([[Autonomy Switch#Self-governing files]]). The gate would deny the edit and the run would park mid-work, so the item stays in the queue for an interactive run, which takes it. An unreadable set skips every such item.
 - **A plan that cannot be resumed here**: its `RUNNING` sentinel names no branch, or a branch absent from this clone. An interactive run takes it.
 - **A draft spec**, as above. An allocator failure in that tier also skips it, so the pick reaches the backlog; an interactive run fails, showing the allocator's stderr.
 
 ## Skips in every run
 
-A plan or pull request whose branch's worktree `git worktree list --porcelain` reports as `locked claude session <branch> (pid N ...)` is skipped, interactive or not, with the pid in the skip line, so two sessions never drive one branch. It applies only while that pid is alive and is not this run's own process or one of its ancestors; a dead-pid lock is stale and the item is picked, and so is a lock whose recorded `start` time differs from the live pid's own start time (the OS reused the pid).
+A plan or pull request whose branch's worktree `git worktree list --porcelain` reports as `locked claude session <branch> (pid N ...)` is skipped, interactive or not, with the pid in the skip line, so two sessions never drive one branch. It applies only while that pid is alive and is not this run's own process or one of its ancestors; a dead-pid lock is stale and does not skip the item, nor does a lock whose recorded `start` time differs from the live pid's own start time (the OS reused the pid).
 
 ## Untrusted input
 
