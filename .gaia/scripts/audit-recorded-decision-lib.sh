@@ -105,7 +105,7 @@ _discard_allowed() {
   done
   printf '%s' "$lookups" | jq -e -s --argjson key "$key" "$_SECURITY_CLASS_JQ"'
     [.[][]? | select([.member, .finding_class, .path, .line] == $key)] | length > 0 and all(.[]; security_class | not)' >/dev/null 2>&1 ||
-    { _error "discard refused: no round reports this key as a Major or Minor non-security finding; a Critical or security-class key takes Hold or Commit"; return 3; }
+    { _error "discard refused: no round reports this key as a Major or Minor non-security finding; a Critical, security-class or unreported key takes Keep (commit the draft) or Redo (restore it, then record-residual --decision fix)"; return 3; }
 }
 
 # _veto_withdraw <row>: removes every vetoes.json entry for the row's key under
