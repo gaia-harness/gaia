@@ -852,6 +852,7 @@
     "wiki/decisions/pnpm.md": "wiki-owned",
     "wiki/decisions/Quality Gate.md": "wiki-owned",
     "wiki/decisions/React Compiler.md": "wiki-owned",
+    "wiki/decisions/Rendered Plan Orchestrator And Test-stage Lens Digest.md": "wiki-owned",
     "wiki/decisions/shadcn Component Layer.md": "wiki-owned",
     "wiki/decisions/Shared Codify Declines.md": "wiki-owned",
     "wiki/decisions/Spec And Plan Without Test Design.md": "wiki-owned",
@@ -918,7 +919,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T17:04:29.638Z",
+  "generated": "2026-11-24T17:32:04.739Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
