@@ -46,6 +46,23 @@ run_hook_split() {
   run --separate-stderr bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$REPO" "$(payload_for "$1")" "$REPO/.claude/hooks/pr-merge-cost.sh"
 }
 
+# open_run <workflow>: the start row of a recorded run in session s-hook, with no close.
+open_run() {
+  jq -nc --arg workflow "$1" '{schema_version:1,kind:"binding",type:"start",session_id:"s-hook",ts:"2026-09-25T01:00:00Z",workflow:$workflow}' \
+    >>"$TELEMETRY_DIRECTORY/usage.jsonl"
+}
+
+# stub_gh_home <owner/repo>: `gh repo view` names the home repository; every other call keeps the shared stub.
+stub_gh_home() {
+  mv "$TEMPORARY_DIRECTORY/bin/gh" "$TEMPORARY_DIRECTORY/bin/gh.shared"
+  cat >"$TEMPORARY_DIRECTORY/bin/gh" <<EOF
+#!/usr/bin/env bash
+[ "\$1 \$2" = "repo view" ] && { printf '{"nameWithOwner":"$1","url":"https://github.com/$1"}\\n'; exit 0; }
+exec "\$(dirname "\$0")/gh.shared" "\$@"
+EOF
+  chmod +x "$TEMPORARY_DIRECTORY/bin/gh"
+}
+
 # run_nojq <hook> <command>: the hook under a PATH that carries cat and grep
 # and no jq.
 run_nojq() {
@@ -150,4 +167,48 @@ run_nojq() {
   run_nojq "$REPO/.claude/hooks/pr-merge-cost.sh" "gh pr view 101"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+}
+
+@test "a merge in a session with an open run prints the record command with the workflow and the merged PR" {
+  gh_view 103 103 fix/foo MERGED 2026-09-25T02:00:00Z
+  open_run gaia-debt
+  run_merge "gh pr merge 103 --squash"
+  [ "$status" -eq 0 ]
+  has_line "[run cost] this session has an open run; if nothing else records it once the merge has landed, close the run with: bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt --pr 103"
+}
+
+@test "no run-cost line when the session never opened a run or the run already has its record" {
+  gh_view 103 103 fix/foo MERGED 2026-09-25T02:00:00Z
+  run_merge "gh pr merge 103 --squash"
+  [ "$status" -eq 0 ]
+  lacks "[run cost]"
+  open_run gaia-debt
+  run bash -c 'cd "$1" && CLAUDE_CODE_SESSION_ID=s-hook bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt' _ "$REPO"
+  [ "$status" -eq 0 ]
+  run_merge "gh pr merge 103 --squash"
+  [ "$status" -eq 0 ]
+  lacks "[run cost]"
+}
+
+@test "the run-cost line arms on -R naming this repository before or after the subcommand, and not on another repository" {
+  stub_gh_home acme/widgets
+  gh_view 103 103 fix/foo MERGED 2026-09-25T02:00:00Z
+  open_run gaia-debt
+  local row
+  for row in "gh pr merge -R acme/widgets 103 --squash" "gh -R acme/widgets pr merge 103 --squash" "gh pr merge 103 --repo=acme/widgets --squash"; do
+    run_merge "$row"
+    [ "$status" -eq 0 ] || return 1
+    has_line "[run cost] this session has an open run; if nothing else records it once the merge has landed, close the run with: bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt --pr 103" || { echo "row $row: no line" >&2; return 1; }
+  done
+  run_merge "gh pr merge 103 -R other/project --squash"
+  [ "$status" -eq 0 ]
+  lacks "[run cost]"
+}
+
+@test "a plan run's line points at its skill's own record step and carries no command" {
+  gh_view 103 103 fix/foo MERGED 2026-09-25T02:00:00Z
+  open_run gaia-plan
+  run_merge "gh pr merge 103 --squash"
+  [ "$status" -eq 0 ]
+  has_line "[run cost] this session has an open run; if nothing else records it once the merge has landed, close the run with the record step of its own skill"
 }
