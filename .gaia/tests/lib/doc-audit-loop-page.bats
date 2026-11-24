@@ -230,7 +230,7 @@ enforcement_draft_passes() {
   grep -qF -- 'ask one `AskUserQuestion` that recommends nothing, its options in this order: `Keep` (run the Quality Gate, commit' <<<"$row" || return 1
   grep -qF -- 'show `git -C <RESOLVED_ROOT> status --short` and `git -C <RESOLVED_ROOT> diff`, every path the fixer touched,' <<<"$row" || return 1
   grep -qF -- 'and `Decline` (first run `record-residual --decision discard` for each named key, which removes its veto and records it as an accepted residual; once every key is recorded, restore every path shown' <<<"$row" || return 1
-  grep -qF -- 'so when a named key'"'"'s finding is Critical or security-class (its `severity` and `security` in the round'"'"'s findings; `stop_detail` names neither) the second option is `Redo` in place of `Decline`; `Redo` also follows a `discard` refused on a key no round reports.' <<<"$row" || return 1
+  grep -qF -- 'so when a named key'"'"'s finding is Critical or security-class (its `severity` and `security` in any round'"'"'s findings; `stop_detail` names neither) the second option is `Redo` in place of `Decline`; `Redo` also follows a `discard` refused on a key no round reports.' <<<"$row" || return 1
   grep -qF -- 'with that non-blank note as its reason, which becomes the veto'"'"'s direction' <<<"$row" || return 1
   grep -qE -- '`Hold`|`Commit`|`Discard`' <<<"$row" && return 1
   return 0
