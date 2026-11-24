@@ -19,7 +19,7 @@ GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS=(
   commit push reset checkout switch restore rebase merge cherry-pick revert am stash
 )
 
-# The `git stash` verbs that write nothing. Every other stash form, a bare
+# The `git stash` verbs that write nothing. Every other stash subcommand, a bare
 # `git stash` included, writes to the working tree, the stack every checkout
 # shares, the object store or a ref.
 GAIA_SUBAGENT_GIT_STASH_READ_VERBS=(list show)
