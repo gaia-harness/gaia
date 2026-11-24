@@ -169,6 +169,7 @@ neutralize_quoted_separators() {
       if [[ "$character" == "$quote" ]]; then
         quote=''
       else
+        # sanctioned copy of .claude/hooks/lib/verb-arming-live-view.sh#GAIA_VERB_ARM_COMMAND_SEPARATORS
         case "$character" in ';'|'&'|'|') character=' ' ;; esac
       fi
     else

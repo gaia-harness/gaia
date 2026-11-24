@@ -302,6 +302,20 @@ runs_guarded_script() {
       *audit-loop-grant.sh* | *audit-loop-ask-grant.sh* | *state-reaper*) ;;
       *) return 1 ;;
     esac
+    # A heredoc body the walker proves is data (a `cat` or `tee` into a file)
+    # is text, not commands; its lines would otherwise each read as a segment.
+    # A missing walker or an abstention leaves the body judged.
+    case "$command_line" in
+      *'<<'*)
+        if ! type gaia_verb_arm_view >/dev/null 2>&1; then
+          # shellcheck source=verb-arming-walk.sh
+          [ -f "${BASH_SOURCE[0]%/*}/verb-arming-walk.sh" ] && . "${BASH_SOURCE[0]%/*}/verb-arming-walk.sh" 2>/dev/null
+        fi
+        if type gaia_verb_arm_view >/dev/null 2>&1 && gaia_verb_arm_view "$command_line"; then
+          command_line="$GAIA_VERB_ARM_VIEW"
+        fi
+        ;;
+    esac
   fi
   segments="${command_line//\$\(/$'\n'}"
   segments=$(printf '%s' "$segments" | tr ';&|`()' '\n')

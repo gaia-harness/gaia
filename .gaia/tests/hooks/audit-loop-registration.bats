@@ -42,6 +42,7 @@ setup() {
     '.hooks.PostToolUse[] | select(.matcher == "AskUserQuestion")^audit-loop-ask-grant.sh'
     '.hooks.PreToolUse[] | select(.matcher == "Edit|Write|MultiEdit")^block-audit-loop-write.sh'
     '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")^block-audit-loop-write.sh'
+    '.hooks.PreToolUse[] | select(.matcher == "ScheduleWakeup|CronCreate|RemoteTrigger|SendMessage")^block-scheduled-audit-line.sh'
   )
   local shape_rows=(
     '[.hooks.PreToolUse[] | select(.matcher == "Agent|Task") | .hooks[].command] | any(test("block-fourth[-]audit-round")) | not'

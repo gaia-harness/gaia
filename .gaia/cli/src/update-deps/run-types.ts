@@ -1,3 +1,4 @@
+import type {BumpKind} from '../release/bump.js';
 import type {SnoozedGroup} from './declines.js';
 
 /**
@@ -6,9 +7,9 @@ import type {SnoozedGroup} from './declines.js';
  * guarantee, mirroring npm-check. It is a display label only; wave routing
  * (`kind`) is unaffected.
  */
-export type Bucket = 'major' | 'minor' | 'nonsemver' | 'patch';
+export type Bucket = 'nonsemver' | BumpKind;
 
-export type Kind = 'major' | 'minor' | 'patch';
+export type Kind = BumpKind;
 
 export type PnpmResult = {
   status: null | number;

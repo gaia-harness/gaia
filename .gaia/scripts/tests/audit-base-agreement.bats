@@ -893,6 +893,7 @@ probe_deadlock() {
   member_error="$(cd "$repo" && ./.github/audit/resolve-audit-base.sh --member "$member" 2>&1 >/dev/null)"
   member_reason="$(grep -oE 'reason=[a-z-]+' <<<"$member_error" | head -n1 | cut -d= -f2)"
   case "$member_reason" in
+    # sanctioned copy of .gaia/scripts/audit-loop-signals-lib.sh#_GAIA_LOOP_INCREMENTAL_BASE_REASONS
     team-signal | member-clearance | member-refusal) ;;
     *)
       printf '%s: --member resolved reason %s, expected team-signal, member-clearance, or member-refusal: %s\n' \

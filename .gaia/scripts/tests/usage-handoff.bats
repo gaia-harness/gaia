@@ -55,12 +55,12 @@ ledger() { printf '%s/usage.jsonl' "$TEL"; }
 last_stdout_line() { printf '%s' "${lines[$((${#lines[@]} - 1))]}"; }
 initiative_tokens() { usage initiative "$1" --line --json | jq -r '.tokens'; }
 
-# handoff_line: the join line `handoff` prints in the current session.
+# handoff_line: the join line, the first of the two lines `handoff` prints in the current session.
 handoff_line() {
   run --separate-stderr usage handoff
   [ "$status" -eq 0 ] || return 1
   [ -z "$stderr" ] || return 1
-  printf '%s' "$output"
+  printf '%s' "${lines[0]}"
 }
 # join_with <line>: runs a printed join line against the pinned roots.
 join_with() {
@@ -154,6 +154,21 @@ join_with() {
 }
 
 # ---------- no open run, refusals, recovery ----------
+
+@test "handoff's second line names how the run closes: a command ref for a command, the skill's own step for a plan" {
+  main_start s1 10:00 gaia-debt
+  run --separate-stderr usage handoff
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 2 ]
+  [ "${lines[1]}" = "close the run with: bash .gaia/scripts/usage.sh record command:gaia-debt --workflow gaia-debt" ]
+  run usage record command:gaia-debt --workflow gaia-debt
+  [ "$status" -eq 0 ]
+  in_session sess-b
+  main_start s2 11:00 gaia-plan
+  run --separate-stderr usage handoff
+  [ "$status" -eq 0 ]
+  [ "${lines[1]}" = "close the run with the record step of its own skill" ]
+}
 
 @test "handoff with no open run prints nothing and exits 0" {
   main_usage a1 10:10 1000

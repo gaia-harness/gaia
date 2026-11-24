@@ -19,8 +19,10 @@ _GAIA_LOOP_HARD_CAP=10
 # The review-base reasons that mean a member reviewed incrementally, shared by
 # the snapshot program and the stop's cheap pre-check so the set exists once.
 # An absent reason is never incremental.
-# shellcheck disable=SC2016
-_GAIA_LOOP_STOP_DEFS_JQ='def incremental_base: IN("member-clearance", "member-refusal", "team-signal");'
+_GAIA_LOOP_INCREMENTAL_BASE_REASONS=(member-clearance member-refusal team-signal)
+_gaia_loop_reasons_jq="$(printf '"%s", ' "${_GAIA_LOOP_INCREMENTAL_BASE_REASONS[@]}")"
+_GAIA_LOOP_STOP_DEFS_JQ="def incremental_base: IN(${_gaia_loop_reasons_jq%, });"
+unset _gaia_loop_reasons_jq
 
 # The signal block of the snapshot program. It runs inside
 # audit-loop-round-lib.sh's verdict program, after $counted, $authored_count, $previous_authored_count, $second_previous_authored_count, $verdict and

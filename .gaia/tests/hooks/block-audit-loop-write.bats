@@ -76,6 +76,7 @@ run_monitor() {
 # a command line for Bash and Monitor.
 run_as() {
   case "$1" in
+    # sanctioned copy of .claude/hooks/lib/hook-payload.sh#GAIA_HOOK_EDIT_TOOLS
     Write | Edit | MultiEdit) run_edit "$1" "$2" "${3:-$MAIN}" ;;
     Bash) run_bash "$2" "${3:-$MAIN}" ;;
     Monitor) run_monitor "$2" "${3:-$MAIN}" ;;
@@ -467,6 +468,43 @@ assert_reaper_denied() {
     run_as "$row_tool" "$row_input" "$row_cwd"
     assert_row_allowed
   done
+}
+
+@test "a data heredoc line naming a reaper script is allowed, and a heredoc that runs one is denied" {
+  local row nl=$'\n'
+  local allowed_rows=(
+    "Bash~cat > $BATS_TEST_TMPDIR/notes.md <<'EOF'${nl}state-reaper.sh prunes spent entries${nl}EOF~~"
+    "Bash~cat > $BATS_TEST_TMPDIR/notes.md <<EOF${nl}state-reaper-lib.sh prunes spent entries${nl}EOF~~"
+    "Bash~tee $BATS_TEST_TMPDIR/notes.md <<'EOF'${nl}state-reaper.sh prunes spent entries${nl}EOF~~"
+  )
+  local denied_rows=(
+    "Bash~bash <<'EOF'${nl}bash .gaia/scripts/state-reaper.sh${nl}EOF~~"
+    "Bash~cat <<'EOF' | bash${nl}bash .gaia/scripts/state-reaper.sh${nl}EOF~~"
+    "Bash~cat > $BATS_TEST_TMPDIR/notes.md <<'EOF'${nl}state-reaper.sh is data${nl}EOF${nl}bash .gaia/scripts/state-reaper.sh~~"
+    "Bash~cat > $BATS_TEST_TMPDIR/notes.md <<'EOF' && bash .gaia/scripts/state-reaper.sh${nl}data${nl}EOF~~"
+    "Bash~cat > $BATS_TEST_TMPDIR/notes.md <<'EOF'; bash .gaia/scripts/state-reaper.sh${nl}data${nl}EOF~~"
+  )
+  for row in "${allowed_rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_row_allowed
+  done
+  for row in "${denied_rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_reaper_denied
+  done
+}
+
+# bats test_tags=protected
+@test "a recorder run on the opener line of a data heredoc is denied" {
+  local nl=$'\n'
+  printf '{"seed":1}' >"$STATE"
+  assert_recorder_denied "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF' && bash $ASK_RECORDER${nl}data${nl}EOF"
+  assert_recorder_denied "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF'; bash $GRANT_RECORDER${nl}data${nl}EOF"
+  assert_recorder_denied "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF' && $ASK_RECORDER${nl}data${nl}EOF"
 }
 
 # --- deny text, every class ---

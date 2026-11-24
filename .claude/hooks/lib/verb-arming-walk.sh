@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The data-proof walker behind the shared verb-arming decision, and the
 # liveness scan after it (verb-arming-live-helpers.sh states its contract).
-# Sourced by lib/verb-arming.sh, lazily, only once a raw arming match has
-# already hit or the text carries gh and a repository flag; sourced by nothing
-# else. Does no work at source time beyond
+# Sourced lazily by lib/verb-arming.sh, once a raw arming match has already hit
+# or the text carries gh and a repository flag, and by lib/reader-operands.sh
+# for the heredoc view. Does no work at source time beyond
 # loading its sibling files.
 #
 #   gaia_verb_arm_view <text>
@@ -45,10 +45,11 @@
 #
 # The body runs from the newline ENDING the opener line, not from the heredoc
 # operator, so anything still on the opener line after the operator is ordinary
-# command text and keeps its arming power. That newline is masked with the body
-# it introduces, because it is the separator a body's first line would arm on.
-# The newline that ends the last body line is left alone: nothing after it is
-# body, and leaving it is the direction that suppresses less.
+# command text and keeps its arming power. That newline is kept, so the last
+# word on the opener line stays whole (`cat > f <<'EOF' && bash <script>`); the
+# body after it is masked to one line of filler, which arms nothing. The newline
+# that ends the last body line is left alone: nothing after it is body, and
+# leaving it is the direction that suppresses less.
 #
 # NOTHING ELSE IS PROOF. Quoted spans are never suppressed: a `bash -c` runs
 # what it is handed from inside one, and a runner reached through a variable
@@ -262,6 +263,12 @@ _gaia_va_opener_is_data() {
   # condition 3 rejects it anywhere on the line.
   case "$text_before_operator" in
     *'&'*|*';'*|*'('*) return 1 ;;
+  esac
+  # An output process substitution (`cat <<'EOF' > >(sh)`) satisfies the
+  # redirect regex below while a shell reads what `cat` writes, so it is refused
+  # here: `>(` anywhere on the line is not a file word.
+  case "$line" in
+    *'>('*) return 1 ;;
   esac
   # Condition 3, read as "no `$` at all" rather than as a list of expansion
   # openers. Narrower than the whitelist's letter, and narrower is the safe

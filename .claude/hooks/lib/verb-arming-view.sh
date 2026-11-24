@@ -249,11 +249,7 @@ gaia_verb_arm_view() {
               *'$('*|*'`'*) data=0 ;;
             esac
           fi
-          if [ "$first" = 1 ] && [ "$data" = 1 ] && [ "$delimiter_offset" -gt 0 ]; then
-            view_text+=x
-          else
-            view_text+="$newline"
-          fi
+          view_text+="$newline"
           first=0
           if [ "$delimiter_offset" -gt 0 ]; then
             body="${remaining_text:0:$delimiter_offset}"

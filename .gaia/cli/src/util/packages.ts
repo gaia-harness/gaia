@@ -32,6 +32,7 @@ const PATH_PATTERN = /^(\.|[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*)$/;
 const CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
 
 /** The `globs` keys every descriptor must carry, in validation order. */
+// sanctioned copy of .claude/hooks/lib/gaia-packages.sh#_GAIA_PKG_GLOB_KEYS
 const GLOB_KEYS = [
   'tddUnitTests',
   'tddStrictCandidates',

@@ -28,6 +28,7 @@ import {run as runUpdateDeps} from './update-deps/index.js';
 import {run as runUpdate} from './update/index.js';
 import {createSubcommandRouter, runWhenInvokedDirectly} from './util/router.js';
 import type {SubcommandHandler} from './util/router.js';
+import {run as runValueSets} from './value-sets/index.js';
 import {run as runWiki} from './wiki/index.js';
 
 const HELP_TEXT = `Usage: gaia <subcommand> [args]
@@ -50,6 +51,7 @@ const HELP_TEXT = `Usage: gaia <subcommand> [args]
   residue-tally [--count-only]
   residue-cursor advance --token T|clear
   residue-record --disposition dismissed|kept|suppressed --token T [--token T ...] --reason-file F
+  value-sets [--candidates] [--config <path> | --policy-from <dir>]
 `;
 
 const SUBCOMMAND_HANDLERS: Readonly<
@@ -72,6 +74,7 @@ const SUBCOMMAND_HANDLERS: Readonly<
   setup: runSetup,
   update: runUpdate,
   'update-deps': runUpdateDeps,
+  'value-sets': runValueSets,
   wiki: runWiki,
 };
 

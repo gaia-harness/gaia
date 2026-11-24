@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Shared pure helpers for the spec and plan status vocabulary and retention
-# windows. Sourced, never run: it defines functions and nothing else, sources
-# nothing itself, and locates no file (the notebook library owns that).
+# windows. Sourced, never run: it defines functions and the status-key arrays
+# its case arms are marked against, sources nothing itself, and locates no file (the notebook library owns that).
 #
 # Public functions:
 #   gaia_ledger_kind_for_id <id>                  spec | plan, else nothing + 2
@@ -9,6 +9,10 @@
 #   gaia_ledger_age_past_window <iso> <now_epoch> <retention_days>
 #                                                 0 only for a parseable timestamp
 #                                                 at least retention_days old
+
+# shellcheck disable=SC2034 # the source arrays the status arms below and the notebook library's copies are marked against; no code reads them
+_GAIA_LEDGER_SPEC_STATUS_KEYS=(spec:draft spec:ready spec:merged spec:abandoned)
+_GAIA_LEDGER_PLAN_STATUS_KEYS=(plan:ready plan:merged plan:abandoned)
 
 gaia_ledger_kind_for_id() {
   case "${1:-}" in
@@ -21,7 +25,9 @@ gaia_ledger_kind_for_id() {
 
 gaia_ledger_status_allowed() {
   case "${1:-}:${2:-}" in
+    # sanctioned copy of .gaia/scripts/spec/ledger-lib.sh#_GAIA_LEDGER_SPEC_STATUS_KEYS
     spec:draft | spec:ready | spec:merged | spec:abandoned) return 0 ;;
+    # sanctioned copy of .gaia/scripts/spec/ledger-lib.sh#_GAIA_LEDGER_PLAN_STATUS_KEYS
     plan:ready | plan:merged | plan:abandoned) return 0 ;;
     *) return 1 ;;
   esac

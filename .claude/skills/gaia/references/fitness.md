@@ -207,7 +207,7 @@ Ask once, via `AskUserQuestion`, after the verify card:
 
 The diff is expected to touch only out-of-audit-scope surfaces (`.claude/**`, root-level `CLAUDE.md`), which clear the merge gate through the out-of-scope bypass (`wiki/concepts/Audit Gate Reference.md`, `#### Signals`). Do not assume it: a heal fix can restore a framework surface the roster claims.
 
-Run the Quality Gate first **only** if the applied diff touched a gate-affecting file (`.ts|tsx|js|jsx|mjs|cjs|css` or gate config); a config or docs-only heal has nothing for it to check.
+Run the Quality Gate before committing; `wiki/decisions/Quality Gate.md` `## When to skip the gate` says which of its steps a config or docs-only heal skips.
 
 <!-- gaia:maintainer-only:start -->
 Clear the **CHANGELOG gate** per `wiki/concepts/PR Merge Workflow.md` before committing: a pure config or hygiene heal is usually an internal, no-entry change; land a `## [Unreleased]` entry in the working tree only if the heal changed adopter-relevant behavior, so it joins the same commit. Scrubbed from adopter bundles.

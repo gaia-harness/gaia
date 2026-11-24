@@ -92,7 +92,9 @@ const WIKI_OWNED_PREFIXES = [
 
 const WIKI_OWNED_EXACT = new Set(['wiki/overview.md', 'wiki/README.md']);
 
-export type ManifestClass = 'owned' | 'shared' | 'wiki-owned';
+const MANIFEST_CLASSES = ['owned', 'shared', 'wiki-owned'] as const;
+
+export type ManifestClass = (typeof MANIFEST_CLASSES)[number];
 
 /**
  * Trimmed, non-blank, non-comment lines from a `.gaia/release-exclude` body.
@@ -200,11 +202,7 @@ export const classifyPath = (relativePath: string): ManifestClass | null => {
   return 'owned';
 };
 
-const ManifestClassSchema = z.literal([
-  'owned',
-  'shared',
-  'wiki-owned',
-] as const);
+const ManifestClassSchema = z.literal(MANIFEST_CLASSES);
 
 const RegionRegenerateSchema = z.object({
   args: z.array(z.string()),
