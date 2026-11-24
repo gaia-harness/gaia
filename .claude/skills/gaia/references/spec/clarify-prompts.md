@@ -197,11 +197,9 @@ Slot semantics:
   Quote it back so the user knows what was sent and can correct
   scope before the subagent runs.
 
-After announcing, the PO performs the dispatch by calling the Agent
-tool (`subagent_type: general-purpose`) with `<question>` as the task,
-the announce line above is narration, not the dispatch itself. Findings
-are folded into `research_summary` of the SPEC. The PO never asks the
-human to do the research themselves.
+After announcing, the PO dispatches the research as `clarify-loop.md`
+`## 5e. Research subagent dispatch` states, and never asks the human to
+do the research themselves.
 
 ---
 

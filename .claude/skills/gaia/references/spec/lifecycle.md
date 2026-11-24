@@ -100,9 +100,9 @@ Runs after `gh pr merge`, in this order. Each step runs only after the one befor
 
    A spec-colocated plan subfolder is deleted; a spec-less plan folder is reduced to `SUMMARY.md`, with its `RUNNING` sentinel cleared. The helper leaves the folder untouched until the usage ledger holds a `gaia-plan` close for the run and a consolidated `SUMMARY.md` exists (the parent SPEC's, passing its verifier, for a spec-colocated plan). It always exits 0.
 
-`REQUIREMENTS.md`, when the SPEC folder holds one, is left in place beside `SUMMARY.md`: it is not a consolidation layer and nothing removes it here. Only the retention window below reaps it, with the folder.
+`REQUIREMENTS.md`, when the SPEC folder holds one, is left in place beside `SUMMARY.md`, and so are `CODE-MAP.json` and its `CODE-MAP.sha256` record: none is a consolidation layer and nothing removes them here. Only the retention window below reaps them, with the folder.
 
-**Retention.** The SPEC folder's `SUMMARY.md` (and `REQUIREMENTS.md` beside it) and a reduced spec-less plan folder, stay for `GAIA_SPEC_RETENTION_DAYS` (default 30). Nothing reaps them early; the pre-flight sweep reaps them once past the window.
+**Retention.** The SPEC folder's `SUMMARY.md` (and `REQUIREMENTS.md`, `CODE-MAP.json` and `CODE-MAP.sha256` beside it) and a reduced spec-less plan folder, stay for `GAIA_SPEC_RETENTION_DAYS` (default 30). Nothing reaps them early; the pre-flight sweep reaps them once past the window.
 
 ## Pre-flight sweep
 
