@@ -16,6 +16,7 @@
     ".claude/commands/gaia-fitness.md": "owned",
     ".claude/commands/gaia-forensics.md": "owned",
     ".claude/commands/gaia-init.md": "owned",
+    ".claude/commands/gaia-next.md": "owned",
     ".claude/commands/gaia-plan.md": "owned",
     ".claude/commands/gaia-residue.md": "owned",
     ".claude/commands/gaia-spec.md": "owned",
@@ -128,6 +129,7 @@
     ".claude/hooks/wiki-session-start.sh": "owned",
     ".claude/hooks/workflow-doctrine-inject.sh": "owned",
     ".claude/hooks/worthiness-presence-check.sh": "owned",
+    ".claude/loop.md": "owned",
     ".claude/rules/ambient-context-resolution.md": "owned",
     ".claude/rules/bats-assertions.md": "owned",
     ".claude/rules/code-comments.md": "owned",
@@ -352,6 +354,7 @@
     ".gaia/scripts/fitness-ownership.sh": "owned",
     ".gaia/scripts/fitness-publish.sh": "owned",
     ".gaia/scripts/frontend-lint-delta.sh": "owned",
+    ".gaia/scripts/gaia-next.sh": "owned",
     ".gaia/scripts/gate-member-warnings.sh": "owned",
     ".gaia/scripts/gh-artifact-lib.sh": "owned",
     ".gaia/scripts/install-react-doctor.sh": "owned",
@@ -793,6 +796,7 @@
     "wiki/concepts/GAIA Cleanse.md": "wiki-owned",
     "wiki/concepts/GAIA CLI.md": "wiki-owned",
     "wiki/concepts/GAIA Init Workflow.md": "wiki-owned",
+    "wiki/concepts/GAIA Next.md": "wiki-owned",
     "wiki/concepts/GAIA Philosophy.md": "wiki-owned",
     "wiki/concepts/GAIA Plan.md": "wiki-owned",
     "wiki/concepts/GAIA Scripts.md": "wiki-owned",
@@ -914,7 +918,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T12:05:54.331Z",
+  "generated": "2026-11-24T15:03:55.804Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
