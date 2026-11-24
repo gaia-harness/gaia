@@ -28,29 +28,16 @@ GAIA_SUBAGENT_GIT_STASH_READ_VERBS=(list show)
 # its own fix rounds, the doctrine's one sanctioned exception.
 GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 
-# subagent_git_shared_state_command: 0 when the segment
-# parse_git_globals last read writes state every linked worktree shares: a
-# stash write verb (the stash stack is one per repository) or
-# --ignore-other-worktrees (it lets a checkout take a branch another tree holds).
-# The option is read from the parsed, quote-stripped git_args by
-# _history_has_option (lib/main-git-guard-history.sh), so a quoted spelling or
-# an unambiguous prefix such as --ignore-o counts too.
-subagent_git_shared_state_command() {
-  local read_verb
-  _history_has_option --ignore-other-worktrees && return 0
-  [ "$git_subcommand" = stash ] || return 1
-  for read_verb in ${GAIA_SUBAGENT_GIT_STASH_READ_VERBS[@]+"${GAIA_SUBAGENT_GIT_STASH_READ_VERBS[@]}"}; do
-    [ "${git_args[0]:-}" = "$read_verb" ] && return 1
-  done
-  return 0
-}
+# The denied subcommands a sub-agent may still run from its own isolated
+# worktree. commit writes that tree's index and its own branch; push writes the
+# remote. Every other denied verb can reach state the linked worktrees share
+# (the stash stack, another tree's branch), so it stays denied there too.
+GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS=(commit push) # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
 
-# subagent_git_own_tree_command <agent id> <command>: 0 when the command acts
-# only on the sub-agent's own isolated worktree checkout (its files, index and
-# HEAD) and writes no state the linked worktrees share. The commit rule's reason
-# (siblings share one tree) does not hold for a tree only this agent uses; the
-# stash stack and branch refs are shared, so stash writes and
-# --ignore-other-worktrees still fail this test.
+# subagent_git_own_tree_command <agent id> <command>: 0 when the command runs
+# only GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS among the denied verbs, and
+# only on the sub-agent's own isolated worktree. The commit rule's reason
+# (siblings share one tree) does not hold for a tree only this agent uses.
 #   - The acting directory's checkout root is a linked worktree (a `.git` file)
 #     named `agent-<agent id>`, the name isolation gives the worktree it makes
 #     for that sub-agent. The id is unique, so a sub-agent in its parent's tree,
@@ -62,11 +49,10 @@ subagent_git_shared_state_command() {
 #     A `cd`, `pushd`, `sh -c`, env prefix (`GIT_DIR=`), `-c core.worktree=`,
 #     `--git-dir` or `--work-tree` could carry git into the parent's tree, so
 #     any of them fails this test.
-# Needs acting_directory, parse_git_globals, git_global_words and git_cwd from
-# lib/main-git-guard-parse.sh, and _history_has_option from
-# lib/main-git-guard-history.sh.
+# Needs acting_directory, parse_git_globals, git_global_words, git_subcommand
+# and git_cwd from lib/main-git-guard-parse.sh.
 subagent_git_own_tree_command() {
-  local agent_id="$1" command="$2" directory checkout_root segment target_root
+  local agent_id="$1" command="$2" directory checkout_root segment target_root own_verb allowed
   [ -n "$agent_id" ] || return 1
   directory=$(acting_directory)
   checkout_root=$(git ${directory:+-C "$directory"} rev-parse --show-toplevel 2>/dev/null) || return 1
@@ -77,7 +63,13 @@ subagent_git_own_tree_command() {
     [ -n "$segment" ] || continue
     [[ "$segment" =~ ^git[[:space:]] ]] || return 1
     parse_git_globals "$segment"
-    ! subagent_git_shared_state_command "$segment" || return 1
+    if subagent_git_segment_denied; then
+      allowed=0
+      for own_verb in ${GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS[@]+"${GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS[@]}"}; do
+        [ "$git_subcommand" = "$own_verb" ] && allowed=1
+      done
+      [ "$allowed" -eq 1 ] || return 1
+    fi
     [ -n "${git_global_words[*]+set}" ] || continue
     [ "${#git_global_words[@]}" -eq 2 ] && [ "${git_global_words[0]}" = -C ] || return 1
     [[ "$git_cwd" =~ ^[A-Za-z0-9._/+@,:=-]+$ ]] || return 1

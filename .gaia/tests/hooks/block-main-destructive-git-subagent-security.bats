@@ -67,13 +67,20 @@ assert_denied() {
 }
 
 # bats test_tags=protected
-@test "from its own worktree, a sub-agent is denied any command that could reach another tree" {
+@test "from its own worktree, a sub-agent is denied every listed verb but commit and push, and any command that could reach another tree" {
   local own="$BATS_TEST_TMPDIR/agent-$AGENT_ID" command
   git -C "$REPO" worktree add --quiet -b "branch-agent-$AGENT_ID" "$own"
   # A directory literally named `$X` in the own tree: the shell would expand
   # the quoted word to wherever X points, so it must not read as the own tree.
   mkdir -p "$own/\$X"
   for command in \
+    'git reset --hard HEAD~1' \
+    'git rebase main' \
+    'git merge main' \
+    'git checkout main' \
+    'git restore file' \
+    "git -C $own reset --hard HEAD~1" \
+    'git commit -m change && git reset --hard HEAD~1' \
     "git -C $REPO commit -m change" \
     "git -C $REPO reset --hard HEAD~1" \
     'git -C "$X" commit -m change' \
@@ -99,7 +106,8 @@ assert_denied() {
     'git checkout "--ignore-other-worktrees" -B branch-main HEAD' \
     "git switch '--ignore-o' -C branch-main" \
     "git commit -m \"\$(cd $REPO && git reset --hard)\"" \
-    "git commit -m \"\`cd $REPO; git reset --hard\`\""; do
+    "git commit -m \"\`cd $REPO; git reset --hard\`\"" \
+    "git commit -m \"\`cd $REPO; git commit -m parent\`\""; do
     echo "case: $command"
     run_in_tree "$own" "$command"
     assert_denied
