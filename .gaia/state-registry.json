@@ -126,6 +126,19 @@
       }
     },
     {
+      "id": "autonomy-switch",
+      "path": "protected/autonomy.json",
+      "match": "exact",
+      "kind": "file",
+      "scope": "shared",
+      "keyed_by": "singleton per machine",
+      "why": "The human-written autonomy switch. Lives in the protected folder and is hand-authored by a human; Claude tool writes to it are denied by block-audit-loop-write.sh.",
+      "writer": "hand-authored",
+      "retention": {
+        "class": "keep"
+      }
+    },
+    {
       "id": "local-settings",
       "path": "settings.json",
       "match": "exact",
