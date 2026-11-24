@@ -49,7 +49,7 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/audit-pr-sections-lib.sh'    # renders the PR-body records and the recorded residuals
   '.gaia/scripts/audit-recorded-decision-lib.sh' # writes a recorded fix decision's veto
   '.gaia/scripts/audit-decided-unattended-lib.sh' # renders the decision log's PR-body section
-  '.gaia/scripts/autonomy-lib.sh'             # whether the run is unattended, and the decision log's path the PR-body section reads
+  '.gaia/scripts/autonomy-lib.sh'             # whether the switch is live, the audit budget's size, and the decision log a spend is written to and the PR-body section reads
   '.gaia/scripts/filing-outcomes-lib.sh'      # reads which keys the filer refused as branch-authored
   '.gaia/scripts/audit-loop-signals-lib.sh'   # rubric signals and unit/member decisions
   '.gaia/scripts/audit-veto-lib.sh'           # decides veto satisfaction
