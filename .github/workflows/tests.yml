@@ -273,7 +273,7 @@ jobs:
           retention-days: 5
       # The other end of the supported Node range (engines.node is
       # `^24.15.0 || >=26.0.0`): the pinned Node above is 24, so Vitest runs
-      # once more under Node 26 over the existing install. It runs last so the
+      # once more under Node 26 after a fresh install. It runs last so the
       # Storybook and Playwright steps stay on the pinned Node.
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Setup Node 26 and install
