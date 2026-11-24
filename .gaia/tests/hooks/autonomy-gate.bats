@@ -377,3 +377,29 @@ conflicted_lane() {
   blocked
   [[ "$output" != *"A merge is in progress"* ]]
 }
+
+@test "a conflict hunk late in the autonomy library blocks the call instead of half-loading it" {
+  conflicted_lane
+  git -C "$LANE" merge --abort
+  local library="$LANE/.gaia/scripts/autonomy-lib.sh"
+  awk '/^autonomy_protected_match\(\) \{/ { print "<<<<<<< x" } { print }' "$library" >"$BATS_TEST_TMPDIR/late"
+  cp "$BATS_TEST_TMPDIR/late" "$library"
+  bash -c '. "$1" 2>/dev/null; type autonomy_active' _ "$library" >/dev/null 2>&1
+  call Write "{\"file_path\":\"$LANE/.claude/settings.json\"}" "$LANE" "$HOOK"
+  blocked
+}
+
+@test "a rebase conflict in the autonomy library allows only its abort and the side pick, and warns about the dropped side" {
+  local library='.gaia/scripts/autonomy-lib.sh'
+  conflicted_lane
+  git -C "$LANE" merge --abort
+  git -C "$LANE" rebase other >/dev/null 2>&1 || true
+  [ -f "$(git -C "$LANE" rev-parse --git-path REBASE_HEAD)" ]
+  call Bash "$(jq -nc --arg command "git -C $LANE rebase --abort" '{command: $command}')" "$LANE" "$HOOK"
+  silent
+  call Bash "$(jq -nc --arg command "git -C $LANE merge --abort" '{command: $command}')" "$LANE" "$HOOK"
+  blocked
+  [[ "$output" == *"A rebase is in progress"*"git rebase --abort"*"drops the other side's changes"* ]]
+  call Bash "$(jq -nc --arg command "git -C $LANE checkout --ours -- $library" '{command: $command}')" "$LANE" "$HOOK"
+  silent
+}

@@ -101,29 +101,50 @@ load "$_gate_directory/lib/jq-availability.sh" gaia_require_jq
 gaia_require_jq 'the autonomy gate' "$payload" tool_input '.claude/' 'CLAUDE.md' 'CLAUDE.local.md' 'local/protected' 'autonomy-' '.gaia/scripts/'
 load "$_gate_directory/lib/hook-payload.sh" gaia_hook_payload_read
 load "$_gate_scripts/main-root-lib.sh" gaia_resolve_main_root
-# A merge that conflicts in autonomy-lib.sh leaves the library unparseable, and
-# every repair route is itself a gated call, so a refusal would be permanent. In
-# that one state (a merge in progress and the library unloadable) exactly the
-# commands below pass; widening the set opens the gate. The pattern admits only
-# an optional `git -C <path>` prefix and these fixed words, so no shell
-# metacharacter can ride along.
+# A merge, rebase, cherry-pick or revert that conflicts in autonomy-lib.sh leaves
+# the library unparseable, and every repair route is itself a gated call, so a
+# refusal would be permanent. In that one state (such an operation in progress
+# and the library unloadable) exactly the commands below pass; widening the set
+# opens the gate. The pattern admits only an optional `git -C <path>` prefix and
+# these fixed words, so no shell metacharacter can ride along. A call naming no
+# harness path never reaches this check (the raw pre-filter exits first), and a
+# refused call exits 2 with the message below rather than a JSON deny.
+# Bash runs a sourced file up to its first syntax error, so a conflict hunk late
+# in the library still defines the early functions: loadable means every function
+# the gate calls, or the protected-write arm fails open on a half-loaded library.
+library_is_loaded() {
+  local function_name
+  for function_name in autonomy_active autonomy_field autonomy_log_decision \
+    autonomy_human_only_header autonomy_protected_globs autonomy_relative_path \
+    autonomy_protected_match; do
+    type "$function_name" >/dev/null 2>&1 || return 1
+  done
+}
+
 load_autonomy_library() {
   set +e
   # shellcheck source=/dev/null
   [ -f "$1" ] && . "$1" 2>/dev/null
   set -e
-  ! type autonomy_active >/dev/null 2>&1 || return 0
-  local merging=0 library=".gaia/scripts/${1##*/}" pattern
-  pattern="^git( -C [A-Za-z0-9_./+@:-]+)? (merge --abort|(checkout|restore) (--ours |--theirs )?-- ${library//./\\.})\$"
+  ! library_is_loaded || return 0
+  local operation='' candidate library=".gaia/scripts/${1##*/}" pattern
   if gaia_hook_payload_read "$payload" && [ "$GAIA_HOOK_TOOL_NAME" = Bash ]; then
-    git -C "$GAIA_HOOK_CWD" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && merging=1
-    if [ "$merging" -eq 1 ] && [[ "$GAIA_HOOK_COMMAND" =~ $pattern ]]; then
-      exit 0
+    for candidate in merge:MERGE_HEAD rebase:REBASE_HEAD cherry-pick:CHERRY_PICK_HEAD revert:REVERT_HEAD; do
+      if git -C "$GAIA_HOOK_CWD" rev-parse -q --verify "${candidate#*:}" >/dev/null 2>&1; then
+        operation=${candidate%%:*}
+        break
+      fi
+    done
+    if [ -n "$operation" ]; then
+      pattern="^git( -C [A-Za-z0-9_./+@:-]+)? ($operation --abort|(checkout|restore) (--ours |--theirs )?-- ${library//./\\.})\$"
+      if [[ "$GAIA_HOOK_COMMAND" =~ $pattern ]]; then
+        exit 0
+      fi
     fi
   fi
   printf 'BLOCKED: autonomy-gate.sh cannot load %s, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.' "${1##*/}" >&2
-  if [ "$merging" -eq 1 ]; then
-    printf ' A merge is in progress: run exactly one of: git merge --abort, git checkout --ours|--theirs -- %s, git restore --ours|--theirs -- %s.' "$library" "$library" >&2
+  if [ -n "$operation" ]; then
+    printf ' A %s is in progress: run exactly one of: git %s --abort, git checkout --ours|--theirs -- %s, git restore --ours|--theirs -- %s. Choosing a side drops the other side'"'"'s changes to the library: re-apply them once it loads, before git add.' "$operation" "$operation" "$library" "$library" >&2
   fi
   printf '\n' >&2
   exit 2
