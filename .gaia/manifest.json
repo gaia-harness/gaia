@@ -282,6 +282,8 @@
     ".gaia/scripts/audit-code-review-record.sh": "owned",
     ".gaia/scripts/audit-code-review.sh": "owned",
     ".gaia/scripts/audit-dispositions-check.sh": "owned",
+    ".gaia/scripts/audit-dispositions-grade-lib.sh": "owned",
+    ".gaia/scripts/audit-dispositions-snapshot-lib.sh": "owned",
     ".gaia/scripts/audit-fix-verify-check-lib.sh": "owned",
     ".gaia/scripts/audit-fix-verify-state-lib.sh": "owned",
     ".gaia/scripts/audit-fix-verify.sh": "owned",
@@ -908,7 +910,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T06:43:58.410Z",
+  "generated": "2026-11-24T06:56:31.545Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

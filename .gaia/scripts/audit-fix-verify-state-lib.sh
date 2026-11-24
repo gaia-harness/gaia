@@ -42,6 +42,8 @@ ENFORCEMENT_PATHS=(
   '.claude/hooks/audit-loop-ask-grant.sh'     # records the human's AskUserQuestion answer
   '.gaia/scripts/context-checkpoint-lib.sh'   # shared context threshold and bands
   '.gaia/scripts/audit-dispositions-check.sh' # deterministic dispositions check
+  '.gaia/scripts/audit-dispositions-grade-lib.sh'    # the dispositions grading program, lookups and outcome check
+  '.gaia/scripts/audit-dispositions-snapshot-lib.sh' # the dispositions check frozen-snapshot helpers and live and snapshot checks
   '.gaia/scripts/branch-authorship-lib.sh'    # the authorship predicate the audit and filer share
   '.gaia/scripts/audit-pr-sections-lib.sh'    # renders the PR-body records and the recorded residuals
   '.gaia/scripts/audit-recorded-decision-lib.sh' # writes a recorded fix decision's veto

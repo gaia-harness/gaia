@@ -289,6 +289,8 @@ auditors:
       - ".gaia/scripts/audit-write-clearance-publish.sh"
       - ".gaia/scripts/audit-write-clearance-ledger.sh"
       - ".gaia/scripts/audit-dispositions-check.sh"
+      - ".gaia/scripts/audit-dispositions-grade-lib.sh"
+      - ".gaia/scripts/audit-dispositions-snapshot-lib.sh"
       - ".gaia/scripts/audit-veto-lib.sh"
       - ".gaia/scripts/audit-loop-stop-lib.sh"
       - ".gaia/scripts/audit-triage-lib.sh"
