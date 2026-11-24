@@ -2,7 +2,8 @@
 #
 # Repository-state helpers for audit-fix-verify.sh: the ENFORCEMENT_PATHS
 # list, the pin digest and its check, the snapshot of HEAD, index, dirty map
-# and untracked list, and the delta of a snapshot from a baseline. Sourced only by audit-fix-verify.sh
+# and untracked list, the delta of a snapshot from a baseline, and the judged
+# path map the check records and settled compares. Sourced only by audit-fix-verify.sh
 # from its own directory, so a pinned copy sources the pinned library; the
 # baseline-<r>.json shape these helpers read lives in that script's header.
 #
@@ -198,4 +199,22 @@ compute_delta() {
     LC_ALL=C comm -23 "$current_directory/base_untracked.txt" "$current_directory/untracked.txt"
   } | LC_ALL=C sort -u >"$current_directory/d_unt"
   return 0
+}
+
+# Writes $1/judged.json from the snapshot in $1: each path whose working
+# content differs from HEAD, and each untracked path, mapped to its
+# working-content blob hash (or deleted, or unreadable). Untracked paths are
+# hashed here, unlike in the baseline, so a later edit to a new file shows.
+judged_paths() {
+  local snapshot_directory="$1" file_path content_hash
+  : >"$snapshot_directory/untracked.tsv"
+  while IFS= read -r file_path; do
+    [ -n "$file_path" ] || continue
+    content_hash="$(_git hash-object -- "$file_path" 2>/dev/null)" || content_hash='unreadable'
+    printf '%s\t%s\n' "$content_hash" "$file_path" >>"$snapshot_directory/untracked.tsv"
+  done <"$snapshot_directory/untracked.txt"
+  jq -Rn --slurpfile dirty "$snapshot_directory/dirty.json" \
+    '$dirty[0] + ([inputs | capture("^(?<content_hash>[^\t]*)\t(?<file_path>.*)$")]
+      | map({key: .file_path, value: .content_hash}) | from_entries)' \
+    <"$snapshot_directory/untracked.tsv" >"$snapshot_directory/judged.json"
 }
