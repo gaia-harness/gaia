@@ -34,7 +34,6 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/audit-loop-round-lib.sh'     # the finding set and the round snapshot
   '.gaia/scripts/audit-loop-report-lib.sh'    # the checkpoint brief and the record values
   '.gaia/scripts/audit-budget-lib.sh'         # the unattended audit budget's limits and spend record
-  '.gaia/scripts/autonomy-lib.sh'             # whether the run is unattended, so whether the budget answers
   '.gaia/scripts/audit-fix-verify.sh'         # this verifier
   '.gaia/scripts/branch-name-lib.sh'          # branch key every state path derives from
   '.gaia/scripts/main-root-lib.sh'            # main-checkout resolution for every state path
@@ -50,7 +49,7 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/audit-pr-sections-lib.sh'    # renders the PR-body records and the recorded residuals
   '.gaia/scripts/audit-recorded-decision-lib.sh' # writes a recorded fix decision's veto
   '.gaia/scripts/audit-decided-unattended-lib.sh' # renders the decision log's PR-body section
-  '.gaia/scripts/autonomy-lib.sh'             # the decision log's path that section reads
+  '.gaia/scripts/autonomy-lib.sh'             # whether the run is unattended, and the decision log's path the PR-body section reads
   '.gaia/scripts/filing-outcomes-lib.sh'      # reads which keys the filer refused as branch-authored
   '.gaia/scripts/audit-loop-signals-lib.sh'   # rubric signals and unit/member decisions
   '.gaia/scripts/audit-veto-lib.sh'           # decides veto satisfaction

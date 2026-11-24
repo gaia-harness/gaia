@@ -338,7 +338,7 @@ _gaia_loop_cli() {
       budget_keys=("branch:$branch_key")
       pr_number="$(printf '%s' "$state" | jq -r '(.pr // 0) | if . > 0 then . else empty end')"
       [ -z "$pr_number" ] || budget_keys+=("pr:$pr_number")
-      subcommand_output="$(printf '%s' "$subcommand_output" | jq -c --argjson budget_grants "$(gaia_audit_budget_count "$main" "${budget_keys[@]}")" \
+      subcommand_output="$(printf '%s' "$subcommand_output" | jq -c --argjson budget_grants "$(gaia_audit_budget_count "$main" ${budget_keys[@]+"${budget_keys[@]}"})" \
         'if $budget_grants > 0 then . + {budget_grants: $budget_grants} else . end')" || return 1
       subcommand_output="$(_gaia_loop_with_review_counts "$root" "$subcommand_output")"
       _gaia_loop_with_review_object "$root" "$(gaia_loop_run_directory "$main" "$branch_key")" "$used" \
