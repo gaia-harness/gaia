@@ -28,13 +28,16 @@ GAIA_SUBAGENT_GIT_STASH_READ_VERBS=(list show)
 # its own fix rounds, the doctrine's one sanctioned exception.
 GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 
-# subagent_git_shared_state_command <segment>: 0 when the segment
+# subagent_git_shared_state_command: 0 when the segment
 # parse_git_globals last read writes state every linked worktree shares: a
 # stash write verb (the stash stack is one per repository) or
 # --ignore-other-worktrees (it lets a checkout take a branch another tree holds).
+# The option is read from the parsed, quote-stripped git_args by
+# _history_has_option (lib/main-git-guard-history.sh), so a quoted spelling or
+# an unambiguous prefix such as --ignore-o counts too.
 subagent_git_shared_state_command() {
   local read_verb
-  [[ " $1 " == *" --ignore-other-worktrees "* ]] && return 0
+  _history_has_option --ignore-other-worktrees && return 0
   [ "$git_subcommand" = stash ] || return 1
   for read_verb in ${GAIA_SUBAGENT_GIT_STASH_READ_VERBS[@]+"${GAIA_SUBAGENT_GIT_STASH_READ_VERBS[@]}"}; do
     [ "${git_args[0]:-}" = "$read_verb" ] && return 1
@@ -60,7 +63,8 @@ subagent_git_shared_state_command() {
 #     `--git-dir` or `--work-tree` could carry git into the parent's tree, so
 #     any of them fails this test.
 # Needs acting_directory, parse_git_globals, git_global_words and git_cwd from
-# lib/main-git-guard-parse.sh.
+# lib/main-git-guard-parse.sh, and _history_has_option from
+# lib/main-git-guard-history.sh.
 subagent_git_own_tree_command() {
   local agent_id="$1" command="$2" directory checkout_root segment target_root
   [ -n "$agent_id" ] || return 1

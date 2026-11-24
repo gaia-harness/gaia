@@ -94,6 +94,10 @@ assert_denied() {
     'git stash' \
     "git -C $own stash pop" \
     'git checkout --ignore-other-worktrees -B branch-main HEAD' \
+    'git checkout --ignore-o -B branch-main HEAD' \
+    'git switch --ignore-other -C branch-main' \
+    'git checkout "--ignore-other-worktrees" -B branch-main HEAD' \
+    "git switch '--ignore-o' -C branch-main" \
     "git commit -m \"\$(cd $REPO && git reset --hard)\"" \
     "git commit -m \"\`cd $REPO; git reset --hard\`\""; do
     echo "case: $command"
@@ -122,4 +126,29 @@ assert_denied() {
   git -C "$named" checkout --quiet -b feature-copy
   run_in_tree "$named" 'git commit -m change'
   assert_denied
+}
+
+# bats test_tags=protected
+@test "from its own worktree, a sub-agent is denied --ignore-other-worktrees in every abbreviated or quoted spelling and the parent's branch does not move" {
+  local own="$BATS_TEST_TMPDIR/agent-$AGENT_ID" command before after
+  git -C "$REPO" worktree add --quiet -b "branch-agent-$AGENT_ID" "$own"
+  before=$(git -C "$REPO" rev-parse feature)
+  for command in \
+    'git checkout --ignore-other-worktrees -B feature HEAD' \
+    'git checkout --ignore-other -B feature HEAD' \
+    'git checkout --ignore-o -B feature HEAD' \
+    'git checkout "--ignore-other-worktrees" -B feature HEAD' \
+    "git checkout '--ignore-o' -B feature HEAD" \
+    "git checkout --ignore-'other-worktrees' -B feature HEAD" \
+    'git switch --ignore-other-worktrees -C feature' \
+    'git switch --ignore-other -C feature' \
+    'git switch --ignore-o -C feature' \
+    'git switch "--ignore-other-worktrees" -C feature' \
+    "git switch '--ignore-o' -C feature"; do
+    echo "case: $command"
+    run_in_tree "$own" "$command"
+    assert_denied
+  done
+  after=$(git -C "$REPO" rev-parse feature)
+  [ "$before" = "$after" ]
 }
