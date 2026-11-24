@@ -14,7 +14,8 @@
 #   - no `agent_id` key (the main thread): allowed;
 #   - a well-formed `agent_id` with an `agent_type` on the exempt list: allowed;
 #   - any other sub-agent, a fork included: a listed subcommand in this
-#     repository is denied; read-only git (`status`, `diff`, `log`,
+#     repository is denied, except in the linked worktree isolation made for
+#     that agent (lib/subagent-git-policy.sh); read-only git (`status`, `diff`, `log`,
 #     `stash list`, `stash show`) and git aimed at another repository are
 #     allowed;
 #   - an `agent_id` key whose value is malformed, or an `agent_type` that is
@@ -241,6 +242,13 @@ subagent_git_restricted=0
 if [ "$GAIA_PAYLOAD_AGENT_PRESENT" -eq 1 ]; then
   if [ -z "$GAIA_PAYLOAD_AGENT_ID" ] || ! subagent_git_exempt "$GAIA_PAYLOAD_AGENT_TYPE"; then
     subagent_git_restricted=1
+    # An isolated sub-agent works in a worktree no sibling shares. Honest limit:
+    # the test reads the hook's own checkout, so a `-C` or `cd` from that
+    # worktree into another tree still passes this rule; the main-branch rules
+    # below still apply to it.
+    if subagent_git_own_worktree "${repository_root:-}" "$GAIA_PAYLOAD_AGENT_ID"; then
+      subagent_git_restricted=0
+    fi
   fi
 fi
 
@@ -350,7 +358,7 @@ while IFS= read -r segment; do
     [ -z "$git_cwd" ] || segment_kind=$(resolve_directory_kind "$git_cwd")
     case "$segment_kind" in
       'foreign '*) ;;
-      *) deny "Sub-agents never run git that changes state ('git $git_subcommand' here): .claude/doctrine/execution.md, \`## Roles and git\`. Sub-agents share one working tree, so one stray commit, checkout, reset or stash discards a sibling's edits. The main thread commits: leave your changes in the working tree and report them. Read-only git (status, diff, log, show, stash list, stash show) stays allowed." ;;
+      *) deny "Sub-agents never run git that changes state ('git $git_subcommand' here): .claude/doctrine/execution.md, \`## Roles and git\`. Sub-agents share one working tree, so one stray commit, checkout, reset or stash discards a sibling's edits. The main thread commits: leave your changes in the working tree and report them. If this is text that only mentions a command (a quoted string with a semicolon before the word commit), write it with the Write tool instead of an inline shell argument. Read-only git (status, diff, log, show, stash list, stash show) stays allowed." ;;
     esac
   fi
 
