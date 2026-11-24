@@ -102,7 +102,7 @@ Runs after `gh pr merge`, in this order. Each step runs only after the one befor
 
 `REQUIREMENTS.md`, when the SPEC folder holds one, is left in place beside `SUMMARY.md`, and so are `CODE-MAP.json` and its `CODE-MAP.sha256` record: none is a consolidation layer and nothing removes them here. Only the retention window below reaps them, with the folder.
 
-**Retention.** The SPEC folder's `SUMMARY.md` (and `REQUIREMENTS.md`, `CODE-MAP.json` and `CODE-MAP.sha256` beside it) and a reduced spec-less plan folder, stay for `GAIA_SPEC_RETENTION_DAYS` (default 30). Nothing reaps them early; the pre-flight sweep reaps them once past the window.
+**Retention.** The SPEC folder's `SUMMARY.md` (and the files left in place beside it above) and a reduced spec-less plan folder, stay for `GAIA_SPEC_RETENTION_DAYS` (default 30). Nothing reaps them early; the pre-flight sweep reaps them once past the window.
 
 ## Pre-flight sweep
 

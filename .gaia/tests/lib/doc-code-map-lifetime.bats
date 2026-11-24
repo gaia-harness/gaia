@@ -59,11 +59,8 @@ DRAFT
   echo "case: the post-merge close names both files as left in place"
   close="$(awk '/^## Post-merge close/{f=1;next} f&&/^## /{exit} f' "$LIFECYCLE_MD")"
   left_paragraph="$(grep -F '`REQUIREMENTS.md`, when the SPEC folder holds one, is left in place beside `SUMMARY.md`' <<<"$close")"
-  retention_paragraph="$(grep -F '**Retention.**' <<<"$close")"
   grep -qF 'CODE-MAP.json' <<<"$left_paragraph"
   grep -qF 'CODE-MAP.sha256' <<<"$left_paragraph"
-  grep -qF 'CODE-MAP.json' <<<"$retention_paragraph"
-  grep -qF 'CODE-MAP.sha256' <<<"$retention_paragraph"
   rm_line="$(grep -F 'rm <SPEC folder>/SPEC.md <SPEC folder>/AUDIT.md' <<<"$close")"
   grep -qF 'CODE-MAP' <<<"$rm_line" && return 1
 
