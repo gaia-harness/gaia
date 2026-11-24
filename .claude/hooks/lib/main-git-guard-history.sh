@@ -215,6 +215,44 @@ _history_names_main() {
   return 1
 }
 
+# rebase_branch_operands: set rebase_branch_words to the operands of the
+# `git rebase` segment that name the branch to rebase: the second operand
+# (`<upstream> <branch>`), or every operand under `--root`. The values of
+# `--onto`, `-X`/`--strategy-option`, `-s`/`--strategy` and `-x`/`--exec` are
+# skipped. A `-` operand is the previous branch, which this walk cannot
+# resolve, so it is counted but never read as main.
+rebase_branch_operands() {
+  local argument skip_next=0 operand_index=0 first_branch_index=1
+  rebase_branch_words=()
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    _history_option_is "$argument" --root && first_branch_index=0
+  done
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
+    case "$argument" in
+      -X | -s | -x) skip_next=1; continue ;;
+      --*=*) continue ;;
+      --*)
+        _history_option_is "$argument" --onto --strategy-option --strategy --exec && skip_next=1
+        continue ;;
+      -?*) continue ;;
+    esac
+    [ "$operand_index" -ge "$first_branch_index" ] && rebase_branch_words+=("$argument")
+    operand_index=$((operand_index + 1))
+  done
+}
+
+# _history_rebase_names_main_branch: 0 when the rebase segment checks out main
+# or master by naming it as the branch to rebase.
+_history_rebase_names_main_branch() {
+  local word
+  rebase_branch_operands
+  for word in ${rebase_branch_words[@]+"${rebase_branch_words[@]}"}; do
+    _history_is_main_ref "$word" && return 0
+  done
+  return 1
+}
+
 # _history_config_reason: the hooksPath rule. A `git config` that sets
 # core.hooksPath to anything but `.githooks`, or unsets it, switches off the
 # pre-commit floor for every later commit, the persistent form of the inline
@@ -391,6 +429,11 @@ history_rule_reason() {
          || { [ "$git_subcommand" = worktree ] && _history_force_create_names_main B; } \
          || { [ "$git_subcommand" = symbolic-ref ] && _history_symbolic_ref_writes_main; }; then
         history_reason="Deleting, renaming, copying over or force-moving the local main or master branch is the user's decision, not Claude's (wiki/concepts/Git Workflow.md): it is the base every feature branch, worktree and cleanup step reads. Ask the user to run it themselves if they want it."
+      fi
+      ;;
+    rebase)
+      if _history_rebase_names_main_branch; then
+        history_reason="This rebase names main or master as the branch to rebase, and git checks that branch out first, so it rewrites local main and leaves later commands in the same call standing on it. Main changes only through a merged pull request (wiki/concepts/Git Workflow.md). Rebase the feature branch onto main instead: check out the feature branch and run 'git rebase origin/main'."
       fi
       ;;
     reflog)
