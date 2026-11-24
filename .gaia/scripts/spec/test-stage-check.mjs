@@ -12,7 +12,7 @@
 // With --digest the script runs no check: it writes the digest the test-stage
 // lens reads first, prints its sha256 hex on one stdout line, and exits 0 (1 on
 // a refused source, one `test-stage-check:` stderr line, 2 on an unreadable
-// file). The format lives in the header of test-stage-digest.mjs.
+// source or an unwritable output). The format lives in the header of test-stage-digest.mjs.
 //
 // Reads every `task-*.md` of the plan directory. Test lines are read under each
 // doc's `## Tests` heading; a Flow test line is read anywhere in the doc, as the plan

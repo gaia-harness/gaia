@@ -22,7 +22,7 @@
 # heading up to the next part heading, leading and trailing blank lines trimmed,
 # emitted verbatim at its template slot. The ## Title body's first non-blank
 # line is the plan title; it also holds `Type: <Conventional Commits type>`
-# (matches ^[a-z]+$) and `Slug: <2-4 word slug>` (none of " ` $ \) lines. Each
+# (matches ^[a-z]+$) and `Slug: <2-4 word slug>` (non-empty, none of " ` $ \) lines. Each
 # phase entry in ## Phase entries opens with `**Phase <N>, <title>` on its own
 # line outside every fence; {PHASE_COUNT} is the number of those lines. A part
 # body holds none of the eight template tokens and no

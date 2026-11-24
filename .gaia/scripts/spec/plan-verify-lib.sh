@@ -89,8 +89,9 @@ security_writer_check() {
   done
 }
 
-# The renderer substitutes absolute values for these tokens in every file it
-# writes; one left behind sends a cold orchestrator to a literal brace path.
+# The planner (README.md, task docs) and the renderer (ORCHESTRATOR.md,
+# KICKOFF.md) substitute absolute values for these tokens; one left behind
+# sends a cold orchestrator to a literal brace path.
 placeholder_check() {
   local generated_file placeholder hit_line
   for generated_file in "$readme" "$orchestrator" "$plan_directory/KICKOFF.md" ${task_files[@]+"${task_files[@]}"}; do

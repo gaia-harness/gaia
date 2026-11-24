@@ -54,7 +54,7 @@ has() {
   has "$STAGE_MD" 'The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states and that the cap above holds. When it has a code map, it uses it only to locate existing test files and never derives an expected behavior from it.' || return 1
   has "$DISPATCH_MD" '| Code map (`<CODE_MAP_PATH>`) |' || return 1
   has "$DISPATCH_MD" 'When `<CODE_MAP_PATH>` is empty the caller drops the whole code-map bullet from the preamble.' || return 1
-  has "$DISPATCH_MD" 'removes only `rm -f <PLAN_DIR>/test-stage-findings/TST.json`' || return 1
+  has "$DISPATCH_MD" 'the re-clear is only `rm -f <PLAN_DIR>/test-stage-findings/TST.json`' || return 1
 }
 
 @test "a failed, absent or changed digest prints the fallback line and dispatches the lens on the whole plan" {

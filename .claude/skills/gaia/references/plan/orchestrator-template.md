@@ -1,6 +1,6 @@
 # Orchestrator template
 
-The one source of the text every generated `ORCHESTRATOR.md` and `KICKOFF.md` shares: the ten fixed step blocks and the generic sections around them. `.gaia/scripts/spec/orchestrator-render.sh` renders a plan's two files from this template and the plan's `orchestrator-parts.md`; `.gaia/scripts/spec/plan-verify.sh` checks each fixed block of a rendered `ORCHESTRATOR.md` against this file's copy. Those two scripts, and the suites that pin this file, are its only readers: a planner or a session never reads it. Everything below the two regions is rendered text a cold orchestrator executes, not instructions to a planner.
+The one source of the text every generated `ORCHESTRATOR.md` and `KICKOFF.md` shares: the ten fixed step blocks and the generic sections around them. `.gaia/scripts/spec/orchestrator-render.sh` renders a plan's two files from this template and the plan's `orchestrator-parts.md`; `.gaia/scripts/spec/plan-verify.sh` checks the fixed blocks of a rendered `ORCHESTRATOR.md` against this file's copy. Those two scripts, and the suites that pin this file, are its only readers: a planner or a session never reads it. Everything from the first region marker on is rendered text a cold orchestrator executes, not instructions to a planner.
 
 ## Header
 
@@ -20,7 +20,7 @@ Read line by line:
 
 ## Fixed blocks
 
-The ten fixed blocks carry a sentinel line and appear in the orchestrator region in this order: `resume-detection`, `yield-handling`, `gate-retry`, `security-writer`, `simplify-pass`, `flow-checks`, `wiki-promotion`, `code-audit`, `post-clearance` and `post-merge-close`. A spec-derived plan carries all of them; a spec-less plan omits `flow-checks` (it sits inside the spec conditional) and carries the rest, with the yield handling, the gate retry and the simplify pass before the wiki promotion. `/gaia-plan` step 4.5 checks each sentinel and their order with `plan-verify.sh`, which also compares the text of the resume-detection, yield-handling, gate-retry, security-writer, simplify-pass, flow-checks, wiki-promotion, code-audit and post-clearance blocks, line by line with indentation and blank lines ignored, against this file's copy, with the plan folder and SPEC path tokens substituted, so a paraphrase fails. A plan generated before this order keeps its own order and is not re-verified, because only step 4.5 runs the script. Never paraphrase a block, drop its sentinel line or reorder them.
+The ten fixed blocks carry a sentinel line and appear in the orchestrator region in this order: `resume-detection`, `yield-handling`, `gate-retry`, `security-writer`, `simplify-pass`, `flow-checks`, `wiki-promotion`, `code-audit`, `post-clearance` and `post-merge-close`. A spec-derived plan carries all of them; a spec-less plan omits `flow-checks` (it sits inside the spec conditional) and carries the rest. `/gaia-plan` step 4.5 checks each sentinel and their order with `plan-verify.sh`, which also compares the text of the resume-detection, yield-handling, gate-retry, security-writer, simplify-pass, flow-checks, wiki-promotion, code-audit and post-clearance blocks, line by line with indentation and blank lines ignored, against this file's copy, with the plan folder and SPEC path tokens substituted, so a paraphrase fails. A plan generated before this order keeps its own order. Both `/gaia-plan` step 4.5 and the test stage's Checks step run the script.
 
 ## Maintenance notes
 
@@ -227,7 +227,7 @@ Sub-agents do not commit, push, or open or update the PR: they only edit files a
 
 The `Yield handoff:` line is the path the yield-handling step pre-clears for that dispatch, and it is the dispatch prompt's final line because the hook reads only an opt-in line that ends the prompt. A nested dispatch an executor makes never carries it. Neither does a phase gate retry prompt (the gate-retry step).
 
-The two paragraphs before it name the stops that are not wanted. The failure-triggered STOP under Stop conditions below stays wanted: a sub-agent blocked by something it cannot resolve says so under `### Deviations from plan` and returns.
+The prompt's `How your run ends` paragraph names the stops that are not wanted. The failure-triggered STOP under Stop conditions below stays wanted: a sub-agent blocked by something it cannot resolve says so under `### Deviations from plan` and returns.
 
 ## Orchestrator-owned git flow
 
