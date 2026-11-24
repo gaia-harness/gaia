@@ -262,7 +262,7 @@ comment_fixtures() {
 }
 
 # bats test_tags=protected
-@test "under autonomy a plan whose RUNNING names no local branch is skipped so the loop moves past it; an interactive run takes it" {
+@test "under autonomy a plan whose RUNNING names no local branch is skipped; an interactive run takes it" {
   running_plan PLAN-001 feat/9-gone
   pick
   jq -e '.job == "plan" and .skipped == []' <<<"$output"

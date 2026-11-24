@@ -132,9 +132,8 @@ protected_path_named() {
   return 1
 }
 
-# read_park_marker_name: sets PARK_MARKER_NAME from the park-reasons file. It
-# runs at the top level of pick, never inside $( ... ), so a failed read exits
-# the script instead of only a subshell.
+# read_park_marker_name runs at the top level of pick, never inside $( ... ), so
+# a failed read exits the script instead of only a subshell.
 PARK_MARKER_NAME=""
 read_park_marker_name() {
   PARK_MARKER_NAME="$(jq -r '.marker_file // empty' "$NEXT_PARK_REASONS_FILE" 2>/dev/null)"
@@ -231,9 +230,10 @@ pick() {
       '{job: "pr", pr: $pr, branch: $branch} + (if $parked == "" then {} else {parked: $parked} end)')"
   done <<<"$prs"
 
-  # The allocator's stderr, the one-time notebook move command, reaches the
-  # operator. Under autonomy the spec tier is skipped anyway, so a failure
-  # there does not end the pick before the backlog tier.
+  # The allocator's stderr (its refusal reason, or the one-time notebook move
+  # command) is left unsilenced so it reaches the operator. Under autonomy the
+  # spec tier is skipped anyway, so a failure there does not end the pick before
+  # the backlog tier.
   if ! spec="$(bash "$NEXT_SCRIPT_DIRECTORY/spec/spec-allocator.sh" in_progress "$main_root")"; then
     [ "$autonomous" = 1 ] || next_fail "spec-allocator.sh in_progress failed"
     skip "the draft-spec tier" "spec-allocator.sh in_progress failed"
