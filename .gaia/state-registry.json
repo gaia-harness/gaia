@@ -139,6 +139,19 @@
       }
     },
     {
+      "id": "autonomy-decision-log",
+      "path": "protected/autonomy-log.jsonl",
+      "match": "exact",
+      "kind": "file",
+      "scope": "shared",
+      "keyed_by": "singleton per machine, one line per decision",
+      "why": "The decisions an unattended run took: the autonomy gate hook appends the recommended option it told Claude to take, with the session and branch. Lives in the protected folder, so Claude tool writes to it are denied by block-audit-loop-write.sh.",
+      "writer": "code",
+      "retention": {
+        "class": "keep"
+      }
+    },
+    {
       "id": "local-settings",
       "path": "settings.json",
       "match": "exact",
