@@ -806,6 +806,7 @@
     "wiki/concepts/Notebook.md": "wiki-owned",
     "wiki/concepts/OS Sandbox.md": "wiki-owned",
     "wiki/concepts/Package Descriptor.md": "wiki-owned",
+    "wiki/concepts/Per-session Rate-limit Reading And Dispatch Checkpoint.md": "wiki-owned",
     "wiki/concepts/Policy-Memory Loop.md": "wiki-owned",
     "wiki/concepts/PR Merge Workflow.md": "wiki-owned",
     "wiki/concepts/Pre-commit Hooks.md": "wiki-owned",
@@ -813,7 +814,6 @@
     "wiki/concepts/React Perf Diagnostic.md": "wiki-owned",
     "wiki/concepts/Registering a Code Audit Team Member.md": "wiki-owned",
     "wiki/concepts/Setup Features.md": "wiki-owned",
-    "wiki/concepts/Shared Rate-limit Reading And Dispatch Checkpoint.md": "wiki-owned",
     "wiki/concepts/Shell Testing and CI.md": "wiki-owned",
     "wiki/concepts/Single-session First-time Onboarding.md": "wiki-owned",
     "wiki/concepts/Spec Code Map Handoff.md": "wiki-owned",
@@ -912,7 +912,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T12:08:26.656Z",
+  "generated": "2026-11-24T12:59:16.399Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
