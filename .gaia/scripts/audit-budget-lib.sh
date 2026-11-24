@@ -16,14 +16,23 @@
 # every write to the protected folder (block-audit-loop-write.sh), can neither
 # raise the budget nor reset the spend. The pool is one per record, shared by
 # every branch; the spend key is `pr:<n>`, or `branch:<key>` while the branch
-# has no pull request.
+# has no pull request (gaia_audit_budget_keys). Units spent under branch:<key>
+# before the pull request linked still count toward its per-PR limit.
 #
 # Source after audit-loop-state-lib.sh (gaia_loop_lock); gaia_audit_budget_spend also needs autonomy-lib.sh loaded.
 #
-# gaia_audit_budget_spend <main root> <spend key>
-#   Spends one unit under the record's lock. rc 0 prints `spent <units the key
-#   has spent> <pool left>`; rc 1 prints `refused <reason>`, reason one of
-#   autonomy-off, per-pr-limit, pool-empty; rc 5 prints why the record could
+# gaia_audit_budget_keys <loop state json> <branch key>
+#   Prints the keys one branch's spend lives under, from the loop state alone:
+#   the spend key first (`pr:<state .pr>` when linked, else `branch:<key>`),
+#   then `branch:<key>` when the spend key is a pull request. The one source of
+#   the key set for the spend and for the record's `budget grants:` count.
+# gaia_audit_budget_spend <main root> <spend key> [<also counted key>...]
+#   Spends one unit under the record's lock, charged to the spend key; the
+#   per-PR limit is checked against the units spent under the spend key and
+#   every also counted key together. rc 0 prints `spent <units those keys have
+#   spent> <pool left>`; rc 1 prints `refused <reason>`, reason one of
+#   autonomy-off, no-budget (the switch sets no per-PR limit or no pool),
+#   per-pr-limit, pool-empty; rc 5 prints why the record could
 #   not be read or written. Only rc 0 spends.
 # gaia_audit_budget_count <main root> <spend key>...
 #   Prints the units spent under those keys summed over every record, 0 when
@@ -46,8 +55,20 @@ _gaia_audit_budget_switch_hash() {
   printf '%s\n' "$hash"
 }
 
+gaia_audit_budget_keys() {
+  local state_json="${1-}" branch_key="${2-}" pr_number
+  pr_number=$(jq -r '(.pr // 0) | if type == "number" and . > 0 then . else empty end' <<<"$state_json" 2>/dev/null) || pr_number=''
+  if [ -n "$pr_number" ]; then
+    printf 'pr:%s\nbranch:%s\n' "$pr_number" "$branch_key"
+  else
+    printf 'branch:%s\n' "$branch_key"
+  fi
+}
+
 gaia_audit_budget_spend() {
-  local main="${1-}" key="${2-}" per_pr pool hash directory record_file record key_spent pool_spent temporary_file
+  local main="${1-}" key="${2-}" per_pr pool hash directory record_file record key_spent pool_spent temporary_file counted_keys
+  shift 2 2>/dev/null || shift $#
+  counted_keys=$(printf '%s\n' "$key" "$@" | jq -R . | jq -sc .)
   if ! per_pr=$(autonomy_field audit_extra_units_per_pr "$main") ||
     ! pool=$(autonomy_field audit_units_pool "$main") ||
     ! hash=$(_gaia_audit_budget_switch_hash "$main"); then
@@ -60,6 +81,10 @@ gaia_audit_budget_spend() {
     printf 'the autonomy file changed while the budget was read\n'
     return 5
   }
+  if [ "$per_pr" -le 0 ] || [ "$pool" -le 0 ]; then
+    printf 'refused no-budget\n'
+    return 1
+  fi
   directory=$(_gaia_audit_budget_directory "$main")
   record_file="$directory/$hash.json"
   # A symlink would put the record where the protected-folder guard never looks.
@@ -80,7 +105,7 @@ gaia_audit_budget_spend() {
   else
     record='{"schema":1,"pool_spent":0,"spent":{}}'
   fi
-  key_spent=$(jq -r --arg key "$key" '.spent[$key] // 0' <<<"$record")
+  key_spent=$(jq -r --argjson keys "$counted_keys" '[$keys[] as $counted | .spent[$counted] // 0] | add' <<<"$record")
   pool_spent=$(jq -r '.pool_spent' <<<"$record")
   if [ "$key_spent" -ge "$per_pr" ]; then
     gaia_loop_unlock "$record_file"

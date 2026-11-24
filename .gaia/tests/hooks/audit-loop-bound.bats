@@ -2276,7 +2276,7 @@ decision_log_lines() {
     seed_rounds 6 '{"verdict":"continue","A":1}'
     unit_dispatch
     assert_pinned fallback
-    reason | grep -qF -- 'Autonomy budget: no unit spent, because'
+    reason | grep -qF -- 'Autonomy budget: no unit spent, because the autonomy switch sets no audit budget.'
     [ "$(state_field '.history.units // [] | length')" -eq 0 ]
     [ -z "$(budget_records)" ]
     [ "$(decision_log_lines)" -eq 0 ]
@@ -2289,6 +2289,36 @@ decision_log_lines() {
   assert_pinned fallback
   reason | grep -qF -- 'Autonomy budget' && return 1
   [ -z "$(budget_records)" ]
+}
+
+@test "budget: units spent before the pull request linked count toward its per-PR limit, and a merged pull request's number is no spend key" {
+  write_switch '{"audit_extra_units_per_pr":2,"audit_units_pool":9}'
+  echo "case: one unit is spent while the branch has no pull request"
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_allowed
+  [ "$(budget_field '.spent["branch:feat/loop"]')" -eq 1 ]
+  echo "case: the pull request links, and the unit spent before it counts"
+  printf '{"number":100,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.pr')" -eq 100 ]
+  [ "$(budget_field '.spent["pr:100"]')" -eq 1 ]
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_pinned fallback
+  reason | grep -qF -- 'Autonomy budget: no unit spent, because pr:100 has spent its audit_extra_units_per_pr units.'
+  [ "$(budget_field '.pool_spent')" -eq 2 ]
+  echo "case: a merged pull request the state does not link is no spend key"
+  fresh_fixture
+  write_switch '{"audit_extra_units_per_pr":1,"audit_units_pool":3}'
+  printf '{"number":40,"state":"MERGED"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_allowed
+  [ "$(budget_field '.spent | keys | join(",")')" = 'branch:feat/loop' ]
+  [ "$(_gaia_loop_cli record-values --root "$ALF_ROOT" | jq -c '.budget_grants')" = 1 ]
 }
 
 @test "budget: a human rewrite of the switch starts a fresh budget, and the maintainer tree spends it the same way" {

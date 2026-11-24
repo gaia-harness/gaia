@@ -1,7 +1,7 @@
 {
   "ceilings": {
     ".claude/hooks/audit-loop-ask-grant.sh": 403,
-    ".claude/hooks/audit-loop-bound.sh": 939,
+    ".claude/hooks/audit-loop-bound.sh": 945,
     ".claude/hooks/block-main-destructive-git.sh": 583,
     ".claude/hooks/block-rm-rf.sh": 821,
     ".claude/hooks/lib/audit-base-provenance.sh": 417,

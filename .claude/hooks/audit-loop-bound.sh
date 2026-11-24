@@ -382,6 +382,8 @@ window_message() {
 # while the switch is live and nothing was spent it sets BUDGET_NOTE to why.
 budget_answer() {
   local budget_trigger="$1" at_cap="$2" rounds_used="$3" spend_key result status=0 key_spent pool_left
+  local -a spend_keys=()
+  local spend_key_line
   # shellcheck source=/dev/null
   . "$scripts/autonomy-lib.sh" 2>/dev/null || return 0
   type autonomy_log_decision >/dev/null 2>&1 && type gaia_audit_budget_spend >/dev/null 2>&1 || return 0
@@ -401,11 +403,15 @@ budget_answer() {
     BUDGET_NOTE='a human accepted the remainder, and the budget never reopens the loop after an accept'
     return 0
   fi
-  spend_key="${BRANCH_PR_NUMBER:-$(jq -r '.pr // empty' <<<"$WORKING_STATE")}"
-  if [ -n "$spend_key" ]; then spend_key="pr:$spend_key"; else spend_key="branch:$BRANCH_KEY"; fi
-  result=$(gaia_audit_budget_spend "$main" "$spend_key") || status=$?
+  while IFS= read -r spend_key_line; do spend_keys+=("$spend_key_line"); done < <(gaia_audit_budget_keys "$WORKING_STATE" "$BRANCH_KEY")
+  spend_key="${spend_keys[0]}"
+  result=$(gaia_audit_budget_spend "$main" "${spend_keys[@]}") || status=$?
   case "$status:$result" in
     0:spent\ *) ;;
+    1:'refused no-budget')
+      BUDGET_NOTE='the autonomy switch sets no audit budget'
+      return 0
+      ;;
     1:'refused per-pr-limit')
       BUDGET_NOTE="$spend_key has spent its audit_extra_units_per_pr units"
       return 0

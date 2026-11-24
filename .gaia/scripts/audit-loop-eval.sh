@@ -257,7 +257,7 @@ _gaia_loop_usage() {
 }
 
 _gaia_loop_cli() {
-  local subcommand="${1-}" root="" round="" branch_key main file state exit_status used subcommand_output pr_number
+  local subcommand="${1-}" root="" round="" branch_key main file state exit_status used subcommand_output budget_key_line
   local -a budget_keys
   [ $# -gt 0 ] && shift
   while [ $# -gt 0 ]; do
@@ -335,9 +335,8 @@ _gaia_loop_cli() {
         members: (reduce .history.rounds[] as $round_entry ({}; reduce ($round_entry.members[]) as $member (.; .[$member] += [$round_entry.tree]))
                   | map_values(unique | length) | to_entries | sort_by(.key) | from_entries),
         grants: ([.allowance.answers[] | select(.kind == "grant")] | length)}')" || return 1
-      budget_keys=("branch:$branch_key")
-      pr_number="$(printf '%s' "$state" | jq -r '(.pr // 0) | if . > 0 then . else empty end')"
-      [ -z "$pr_number" ] || budget_keys+=("pr:$pr_number")
+      budget_keys=()
+      while IFS= read -r budget_key_line; do budget_keys+=("$budget_key_line"); done < <(gaia_audit_budget_keys "$state" "$branch_key")
       subcommand_output="$(printf '%s' "$subcommand_output" | jq -c --argjson budget_grants "$(gaia_audit_budget_count "$main" ${budget_keys[@]+"${budget_keys[@]}"})" \
         'if $budget_grants > 0 then . + {budget_grants: $budget_grants} else . end')" || return 1
       subcommand_output="$(_gaia_loop_with_review_counts "$root" "$subcommand_output")"
