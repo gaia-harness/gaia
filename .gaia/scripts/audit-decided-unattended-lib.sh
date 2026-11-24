@@ -18,9 +18,10 @@
 # entry in log order, or nothing when the branch has none (a detached HEAD and
 # an absent log included). Branches compare by their normalized key, so an
 # entry the gate wrote before the harness's `worktree-` branch was renamed
-# still counts. An entry whose text fails the secret screen or names a
-# machine-local path is withheld and counted: the PR-text hook would refuse a
-# body carrying the path. rc 3 when the log or a screen cannot be read.
+# still counts. An entry whose text fails the secret screen or the
+# machine-local reference screen is withheld and counted: the PR-text hook
+# would refuse a body carrying what that screen matches. rc 3 when the log or a
+# screen cannot be read.
 _decided_unattended_section() {
   local branch log key candidate matching="[]" texts clean local_lines text_file local_status=0
   branch="$(git -C "$ROOT" branch --show-current 2>/dev/null)" || return 0
