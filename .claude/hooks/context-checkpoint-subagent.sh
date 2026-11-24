@@ -73,9 +73,11 @@ payload=$(cat)
 event_pattern='(^|[^\\])"hook_event_name"[[:space:]]*:[[:space:]]*"([^"]*)"'
 [[ $payload =~ $event_pattern ]] || exit 0
 [ "${BASH_REMATCH[2]}" = PostToolUse ] || exit 0
-agent_pattern='(^|[^\\])"agent_id"[[:space:]]*:[[:space:]]*"([^"]*)"'
-[[ $payload =~ $agent_pattern ]] || exit 0
-agent_id="${BASH_REMATCH[2]}"
+# shellcheck source=lib/payload-agent.sh
+. "$here/lib/payload-agent.sh" || exit 0
+gaia_payload_agent_read "$payload"
+agent_id="$GAIA_PAYLOAD_AGENT_ID"
+[ -n "$agent_id" ] || exit 0
 session_pattern='(^|[^\\])"session_id"[[:space:]]*:[[:space:]]*"([^"]*)"'
 [[ $payload =~ $session_pattern ]] || exit 0
 session_id="${BASH_REMATCH[2]}"
@@ -86,10 +88,9 @@ cwd_pattern='(^|[^\\])"cwd"[[:space:]]*:[[:space:]]*"([^"]*)"'
 [[ $payload =~ $cwd_pattern ]] || exit 0
 cwd="${BASH_REMATCH[2]}"
 
-# Shape checks before any of these values builds a path: the agent id and
-# session id are file-name components, the transcript path is a directory base.
-agent_id_pattern='^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$'
-[[ $agent_id =~ $agent_id_pattern ]] || exit 0
+# Shape checks before any of these values builds a path: the agent id (its
+# shape checked by gaia_payload_agent_read) and session id are file-name
+# components, the transcript path is a directory base.
 case "$transcript_path" in /*.jsonl) ;; *) exit 0 ;; esac
 case "$transcript_path" in *\\* | */../*) exit 0 ;; esac
 transcript_base="${transcript_path%.jsonl}"
