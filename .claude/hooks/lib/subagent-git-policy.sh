@@ -38,14 +38,15 @@ GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS=(commit push) # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
 
 # The denied subcommands a sub-agent may also run from its own worktree, only
-# to bring the remote default branch into its own branch (see
-# subagent_git_catch_up_arguments_ok): an isolated run must absorb a default
+# to bring the remote default branch into its own branch, or to abort or
+# continue that (see subagent_git_catch_up_arguments_ok): an isolated run must absorb a default
 # branch that moved while it worked.
 GAIA_SUBAGENT_OWN_WORKTREE_CATCH_UP_GIT_SUBCOMMANDS=(merge rebase) # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
 
 # subagent_git_own_tree_command <agent id> <command>: 0 when the command runs
-# only GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS, or a catch-up merge or rebase
-# of GAIA_SUBAGENT_OWN_WORKTREE_CATCH_UP_GIT_SUBCOMMANDS, among the denied verbs, and
+# only GAIA_SUBAGENT_OWN_WORKTREE_GIT_SUBCOMMANDS, or
+# GAIA_SUBAGENT_OWN_WORKTREE_CATCH_UP_GIT_SUBCOMMANDS with arguments
+# subagent_git_catch_up_arguments_ok accepts, among the denied verbs, and
 # only on the sub-agent's own isolated worktree. The sub-agent rule's reason
 # (siblings share one tree) does not hold for a tree only this agent uses.
 #   - The acting directory's checkout root is a linked worktree (a `.git` file)
@@ -59,8 +60,8 @@ GAIA_SUBAGENT_OWN_WORKTREE_CATCH_UP_GIT_SUBCOMMANDS=(merge rebase) # subset of .
 #     A `cd`, `pushd`, `sh -c`, env prefix (`GIT_DIR=`), `-c core.worktree=`,
 #     `--git-dir` or `--work-tree` could carry git into the parent's tree, so
 #     any of them fails this test.
-# Needs acting_directory, parse_git_globals, git_global_words, git_subcommand
-# and git_cwd from lib/main-git-guard-parse.sh.
+# Needs acting_directory, parse_git_globals, git_global_words, git_subcommand,
+# git_args and git_cwd from lib/main-git-guard-parse.sh.
 subagent_git_own_tree_command() {
   local agent_id="$1" command="$2" directory checkout_root segment target_root own_verb allowed
   [ -n "$agent_id" ] || return 1
@@ -99,8 +100,8 @@ subagent_git_own_tree_command() {
 # `main`; unset fails closed), or is `--abort` or `--continue`, which a
 # conflicted run needs to leave its tree usable. The words are an exact
 # allowlist: a second operand (`rebase origin/main other-branch` switches
-# branches), `FETCH_HEAD`, `--autostash` (writes the shared stash stack),
-# `--exec` and every other option fall outside it. `merge` also takes a leading
+# branches) and `--autostash` (writes the shared stash stack) fall outside it,
+# as does every other option. `merge` also takes a leading
 # `--no-edit`, so no editor opens.
 subagent_git_catch_up_arguments_ok() {
   local default_ref default_branch
