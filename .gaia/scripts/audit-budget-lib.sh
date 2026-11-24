@@ -25,7 +25,7 @@
 #   Prints the keys one branch's spend lives under, from the loop state alone:
 #   the spend key first (`pr:<state .pr>` when linked, else `branch:<key>`),
 #   then `branch:<key>` when the spend key is a pull request. The one source of
-#   the key set for the spend and for the record's `budget grants:` count.
+#   the key set for the spend and for record-values' `budget grants:` count.
 # gaia_audit_budget_spend <main root> <spend key> [<also counted key>...]
 #   Spends one unit under the record's lock, charged to the spend key; the
 #   per-PR limit is checked against the units spent under the spend key and
