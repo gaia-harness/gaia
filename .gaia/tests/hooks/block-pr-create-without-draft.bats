@@ -223,7 +223,6 @@ check_decision() {
   grep -qF 'BLOCKED: block-pr-create-without-draft.sh cannot load lib/hook-payload.sh' <<<"$output"
 }
 
-# The allow list lets this form through without a prompt; the hook still denies it.
 @test "an allowed gh pr create form is still blocked when it is not a draft" {
   . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
   gh_command_is_allowed 'gh pr create --title "feat: x" --body-file f'

@@ -415,7 +415,6 @@ check_no_pr_edge() {
   check_no_breadcrumb unwritable-cache
 }
 
-# The allow list lets this form through without a prompt; the hook still captures it.
 @test "an allowed gh pr create form still writes the breadcrumb" {
   . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
   gh_command_is_allowed 'gh pr create --title x --body y'

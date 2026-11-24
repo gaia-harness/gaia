@@ -250,7 +250,6 @@ run_hook_in_home() {
   [ "$spawn_count" -eq 1 ]
 }
 
-# The allow list lets this form through without a prompt; the hook still denies it.
 @test "an allowed gh pr create form is still blocked when its title is invalid" {
   . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
   gh_command_is_allowed 'gh pr create --title "bogus: do a thing" --body x'

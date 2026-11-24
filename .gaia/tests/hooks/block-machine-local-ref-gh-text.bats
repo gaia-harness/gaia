@@ -171,7 +171,6 @@ assert_allowed() {
   done
 }
 
-# The allow list lets this form through without a prompt; the hook still denies it.
 @test "an allowed gh pr edit form is still blocked when its body cites a machine-local path" {
   . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
   gh_command_is_allowed 'gh pr edit 2898 --body "Evidence in .gaia/local/runs/feat/12-x/STATE.md"'
