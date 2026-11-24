@@ -21,6 +21,7 @@ import {
   normalizeRelationship,
   normalizeScope,
   normalizeSeverity,
+  SEVERITY_ORDER,
   toSemverRange,
 } from './advisory-validate.js';
 import type {
@@ -381,13 +382,6 @@ export const normalizePnpmAudit = (
 };
 
 // ---------- join ----------
-
-const SEVERITY_ORDER: readonly AdvisorySeverity[] = [
-  'critical',
-  'high',
-  'medium',
-  'low',
-];
 
 const severityRank = (severity: AdvisorySeverity): number =>
   SEVERITY_ORDER.indexOf(severity);

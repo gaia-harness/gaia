@@ -1,5 +1,6 @@
 import type {ModelFamily} from './types.js';
 
+// subset of .gaia/cli/src/fitness/types.ts#ModelFamily
 const FAMILIES: readonly Exclude<ModelFamily, 'unresolved'>[] = [
   'opus',
   'sonnet',

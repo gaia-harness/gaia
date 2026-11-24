@@ -24,6 +24,7 @@ import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {resolveRepoRoot} from '../util/repo-root.js';
+import {DOMAIN_DIRS as PAGE_INDEX_DOMAIN_DIRS} from './page-index.js';
 import {
   ancestorBefore,
   countDriftCommits,
@@ -73,16 +74,9 @@ const classifySeverity = (commitCount: number): DriftSeverity => {
   return 'high';
 };
 
-const DOMAIN_DIRS = [
-  'components',
-  'concepts',
-  'decisions',
-  'dependencies',
-  'entities',
-  'flows',
-  'meta',
-  'modules',
-];
+const DOMAIN_DIRS = PAGE_INDEX_DOMAIN_DIRS.toSorted((a, b) =>
+  a.localeCompare(b)
+);
 
 const countDomainPages = (wikiRoot: string): Record<string, number> => {
   const counts: Record<string, number> = {};

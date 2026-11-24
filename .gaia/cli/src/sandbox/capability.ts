@@ -8,7 +8,9 @@
  * calls this function, so the tier, seed and apply tests run deterministically
  * on `ubuntu-latest` CI regardless of the runner's real OS.
  */
-export type Capability = 'needs-deps' | 'ready' | 'unsupported';
+export const CAPABILITIES = ['ready', 'needs-deps', 'unsupported'] as const;
+
+export type Capability = (typeof CAPABILITIES)[number];
 
 export type DetectionInput = {
   hasBwrap?: boolean;
@@ -23,9 +25,13 @@ export type DetectionResult = {
   reason: string;
 };
 
-export type Platform = 'darwin' | 'linux' | 'win32';
+export const PLATFORMS = ['darwin', 'linux', 'win32'] as const;
 
-export type WslKind = 'none' | 'wsl1' | 'wsl2';
+export const WSL_KINDS = ['none', 'wsl1', 'wsl2'] as const;
+
+export type Platform = (typeof PLATFORMS)[number];
+
+export type WslKind = (typeof WSL_KINDS)[number];
 
 const APT_INSTALL_COMMAND = 'sudo apt-get install bubblewrap socat';
 const DNF_INSTALL_COMMAND = 'sudo dnf install bubblewrap socat';

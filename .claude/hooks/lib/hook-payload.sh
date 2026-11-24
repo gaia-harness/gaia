@@ -68,6 +68,8 @@ GAIA_HOOK_FILE_PATH=""
 GAIA_HOOK_PATH=""
 GAIA_HOOK_GLOB=""
 GAIA_HOOK_COMMAND=""
+# The tools that write a file through `tool_input.file_path`.
+GAIA_HOOK_EDIT_TOOLS=(Edit Write MultiEdit)
 
 gaia_hook_payload_read() {
   local payload="$1"

@@ -49,6 +49,10 @@ REQUIRED_CONTEXTS=(
                                       # the bats suite when shell changed, so
                                       # a shell defect cannot merge on a red
                                       # check that never blocked
+  "Value sets"                        # .github/workflows/tests.yml; runs on
+                                      # every pull request with no filter, so
+                                      # a duplicate value set cannot merge
+                                      # through a change no other job runs on
 )
 
 repo=""

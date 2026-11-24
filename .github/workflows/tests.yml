@@ -386,3 +386,76 @@ jobs:
       - if: steps.select.outputs.bats == 'true'
         name: Run the bats suites
         run: pnpm test:shell
+
+  # Fails a pull request that adds a second definition of a value set the
+  # project already defines (`gaia value-sets`). It has no paths filter, no
+  # `if:` on the job or any step and no early exit, and it reads the whole head
+  # tree: a duplicate can enter through any file, including a shell-only change
+  # the other jobs skip, so any narrower trigger would let a pull request report
+  # the required check green without running it. For the same reason it runs
+  # on `push` and `workflow_dispatch` too; the check step branches on the event
+  # itself rather than through a condition.
+  value-sets:
+    name: Value sets
+    # 10 minutes bounds execution: a job that hits the cap is cancelled and
+    # reports an ordinary red check to re-run rather than hanging. The install
+    # dominates; the check itself reads the tracked files in seconds.
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # The base policy files below come through the API, so the credential
+      # need not persist in the checkout.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      # The root install, so the project's own `typescript` resolves from the
+      # repository root: the check reads TypeScript through it.
+      - uses: ./.github/actions/gaia-setup-node
+      # On a pull request the exclusion config and the GAIA manifest come from
+      # the base commit, never from the head: a pull request that could edit
+      # them would exclude its own duplicate or list its own file as harness
+      # through them. That does not reach a pull request that edits this job or
+      # the committed CLI bundle; review of those files covers that case. The
+      # CLI still shape-checks the head's config, so a malformed one fails here.
+      # They are read through the contents API, not `git fetch`: the checkout
+      # keeps no credential, and a private repository (what /setup-gaia
+      # provisions by default) would refuse an unauthenticated fetch. A 404 means
+      # the base has no such file, so it stays absent; any other failure stops
+      # the job, because falling back to the head's copy would let a pull request
+      # choose its own policy. The event and base sha reach the script through
+      # `env:`, never interpolated into the shell text.
+      - name: Check for duplicate value sets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          read_base_file() {
+            local file="$1" failure
+            mkdir -p "$(dirname "$policy_directory/$file")"
+            if ! failure="$(gh api -H 'Accept: application/vnd.github.raw' \
+              "repos/$REPOSITORY/contents/$file?ref=$BASE_SHA" 2>&1 > "$policy_directory/$file")"; then
+              case "$failure" in
+                *'HTTP 404'*) rm -f "$policy_directory/$file" ;;
+                *) echo "value-sets: cannot run: could not read $file from the base commit" >&2; exit 2 ;;
+              esac
+            fi
+          }
+          if [ "$EVENT_NAME" = pull_request ]; then
+            policy_directory="$RUNNER_TEMP/value-sets-policy"
+            rm -rf "$policy_directory"
+            mkdir -p "$policy_directory"
+            read_base_file .gaia/value-sets.json
+            read_base_file .gaia/manifest.json
+            # gaia:maintainer-only:start
+            read_base_file .claude/rules/maintainers/harness-triage-threshold.md
+            # gaia:maintainer-only:end
+            .gaia/cli/gaia value-sets --policy-from "$policy_directory"
+          else
+            .gaia/cli/gaia value-sets
+          fi

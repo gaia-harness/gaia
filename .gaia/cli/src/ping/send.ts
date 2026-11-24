@@ -21,7 +21,9 @@ import path from 'node:path';
 import {readOrCreateProjectId, resolveStorageRoots} from '../storage/index.js';
 import {lookupOwn} from '../util/argv.js';
 
-export type PingEvent = 'init' | 'setup' | 'update';
+export const PING_EVENTS = ['init', 'setup', 'update'] as const;
+
+export type PingEvent = (typeof PING_EVENTS)[number];
 
 export type PingPayload = Record<string, number | string> & {event: PingEvent};
 

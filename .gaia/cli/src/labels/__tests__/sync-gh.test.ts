@@ -8,6 +8,7 @@
  * label delete, the second decides what the manual command list is a list of.
  */
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
+import {LABEL_FEATURES} from '../../schemas/labels.js';
 import {resolveRepoRootFromImportMeta} from '../../util/repo-root-fixture.js';
 import type {ProcessResult} from '../../util/run-process.js';
 import {runGh} from '../../util/run-process.js';
@@ -20,14 +21,10 @@ const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);
 
 const BLOCKED = 'good first issue';
 
-const ALL_FEATURES = [
+const ALL_FEATURES = LABEL_FEATURES.flatMap((feature) => [
   '--feature',
-  'tech-debt',
-  '--feature',
-  'dependabot',
-  '--feature',
-  'forensics',
-];
+  feature,
+]);
 
 const ok = (stdout: string): ProcessResult => ({
   exitCode: 0,

@@ -28,11 +28,13 @@ const COLORS = ['blue', 'green', 'red'] as const;
 const COUNTRIES = ['fr', 'jp', 'us'] as const;
 const SIZES = ['lg', 'md', 'sm'] as const;
 
+// sanctioned copy of apps/web/app/components/form/tests/composed-form.tsx#COLORS
 const COLORS_DISPLAY_ORDER: (typeof COLORS)[number][] = [
   'red',
   'green',
   'blue',
 ];
+// sanctioned copy of apps/web/app/components/form/tests/composed-form.tsx#SIZES
 const SIZES_DISPLAY_ORDER: (typeof SIZES)[number][] = ['sm', 'md', 'lg'];
 
 const REQUIRED_MESSAGE = 'required';
@@ -199,7 +201,14 @@ export const ComposedForm = ({disabled = false}: ComposedFormProps) => {
             data-invalid={fields.colors.errors ? true : undefined}
             orientation="horizontal"
           >
-            <Checkbox {...checkboxProps} disabled={disabled} />
+            <Checkbox
+              {...checkboxProps}
+              aria-describedby={
+                fields.colors.errors ? fields.colors.errorId : undefined
+              }
+              aria-invalid={fields.colors.errors ? true : undefined}
+              disabled={disabled}
+            />
             <FieldLabel htmlFor={checkboxProps.id}>
               {colorLabels[checkboxProps.value as (typeof COLORS)[number]]}
             </FieldLabel>

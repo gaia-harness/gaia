@@ -73,6 +73,9 @@ write_settings() {
 # kind=libread      blocking, reads its payload only through the shared one-jq
 #                   reader, and has no gaia_require_jq call
 # kind=libreadarmed blocking, calls gaia_require_jq ahead of the shared reader
+# kind=approver     only ever allows, its reason on a line of its own, and
+#                   stands down without jq (the correct posture)
+# kind=denier       the same shape returning deny, so blocking and standing down
 write_hook() {
   local fixture_directory="$1" name="$2" kind="$3"
   {
@@ -118,6 +121,15 @@ write_hook() {
       libreadarmed)
         printf ". lib/jq-availability.sh\ngaia_require_jq 'the fixture guard' \"\$payload\" tool_input 'needle'\n"
         printf '. lib/hook-payload.sh\ngaia_hook_payload_read "$payload" || exit 0\nexit 2\n'
+        ;;
+      approver | denier)
+        local decision=allow
+        [ "$kind" = denier ] && decision=deny
+        printf 'command -v jq >/dev/null 2>&1 || exit 0\n'
+        printf "command=\$(jq -r '.tool_input.command' <<<\"\$payload\")\n"
+        printf 'jq -n %s\n' "'{hookSpecificOutput: {permissionDecision: \"$decision\","
+        printf '  permissionDecisionReason: "fixture"}}%s\n' "'"
+        printf 'exit 0\n'
         ;;
     esac
   } >"$fixture_directory/.claude/hooks/$name"
@@ -180,6 +192,23 @@ expect_check() {
   write_hook "$fixture_directory" reader.sh libreadarmed
   write_settings "$fixture_directory" PreToolUse armed.sh reader.sh
   expect_check 'a gaia_require_jq call ahead of the shared payload reader passes' 0 -- "$fixture_directory"
+
+  # An allow cannot stop a call, so a hook that only ever approves stands down
+  # like an advisory one; its reason line must not read as a decision.
+  fixture_directory="$(make_fixture clean-approver)"
+  write_hook "$fixture_directory" armed.sh armed
+  write_hook "$fixture_directory" approver.sh approver
+  write_settings "$fixture_directory" PreToolUse armed.sh approver.sh
+  expect_check 'an allow-only hook standing down is not held to the refusal' 0 -- "$fixture_directory"
+}
+
+@test "red: a deny hook whose only decision line also carries a reason still blocks" {
+  local fixture_directory
+  fixture_directory="$(make_fixture red-denier)"
+  write_hook "$fixture_directory" armed.sh armed
+  write_hook "$fixture_directory" denier.sh denier
+  write_settings "$fixture_directory" PreToolUse armed.sh denier.sh
+  expect_check 'a deny beside its reason is a blocking decision' 1 denier.sh -- "$fixture_directory"
 }
 
 # --- the findings ------------------------------------------------------------
