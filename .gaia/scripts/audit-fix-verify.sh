@@ -12,10 +12,11 @@
 # The verifier judges the fixer from a pinned copy of itself. The baseline
 # subcommand copies this script and the libraries it sources into
 # <run-folder>/verifier-bin-<r>/ (beside the baseline file) and records their
-# digest in the baseline; the main thread runs check, round-check and drift from
-# that copy by its run-folder path, never from the working tree the fixer edits.
-# Each of those subcommands refuses (bad-input, or exit 1 for drift and
-# round-check) when the files beside it no longer hash to the recorded digest.
+# digest in the baseline; the main thread runs check, settled, round-check and
+# drift from that copy by its run-folder path, never from the working tree the
+# fixer edits. Each of those subcommands refuses (bad-input, or exit 1 for
+# settled, drift and round-check) when the files beside it no longer hash to the
+# recorded digest.
 # An edit to the working-tree verifier therefore takes effect from the next
 # round's baseline, not within the round that made it.
 #
@@ -27,11 +28,15 @@
 #                                   --baseline <f> --baseline-sha <hex>
 #                                   --result <fixer-file> --out <verifier-file>
 #                                   [--extra-declared <paths-file>]...
+#   audit-fix-verify.sh settled     --root <R> --baseline <f> --baseline-sha <hex>
+#                                   --verifier <verifier-file> --verifier-sha <hex> --result <fixer-file>
+#                                   --security-paths <paths-file> [--gate-paths <paths-file>]
 #   audit-fix-verify.sh drift       --root <R> --baseline <f>
 #   audit-fix-verify.sh round-check --run-folder <dir> --round <r>
 #
 # Exit codes: 0 pass, 1 findings (check prints each to stderr on its own line as
-# `kind: detail`; drift and round-check print their own one-line messages), 2
+# `kind: detail`; settled prints each finding the same way, `head-moved` bare;
+# drift and round-check print their own one-line messages), 2
 # usage or missing jq, 3 baseline refusal (index differs from HEAD, or the repo
 # state cannot be read; no output file is written), 4 baseline refusal because
 # the member wave left the tree dirty (a modified tracked file or an untracked, non-ignored
@@ -115,7 +120,29 @@
 #
 #   verifier-<r>-<k>.json (the check subcommand):
 #     {"schema":1,"round":r,"attempt":k,"pass":true|false,
-#      "errors":[{"kind","detail"}]}
+#      "errors":[{"kind","detail"}],
+#      "judged":{"paths":{"<path>":"<blob hash, deleted, or unreadable>"},
+#        "result_sha":"<sha256 of the fixer file>"}|null}
+#     judged is set only on a pass: each path differing from HEAD, untracked
+#     paths included and hashed, as the check read them. settled compares the
+#     tree and the fixer file against it before the round stages and again after a gate pass, and
+#     fails on head-moved, result-moved, tree-moved (one line per path; paths in
+#     the --security-paths and --gate-paths files are exempt) or bad-input.
+#     settled takes no --extra-declared (a usage error). The pre-gate run
+#     exempts only --security-paths (the security writer's tests, required,
+#     empty when none ran), never gate-<r>-<j>.paths, whose content the check
+#     already judged; only the post-gate re-check passes --gate-paths, that
+#     attempt's gate-<r>-<k>.paths, and it exempts only the entries that are
+#     already keys of the judged record. A gate-paths entry outside it (a late
+#     fixer edit to an undeclared file during the gate window) is not exempt and
+#     fails as tree-moved. What settled cannot catch: a late fixer edit to a
+#     --security-paths entry, which is exempt outright, or to a judged path
+#     during the gate window, which the gate's snapshot records as a gate path
+#     whoever wrote it, the autofix or the fixer.
+#     --baseline-sha and --verifier-sha (both required) are the sha256 the main
+#     thread records of the baseline file when it writes it and of the verifier
+#     file right after check, so a baseline or verifier output rewritten
+#     afterwards is refused as bad-input.
 #     kinds: missing-disposition, undeclared-path, undeclared-revert,
 #     forbidden-path, enforcement-path, head-moved, index-changed,
 #     audit-artifact-written, bad-input.
@@ -131,8 +158,8 @@
 #     branch-own digests cannot be resolved. Another branch's concurrent
 #     audit never fails this branch's round.
 #
-# Known limits: an untracked path is judged on presence only, never content,
-# and a mode-only change on a baseline-dirty path is invisible because the
+# Known limits: check judges an untracked path on presence only, never content
+# (settled hashes it), and a mode-only change on a baseline-dirty path is invisible because the
 # comparison is on content hashes. Both fail toward missing a delta the
 # fixer's own declaration would have to name; the Quality Gate and the audit
 # re-run still read the tree.
@@ -160,6 +187,7 @@ usage() {
 usage:
   audit-fix-verify.sh baseline    --root <R> --round <r> --out <baseline-file>
   audit-fix-verify.sh check       --root <R> --round <r> --attempt <k> --dispositions <f> --dispositions-sha <hex> --baseline <f> --baseline-sha <hex> --result <f> --out <f> [--extra-declared <paths-file>]...
+  audit-fix-verify.sh settled     --root <R> --baseline <f> --baseline-sha <hex> --verifier <f> --verifier-sha <hex> --result <f> --security-paths <paths-file> [--gate-paths <paths-file>]
   audit-fix-verify.sh drift       --root <R> --baseline <f>
   audit-fix-verify.sh round-check --run-folder <dir> --round <r>
 EOF
@@ -185,6 +213,10 @@ DISPOSITIONS_SHA=''
 BASELINE_FILE=''
 BASELINE_SHA=''
 RESULT=''
+VERIFIER_FILE=''
+VERIFIER_SHA=''
+SECURITY_PATHS_FILE=''
+GATE_PATHS_FILE=''
 RUNFOLDER=''
 EXTRA_DECLARED_FILES=''
 
@@ -326,7 +358,7 @@ SUBCOMMAND="$1"
 shift
 while [ $# -gt 0 ]; do
   [ $# -ge 2 ] || die_usage "option $1 needs a value"
-  # shellcheck disable=SC2034 # the check options are read by audit-fix-verify-check-lib.sh
+  # shellcheck disable=SC2034 # the check and settled options are read by audit-fix-verify-check-lib.sh
   case "$1" in
     --root) ROOT="$2" ;;
     --round) ROUND="$2" ;;
@@ -337,6 +369,16 @@ while [ $# -gt 0 ]; do
     --baseline) BASELINE_FILE="$2" ;;
     --baseline-sha) BASELINE_SHA="$2" ;;
     --result) RESULT="$2" ;;
+    --verifier) VERIFIER_FILE="$2" ;;
+    --verifier-sha) VERIFIER_SHA="$2" ;;
+    --security-paths)
+      [ -z "$SECURITY_PATHS_FILE" ] || die_usage '--security-paths is given once'
+      SECURITY_PATHS_FILE="$2"
+      ;;
+    --gate-paths)
+      [ -z "$GATE_PATHS_FILE" ] || die_usage '--gate-paths is given once'
+      GATE_PATHS_FILE="$2"
+      ;;
     --run-folder) RUNFOLDER="$2" ;;
     --extra-declared) EXTRA_DECLARED_FILES="$EXTRA_DECLARED_FILES$2"$'\n' ;;
     *) die_usage "unknown option $1" ;;
@@ -347,6 +389,7 @@ done
 case "$SUBCOMMAND" in
   baseline) command_baseline ;;
   check) command_check ;;
+  settled) command_settled ;;
   drift) command_drift ;;
   round-check) command_round_check ;;
   *) die_usage "unknown subcommand $SUBCOMMAND" ;;
