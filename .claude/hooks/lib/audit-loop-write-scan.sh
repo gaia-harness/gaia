@@ -253,7 +253,7 @@ words_run_guarded_script() {
   local matcher="${1:-guarded_script_kind}" count=${#words[@]} word_index=0 word base syntax_check
 
   # Skip leading NAME=value words, `!`, `exec`, and the reserved words that
-  # open a command (a brace group, then, do, else, elif, time).
+  # open a command.
   while [ "$word_index" -lt "$count" ]; do
     case "${words[$word_index]}" in
       [A-Za-z_]*=* | '!' | exec | '{' | then | do | else | elif | time) word_index=$((word_index + 1)) ;;
