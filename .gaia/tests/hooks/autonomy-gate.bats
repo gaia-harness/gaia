@@ -132,6 +132,51 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
   [ ! -e "$LOG" ]
 }
 
+@test "a recommended merge parks while may_merge is false and is taken once it is true" {
+  switch_on
+  echo "case: may_merge false"
+  ask "$(question 'Merge it' 'Merge it (Recommended)' 'Hold the merge')"
+  denied
+  [[ "$(reason)" == *"may_merge false"*"autonomy-park.sh --reason question"* ]]
+  [ ! -e "$LOG" ]
+  echo "case: may_merge true"
+  jq -n '{enabled: true, expires_at: (now + 3600 | todate), may_merge: true}' >"$SWITCH"
+  ask "$(question 'Merge it' 'Merge it (Recommended)' 'Hold the merge')"
+  denied
+  [[ "$(reason)" == *"Take 'Merge it (Recommended)'"* ]]
+}
+
+# bats test_tags=protected
+@test "may_merge false or absent: a recommended merge is never taken and no decision is logged" {
+  echo "case: may_merge false parks"
+  switch_on
+  ask "$(question 'Merge it' 'Merge it (Recommended)' 'Hold the merge')"
+  denied
+  [[ "$(reason)" == *"autonomy-park.sh --reason question"* ]] || return 1
+  [[ "$(reason)" == *"Take 'Merge it"* ]] && return 1
+  [ ! -e "$LOG" ] || return 1
+  echo "case: may_merge absent is never a take"
+  jq -n '{enabled: true, expires_at: (now + 3600 | todate)}' >"$SWITCH"
+  ask "$(question 'Merge it' 'Merge it (Recommended)' 'Hold the merge')"
+  [ "$status" -eq 0 ] || return 1
+  [[ "$output" == *"Take 'Merge it"* ]] && return 1
+  [ ! -e "$LOG" ] || return 1
+  true
+}
+
+@test "with jq missing, a bare AskUserQuestion is allowed and a guarded spelling is refused" {
+  local bin payload tool
+  bin="$BATS_TEST_TMPDIR/nojq"
+  mkdir -p "$bin"
+  for tool in bash cat dirname tr sed grep; do ln -s "$(command -v "$tool")" "$bin/$tool"; done
+  payload='{"session_id":"s1","cwd":"/x","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"q","header":"h","options":[]}]}}'
+  run env PATH="$bin" bash -c 'printf "%s" "$1" | bash "$2"' _ "$payload" "$HOOK"
+  [ "$status" -eq 0 ]
+  payload='{"session_id":"s1","cwd":"/x","tool_name":"Write","tool_input":{"file_path":"/x/.claude/settings.json"}}'
+  run env PATH="$bin" bash -c 'printf "%s" "$1" | bash "$2"' _ "$payload" "$HOOK"
+  [ "$status" -eq 2 ]
+}
+
 # bats test_tags=protected
 @test "the pinned checkpoint question parks with audit-checkpoint, records no grant and logs nothing" {
   local pinned_question round_number before
@@ -240,10 +285,13 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
     apps/web/.claude/settings.overlay.json .claude/hooks/x.sh .claude/hooks/lib/y.sh \
     .claude/rules/r.md apps/web/.claude/rules/r.md .claude/agents/a.md .claude/skills/s/SKILL.md \
     .claude/commands/c.md apps/web/.claude/agents/a.md apps/web/.claude/skills/s/SKILL.md \
-    apps/web/.claude/commands/c.md .gaia/local/protected/autonomy.json CLAUDE.md apps/web/CLAUDE.md; do
+    apps/web/.claude/commands/c.md .gaia/local/protected/autonomy.json CLAUDE.md apps/web/CLAUDE.md \
+    .gaia/autonomy-protected-paths.json .gaia/autonomy-human-only-headers.json .gaia/scripts/autonomy-lib.sh \
+    .gaia/scripts/autonomy-park.sh .gaia/scripts/main-root-lib.sh .gaia/scripts/audit-loop-state-lib.sh \
+    CLAUDE.local.md apps/web/CLAUDE.local.md apps/web/.claude/settings.local.json; do
     autonomy_protected_match "$path" "$globs" || { echo "unmatched: $path"; return 1; }
   done
-  for path in src/CLAUDE.md .claude/settings.jsonx .claude/doctrine/x.md .gaia/local/runs/x apps/web/src/a.ts README.md; do
+  for path in src/CLAUDE.md .claude/settings.jsonx .claude/doctrine/x.md .gaia/local/runs/x apps/web/src/a.ts README.md .gaia/scripts/other.sh; do
     ! autonomy_protected_match "$path" "$globs" || { echo "matched: $path"; return 1; }
   done
 }

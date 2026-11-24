@@ -8,15 +8,22 @@
     ".claude/skills/**",
     ".claude/commands/**",
     ".gaia/local/protected/**",
-    "CLAUDE.md"
+    ".gaia/autonomy-*.json",
+    ".gaia/scripts/autonomy-*.sh",
+    ".gaia/scripts/main-root-lib.sh",
+    ".gaia/scripts/audit-loop-state-lib.sh",
+    "CLAUDE.md",
+    "CLAUDE.local.md"
   ],
   "package": [
     ".claude/settings.json",
+    ".claude/settings.local.json",
     ".claude/settings.overlay.json",
     ".claude/rules/**",
     ".claude/agents/**",
     ".claude/skills/**",
     ".claude/commands/**",
-    "CLAUDE.md"
+    "CLAUDE.md",
+    "CLAUDE.local.md"
   ]
 }

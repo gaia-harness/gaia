@@ -40,14 +40,16 @@
 # HONEST LIMITS. The Bash arm inherits both parsers' limits (their headers name
 # them): a path in a variable, built by substitution, reached by a `cd` and a
 # relative name, or written through `eval` or an interpreter script passes. A
-# word is considered only when its spelling names `.claude/`, `CLAUDE.md` or
-# `local/protected`, so a symlink alias to a protected file passes on every
-# arm. A `cp` or `mv` that only reads a protected path is denied: the verb is
+# word is considered only when its spelling names `.claude/`, `CLAUDE.md`,
+# `CLAUDE.local.md`, `local/protected`, `autonomy-` or `.gaia/scripts/`, so
+# a symlink alias to a protected file passes on every arm. A `git checkout
+# <ref> -- <file>`, `git restore` or `git apply` that rewrites a protected file
+# carries no redirect and no write verb, so it passes too. A `cp` or `mv` that only reads a protected path is denied: the verb is
 # armed and the direction is not parsed, the over-deny being the safe side.
 #
 # Fail mode: a missing library refuses with exit 2. A missing jq refuses only a
-# call whose tool_input names a guarded spelling; with jq absent the switch
-# reads as off anyway. A deny is JSON on stdout with exit 0.
+# call whose tool_input names a guarded spelling (never a bare AskUserQuestion:
+# with jq absent the switch reads as off, so it is allowed). A deny is JSON on stdout with exit 0.
 #
 # Bash 3.2 compatible.
 set -euo pipefail
@@ -55,12 +57,21 @@ set -euo pipefail
 payload=$(cat)
 
 # Raw pre-filter, before any fork: every call this hook can bind names the
-# AskUserQuestion tool or one of the spellings is_protected arms on (the harness
-# writes `/` unescaped, though JSON allows `\/`), so the ordinary Bash call
-# stops here.
+# AskUserQuestion tool or, in its tool_input, one of the spellings is_protected
+# arms on (the harness writes `/` unescaped, though JSON allows `\/`), so the
+# ordinary Bash call stops here. The spellings are matched against the payload
+# from the tool_input key on, because the fields before it (transcript_path,
+# cwd) are paths under `.claude/` on every call; a payload without the key is
+# matched whole.
+_gate_region=${payload#*\"tool_input\"}
 case "$payload" in
-  *AskUserQuestion* | *.claude/* | *CLAUDE.md* | *local/protected*) ;;
-  *) exit 0 ;;
+  *AskUserQuestion*) ;;
+  *)
+    case "$_gate_region" in
+      *.claude/* | *CLAUDE.md* | *CLAUDE.local.md* | *local/protected* | *autonomy-* | *.gaia/scripts/*) ;;
+      *) exit 0 ;;
+    esac
+    ;;
 esac
 
 _gate_directory="${BASH_SOURCE[0]%/*}"
@@ -83,7 +94,7 @@ load() {
 }
 
 load "$_gate_directory/lib/jq-availability.sh" gaia_require_jq
-gaia_require_jq 'the autonomy gate' "$payload" tool_input 'questions' '.claude/' 'CLAUDE.md' 'local/protected'
+gaia_require_jq 'the autonomy gate' "$payload" tool_input '.claude/' 'CLAUDE.md' 'CLAUDE.local.md' 'local/protected' 'autonomy-' '.gaia/scripts/'
 load "$_gate_directory/lib/hook-payload.sh" gaia_hook_payload_read
 load "$_gate_scripts/main-root-lib.sh" gaia_resolve_main_root
 load "$_gate_scripts/autonomy-lib.sh" autonomy_active
@@ -156,6 +167,11 @@ ask_gate() {
     esac
     recommended=$(jq -r --argjson i "$index" '[.[$i].options // [] | .[]? | .label? | strings | select(endswith(" (Recommended)"))] | if length == 1 then .[0] else empty end' <<<"$questions")
     [ -n "$recommended" ] || park_question "the question '$header' does not mark exactly one option (Recommended), and the gate never guesses."
+    # A merge is the human's to allow: with may_merge not true, a recommended
+    # label that leads to a merge parks instead of being taken.
+    if [[ "$recommended" =~ ^[Mm]erge([^[:alnum:]]|$) ]] && [ "$(autonomy_field may_merge "$cwd" 2>/dev/null || true)" != true ]; then
+      park_question "the question '$header' recommends a merge and the switch has may_merge false, so only a human allows the merge."
+    fi
     labels="$labels$header"$'\t'"$recommended"$'\n'
     index=$((index + 1))
   done
@@ -197,7 +213,7 @@ is_protected() {
   local word resolved relative
   word=$(gaia_write_target_strip_quotes "${1-}")
   case "$word" in
-    *.claude/* | *CLAUDE.md* | *local/protected*) ;;
+    *.claude/* | *CLAUDE.md* | *CLAUDE.local.md* | *local/protected* | *autonomy-* | *.gaia/scripts/*) ;;
     *) return 1 ;;
   esac
   [ -n "$main_root" ] || return 0
