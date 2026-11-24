@@ -90,6 +90,31 @@ policy_list() {
   done
 }
 
+@test "run in .claude/settings.json registration order, both hooks leave an executor's and a fork's commit denied" {
+  local hook agent decision verdicts
+  local -a order=()
+  while IFS= read -r hook; do order+=("$hook"); done < <(
+    jq -r '.hooks.PreToolUse[] | select(.matcher | split("|") | index("Bash")) | .hooks[].command
+      | capture("/\\.claude/hooks/(?<name>[^/\"]+\\.sh)").name' "$SOURCE_ROOT/.claude/settings.json" |
+      grep -xE 'block-main-destructive-git\.sh|classify-git-command\.sh')
+  [ "${#order[@]}" -eq 2 ]
+  for agent in "$EXECUTOR" "$FORK"; do
+    verdicts=""
+    for hook in "${order[@]}"; do
+      run_raw "$REPO/.claude/hooks/$hook" "$(payload 'git commit -m change' "$agent")"
+      [ "$status" -eq 0 ]
+      decision=none
+      [ -z "$output" ] || decision=$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$output")
+      verdicts="$verdicts $hook=$decision"
+    done
+    echo "case: $agent |$verdicts"
+    # A PreToolUse deny from any hook beats another hook's allow, so the call
+    # is denied exactly when one of them denies.
+    grep -qF -- ' classify-git-command.sh=allow' <<<"$verdicts"
+    grep -qF -- ' block-main-destructive-git.sh=deny' <<<"$verdicts"
+  done
+}
+
 @test "every listed subcommand is denied to a sub-agent and a fork, and every stash write form with it" {
   local subcommand agent count=0
   while IFS= read -r subcommand; do
