@@ -35,8 +35,8 @@ GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 #     named `agent-<agent id>`, the name isolation gives the worktree it makes
 #     for that sub-agent. The id is unique, so a sub-agent in its parent's tree,
 #     or a depth-2 agent in another agent's, never matches.
-#   - Every segment is a bare `git <subcommand>` whose only global option is one
-#     `-C <literal path>` resolving to that same root (`.claude/rules/shell-cwd.md`
+#   - Every segment is a bare `git <subcommand>` whose global options, if any,
+#     are one `-C <literal path>` resolving to that same root (`.claude/rules/shell-cwd.md`
 #     prescribes `git -C`; a quoted `$X` the shell would expand is not literal).
 #     The command carries no backtick, which the `| & ; ( )` split cannot open.
 #     A `cd`, `pushd`, `sh -c`, env prefix (`GIT_DIR=`), `-c core.worktree=`,
