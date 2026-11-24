@@ -416,6 +416,7 @@ check_no_pr_edge() {
 }
 
 @test "an allowed gh pr create form still writes the breadcrumb" {
+  # shellcheck source=../helpers/gh-allow-list.sh
   . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
   gh_command_is_allowed 'gh pr create --title x --body y'
   build_repo

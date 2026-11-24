@@ -224,6 +224,7 @@ check_decision() {
 }
 
 @test "an allowed gh pr create form is still blocked when it is not a draft" {
+  # shellcheck source=../helpers/gh-allow-list.sh
   . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
   gh_command_is_allowed 'gh pr create --title "feat: x" --body-file f'
   run_hook 'gh pr create --title "feat: x" --body-file f'

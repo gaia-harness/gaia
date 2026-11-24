@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared bats primitive: is a `gh` command allowed without a permission prompt
-# by the root `.claude/settings.json` allow list?
+# by the root `.claude/settings.json`?
 #
 # Sourced from a suite's body, from any bats directory. A hook suite uses it to
 # prove its hook still fires on a form the allow list lets through, so an allow
@@ -9,19 +9,32 @@
 # API:
 #   gh_command_is_allowed COMMAND
 #
-# Returns 0 when a `Bash(<prefix>:*)` rule matches COMMAND at a word boundary
-# (or a `Bash(<command>)` rule equals it), 1 otherwise. Reads
+# Returns 0 when a `Bash(...)` allow rule matches COMMAND and no `ask` or `deny`
+# `Bash(...)` rule does, 1 otherwise. A `<prefix>:*` rule matches at a word
+# boundary; any other rule is a glob over the whole command. Reads
 # `$REPO_ROOT/.claude/settings.json`, so the caller sets `REPO_ROOT`.
 
+gh_command_matches_rule() {
+  local command_text="$1" rule="$2" prefix
+  case "$rule" in
+    *:\*)
+      prefix=${rule%:\*}
+      [ "$command_text" = "$prefix" ] || [[ $command_text == "$prefix "* ]]
+      ;;
+    *)
+      # shellcheck disable=SC2053
+      [[ $command_text == $rule ]]
+      ;;
+  esac
+}
+
 gh_command_is_allowed() {
-  jq -e --arg command "$1" '
-    .permissions.allow
-    | map(select(startswith("Bash(") and endswith(")")) | .[5:-1])
-    | any(. as $rule
-        | if ($rule | endswith(":*"))
-          then ($rule | .[:-2]) as $prefix
-            | ($command == $prefix or ($command | startswith($prefix + " ")))
-          else $command == $rule
-          end)
-  ' "$REPO_ROOT/.claude/settings.json" >/dev/null
+  local command_text="$1" rule allowed=1
+  while IFS= read -r rule; do
+    gh_command_matches_rule "$command_text" "$rule" && allowed=0
+  done < <(jq -r '.permissions.allow[] | select(startswith("Bash(") and endswith(")")) | .[5:-1]' "$REPO_ROOT/.claude/settings.json")
+  while IFS= read -r rule; do
+    gh_command_matches_rule "$command_text" "$rule" && return 1
+  done < <(jq -r '(.permissions.ask + .permissions.deny)[] | select(startswith("Bash(") and endswith(")")) | .[5:-1]' "$REPO_ROOT/.claude/settings.json")
+  return "$allowed"
 }

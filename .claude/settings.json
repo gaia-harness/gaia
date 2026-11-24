@@ -31,7 +31,7 @@
       "Bash(bash .gaia/scripts/state-cleanup.sh:*)",
       "Bash(bash .gaia/scripts/summary-verify.sh:*)",
       "Bash(corepack disable pnpm)",
-      "Bash(gh auth status:*)",
+      "Bash(gh auth status)",
       "Bash(gh issue close:*)",
       "Bash(gh issue comment:*)",
       "Bash(gh issue create:*)",
@@ -40,15 +40,12 @@
       "Bash(gh issue reopen:*)",
       "Bash(gh issue view:*)",
       "Bash(gh label list:*)",
-      "Bash(gh pr checkout:*)",
       "Bash(gh pr checks:*)",
-      "Bash(gh pr close:*)",
       "Bash(gh pr comment:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr diff:*)",
       "Bash(gh pr edit:*)",
       "Bash(gh pr list:*)",
-      "Bash(gh pr ready:*)",
       "Bash(gh pr status:*)",
       "Bash(gh pr view:*)",
       "Bash(gh release list:*)",
@@ -130,7 +127,11 @@
     ],
     "ask": [
       "Edit(**/.claude/settings.json)",
-      "Edit(.claude/settings.json)"
+      "Edit(.claude/settings.json)",
+      "Bash(gh issue comment --delete-last*)",
+      "Bash(gh issue comment * --delete-last*)",
+      "Bash(gh pr comment --delete-last*)",
+      "Bash(gh pr comment * --delete-last*)"
     ],
     "deny": [
       "Bash(git push --force-with-lease *main*)",

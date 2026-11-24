@@ -283,10 +283,3 @@ EOF
   [ "$status" -eq 2 ]
   grep -qF 'BLOCKED: block-fork-pr-checkout.sh cannot load lib/hook-payload.sh' <<<"$output"
 }
-
-@test "an allowed gh pr checkout form is still denied for a fork pull request" {
-  . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
-  gh_command_is_allowed 'gh pr checkout 34'
-  run_guard 'gh pr checkout 34'
-  assert_denied_by_json
-}

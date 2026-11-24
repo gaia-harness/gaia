@@ -251,6 +251,7 @@ run_hook_in_home() {
 }
 
 @test "an allowed gh pr create form is still blocked when its title is invalid" {
+  # shellcheck source=../helpers/gh-allow-list.sh
   . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
   gh_command_is_allowed 'gh pr create --title "bogus: do a thing" --body x'
   run_hook 'gh pr create --title "bogus: do a thing" --body x'
