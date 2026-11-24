@@ -9,6 +9,7 @@ import {
   reportOf,
   writeFailingClassifier,
 } from './check-support.js';
+import {GRADE_ORDER} from './grade.js';
 import {OWNERSHIP_CLASSIFIER_ENV} from './ownership.js';
 import {linesWithContents, skillFile} from './rules/authoring.fixtures.js';
 import type {FixtureProject} from './types.js';
@@ -154,21 +155,7 @@ const GRADE_CASES: readonly GradeCase[] = [
   },
 ];
 
-const GRADE_ORDER = [
-  'F',
-  'D-',
-  'D',
-  'D+',
-  'C-',
-  'C',
-  'C+',
-  'B-',
-  'B',
-  'B+',
-  'A-',
-  'A',
-  'A+',
-];
+const WORST_FIRST_GRADES = GRADE_ORDER.toReversed();
 
 describe('gaia fitness check grades', () => {
   test.each(GRADE_CASES)(
@@ -184,7 +171,7 @@ describe('gaia fitness check grades', () => {
         .map((entry) => entry.grade)
         .filter((grade) => grade !== 'n/a');
       const lowest = graded.toSorted(
-        (a, b) => GRADE_ORDER.indexOf(a) - GRADE_ORDER.indexOf(b)
+        (a, b) => WORST_FIRST_GRADES.indexOf(a) - WORST_FIRST_GRADES.indexOf(b)
       )[0];
 
       expect(graded.length).toBeGreaterThan(0);

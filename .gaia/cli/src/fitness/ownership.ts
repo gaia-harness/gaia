@@ -28,6 +28,7 @@ const CLASSES: ReadonlySet<string> = new Set([
 const CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
 
 /** Only these variables reach the classifier; nothing the project controls does. */
+// subset of .gaia/cli/src/fitness/builtins.ts#ENV_ALLOWLIST
 const SCRUBBED_ENV_KEYS = ['PATH', 'HOME', 'LANG', 'LC_ALL'] as const;
 
 const scrubbedEnvironment = (): Record<string, string> => {

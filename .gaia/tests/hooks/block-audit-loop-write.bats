@@ -76,6 +76,7 @@ run_monitor() {
 # a command line for Bash and Monitor.
 run_as() {
   case "$1" in
+    # sanctioned copy of .claude/hooks/lib/hook-payload.sh#GAIA_HOOK_EDIT_TOOLS
     Write | Edit | MultiEdit) run_edit "$1" "$2" "${3:-$MAIN}" ;;
     Bash) run_bash "$2" "${3:-$MAIN}" ;;
     Monitor) run_monitor "$2" "${3:-$MAIN}" ;;

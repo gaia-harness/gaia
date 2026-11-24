@@ -125,6 +125,7 @@ else
         ;;
     esac
     case "$scoped_name" in
+      # sanctioned copy of .gaia/scripts/react-doctor-version-lib.sh#dependency_manifest_files
       package.json | pnpm-workspace.yaml | pnpm-lock.yaml)
         run_knip=1
         ;;

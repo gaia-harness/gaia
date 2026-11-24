@@ -14,6 +14,7 @@ import type {
   FixtureMap,
   FixtureProject,
   RuleDefinition,
+  Severity,
 } from './types.js';
 
 const cleanups: (() => void)[] = [];
@@ -39,8 +40,6 @@ const checkReport = async (
 
   return result.json as CheckReport;
 };
-
-type Severity = 'error' | 'info' | 'warning';
 
 const exitReport = (severity: Severity): CheckReport => ({
   categories: [],

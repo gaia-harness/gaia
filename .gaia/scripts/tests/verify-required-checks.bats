@@ -26,7 +26,8 @@ Audit CI Tests
 Run Chromatic
 Vitest and Playwright
 Vitest (.gaia/cli)
-Shellcheck and bats"
+Shellcheck and bats
+Value sets"
 }
 
 # Usage errors (exit 2)
@@ -79,7 +80,8 @@ Shellcheck and bats"
 Run Chromatic
 Vitest and Playwright
 Vitest (.gaia/cli)
-Shellcheck and bats"
+Shellcheck and bats
+Value sets"
   run "$SCRIPT" --repo gaia-react/gaia --branch main \
     --ruleset-contexts <(printf '%s\n' "$partial")
   [ "$status" -eq 1 ] || { echo "case partial: expected exit 1, got $status"; return 1; }
@@ -97,7 +99,7 @@ Shellcheck and bats"
     --ruleset-contexts <(printf '')
   [ "$status" -eq 1 ] || { echo "case empty: expected exit 1, got $status"; return 1; }
   local context
-  for context in "GAIA-Audit" "Audit CI Tests" "Run Chromatic" "Vitest and Playwright" "Vitest (.gaia/cli)" "Shellcheck and bats"; do
+  for context in "GAIA-Audit" "Audit CI Tests" "Run Chromatic" "Vitest and Playwright" "Vitest (.gaia/cli)" "Shellcheck and bats" "Value sets"; do
     assert_contains "$context" || { echo "case empty: $context not reported"; return 1; }
   done
 }

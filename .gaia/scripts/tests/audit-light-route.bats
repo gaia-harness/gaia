@@ -416,6 +416,7 @@ refuse_notes() {
 
 @test "each enforcement script routes the shell member full hard-full naming its roster glob, and the same edits route light with the globs gone" {
   local path base_sha
+  # subset of .gaia/scripts/audit-fix-verify-state-lib.sh#ENFORCEMENT_PATHS
   local paths=(.gaia/scripts/audit-fix-verify.sh .gaia/scripts/audit-dispositions-check.sh .gaia/scripts/audit-pr-sections-lib.sh .gaia/scripts/audit-recorded-decision-lib.sh .gaia/scripts/filing-outcomes-lib.sh .gaia/scripts/audit-veto-lib.sh .gaia/scripts/audit-triage-lib.sh .gaia/scripts/audit-gate-owed.sh)
   lsb_init
   base_sha="$LSB_HEAD"

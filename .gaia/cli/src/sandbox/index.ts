@@ -20,7 +20,12 @@ import {lookupOwn, takeNonFlagValue} from '../util/argv.js';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
 import {resolveMainWorktreeRoot} from '../util/main-root.js';
 import {mergeSandboxSettings} from './apply.js';
-import {classifyCapability} from './capability.js';
+import {
+  CAPABILITIES,
+  classifyCapability,
+  PLATFORMS,
+  WSL_KINDS,
+} from './capability.js';
 import type {
   Capability,
   DetectionInput,
@@ -28,7 +33,11 @@ import type {
   Platform,
   WslKind,
 } from './capability.js';
-import {readSandboxMarker, writeSandboxMarker} from './marker.js';
+import {
+  readSandboxMarker,
+  SANDBOX_OUTCOMES,
+  writeSandboxMarker,
+} from './marker.js';
 import type {SandboxOutcome} from './marker.js';
 import {seedSandboxConfig} from './seed.js';
 
@@ -137,19 +146,6 @@ const buildFlags = (
       {ok: true, value}
     : {message: `${missing.flag} is required`, ok: false};
 };
-
-const PLATFORMS: readonly Platform[] = ['darwin', 'linux', 'win32'];
-const WSL_KINDS: readonly WslKind[] = ['none', 'wsl1', 'wsl2'];
-const CAPABILITIES: readonly Capability[] = [
-  'ready',
-  'needs-deps',
-  'unsupported',
-];
-const SANDBOX_OUTCOMES: readonly SandboxOutcome[] = [
-  'enabled',
-  'declined',
-  'incapable',
-];
 
 /**
  * Real host probes, used by `detect` for whichever flags are omitted. Kept

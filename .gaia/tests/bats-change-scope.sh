@@ -46,10 +46,12 @@
 
 set -uo pipefail
 
+# shellcheck source=.gaia/scripts/react-doctor-version-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../scripts/react-doctor-version-lib.sh"
+
+# shellcheck disable=SC2154 # assigned in the sourced react-doctor-version-lib.sh, which shellcheck does not follow
 install_inputs=(
-  "package.json"
-  "pnpm-lock.yaml"
-  "pnpm-workspace.yaml"
+  ${dependency_manifest_files[@]+"${dependency_manifest_files[@]}"}
   ".npmrc"
   ".node-version"
   "apps/web/package.json"

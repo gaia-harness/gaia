@@ -10,6 +10,7 @@ import type {
   Severity,
 } from '../types.js';
 
+// subset of .gaia/cli/src/fitness/types.ts#FileKind
 const PROMPT_KINDS: readonly FileKind[] = ['skill', 'command', 'agent'];
 
 /** A line that quotes a phrase to warn against it, so the phrase is not an instruction. */

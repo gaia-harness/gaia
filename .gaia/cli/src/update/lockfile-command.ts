@@ -18,6 +18,7 @@ import {execFileSync} from 'node:child_process';
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
+import {IMPORTER_DEPENDENCY_FIELDS} from '../release/pnpm-member-strip.js';
 import {structuredError} from '../stderr.js';
 import {BUILTIN_REGISTRY} from '../util/packages.js';
 import {parseValueFlags} from '../util/parse-value-flags.js';
@@ -58,9 +59,7 @@ const RESOLUTION_KEYS: readonly string[] = RESOLUTION_SETTINGS.flatMap(
 );
 
 const INSTALL_KEYS: readonly string[] = [
-  'dependencies',
-  'devDependencies',
-  'optionalDependencies',
+  ...IMPORTER_DEPENDENCY_FIELDS,
   'peerDependencies',
   'packageManager',
 ];

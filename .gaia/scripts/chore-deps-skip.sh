@@ -89,6 +89,7 @@ case "$subject" in
       [ -n "$changed_path" ] || continue
       saw_path=1
       case "$changed_path" in
+        # sanctioned copy of .gaia/scripts/react-doctor-version-lib.sh#dependency_manifest_files
         package.json | pnpm-lock.yaml | pnpm-workspace.yaml) ;;
       # gaia:maintainer-only:start
         # This maintainer checkout's CLI package manifest; its lockfile is the root one.

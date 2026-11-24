@@ -11,6 +11,7 @@
 import {existsSync, mkdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
+import {CAPABILITIES} from './capability.js';
 import type {Capability} from './capability.js';
 
 const MARKER_FILENAME = 'sandbox.json';
@@ -22,21 +23,9 @@ export type SandboxMarker = {
   version: 1;
 };
 
-export type SandboxOutcome = 'declined' | 'enabled' | 'incapable';
+export const SANDBOX_OUTCOMES = ['enabled', 'declined', 'incapable'] as const;
 
-// Canonical enum vocabularies, used to reject a present-but-off-vocabulary
-// hand-edited marker, matching the enum validation the sibling
-// project-config reader gets from Zod.
-const CAPABILITIES: readonly Capability[] = [
-  'needs-deps',
-  'ready',
-  'unsupported',
-];
-const OUTCOMES: readonly SandboxOutcome[] = [
-  'declined',
-  'enabled',
-  'incapable',
-];
+export type SandboxOutcome = (typeof SANDBOX_OUTCOMES)[number];
 
 export const resolveMarkerPath = (repoRoot: string): string =>
   path.join(repoRoot, '.gaia', 'local', MARKER_FILENAME);
@@ -66,7 +55,7 @@ export const readSandboxMarker = (repoRoot: string): null | SandboxMarker => {
   }
 
   if (
-    !(OUTCOMES as readonly string[]).includes(parsed.outcome) ||
+    !(SANDBOX_OUTCOMES as readonly string[]).includes(parsed.outcome) ||
     !(CAPABILITIES as readonly string[]).includes(parsed.capability)
   ) {
     // Present but off-vocabulary (e.g. a hand-edited marker): fail loud,
