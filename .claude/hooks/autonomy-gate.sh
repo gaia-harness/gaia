@@ -51,7 +51,7 @@
 #
 # Fail mode: a missing library refuses with exit 2; the one exception is an
 # unloadable autonomy-lib.sh during a merge, which allows a fixed repair set
-# (REPAIR_COMMAND_PATTERN). A missing jq refuses only a
+# (load_autonomy_library). A missing jq refuses only a
 # call whose tool_input names a guarded spelling (never a bare AskUserQuestion:
 # with jq absent the switch reads as off, so it is allowed). A deny is JSON on stdout with exit 0.
 #
@@ -107,25 +107,23 @@ load "$_gate_scripts/main-root-lib.sh" gaia_resolve_main_root
 # commands below pass; widening the set opens the gate. The pattern admits only
 # an optional `git -C <path>` prefix and these fixed words, so no shell
 # metacharacter can ride along.
-REPAIR_COMMAND_PATTERN='^git( -C [A-Za-z0-9_./+@:-]+)? (merge --abort|(checkout|restore) (--ours |--theirs )?-- \.gaia/scripts/autonomy-lib\.sh)$'
-REPAIR_COMMANDS='git merge --abort, git checkout --ours|--theirs -- .gaia/scripts/autonomy-lib.sh, git restore --ours|--theirs -- .gaia/scripts/autonomy-lib.sh'
-
 load_autonomy_library() {
   set +e
   # shellcheck source=/dev/null
   [ -f "$1" ] && . "$1" 2>/dev/null
   set -e
   ! type autonomy_active >/dev/null 2>&1 || return 0
-  local merging=0
+  local merging=0 library=".gaia/scripts/${1##*/}" pattern
+  pattern="^git( -C [A-Za-z0-9_./+@:-]+)? (merge --abort|(checkout|restore) (--ours |--theirs )?-- ${library//./\\.})\$"
   if gaia_hook_payload_read "$payload" && [ "$GAIA_HOOK_TOOL_NAME" = Bash ]; then
     git -C "$GAIA_HOOK_CWD" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && merging=1
-    if [ "$merging" -eq 1 ] && [[ "$GAIA_HOOK_COMMAND" =~ $REPAIR_COMMAND_PATTERN ]]; then
+    if [ "$merging" -eq 1 ] && [[ "$GAIA_HOOK_COMMAND" =~ $pattern ]]; then
       exit 0
     fi
   fi
   printf 'BLOCKED: autonomy-gate.sh cannot load %s, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.' "${1##*/}" >&2
   if [ "$merging" -eq 1 ]; then
-    printf ' A merge is in progress: run exactly one of: %s.' "$REPAIR_COMMANDS" >&2
+    printf ' A merge is in progress: run exactly one of: git merge --abort, git checkout --ours|--theirs -- %s, git restore --ours|--theirs -- %s.' "$library" "$library" >&2
   fi
   printf '\n' >&2
   exit 2
