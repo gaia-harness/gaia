@@ -182,6 +182,7 @@ PLAN_REL="${PLAN_DIR#"$ROOT/"}"
 test -f "$PLAN_DIR/README.md" \
   && test -f "$PLAN_DIR/ORCHESTRATOR.md" \
   && test -f "$PLAN_DIR/KICKOFF.md" \
+  && test -f "$PLAN_DIR/orchestrator-parts.md" \
   && ls "$PLAN_DIR"/task-*.md >/dev/null 2>&1
 ```
 

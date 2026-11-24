@@ -21,6 +21,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   TEMPLATE_REL=".claude/skills/gaia/references/plan/orchestrator-template.md"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
+  PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
 }
 
@@ -262,6 +263,8 @@ check_step_owns_no_retry() {
   range="$(stop_range "$1")"
   need_text 'Stop conditions' "$range" || return 1
   in_order "$range" 'a quality-gate failure the phase gate retry does not settle' || return 1
+  in_order "$(trim_lines <"$1/$PLANNER_REL")" \
+    'A phase entry never states its own retry or halt rule for a gate failure; the fixed gate-retry block owns which failures retry.' || return 1
 }
 
 check_executor_self_check() {

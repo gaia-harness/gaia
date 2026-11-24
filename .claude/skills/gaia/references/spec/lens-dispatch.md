@@ -100,4 +100,4 @@ The steps for a lens:
    ```
 
    Exit 0 is real (an empty `findings` array is real), 1 is a no-op, 2 is a usage error: a caller bug, so stop and surface it.
-4. On a no-op, re-clear that lens's file before the re-dispatch; for the test stage the re-clear is only `rm -f <PLAN_DIR>/test-stage-findings/TST.json` (`<PLAN_DIR>` repo-relative), never the folder, so the digest stays. On the inline fallback, say in one line which lens ran inline.
+4. On a no-op, re-clear that lens's file before the re-dispatch; for the test stage the re-clear is only `rm -rf <PLAN_DIR>/test-stage-findings/TST.json` (`<PLAN_DIR>` repo-relative, the form the `.notebook` allow entries match), never the folder, so the digest stays. On the inline fallback, say in one line which lens ran inline.
