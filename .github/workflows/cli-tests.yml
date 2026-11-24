@@ -301,19 +301,6 @@ jobs:
       - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
         name: Run Vitest tests
         run: pnpm -C .gaia/cli test --run
-      # The other end of the supported Node range (engines.node is
-      # `^24.15.0 || >=26.0.0`): the pinned Node above is 24, so the same
-      # suite runs once more under Node 26 with a fresh install.
-      - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
-        name: Setup Node 26 and install the CLI member
-        uses: ./.github/actions/gaia-setup-node
-        with:
-          install: cli
-          node-version: '26'
-          cache-dependency-path: 'pnpm-lock.yaml'
-      - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
-        name: Run Vitest tests on Node 26
-        run: pnpm -C .gaia/cli test --run
       # The region-marker conformance suite drives the real TypeScript parser
       # through tsx, so it needs .gaia/cli/node_modules and skips itself wherever
       # they are absent. audit-ci-tests.yml's scripts legs are lean and install
@@ -410,3 +397,17 @@ jobs:
       - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
         name: Verify vendored skills are byte-identical to their markers
         run: bash .gaia/scripts/verify-vendored-skills.sh
+      # The other end of the supported Node range (engines.node is
+      # `^24.15.0 || >=26.0.0`): the pinned Node above is 24, so the same
+      # suite runs once more under Node 26 over the existing install. It runs
+      # last so every other step stays on the pinned Node.
+      - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+        name: Setup Node 26 and install the CLI member
+        uses: ./.github/actions/gaia-setup-node
+        with:
+          install: cli
+          node-version: '26'
+          cache-dependency-path: 'pnpm-lock.yaml'
+      - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+        name: Run Vitest tests on Node 26
+        run: pnpm -C .gaia/cli test --run

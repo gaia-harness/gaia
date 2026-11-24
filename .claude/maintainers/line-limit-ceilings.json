@@ -76,7 +76,7 @@
     ".gaia/statusline/gaia-statusline-right.sh": 638,
     ".github/forensics/parse-issue-body.sh": 404,
     ".github/workflows/audit-ci-tests.yml": 1019,
-    ".github/workflows/cli-tests.yml": 412,
+    ".github/workflows/cli-tests.yml": 413,
     ".github/workflows/forensics-triage.yml": 891,
     ".github/workflows/tests.yml": 476
   },
