@@ -111,6 +111,6 @@ esac
 if [[ $merged_reference =~ ^[1-9][0-9]{0,9}$ && $closing_step == *'usage.sh record '* ]]; then
   closing_step="$closing_step --pr $merged_reference"
 fi
-printf '[run cost] this session has an open run; if its own skill never reaches its cost-record step, %s\n' "$closing_step"
+printf '[run cost] this session has an open run; if nothing else records it once the merge has landed, %s\n' "$closing_step"
 
 exit 0

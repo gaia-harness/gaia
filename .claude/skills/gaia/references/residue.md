@@ -179,7 +179,7 @@ At that point, save before asking, as the checkpoint says, to this run's own sta
 - `Held: <the held cursor tokens, space-separated>`, or `Held: none`
 - `NEXT: re-run residue-tally and start the next batch`
 
-Then ask the checkpoint's question. On `Continue here`, start the next batch. On `Clear and resume`, run `bash .gaia/scripts/usage.sh handoff` as the checkpoint says, and print the continuation prompt in a bare fenced block, filling in the state file's absolute path and, when the handoff printed lines, its first line (the join line) as the first step; the second line is handled as the checkpoint's `## Carry the run's cost across` says, and this sweep's own record step closes the run:
+Then ask the checkpoint's question. On `Continue here`, start the next batch. On `Clear and resume`, run `bash .gaia/scripts/usage.sh handoff` as the checkpoint says, and print the continuation prompt in a bare fenced block, filling in the state file's absolute path and, when the handoff printed lines, its first line (the join line) as the first step; the prompt omits the second line, since this sweep's own record step closes the run:
 
 ```
 <the usage.sh handoff join line, when it printed one: run it first, verbatim>
