@@ -32,7 +32,7 @@ One command. GAIA handles the rest, then `/gaia-init` finishes the last-mile set
 > [!NOTE]
 > Start projects with `npx create-gaia@latest my-app` rather than cloning or forking. The CLI sets up your project for you, strips the GAIA branding and release tooling, etc. A clone leaves all of that in place and pointed at the wrong repo.
 
-**Requirements:** [Node.js](https://nodejs.org/) 24.15.0+ or 26+ ([nvm](https://github.com/nvm-sh/nvm) recommended). macOS or Linux; on Windows, run inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) (the hooks and CLI need bash and POSIX file paths, and native Windows isn't exercised in CI).
+**Requirements:** [Node.js](https://nodejs.org/) 24.15.0 or later, or 26 or later ([nvm](https://github.com/nvm-sh/nvm) recommended). macOS or Linux; on Windows, run inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) (the hooks and CLI need bash and POSIX file paths, and native Windows isn't exercised in CI).
 
 [Learn more about GAIA →](https://gaiaharness.com/)
 
