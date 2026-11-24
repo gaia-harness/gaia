@@ -3159,7 +3159,7 @@ merge_log_lines() {
     echo "case: $command_line"
     run_merge_hook "$command_line"
     assert_denied_by_json
-    jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'with may_merge false: the PR is ready for you'
+    jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'with may_merge false: the PR is merge-ready'
     jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- "autonomy-park.sh --reason merge-ready --pr <n> --root"
   done
   [ "$(merge_log_lines)" -eq 0 ]
@@ -3171,7 +3171,7 @@ merge_log_lines() {
   commit_files "Makefile" "all:"
   run_merge_hook
   assert_denied_by_json
-  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'the PR is ready for you' && return 1
+  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'the PR is merge-ready' && return 1
   [ "$(merge_log_lines)" -eq 0 ]
   write_marker "code-audit-frontend"
   run_merge_hook 'gh pr merge 30 --auto --squash'
@@ -3188,7 +3188,7 @@ merge_log_lines() {
   [ ! -e "$BATS_TEST_TMPDIR/elsewhere.jsonl" ]
 }
 
-# The question gate parks only a recommended label that starts with "Merge";
+# The question gate's merge arm parks only a recommended label whose first word is Merge;
 # an "Apply ..." option whose path ends in a merge is taken. The merge gate is
 # the enforcement point: with may_merge false the merge that follows parks.
 # bats test_tags=protected
@@ -3229,7 +3229,7 @@ merge_log_lines() {
     esac
     run_merge_hook
     assert_denied_by_json
-    jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'the PR is ready for you' && return 1
+    jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'the PR is merge-ready' && return 1
     write_marker "code-audit-frontend"
     run_merge_hook
     assert_allowed_by_json

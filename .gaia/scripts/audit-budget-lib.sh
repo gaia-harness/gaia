@@ -18,7 +18,7 @@
 # every branch; the spend key is `pr:<n>`, or `branch:<key>` while the branch
 # has no pull request.
 #
-# Source after audit-loop-state-lib.sh (gaia_loop_lock) and autonomy-lib.sh.
+# Source after audit-loop-state-lib.sh (gaia_loop_lock); gaia_audit_budget_spend also needs autonomy-lib.sh loaded.
 #
 # gaia_audit_budget_spend <main root> <spend key>
 #   Spends one unit under the record's lock. rc 0 prints `spent <units the key

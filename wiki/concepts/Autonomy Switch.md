@@ -74,7 +74,9 @@ Under the switch, a write to a file that governs the harness itself parks too. A
 
 ### The decision log
 
-`<main checkout>/.gaia/local/protected/autonomy-log.jsonl` records every option the gate told Claude to take, every audit unit the budget spent (header `Audit budget`) and every merge the merge gate allowed (header `Unattended merge`), one JSON object per line: `time`, `session_id`, `branch`, `header`, `option`. Each hook writes its entry before it lets the action through, so the record never depends on Claude. A failed write parks or denies instead.
+`<main checkout>/.gaia/local/protected/autonomy-log.jsonl` records every option the gate told Claude to take, every audit unit the budget spent (header `Audit budget`) and every merge the merge gate allowed (header `Unattended merge`), one JSON object per line: `time`, `session_id`, `branch`, `header`, `option`. Each hook writes its entry before it lets the action through, so the record never depends on Claude. A failed write parks or denies instead. The log is main-anchored, so every worktree's decisions land in one file, and it sits in the protected folder, so Claude cannot rewrite it.
+
+The audit's PR-body sections (`audit-dispositions-check.sh pr-sections`) include the branch's entries under `## Decided unattended`, one `header: option` line each (`.gaia/scripts/audit-decided-unattended-lib.sh`). An entry whose text fails the secret screen or the machine-local reference screen (`.gaia/scripts/machine-local-ref-lib.sh`) is withheld and counted. A branch with no entries gets no section. The backstop state reaper drops an entry once no local branch or worktree maps onto its branch and the entry is older than the `autonomy-decision-log` registry row's window.
 
 ## The audit budget
 
@@ -82,9 +84,7 @@ The two `audit_*` fields let an unattended audit loop past a checkpoint a human 
 
 ## The merge
 
-With `may_merge` not `true`, `.claude/hooks/pr-merge-audit-check.sh` denies every `gh pr merge` while the switch is live and the run parks with reason `merge-ready`; with `true`, the audit gate decides as it does attended ([[PR Merge Workflow#4. Merge]]). The log is main-anchored, so every worktree's decisions land in one file, and it sits in the protected folder, so Claude cannot rewrite it.
-
-The audit's PR-body sections (`audit-dispositions-check.sh pr-sections`) include the branch's entries under `## Decided unattended`, one `header: option` line each (`.gaia/scripts/audit-decided-unattended-lib.sh`). An entry whose text fails the secret screen or the machine-local reference screen (`.gaia/scripts/machine-local-ref-lib.sh`) is withheld and counted. A branch with no entries gets no section. The backstop state reaper drops an entry once no local branch or worktree maps onto its branch and the entry is older than the `autonomy-decision-log` registry row's window.
+With `may_merge` not `true`, `.claude/hooks/pr-merge-audit-check.sh` denies every `gh pr merge` while the switch is live and the run parks with reason `merge-ready`; with `true`, the audit gate decides as it does attended ([[PR Merge Workflow#4. Merge]]).
 
 ## The guard and its accepted residuals
 
