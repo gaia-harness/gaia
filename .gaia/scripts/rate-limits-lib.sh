@@ -120,11 +120,6 @@ if . "$_gaia_rate_limits_library_directory/context-checkpoint-lib.sh" 2>/dev/nul
     && [ -n "${_GAIA_RATE_LIMITS_REPORT_PROGRAM:-}" ] && _GAIA_RATE_LIMITS_SIBLINGS_LOADED=1
 fi
 
-# gaia_rate_limits_directory <main-root>: print the reading folder.
-gaia_rate_limits_directory() {
-  printf '%s/%s\n' "${1:-}" "$_GAIA_RATE_LIMITS_RELATIVE_PATH"
-}
-
 # gaia_rate_limits_file <main-root> <session-id>: print the session's reading
 # file; rc 1 and no output for an id that is not UUID-shaped.
 gaia_rate_limits_file() {
@@ -158,8 +153,9 @@ gaia_rate_limits_is_window_name() {
   [[ ${1:-} =~ $pattern ]]
 }
 
-# gaia_rate_limits_seven_day_set: set _GAIA_RATE_LIMITS_SEVEN_DAY_SET to the
-# 7-day band set of the account tier (standard, max or ultra), never printed.
+# gaia_rate_limits_seven_day_set: set _GAIA_RATE_LIMITS_SEVEN_DAY_SET_INDEX to
+# the index in the jq `sets` array of the account tier's 7-day band set (0
+# standard, 1 max, 2 ultra), never printed.
 # The profile is $CLAUDE_CONFIG_DIR/.claude.json when that variable is set and
 # non-empty, with no fallback, else $HOME/.claude.json. Exactly one jq that
 # emits only a string value of the one key, its stderr discarded, so no other
@@ -168,7 +164,7 @@ gaia_rate_limits_is_window_name() {
 # are mapped.
 gaia_rate_limits_seven_day_set() {
   local profile tier=""
-  _GAIA_RATE_LIMITS_SEVEN_DAY_SET=standard
+  _GAIA_RATE_LIMITS_SEVEN_DAY_SET_INDEX=0
   if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
     profile="$CLAUDE_CONFIG_DIR/.claude.json"
   elif [ -n "${HOME:-}" ]; then
@@ -179,10 +175,9 @@ gaia_rate_limits_seven_day_set() {
   [ -f "$profile" ] && [ -r "$profile" ] || return 0
   tier=$(jq -r 'try (.oauthAccount.organizationRateLimitTier | strings) // empty' "$profile" 2>/dev/null) || tier=""
   case $tier in
-    default_claude_max_20x) _GAIA_RATE_LIMITS_SEVEN_DAY_SET=ultra ;;
-    default_claude_max_5x) _GAIA_RATE_LIMITS_SEVEN_DAY_SET=max ;;
-    default_raven) _GAIA_RATE_LIMITS_SEVEN_DAY_SET=standard ;;
-    *) _GAIA_RATE_LIMITS_SEVEN_DAY_SET=standard ;;
+    default_claude_max_20x) _GAIA_RATE_LIMITS_SEVEN_DAY_SET_INDEX=2 ;;
+    default_claude_max_5x) _GAIA_RATE_LIMITS_SEVEN_DAY_SET_INDEX=1 ;;
+    # default_raven, and anything unmapped, stays standard.
   esac
   return 0
 }
@@ -349,11 +344,7 @@ gaia_rate_limits_report() {
     "ok${tab}0") ;;
     "ok${tab}1")
       gaia_rate_limits_seven_day_set
-      case $_GAIA_RATE_LIMITS_SEVEN_DAY_SET in
-        max) set_index=1 ;;
-        ultra) set_index=2 ;;
-        *) set_index=0 ;;
-      esac
+      set_index=$_GAIA_RATE_LIMITS_SEVEN_DAY_SET_INDEX
       ;;
     *) return 1 ;;
   esac

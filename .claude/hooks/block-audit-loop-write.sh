@@ -205,7 +205,7 @@ if ! type gaia_require_jq >/dev/null 2>&1; then
   printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/jq-availability.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
-gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits.json' 'cache/shared/rate-limits' 'cache/rate-limit-checkpoint' 'organizationRateLimitTier' 'CLAUDE_CONFIG_DIR' 'rate-limits-lib.sh' 'rate-limits.sh write'
+gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits' 'cache/rate-limit-checkpoint' 'organizationRateLimitTier' 'CLAUDE_CONFIG_DIR' 'rate-limits-lib.sh' 'rate-limits.sh write'
 
 set +e
 # shellcheck source=lib/hook-payload.sh

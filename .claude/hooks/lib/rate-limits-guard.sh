@@ -60,13 +60,11 @@ gaia_rate_limits_guard_path() {
 # fallback). Naming one to read it (cat, jq) is allowed.
 gaia_rate_limits_guard_writes_file() {
   local delimiters='[[:space:]"'\'';|&)<>]'
-  local readings_re="$GAIA_RATE_LIMITS_GUARD_READINGS_SUFFIX(/|\\.json($delimiters|\$)|$delimiters|\$)"
-  local markers_re="$GAIA_RATE_LIMITS_GUARD_MARKERS_SUFFIX(/|$delimiters|\$)"
+  local names_re="($GAIA_RATE_LIMITS_GUARD_READINGS_SUFFIX(\\.json)?|$GAIA_RATE_LIMITS_GUARD_MARKERS_SUFFIX)(/|$delimiters|\$)"
+  [[ "$1" =~ $names_re ]] || return 1
+  # Rescanned: runs_guarded_script, called before this, overwrites the scan.
   shell_scan "$1"
-  if [[ "$1" =~ $readings_re ]] && writes_named "$1" "$readings_re"; then
-    return 0
-  fi
-  [[ "$1" =~ $markers_re ]] && writes_named "$1" "$markers_re"
+  writes_named "$1" "$names_re"
 }
 
 # names_rate_limits_write <script-word> <next-word>: the words_run_guarded_script
@@ -107,15 +105,7 @@ gaia_rate_limits_guard_sets_config_dir() {
 # text is outside the fixed payload fields, so one jq reads it, and only after
 # the path ends in `.claude.json`.
 gaia_rate_limits_guard_edits_tier() {
-  case "$1" in
-    *.claude.json) ;;
-    *)
-      case "$2" in
-        *.claude.json) ;;
-        *) return 1 ;;
-      esac
-      ;;
-  esac
+  [[ $1 == *.claude.json || $2 == *.claude.json ]] || return 1
   jq -e --arg field "$GAIA_RATE_LIMITS_GUARD_TIER_FIELD" '[.tool_input | (.content, .new_string, (.edits[]?.new_string))] | map(select(type == "string")) | any(contains($field))' <<<"$3" >/dev/null 2>&1
 }
 
