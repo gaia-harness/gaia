@@ -2,8 +2,10 @@
 #
 # The test stage writes the digest its review lens reads: after the stage's own
 # pre-clear of the findings folder, the check script run with --digest exits 0
-# and leaves a non-empty digest file in that folder. The digest's content and
-# refusals belong to test-stage-check.bats. Fixtures live under $BATS_TEST_TMPDIR.
+# and leaves the digest in that folder: it carries the fixture's
+# behavior, its Tests line and its Flow test line, and the hash the script prints
+# matches the written file. The digest's full content and refusals belong to
+# test-stage-check.bats. Fixtures live under $BATS_TEST_TMPDIR.
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
 
@@ -15,7 +17,7 @@ setup() {
   mkdir -p "$PLAN_DIR"
 }
 
-@test "the test stage writes a non-empty digest into its pre-cleared findings folder" {
+@test "the test stage writes a digest into its pre-cleared findings folder that carries the behavior, Tests line and Flow test line, and whose printed hash matches the file" {
   cat >"$SPEC" <<'SPEC'
 ---
 spec_id: scratch
@@ -41,5 +43,9 @@ SPEC
   rm -rf "$PLAN_DIR/test-stage-findings" && mkdir -p "$PLAN_DIR/test-stage-findings"
   run node "$CLI" --plan-dir "$PLAN_DIR" --spec "$SPEC" --digest "$PLAN_DIR/test-stage-findings/digest.md"
   [ "$status" -eq 0 ]
-  [ -s "$PLAN_DIR/test-stage-findings/digest.md" ]
+  local digest="$PLAN_DIR/test-stage-findings/digest.md"
+  [ "$output" = "$(shasum -a 256 "$digest" | cut -d' ' -f1)" ]
+  grep -F -q 'The footer shows the year.' "$digest"
+  grep -F -q 'Test (B1, unit, none): a.test.ts › footer year' "$digest"
+  grep -F -q 'Flow test (scratch-flow): flow.spec.ts' "$digest"
 }
