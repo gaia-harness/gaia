@@ -27,7 +27,7 @@ setup() {
   done
 }
 
-@test "the gh forms outside the unattended allow list still prompt" {
+@test "the gh forms an unattended run must not run unprompted still prompt" {
   local command_text
   for command_text in \
     'gh auth status --show-token' \

@@ -2,9 +2,8 @@
 # Shared bats primitive: is a `gh` command allowed without a permission prompt
 # by the root `.claude/settings.json`?
 #
-# Sourced from a suite's body, from any bats directory. A hook suite uses it to
-# prove its hook still fires on a form the allow list lets through, so an allow
-# rule never stands in for a PreToolUse deny.
+# A hook suite uses it to prove its hook still fires on a form the allow list
+# lets through, so an allow rule never stands in for a PreToolUse deny.
 #
 # API:
 #   gh_command_is_allowed COMMAND
