@@ -29,6 +29,7 @@
     ".claude/hooks/audit-loop-ask-grant.sh": "owned",
     ".claude/hooks/audit-loop-bound.sh": "owned",
     ".claude/hooks/audit-loop-grant.sh": "owned",
+    ".claude/hooks/autonomy-session-start.sh": "owned",
     ".claude/hooks/block-audit-loop-write.sh": "owned",
     ".claude/hooks/block-eslint-config-edit.sh": "owned",
     ".claude/hooks/block-fork-pr-checkout.sh": "owned",
@@ -311,6 +312,7 @@
     ".gaia/scripts/audit-write-clearance-publish.sh": "owned",
     ".gaia/scripts/audit-write-clearance.sh": "owned",
     ".gaia/scripts/audit-write-findings.sh": "owned",
+    ".gaia/scripts/autonomy-lib.sh": "owned",
     ".gaia/scripts/autonomy-park.sh": "owned",
     ".gaia/scripts/branch-authorship-lib.sh": "owned",
     ".gaia/scripts/branch-name-lib.sh": "owned",
@@ -768,6 +770,7 @@
     "wiki/concepts/Audit Disposition and Debt Fix.md": "wiki-owned",
     "wiki/concepts/Audit Gate Reference.md": "wiki-owned",
     "wiki/concepts/Audit Round Procedure.md": "wiki-owned",
+    "wiki/concepts/Autonomy Switch.md": "wiki-owned",
     "wiki/concepts/Claude Hooks.md": "wiki-owned",
     "wiki/concepts/Claude Integration Conventions.md": "wiki-owned",
     "wiki/concepts/Claude Skills.md": "wiki-owned",
@@ -903,7 +906,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T02:23:33.369Z",
+  "generated": "2026-11-24T03:30:52.842Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
