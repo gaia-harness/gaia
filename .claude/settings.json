@@ -15,6 +15,7 @@
       "Bash(bash .gaia/scripts/spec/handoff-clear.sh:*)",
       "Bash(bash .gaia/scripts/spec/ledger-update.sh:*)",
       "Bash(bash .gaia/scripts/spec/lint.sh:*)",
+      "Bash(bash .gaia/scripts/spec/orchestrator-render.sh:*)",
       "Bash(bash .gaia/scripts/spec/plan-allocator.sh:*)",
       "Bash(bash .gaia/scripts/spec/plan-archive-merged.sh:*)",
       "Bash(bash .gaia/scripts/spec/plan-reconcile.sh:*)",

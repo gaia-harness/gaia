@@ -14,6 +14,7 @@ Read `.claude/skills/gaia/references/plan.md` from the project root and follow i
 - `.claude/skills/gaia/references/plan/decomposition-audit.md`: step 4.6, the three review lenses and how their findings are applied.
 - `.claude/skills/gaia/references/spec/lens-dispatch.md`: step 4.6, with the audit.
 - `.claude/skills/gaia/references/plan/planner.md`: never read on this thread; the planner sub-agent spawned at step 4 reads it first.
+- `.claude/skills/gaia/references/plan/orchestrator-template.md`: never read on this thread or by the planner; only `orchestrator-render.sh` and `plan-verify.sh` read it.
 - `.claude/skills/gaia/references/test-stage.md`: read only when step 5's Run fires, through the `gaia-test` skill.
 - `.claude/skills/gaia/references/spec/wiki-promote.md`: never read on this thread; `planner.md` routes the planner to it at the step that needs it.
 - `.claude/skills/gaia/references/simplify-pass.md`: never read on this thread; the orchestrator the planner writes reads it after the last phase commits.

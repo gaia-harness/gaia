@@ -187,7 +187,7 @@ test -f "$PLAN_DIR/README.md" \
 
 If any required file is missing, surface the failure to the user with the planner's return payload. Do not retry silently, the user decides through `AskUserQuestion`: `Investigate first` (Recommended) or `Re-spawn the planner`. Never proceed to step 4.6 with an incomplete plan folder.
 
-Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching `planner.md`'s copy, that each task doc maps to one README phase row, and, per the `TEST-STAGE` record `test-stage.md` owns, that no Flow test line appears before the test stage has run. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
+Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching the copy in `.claude/skills/gaia/references/plan/orchestrator-template.md`, that each task doc maps to one README phase row, and, per the `TEST-STAGE` record `test-stage.md` owns, that no Flow test line appears before the test stage has run. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}`, `{AUDIT_PATH}` or `{BRANCH_ID}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
 
 ```bash
 if [[ -n "${SPEC_PATH:-}" ]]; then

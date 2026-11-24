@@ -172,6 +172,7 @@
     ".claude/skills/gaia/references/isolation.md": "owned",
     ".claude/skills/gaia/references/plan.md": "owned",
     ".claude/skills/gaia/references/plan/decomposition-audit.md": "owned",
+    ".claude/skills/gaia/references/plan/orchestrator-template.md": "owned",
     ".claude/skills/gaia/references/plan/planner.md": "owned",
     ".claude/skills/gaia/references/residue.md": "owned",
     ".claude/skills/gaia/references/security-writer.md": "owned",
@@ -404,6 +405,8 @@
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
     ".gaia/scripts/spec/ledger-update.sh": "owned",
     ".gaia/scripts/spec/lint.sh": "owned",
+    ".gaia/scripts/spec/orchestrator-render-lib.sh": "owned",
+    ".gaia/scripts/spec/orchestrator-render.sh": "owned",
     ".gaia/scripts/spec/page-use-fixtures.mjs": "owned",
     ".gaia/scripts/spec/page-use.mjs": "owned",
     ".gaia/scripts/spec/plan-allocator.sh": "owned",
@@ -914,7 +917,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T12:05:54.331Z",
+  "generated": "2026-11-24T16:03:01.359Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
