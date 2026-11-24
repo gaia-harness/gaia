@@ -480,6 +480,8 @@ assert_reaper_denied() {
     "Bash~bash <<'EOF'${nl}bash .gaia/scripts/state-reaper.sh${nl}EOF~~"
     "Bash~cat <<'EOF' | bash${nl}bash .gaia/scripts/state-reaper.sh${nl}EOF~~"
     "Bash~cat > $BATS_TEST_TMPDIR/notes.md <<'EOF'${nl}state-reaper.sh is data${nl}EOF${nl}bash .gaia/scripts/state-reaper.sh~~"
+    "Bash~cat > $BATS_TEST_TMPDIR/notes.md <<'EOF' && bash .gaia/scripts/state-reaper.sh${nl}data${nl}EOF~~"
+    "Bash~cat > $BATS_TEST_TMPDIR/notes.md <<'EOF'; bash .gaia/scripts/state-reaper.sh${nl}data${nl}EOF~~"
   )
   for row in "${allowed_rows[@]}"; do
     echo "case: $row"
@@ -493,6 +495,15 @@ assert_reaper_denied() {
     run_as "$row_tool" "$row_input" "$row_cwd"
     assert_reaper_denied
   done
+}
+
+# bats test_tags=protected
+@test "a recorder run on the opener line of a data heredoc is denied" {
+  local nl=$'\n'
+  printf '{"seed":1}' >"$STATE"
+  assert_recorder_denied "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF' && bash $ASK_RECORDER${nl}data${nl}EOF"
+  assert_recorder_denied "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF'; bash $GRANT_RECORDER${nl}data${nl}EOF"
+  assert_recorder_denied "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF' && $ASK_RECORDER${nl}data${nl}EOF"
 }
 
 # --- deny text, every class ---

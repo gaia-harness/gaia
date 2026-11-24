@@ -89,7 +89,9 @@
 #     `grep`, `bash -n`) is allowed, because staging, gate discovery and commits
 #     name these paths. A heredoc body the verb-arming walker proves is data (a
 #     `cat` or `tee` into a file) is not read as commands, so a line of it
-#     naming a recorder is allowed.
+#     naming a recorder is allowed. A script a data heredoc writes and a later
+#     command in the same call runs is not caught: the body is data when the
+#     guard reads it.
 #   Reaper execution: the same reading, with its own deny message, over the
 #     scripts state-reaper.sh, state-reaper-lib.sh, state-reaper-classes.sh and
 #     state-reaper-session-start.sh. Naming them stays allowed, and so does
@@ -112,6 +114,9 @@
 # spellings such as `.gaia/local/prot*`; a verb joined to the path by quoting
 # tricks, or itself quoted (`'rm'`); `bash < <recorder>` and
 # `cat <recorder> | bash`, and the same two spellings for a reaper script; a
+# leading input redirect before the command word (`< file bash <recorder>`,
+# and the same for a reaper script), which the command-word reading does not
+# skip; a
 # recorder or reaper name inside a quoted string that the
 # split above cuts at a `;`, `|` or `&`; case variants of a guarded path on a
 # case-insensitive filesystem (`.gaia/local/Protected`); an Edit/Write path or
