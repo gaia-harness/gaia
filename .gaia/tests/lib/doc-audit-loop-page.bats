@@ -216,20 +216,26 @@ in_round_worthiness_passes() {
 # enforcement_draft_passes <page> <runbook>: rc 0 when the fixer may draft a
 # vetoed enforcement-path repair, the verifier failure on it stops with no
 # continuation, and the runbook shows the fixer's whole diff, asks the human
-# with no recommendation and the conservative option first, and has Discard
-# withdraw each veto through the script before restoring the tree.
+# with no recommendation after a plain-language explanation,
+# offers Keep and Decline (Redo in place of Decline on a Critical or
+# security-class key), and has Decline withdraw each veto through the script
+# before restoring the tree.
 enforcement_draft_passes() {
   local fix_round row
   fix_round="$(section "$FIXROUND" "$1" | sentences)" || return 1
   grep -qF -- 'unless the dispositions file names it in enforcement_paths_allowed or a fix entry on that path carries enforcement_draft: true' <<<"$fix_round" || return 1
   grep -qF -- 'a failure whose every error is `enforcement-path` on such an entry'"'"'s path gets no continuation: the edits stay uncommitted and the round stops `needs-human` with `enforcement-draft`' <<<"$fix_round" || return 1
   row="$(grep -F -- '| `dispositions-check-failed`, `needs-human`, `failure` |' "$2")" || return 1
-  grep -qF -- 'ask one `AskUserQuestion` that recommends nothing, its options in this order: `Hold` (leave the tree as it is and stop), `Commit`' <<<"$row" || return 1
+  grep -qF -- 'then explain the change in plain language a reader with no harness knowledge can decide from, neutral, stating in this order what the guard is for in one line, whether the edit makes it stricter or looser (before versus after), which finding asked for it and what that finding said, and anything the edit touches beyond what the finding asked.' <<<"$row" || return 1
+  grep -qF -- 'ask one `AskUserQuestion` that recommends nothing, its options in this order: `Keep` (run the Quality Gate, commit' <<<"$row" || return 1
   grep -qF -- 'show `git -C <RESOLVED_ROOT> status --short` and `git -C <RESOLVED_ROOT> diff`, every path the fixer touched,' <<<"$row" || return 1
-  grep -qF -- 'and `Discard` (first run `record-residual --decision discard` for each named key, which removes its veto and records it as an accepted residual; once every key is recorded, restore every path shown' <<<"$row" || return 1
-  grep -qF -- '`discard` is refused on a Critical or security-class key, which leaves the tree as it is, so offer only `Hold` and `Commit`' <<<"$row"
+  grep -qF -- 'and `Decline` (first run `record-residual --decision discard` for each named key, which removes its veto and records it as an accepted residual; once every key is recorded, restore every path shown' <<<"$row" || return 1
+  grep -qF -- 'on that refusal ask again with `Redo` in place of `Decline`' <<<"$row" || return 1
+  grep -qF -- 'with that non-blank note as its reason, which becomes the veto'"'"'s direction' <<<"$row" || return 1
+  grep -qE -- '`Hold`|`Commit`|`Discard`' <<<"$row" && return 1
+  return 0
 }
 
-@test "a vetoed enforcement-path repair is drafted, stops uncommitted, and the human picks with Hold first" {
+@test "a vetoed enforcement-path repair is drafted, stops uncommitted, and the human picks Keep or Decline after a plain explanation" {
   enforcement_draft_passes "$PAGE" "$RUNBOOK"
 }
