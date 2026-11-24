@@ -27,7 +27,7 @@
 // --pre / --post: spec mode, the pre-fix and post-fix SPEC files; plan mode,
 // directories whose same-named `.md` files are compared. Compared lines: spec
 // mode, every behavior sentence (a behavior line or a case line of the
-// `## Behaviors` section); plan mode, every bullet under a `## Acceptance
+// `## Behaviors` section); plan mode, every bullet or numbered item under a `## Acceptance
 // criteria` heading of a task doc. Lines compare after whitespace is collapsed.
 // --dest: the valid destination files, matched by basename against a drop's
 // `file`. Spec mode: the --dest files, else the --post file; the name SPEC.md
@@ -54,7 +54,7 @@
 //     edits[].quote matches (six or more words found in the pre-fix line);
 //   - a case removed beyond any it replaced with fewer `drops` entries than
 //     removed cases: spec mode counts per behavior id (the drop's `behavior`),
-//     plan mode counts acceptance bullets across all files, since a bullet has
+//     plan mode counts acceptance items (bullets or numbered) across all files, since an item has
 //     no id. In plan mode the strict-kind rule reaches only a drop whose `behavior` names a behavior of the --dest SPEC.
 //
 // Plan mode: a structural finding (one the main thread does not fix in place)
