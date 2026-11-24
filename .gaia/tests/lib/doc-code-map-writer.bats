@@ -66,9 +66,10 @@ require_text() {
     '`## The code map`'; do
     grep -qF -- "$literal" <<<"$section" || { echo "5e prompt lacks: $literal" >&2; return 1; }
   done
-  # The key list has one owner; 5e points at it and states none of its own.
+  # The key list has one owner; 5e points at it and adds only the one requirement agents trip on.
   grep -qF -- '"commit"' <<<"$section" && return 1
-  grep -qF -- '`lines`' <<<"$section" && return 1
+  grep -qF -- 'every `files[]` entry carries a `lines` string `<start>-<end>`, digits only and never empty' <<<"$section" || { echo "5e prompt lacks the lines requirement" >&2; return 1; }
+  grep -qF -- 'keep the `lines` range' <<<"$section" || { echo "5e prompt lacks the keep-the-range clause" >&2; return 1; }
   true
 }
 
