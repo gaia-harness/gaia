@@ -23,8 +23,8 @@
 # `write` verb is refused. The tier is guarded two ways: an Edit, Write or
 # MultiEdit of a `.claude.json` whose new text names the tier field, or a command
 # that writes a `.claude.json` and names it; and a command that sets
-# CLAUDE_CONFIG_DIR while running `rate-limits.sh`, which could point it at
-# another profile's tier (any assignment is denied, whatever folder it names). Reading stays allowed.
+# CLAUDE_CONFIG_DIR to any folder and names `rate-limits.sh`, since the CLI
+# could then read another profile's tier. Reading stays allowed.
 #
 # The root comes from the caller, so this file holds no bare local-state path.
 #

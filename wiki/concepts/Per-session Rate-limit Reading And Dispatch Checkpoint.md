@@ -4,7 +4,7 @@ status: active
 created: 2026-11-24
 updated: 2026-11-24
 promoted_at: 2026-11-24T12:58:43Z
-promoted_hash: sha256:6ade935c98be277e7cbc94e6f11fb3809f8ce10209c0d95a88bd36f9968c8bb6
+promoted_hash: sha256:3c5b253e636ca89a358253e66dccc981d931e21912a2589e3f6c2875ebde7c1e
 pr_number: 3805
 tags: [promoted, concepts]
 ---
@@ -25,7 +25,7 @@ Each GAIA session writes its 5-hour and 7-day rate-limit windows to its own read
 - **Reader.** `bash .gaia/scripts/rate-limits.sh read` prints one line per window with its band word, reset time, countdown, burn-rate projection, how long ago the figure changed and ` unconfirmed` when it is, or `no reading`, and always exits 0. When `CLAUDE_CODE_SESSION_ID` names a session with an entry for a window it prints that entry; otherwise it prints the latest-change choice. `GAIA_RATE_LIMITS_NOW` and `TZ` pin the clock for tests.
 - **Bands.** `.gaia/scripts/rate-limits-lib.sh` owns every band value and the tier map. The 5-hour window bands on the standard set on every plan. The 7-day window bands on the set of the account's plan tier, and a missing, unreadable or unmapped tier gets the standard set.
 - **Tier.** The tier is one string key of Claude Code's profile, read lazily: only when the chosen whole 7-day figure reaches the lowest 7-day warning of any set, so the statusline path never opens the profile. Nothing else from the profile, and neither the tier string nor a band-set name, reaches output, a file or a log.
-- **State.** The state registry has a live row for the readings folder with 7-day age retention. The earlier single shared file and its temporaries are registry residue, which the residue sweep removes once the folder exists.
+- **State.** The state registry has a live row for the readings folder with 7-day age retention. The earlier single shared file and its temporaries are registry residue, which `residue-sweep --apply` deletes once the folder exists.
 
 ### The write guard
 
@@ -34,11 +34,11 @@ Each GAIA session writes its 5-hour and 7-day rate-limit windows to its own read
 ### The dispatch checkpoint
 
 - **Hook.** `.claude/hooks/rate-limit-checkpoint-inject.sh`, PreToolUse on `Agent|Task|Workflow`. It reads only the dispatching session's own reading, never another session's. It is silent in a sub-agent (the payload carries `agent_id`), with no reading, for a window below its band or expired, and when the session already heard that band of that window. Otherwise it emits one `additionalContext` with a `Rate-limit checkpoint: <name> <band> band (<P>%), resets <when>.` line per qualifying window, the reader's lines and `Policy: .claude/doctrine/rate-limit-checkpoint.md`. It always exits 0 and never blocks.
-- **Marker.** `<main checkout>/.gaia/local/cache/rate-limit-checkpoint/<session_id>.json` records, per window, the `resets_at` and the highest band spoken. A fall to a lower band lowers the marked band silently, so the next climb speaks again. A reset time more than 600 seconds from the marked one starts from clear.
+- **Marker.** `<main checkout>/.gaia/local/cache/rate-limit-checkpoint/<session_id>.json` records, per window, the `resets_at` and the band last spoken. A fall to a lower band lowers the marked band silently, so the next climb speaks again. A reset time more than the same-window slack (`GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS`, `rate-limits-lib.sh`) from the marked one starts from clear.
 - **Cost.** The hook runs at most two jq processes: the report program and, only past the tier threshold, the profile read. It fails open on a bad own file or an unwritable marker folder.
 - **Doctrine.** `.claude/doctrine/rate-limit-checkpoint.md` owns the policy by band word. The planner's `**Phase order**` bullet and the PR merge workflow's audit-loop dispatch step run the reader before they fan out and open the doctrine only when a reader line prints `warning` or `critical`.
 
 ## Divergence
 
-- **Hook timing.** The below-warning and band-marked paths pay the libraries, the root resolution and one jq, and the tier-read path pays a second jq for the profile. On a loaded machine all three run far above the no-op baseline. Figures: `wiki/concepts/Workflow Doctrine.md` `## Measurements`.
-- **Reset bounds.** The writer keeps the window-length bounds on a reset time: a reset later than now plus the window's longest length plus the 600-second same-window slack is refused, and one earlier than now minus it is ignored.
+- **Hook timing.** Every path with a reading (below-warning, band-marked, firing, tier read) pays the libraries, the full root resolution and one jq, and the tier read pays a second jq for the profile, so all of them exceed the assumed 50 ms p50 budget. Figures: `wiki/concepts/Workflow Doctrine.md` `## Measurements`.
+- **Reset bounds.** The writer keeps the window-length bounds on a reset time: a reset later than now plus the window's longest length plus the same-window slack is refused, and one earlier than now minus the longest length is ignored.

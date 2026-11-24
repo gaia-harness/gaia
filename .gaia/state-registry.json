@@ -868,7 +868,7 @@
       "kind": "dir",
       "scope": "main-only",
       "keyed_by": null,
-      "why": "Per-session marker written by rate-limit-checkpoint-inject.sh (tmp + mv) holding, per window name, the reset time and the highest rate-limit band the checkpoint has told the session about, so each band of each window is told once per climb, since a fall in the figure lowers the marked band and the next climb speaks again. Anchored to the main root so a session moving between the main checkout and a worktree sees one marker.",
+      "why": "Per-session marker written by rate-limit-checkpoint-inject.sh (tmp + mv) holding, per window name, the reset time and the band last told (lowered when the figure drops to a lower band), so each band of each window is told once per climb. Anchored to the main root so a session moving between the main checkout and a worktree sees one marker.",
       "writer": "code",
       "retention": {
         "class": "age",

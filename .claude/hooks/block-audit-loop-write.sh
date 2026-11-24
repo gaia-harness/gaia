@@ -110,8 +110,8 @@
 #     unsound-reading fallback denies a command that redirects into a reading,
 #     a marker, either folder or the legacy file, or runs a write, move or
 #     delete verb over one (`>`, `rm`, `mv`, `cp`, `tee`, `ln`, `sed -i`
-#     and the like), `rm -rf` of either folder with or without a trailing slash
-#     included, and a command that EXECUTES `rate-limits.sh` with `write`
+#     and the like, including `rm -rf` of either folder with or without a
+#     trailing slash), and a command that EXECUTES `rate-limits.sh` with `write`
 #     as its first argument (command word, or the script argument of bash, sh,
 #     zsh, dash, ksh, `source`, `.` or `exec`; quoted or not). `rate-limits.sh
 #     read`, `cat` and `jq .` of a reading, and `git add`, `git diff`,
