@@ -353,6 +353,10 @@ _gaia_reaper_reap_branch_spent() {
     _gaia_reaper_reap_audit_loop "$local_root" "$row_json" "$row_directory" "$candidates" "$_gaia_reaper_row_days"
     return 0
   fi
+  if [ "$_gaia_reaper_row_key" = line-branch ]; then
+    _gaia_reaper_reap_lines "$main_root" "$local_root" "$candidates" "$live_keys"
+    return 0
+  fi
   while IFS= read -r relative; do
     [ -n "$relative" ] || continue
     window="$_gaia_reaper_row_days"
@@ -379,6 +383,69 @@ _gaia_reaper_reap_branch_spent() {
   fi
   [ "${#removable[@]}" -gt 0 ] || return 0
   _gaia_reaper_remove_and_tidy "$local_root" "$row_json" "$row_directory" "${removable[@]}"
+}
+
+# _gaia_reaper_spent_branches <file> <live-keys>: a JSON array of the file's
+# distinct `branch` values that map to no live key, the empty branch included.
+_gaia_reaper_spent_branches() {
+  local branch key spent="[]"
+  while IFS= read -r branch; do
+    key="$(gaia_branch_normalize "$branch")"
+    [ -n "$key" ] && gaia_reaper_path_live "$key" "$2" && continue
+    spent="$(jq -c -n --argjson spent "$spent" --arg branch "$branch" '$spent + [$branch]')" || return 1
+  done < <(jq -R -r 'fromjson? | select(type == "object" and (.branch | type) == "string") | .branch' "$1" 2>/dev/null | sort -u)
+  printf '%s\n' "$spent"
+}
+
+# _GAIA_REAPER_SPENT_LINE_JQ: spent_line holds for a raw line that parses to an
+# object whose `branch` is in $spent and whose `time` is older than $days.
+# shellcheck disable=SC2016
+_GAIA_REAPER_SPENT_LINE_JQ='
+def spent_line: (fromjson? // null) | type == "object" and (.branch | type) == "string" and (.branch | IN($spent[]))
+  and ((.time | if type == "string" then (try fromdateiso8601 catch null) else null end) as $time
+       | $time != null and $time < (now - $days * 86400));
+'
+
+# _gaia_reaper_reap_lines <main-root> <local-root> <candidates> <live-keys>:
+# the line-branch key. The spent branches are re-read against a fresh snapshot
+# before the rewrite. The writer appends with no lock, so the rewrite goes
+# through a temporary sibling renamed over the file, and only when the file's
+# size has not changed since it was read. An append landing between that check
+# and the rename is still lost: the check narrows the window, and closing it
+# would need a lock the writer also takes.
+_gaia_reaper_reap_lines() {
+  local main_root="$1" local_root="$2" relative="${3%%$'\n'*}" target spent size temporary dropped entry
+  [ -n "$relative" ] || return 0
+  target="$local_root/$relative"
+  [ -f "$target" ] && [ ! -L "$target" ] || return 0
+  spent="$(_gaia_reaper_spent_branches "$target" "$4")" || return 0
+  [ "$spent" != "[]" ] || return 0
+  _gaia_reaper_recheck_branches "$main_root" "$_gaia_reaper_row_id" || return 0
+  spent="$(_gaia_reaper_spent_branches "$target" "$(gaia_reaper_live_keys normalize)")" || return 0
+  [ "$spent" != "[]" ] || return 0
+  size="$(wc -c <"$target" | tr -d ' ')"
+  dropped="$(jq -R -r --argjson spent "$spent" --argjson days "$_gaia_reaper_row_days" \
+    "$_GAIA_REAPER_SPENT_LINE_JQ"'select(spent_line) | fromjson | "\(.time) \(.branch)"' "$target" 2>/dev/null)" || return 0
+  [ -n "$dropped" ] || return 0
+  temporary="$target.reap.$$"
+  if ! jq -R -r --argjson spent "$spent" --argjson days "$_gaia_reaper_row_days" \
+    "$_GAIA_REAPER_SPENT_LINE_JQ"'select(spent_line | not)' "$target" >"$temporary" 2>/dev/null; then
+    rm -f "$temporary" 2>/dev/null
+    return 0
+  fi
+  if [ "$(wc -c <"$target" | tr -d ' ')" != "$size" ]; then
+    rm -f "$temporary" 2>/dev/null
+    printf 'skipped %s: the file grew while it was read\n' "$_gaia_reaper_row_id"
+    return 0
+  fi
+  if ! mv -f "$temporary" "$target" 2>/dev/null; then
+    rm -f "$temporary" 2>/dev/null
+    printf 'skipped %s: the rewritten file could not replace the old one\n' "$_gaia_reaper_row_id"
+    return 0
+  fi
+  while IFS= read -r entry; do
+    printf 'removed %s: entry %s\n' "$relative" "$entry"
+  done <<<"$dropped"
 }
 
 # _gaia_reaper_key_live <normalize|slug> <key> <live-keys>: slugs never nest,

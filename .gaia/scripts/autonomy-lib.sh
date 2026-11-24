@@ -34,8 +34,10 @@
 #   the main checkout cannot be resolved.
 # autonomy_log_decision <session_id> <branch> <header> <option> [directory]
 #   Appends one line to the decision log: {time (ISO-8601 UTC), session_id,
-#   branch, header, option}. The gate is its only caller; the protected-folder guard denies
-#   Claude's own writes. Returns 1, writing nothing, when the main checkout
+#   branch, header, option}. Its callers are hooks: the gate,
+#   audit-loop-bound.sh for an audit budget spend, and
+#   pr-merge-audit-check-unattended.sh for an unattended merge; the
+#   protected-folder guard denies Claude's own writes. Returns 1, writing nothing, when the main checkout
 #   cannot be resolved, jq is missing, the log or its folder is a symlink, or
 #   the append fails.
 # autonomy_human_only_header <header>

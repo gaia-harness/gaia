@@ -144,11 +144,13 @@
       "match": "exact",
       "kind": "file",
       "scope": "shared",
-      "keyed_by": "singleton per machine, one line per decision",
-      "why": "The decisions an unattended run took, with the session and branch: the recommended option the autonomy gate hook told Claude to take, each audit unit the audit loop bound hook spent from the autonomy budget, and each merge the PR merge gate allowed. Lives in the protected folder, so Claude tool writes to it are denied by block-audit-loop-write.sh.",
+      "keyed_by": "singleton per machine, one line per decision, each line keyed by its branch",
+      "why": "The decisions an unattended run took, with the session and branch: the recommended option the autonomy gate hook told Claude to take, each audit unit the audit loop bound hook spent from the autonomy budget, and each merge the PR merge gate allowed. The audit renders a branch's lines into its pull request body. Lives in the protected folder, so Claude tool writes to it are denied by block-audit-loop-write.sh.",
       "writer": "code",
       "retention": {
-        "class": "keep"
+        "class": "branch-spent",
+        "days": 7,
+        "key": "line-branch"
       }
     },
     {

@@ -1,6 +1,7 @@
 name: 'GAIA Setup Node'
 description: |
-  Install pnpm, set up Node from .node-version with the pnpm store cached, and
+  Install pnpm, set up Node from .node-version (unless the node-version input
+  overrides it) with the pnpm store cached, and
   optionally run the frozen-lockfile install for the whole workspace or for
   the CLI member and its dependencies alone.
 
@@ -54,6 +55,12 @@ inputs:
       install unchanged.
     required: false
     default: 'false'
+  node-version:
+    description: >-
+      Passed through to actions/setup-node, which prefers it to the version
+      file. Empty means the `.node-version` pin.
+    required: false
+    default: ''
   install-attempt-seconds:
     description: >-
       The wall-clock bound on one install attempt, in seconds; an attempt the
@@ -80,6 +87,7 @@ runs:
     - name: Setup Node
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
+        node-version: ${{ inputs.node-version }}
         node-version-file: '.node-version'
         cache: 'pnpm'
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
