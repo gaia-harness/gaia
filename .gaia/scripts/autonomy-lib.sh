@@ -153,7 +153,6 @@ autonomy_protected_globs() {
   local root="${1-}" file="$_autonomy_data_directory/autonomy-protected-paths.json"
   local status=0 root_globs package_globs name package_path glob
   command -v jq >/dev/null 2>&1 || return 1
-  # Both arrays must be non-empty arrays of non-empty strings, or neither is read.
   local valid='def strings_only: type == "array" and length > 0 and all(.[]; type == "string" and length > 0);
     (.root | strings_only) and (.package | strings_only)'
   root_globs=$(jq -r "if $valid then .root[] else empty end" "$file" 2>/dev/null) || return 1

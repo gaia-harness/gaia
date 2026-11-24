@@ -3,8 +3,7 @@
 # Bash, Monitor): while the autonomy switch is live, deny every
 # AskUserQuestion with what to do instead, and deny every write to a file that
 # governs the harness itself. With the switch off it allows everything and
-# says nothing. The switch is read only through autonomy_active in
-# .gaia/scripts/autonomy-lib.sh.
+# says nothing.
 #
 # WHY DENY. An unattended run has nobody to answer a question, so the call
 # would stall the run; a denial reaches Claude at once with the answer or the
@@ -30,8 +29,9 @@
 # (`notebook_path`) and a Bash or Monitor command that writes a path in the
 # protected set (autonomy_protected_globs) are denied with the park command.
 # Each path is resolved physically (physical_path), then made relative to the
-# checkout holding it (autonomy_relative_path), so a linked worktree's copy of
-# a protected file is protected too. A Bash command is read with the scan
+# checkout holding it (autonomy_relative_path, then sibling_tree for a linked
+# worktree of the same main checkout outside it), so every linked worktree's
+# copy of a protected file is protected too. A Bash command is read with the scan
 # block-audit-loop-write.sh uses (a redirect into the path, or a write verb
 # outside quotes in a command naming it; on an unsound reading, any write
 # spelling) and with lib/bash-write-target.sh. An unreadable protected set
@@ -55,8 +55,9 @@ set -euo pipefail
 payload=$(cat)
 
 # Raw pre-filter, before any fork: every call this hook can bind names the
-# AskUserQuestion tool or one of the spellings is_protected arms on (JSON never
-# escapes those characters), so the ordinary Bash call stops here.
+# AskUserQuestion tool or one of the spellings is_protected arms on (the harness
+# writes `/` unescaped, though JSON allows `\/`), so the ordinary Bash call
+# stops here.
 case "$payload" in
   *AskUserQuestion* | *.claude/* | *CLAUDE.md* | *local/protected*) ;;
   *) exit 0 ;;
@@ -180,6 +181,18 @@ protected_globs() {
 
 # is_protected <word>: rc 0 when the word, a path, resolves into the protected
 # set. Called by name from gaia_bash_command_writes_target too.
+# sibling_tree <physical path>: print the root of the linked worktree holding
+# the path when that worktree belongs to this main checkout, else nothing. Only
+# a path outside the main checkout and the session's own tree reaches it.
+sibling_tree() {
+  local directory="${1%/*}" root
+  while [ -n "$directory" ] && [ ! -d "$directory" ]; do directory="${directory%/*}"; done
+  [ -n "$directory" ] || return 0
+  [ "$(gaia_resolve_main_root "$directory" 2>/dev/null)" = "$main_root" ] || return 0
+  root=$(git -C "$directory" rev-parse --show-toplevel 2>/dev/null) || return 0
+  cd -P -- "$root" 2>/dev/null && pwd -P
+}
+
 is_protected() {
   local word resolved relative
   word=$(gaia_write_target_strip_quotes "${1-}")
@@ -189,7 +202,8 @@ is_protected() {
   esac
   [ -n "$main_root" ] || return 0
   resolved=$(physical_path "$word" "$cwd")
-  relative=$(autonomy_relative_path "$resolved" "$main_root" "$tree_root") || return 1
+  relative=$(autonomy_relative_path "$resolved" "$main_root" "$tree_root" ||
+    autonomy_relative_path "$resolved" "$main_root" "$(sibling_tree "$resolved")") || return 1
   protected_globs
   if autonomy_protected_match "$relative" "$PROTECTED_GLOBS"; then
     PROTECTED_HIT="$relative"

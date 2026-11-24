@@ -172,7 +172,7 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
   call NotebookEdit "{\"notebook_path\":\"$MAIN/apps/web/CLAUDE.md\"}"
   denied
   [[ "$(reason)" == *"apps/web/CLAUDE.md governs the harness"*"autonomy-park.sh --reason question"* ]]
-  for command in "printf x > .claude/rules/r.md" "printf x >| .claude/hooks/h.sh""rm -f .claude/agents/a.md" "sed -i '' s/a/b/ CLAUDE.md" "echo x | sponge apps/web/.claude/settings.overlay.json"; do
+  for command in "printf x > .claude/rules/r.md" "printf x >| .claude/hooks/h.sh" "rm -f .claude/agents/a.md" "sed -i '' s/a/b/ CLAUDE.md" "echo x | sponge apps/web/.claude/settings.overlay.json"; do
     echo "case: Bash $command"
     call Bash "$(jq -nc --arg command "$command" '{command: $command}')"
     denied
@@ -201,6 +201,10 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
   call Edit "{\"file_path\":\"$outside/.claude/rules/r.md\"}" "$outside"
   denied
   [[ "$(reason)" == *" .claude/rules/r.md governs the harness"* ]]
+  echo "case: that outside worktree's copy, from a session in the main checkout"
+  call Write "{\"file_path\":\"$outside/.claude/agents/a.md\"}" "$MAIN"
+  denied
+  [[ "$(reason)" == *" .claude/agents/a.md governs the harness"* ]]
 }
 
 @test "under autonomy, reads and writes outside the protected set pass" {
@@ -228,7 +232,7 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
 }
 
 # bats test_tags=protected
-@test "the protected set matches every row of its defining table and nothing beside it" {
+@test "the protected set matches every self-governing path and none of the ordinary paths beside them" {
   local globs path
   globs=$(autonomy_protected_globs "$REPO_ROOT")
   [ -n "$globs" ]
