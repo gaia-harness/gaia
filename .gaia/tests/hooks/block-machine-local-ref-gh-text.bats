@@ -170,3 +170,11 @@ assert_allowed() {
       | any(endswith("/.claude/hooks/block-machine-local-ref-gh-text.sh\""))' "$settings" >/dev/null
   done
 }
+
+@test "an allowed gh pr edit form is still blocked when its body cites a machine-local path" {
+  # shellcheck source=../helpers/gh-allow-list.sh
+  . "$REPO_ROOT/.gaia/tests/helpers/gh-allow-list.sh"
+  gh_command_is_allowed 'gh pr edit 2898 --body "Evidence in .gaia/local/runs/feat/12-x/STATE.md"'
+  run_hook 'gh pr edit 2898 --body "Evidence in .gaia/local/runs/feat/12-x/STATE.md"'
+  assert_blocked
+}
