@@ -460,6 +460,8 @@ moved_library_paths() {
     '.gaia/scripts/audit-dispositions-grade-lib.sh' \
     '.gaia/scripts/audit-dispositions-snapshot-lib.sh' \
     '.gaia/scripts/audit-recorded-decision-lib.sh' \
+    '.gaia/scripts/audit-decided-unattended-lib.sh' \
+    '.gaia/scripts/autonomy-lib.sh' \
     '.gaia/scripts/filing-outcomes-lib.sh' \
     '.gaia/scripts/audit-veto-lib.sh' \
     '.gaia/scripts/audit-loop-stop-lib.sh' \

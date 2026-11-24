@@ -33,6 +33,8 @@ FIXTURE_REGISTRY='{
      "retention": {"class": "branch-spent", "key": "audit-loop", "days": 7}},
     {"id": "verify-pass", "path": "protected/verify-pass/", "match": "prefix", "kind": "dir",
      "retention": {"class": "branch-spent", "key": "normalized-file", "days": 7}},
+    {"id": "decisions", "path": "protected/decisions.jsonl", "match": "exact", "kind": "file",
+     "retention": {"class": "branch-spent", "key": "line-branch", "days": 7}},
     {"id": "runs", "path": "runs/", "match": "prefix", "kind": "dir",
      "retention": {"class": "branch-spent", "key": "normalized-path", "days": 7, "session_days": 30}},
     {"id": "scratch", "path": "scratch/", "match": "prefix", "kind": "dir", "retention": {"class": "age", "days": 7}}
@@ -163,6 +165,45 @@ EOF
   check_rejects '{"path":"a/","reaped_by":"some prose"}' 'legacy reaped_by'
   check_rejects '{"path":"protected/x/","retention":{"class":"age","days":7}}' 'protected/'
   check_rejects '{"path":"protected/x/","retention":{"class":"branch-spent","key":"normalized-path","days":8}}' 'protected/'
+}
+
+@test "a line-branch row must be one exact file path" {
+  run gaia_reaper_row_check '{"path":"protected/x.jsonl","match":"exact","kind":"file","retention":{"class":"branch-spent","key":"line-branch","days":7}}'
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  local invalid
+  for invalid in \
+    '{"path":"protected/*.jsonl","match":"glob","kind":"file","retention":{"class":"branch-spent","key":"line-branch","days":7}}' \
+    '{"path":"protected/x/","match":"prefix","kind":"dir","retention":{"class":"branch-spent","key":"line-branch","days":7}}' \
+    '{"path":"protected/x.jsonl|protected/y.jsonl","match":"exact","kind":"file","retention":{"class":"branch-spent","key":"line-branch","days":7}}'; do
+    run gaia_reaper_row_check "$invalid"
+    [ "$status" -eq 1 ] || { printf 'accepted: %s\n' "$invalid"; return 1; }
+    case "$output" in *'line-branch needs an exact file row'*) ;; *) printf 'reason for %s was: %s\n' "$invalid" "$output"; return 1 ;; esac
+  done
+}
+
+@test "a line-branch row drops only old lines of gone branches and rewrites the file rather than deleting it" {
+  local young kept expected
+  make_main
+  branch feat/open
+  snap
+  young="$(jq -r -n 'now - 86400 | floor | todate')"
+  mkdir -p "$LOCAL/protected"
+  {
+    printf '{"time":"2020-01-01T00:00:00Z","session_id":"s","branch":"feat/merged","header":"Gone","option":"old"}\n'
+    printf '{"time":"2020-01-01T00:00:00Z","session_id":"s","branch":"feat/open","header":"Live","option":"old"}\n'
+    printf '{"time":"2020-01-01T00:00:00Z","session_id":"s","branch":"worktree-feat+open","header":"Live alias","option":"old"}\n'
+    printf '{"time":"%s","session_id":"s","branch":"feat/merged","header":"Gone","option":"young"}\n' "$young"
+    printf '{"time":"2020-01-01T00:00:00Z","session_id":"s","branch":"","header":"Detached","option":"old"}\n'
+    printf '{"session_id":"s","branch":"feat/merged","header":"Gone","option":"no time"}\n'
+    printf 'not json\n'
+  } >"$LOCAL/protected/decisions.jsonl"
+  reap decisions
+  kept="$(jq -R -r 'fromjson? | "\(.header)/\(.option)"' "$LOCAL/protected/decisions.jsonl")"
+  expected="$(printf '%s\n' 'Live/old' 'Live alias/old' 'Gone/young' 'Gone/no time')"
+  [ "$kept" = "$expected" ] || { printf 'kept:\n%s\n' "$kept"; return 1; }
+  grep -qx 'not json' "$LOCAL/protected/decisions.jsonl" || { cat "$LOCAL/protected/decisions.jsonl"; return 1; }
+  [ "$(grep -c '^removed protected/decisions.jsonl: entry ' <<<"$REAP_OUTPUT")" -eq 2 ] || { echo "$REAP_OUTPUT"; return 1; }
+  [ -z "$(find "$LOCAL/protected" -name '*.reap.*')" ]
 }
 
 @test "branch liveness keeps live worktree and sibling-prefix keys and reaps only gone keys" {

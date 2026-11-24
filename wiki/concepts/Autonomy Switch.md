@@ -76,6 +76,8 @@ Under the switch, a write to a file that governs the harness itself parks too. A
 
 `<main checkout>/.gaia/local/protected/autonomy-log.jsonl` records every option the gate told Claude to take, one JSON object per line: `time`, `session_id`, `branch`, `header`, `option`. The gate writes the entry before it denies, so the record never depends on Claude. A failed write parks instead. The log is main-anchored, so every worktree's decisions land in one file, and it sits in the protected folder, so Claude cannot rewrite it.
 
+The audit's PR-body sections (`audit-dispositions-check.sh pr-sections`) include the branch's entries under `## Decided unattended`, one `header: option` line each (`.gaia/scripts/audit-decided-unattended-lib.sh`). An entry whose text fails the secret screen or names a machine-local path is withheld and counted. A branch with no entries gets no section. The backstop state reaper drops an entry once no local branch or worktree maps onto its branch and the entry is older than the `autonomy-decision-log` registry row's window.
+
 ## The guard and its accepted residuals
 
 `.claude/hooks/block-audit-loop-write.sh` guards everything under `.gaia/local/protected/` by placement, so it denies Claude's Edit, Write, MultiEdit, Bash and Monitor writes that name the switch, in the main-checkout and worktree spellings. Like the audit-loop allowance in the same folder, the guard stops drift, not an adversary. These stay open on purpose:
