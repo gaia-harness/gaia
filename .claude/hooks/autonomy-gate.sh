@@ -179,11 +179,8 @@ protected_globs() {
     park_question "the protected set (.gaia/autonomy-protected-paths.json) cannot be read, so no write is allowed unattended."
 }
 
-# is_protected <word>: rc 0 when the word, a path, resolves into the protected
-# set. Called by name from gaia_bash_command_writes_target too.
 # sibling_tree <physical path>: print the root of the linked worktree holding
-# the path when that worktree belongs to this main checkout, else nothing. Only
-# a path outside the main checkout and the session's own tree reaches it.
+# the path when that worktree belongs to this main checkout, else nothing.
 sibling_tree() {
   local directory="${1%/*}" root
   while [ -n "$directory" ] && [ ! -d "$directory" ]; do directory="${directory%/*}"; done
@@ -193,6 +190,9 @@ sibling_tree() {
   cd -P -- "$root" 2>/dev/null && pwd -P
 }
 
+# is_protected <word>: rc 0 when the word, a path, resolves into the protected
+# set, or carries a protected spelling when no main checkout resolves (fail
+# closed). Called by name from gaia_bash_command_writes_target too.
 is_protected() {
   local word resolved relative
   word=$(gaia_write_target_strip_quotes "${1-}")

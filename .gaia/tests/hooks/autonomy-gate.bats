@@ -232,7 +232,7 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
 }
 
 # bats test_tags=protected
-@test "the protected set matches every self-governing path and none of the ordinary paths beside them" {
+@test "the protected set matches the self-governing paths and none of the ordinary paths beside them" {
   local globs path
   globs=$(autonomy_protected_globs "$REPO_ROOT")
   [ -n "$globs" ]
