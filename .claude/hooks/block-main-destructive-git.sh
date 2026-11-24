@@ -242,10 +242,9 @@ subagent_git_restricted=0
 if [ "$GAIA_PAYLOAD_AGENT_PRESENT" -eq 1 ]; then
   if [ -z "$GAIA_PAYLOAD_AGENT_ID" ] || ! subagent_git_exempt "$GAIA_PAYLOAD_AGENT_TYPE"; then
     subagent_git_restricted=1
-    # An isolated sub-agent works in a worktree no sibling shares. Honest limit:
-    # the test reads the hook's own checkout, so a `-C` or `cd` from that
-    # worktree into another tree still passes this rule; the main-branch rules
-    # below still apply to it.
+    # Honest limit: subagent_git_own_worktree reads the hook's own checkout
+    # root, so a `-C` or `cd` from that worktree into another tree still passes
+    # this rule; the main-branch rules below still apply to it.
     if subagent_git_own_worktree "${repository_root:-}" "$GAIA_PAYLOAD_AGENT_ID"; then
       subagent_git_restricted=0
     fi
@@ -358,7 +357,7 @@ while IFS= read -r segment; do
     [ -z "$git_cwd" ] || segment_kind=$(resolve_directory_kind "$git_cwd")
     case "$segment_kind" in
       'foreign '*) ;;
-      *) deny "Sub-agents never run git that changes state ('git $git_subcommand' here): .claude/doctrine/execution.md, \`## Roles and git\`. Sub-agents share one working tree, so one stray commit, checkout, reset or stash discards a sibling's edits. The main thread commits: leave your changes in the working tree and report them. If this is text that only mentions a command (a quoted string with a semicolon before the word commit), write it with the Write tool instead of an inline shell argument. Read-only git (status, diff, log, show, stash list, stash show) stays allowed." ;;
+      *) deny "Sub-agents never run git that changes state ('git $git_subcommand' here): .claude/doctrine/execution.md, \`## Roles and git\`. Sub-agents share one working tree, so one stray commit, checkout, reset or stash discards a sibling's edits. The main thread commits: leave your changes in the working tree and report them. If this is text that only mentions a git command (a quoted string where a separator such as ;, | or a newline puts git at the start of a segment), write it with the Write tool instead of an inline shell argument. Read-only git (status, diff, log, show, stash list, stash show) stays allowed." ;;
     esac
   fi
 

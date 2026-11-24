@@ -29,8 +29,8 @@ GAIA_SUBAGENT_GIT_STASH_READ_VERBS=(list show)
 GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 
 # subagent_git_own_worktree <checkout root> <agent id>: 0 when the root is a
-# linked worktree the runtime made for exactly this sub-agent. Isolation names
-# that worktree `agent-<agent id>`, and the id is unique to the agent, so a
+# linked worktree (a `.git` file) named `agent-<agent id>`, the name isolation
+# gives the worktree it makes for that sub-agent. The id is unique, so a
 # sub-agent that shares its parent's tree (or a depth-2 agent in another
 # agent's tree) never matches and stays restricted. The commit rule's reason
 # (siblings share one tree) does not hold for a tree only this agent uses.

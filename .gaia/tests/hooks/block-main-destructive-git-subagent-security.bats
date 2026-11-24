@@ -1,8 +1,9 @@
 #!/usr/bin/env bats
 
-# Access rule of .claude/hooks/block-main-destructive-git.sh: a sub-agent may
-# run state-changing git only in the linked worktree named agent-<its own agent
-# id>; in any other tree it is denied. Commands reach the hook as payload text
+# Access rule of .claude/hooks/block-main-destructive-git.sh: a non-exempt
+# sub-agent may run state-changing git in this repository only in the linked
+# worktree named agent-<its own agent id>; in any other tree of the repository
+# it is denied. Commands reach the hook as payload text
 # and never run, so a refusal is the deny decision itself.
 
 # shellcheck disable=SC2016  # jq programs are single-quoted so their `$` reaches jq
