@@ -236,7 +236,8 @@ commit_in_worktree() {
   printf '%s\n' "$denial_reason" | grep -qxF -- "Grant (type exactly as the whole prompt): $(gaia_loop_grant_line 3)"
   printf '%s\n' "$denial_reason" | grep -qxF -- "Accept (type exactly as the whole prompt): $(gaia_loop_accept_line)"
   printf '%s\n' "$denial_reason" | grep -qF -- "Interactive run: on the main thread of this session, ask this question with AskUserQuestion exactly as printed"
-  printf '%s\n' "$denial_reason" | grep -qF -- "Unattended run (no human in the session: a headless, scheduled, or /loop run): never ask; park with bash, passing .gaia/scripts/autonomy-park.sh --reason audit-checkpoint --pr <n>, from the root of the branch work tree, and print no continuation prompt."
+  printf '%s\n' "$denial_reason" | grep -qF -- "Unattended run (no human in the session: a headless, scheduled, or /loop run): never ask; park with \`bash "
+  printf '%s\n' "$denial_reason" | grep -qF -- "/autonomy-park.sh --reason audit-checkpoint --pr <n> --root $ALF_ROOT\`; when the park exits non-zero, print the Grant line above before stopping so the grant still reaches the human; print no continuation prompt."
   printf '%s\n' "$denial_reason" | grep -qF -- "or CI" && return 1
   printf '%s\n' "$denial_reason" | grep -qF -- "never types or simulates"
   printf '%s\n' "$denial_reason" | grep -qF -- "already-audited tree is still allowed"
@@ -1287,7 +1288,7 @@ settings() {
         [ "$(state_field '.history.checkpoints[-1].question | tojson')" = "$want" ]
         [[ "$(state_field '.history.checkpoints[-1].question.questions[0].question')" == *"(context), context "[0-9]*"% ("[0-9]*"k of 1000k). How should"* ]]
         [ "$(state_field '.history.checkpoints[-1].at_round')" -eq 2 ]
-        reason | grep -qF -- "never ask; park with bash, passing .gaia/scripts/autonomy-park.sh --reason audit-checkpoint --pr <n>, from the root of the branch work tree, and print no continuation prompt"
+        reason | grep -qF -- "/autonomy-park.sh --reason audit-checkpoint --pr <n> --root $ALF_ROOT\`; when the park exits non-zero, print the Grant line above before stopping"
         [ "$(state_field '.history.units // [] | length')" -eq 0 ]
         ;;
       unusable-reading-falls-back)

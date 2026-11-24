@@ -236,3 +236,16 @@ no_side_effects() {
   [ "$status" -eq 2 ]
   no_side_effects
 }
+
+@test "an unreadable STATE.md fails the park naming the file and leaves it unchanged" {
+  [ "$(id -u)" -ne 0 ] || skip "root reads any file"
+  mkdir -p "$RUN_DIRECTORY"
+  printf '# State\n\nprior work\n' > "$RUN_DIRECTORY/STATE.md"
+  chmod 000 "$RUN_DIRECTORY/STATE.md"
+  park --reason merge-ready --pr 6
+  chmod 600 "$RUN_DIRECTORY/STATE.md"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cannot read "*"/STATE.md"* ]]
+  [ "$(cat "$RUN_DIRECTORY/STATE.md")" = "$(printf '# State\n\nprior work')" ]
+  [ -z "$(remote_head feat/12-park-me)" ]
+}

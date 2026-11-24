@@ -146,9 +146,14 @@ fi
 
 mkdir -p "$run_directory" || park_fail "cannot create the run folder $run_directory"
 rm -f "$marker_file" || park_fail "cannot remove the earlier parked marker $marker_file"
+prior_state=""
+if [ -f "$state_file" ]; then
+  prior_state="$(awk '/^## Parked$/ { skip = 1; next } skip && /^## / { skip = 0 } !skip' "$state_file")" ||
+    park_fail "cannot read $state_file"
+fi
 {
   if [ -f "$state_file" ]; then
-    awk '/^## Parked$/ { skip = 1; next } skip && /^## / { skip = 0 } !skip' "$state_file"
+    printf '%s\n' "$prior_state"
   else
     printf '# State\n'
   fi

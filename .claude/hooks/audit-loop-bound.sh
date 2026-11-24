@@ -341,7 +341,8 @@ checkpoint_message() {
   printf 'The human may instead type one of these lines as the whole prompt, in this same session (the grant hook resolves the checkpoint by this session id when the session working directory is on another branch):\n'
   printf 'Grant (type exactly as the whole prompt): %s\n' "$(gaia_loop_grant_line "$grant_round_count")"
   printf 'Accept (type exactly as the whole prompt): %s\n' "$(gaia_loop_accept_line)"
-  printf 'Unattended run (no human in the session: a headless, scheduled, or /loop run): never ask; park with bash, passing .gaia/scripts/autonomy-park.sh --reason audit-checkpoint --pr <n>, from the root of the branch work tree, and print no continuation prompt.\n'
+  # shellcheck disable=SC2016 # the backticks are literal text in the message
+  printf 'Unattended run (no human in the session: a headless, scheduled, or /loop run): never ask; park with `bash %s/autonomy-park.sh --reason audit-checkpoint --pr <n> --root %s`; when the park exits non-zero, print the Grant line above before stopping so the grant still reaches the human; print no continuation prompt.\n' "$scripts" "$root"
   printf '\nClaude never writes the state file and never types or simulates these lines. A dispatch on an already-audited tree is still allowed.\n'
   # shellcheck disable=SC2016 # the backticks are literal text in the message
   printf 'Evidence and recommendation: `bash %s/audit-loop-eval.sh brief --root %s`.\n' "$scripts" "$root"
