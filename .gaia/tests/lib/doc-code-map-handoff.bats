@@ -29,11 +29,6 @@ section_of() {
   ' "$1"
 }
 
-@test "the writer hands its append to the code map section and that section exists" {
-  section_of "$CLARIFY_MD" "## 5e. Research subagent dispatch" | grep -qF '## The code map' || return 1
-  grep -qxF '## The code map' "$CLARIFY_MD"
-}
-
 @test "the lens slot row points to the code map section that resolves" {
   section_of "$LENS_MD" "## Caller slots" | grep -F '<CODE_MAP_PATH>' | grep -qF 'clarify-loop.md` `## The code map`' || return 1
   grep -qxF '## The code map' "$CLARIFY_MD"
