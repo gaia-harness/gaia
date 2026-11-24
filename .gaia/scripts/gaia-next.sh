@@ -174,8 +174,8 @@ own_process_chain() {
 # that locks the branch's worktree (`locked claude session <branch> (pid N ...)`
 # in `git worktree list --porcelain`) and returns 0. Returns 1 when there is no
 # such lock, its pid is dead or reused (a stale lock), or the pid is this run's
-# own process or one of its ancestors. A lock that records `start <date>` (UTC)
-# names the session's process; a pid whose own start time differs now names an
+# own process or one of its ancestors. A lock that records `start <date>` (UTC,
+# C-locale `ps -o lstart` format) names the session's process; a pid whose own start time differs now names an
 # unrelated process, so the lock is stale.
 foreign_session_pid() {
   local lock pid recorded_start actual_start
