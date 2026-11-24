@@ -179,6 +179,17 @@ check() {
   [ "$status" -eq 0 ]
 }
 
+@test "a numbered acceptance-criteria list counts for a criterion reference" {
+  printf '# task-one\n\n## Acceptance criteria\n\n1. First criterion.\n2) Second criterion.\n\n## Tests\n\n- Test (task-one:AC2, unit, none): a.test.ts › second\n' >"$PLAN/task-one.md"
+  check
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+
+  sed -i.bak 's/AC2/AC3/' "$PLAN/task-one.md"
+  check
+  [ "$status" -eq 1 ]
+  has_output "task-one:AC3" || return 1
+}
+
 @test "a malformed Test line and a spec-less acceptance-criterion reference are refused" {
   write_task task-one '- Test (task-one:AC1, unit, none): a.test.ts › fine'
   check

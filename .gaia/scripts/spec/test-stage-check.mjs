@@ -43,6 +43,7 @@
 import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {parseBehaviors, SECURITY_KINDS} from './behaviors.mjs';
+import {LIST_ITEM_MARKER} from './drop-check-lib.mjs';
 
 const LAYERS = ['unit', 'story', 'route', 'real-server', 'browser', 'shell'];
 const MUST_BE_TESTED_KINDS = [...SECURITY_KINDS, 'refusal', 'data-loss'];
@@ -127,7 +128,7 @@ function sectionLines(text, headingPattern) {
 
 function countCriteria(taskText) {
   return sectionLines(taskText, CRITERIA_HEADING).filter((line) =>
-    /^[-*] /.test(line),
+    LIST_ITEM_MARKER.test(line),
   ).length;
 }
 
