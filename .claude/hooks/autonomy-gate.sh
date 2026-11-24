@@ -93,10 +93,29 @@ load() {
   # shellcheck source=/dev/null
   [ -f "$1" ] && . "$1" 2>/dev/null
   set -e
-  if ! type "$2" >/dev/null 2>&1; then
-    printf 'BLOCKED: autonomy-gate.sh cannot load %s, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' "${1##*/}" >&2
-    exit 2
-  fi
+  type "$2" >/dev/null 2>&1 && return 0
+  local cwd_pattern='"cwd": ?"([^"\\]+)"' operation='' library
+  library=$(grep -F "/${1##*/}" <<<"$_gate_conflict_libraries") || library=''
+  if [ -n "$library" ] && [[ "$payload" =~ $cwd_pattern ]]; then operation=$(operation_in_progress "${BASH_REMATCH[1]}"); fi
+  refuse_unloadable "$1" "$operation" "$library"
+}
+
+# operation_in_progress <tree>: print the merge, rebase, cherry-pick or revert
+# in progress in the tree, nothing when none is.
+operation_in_progress() {
+  local candidate
+  for candidate in merge:MERGE_HEAD rebase:REBASE_HEAD cherry-pick:CHERRY_PICK_HEAD revert:REVERT_HEAD; do
+    ! git -C "$1" rev-parse -q --verify "${candidate#*:}" >/dev/null 2>&1 || { printf '%s' "${candidate%%:*}"; return 0; }
+  done
+}
+
+# refuse_unloadable <file> <operation> <library>: the fail-loud refusal; when
+# an operation is in progress it names the repair commands the repair arms allow.
+refuse_unloadable() {
+  printf 'BLOCKED: autonomy-gate.sh cannot load %s, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.' "${1##*/}" >&2
+  [ -z "$2" ] || printf ' A %s is in progress: from the tree root run exactly one of: git %s --abort, git checkout --ours|--theirs -- %s, git restore --ours|--theirs -- %s. Choosing a side drops the other side'"'"'s changes to the library: re-apply them once it loads, before git add.' "$2" "$2" "$3" "$3" >&2
+  printf '\n' >&2
+  exit 2
 }
 
 # Every library the hook sources before it can gate a call, relative to a tree
@@ -123,7 +142,7 @@ allow_library_conflict_repair() {
   local tool_pattern='"tool_name": ?"Bash"'
   local abort_pattern='^git( -C ([A-Za-z0-9_./+@:-]+))? (merge|rebase|cherry-pick|revert) --abort$'
   local pick_pattern='^git( -C ([A-Za-z0-9_./+@:-]+))? (checkout|restore) (--ours |--theirs )?-- ([A-Za-z0-9_./+-]+)$'
-  local directory='' verb='' file='' command_line target operation='' candidate unmerged_path found=0
+  local directory='' verb='' file='' command_line target operation='' unmerged_path found=0
   [[ "$payload" =~ $tool_pattern ]] || return 0
   [[ "$payload" =~ $cwd_pattern ]] || return 0
   target=${BASH_REMATCH[1]}
@@ -140,12 +159,7 @@ allow_library_conflict_repair() {
     return 0
   fi
   case "$directory" in '') ;; /*) target=$directory ;; *) target=$target/$directory ;; esac
-  for candidate in merge:MERGE_HEAD rebase:REBASE_HEAD cherry-pick:CHERRY_PICK_HEAD revert:REVERT_HEAD; do
-    if git -C "$target" rev-parse -q --verify "${candidate#*:}" >/dev/null 2>&1; then
-      operation=${candidate%%:*}
-      break
-    fi
-  done
+  operation=$(operation_in_progress "$target")
   [ -n "$operation" ] || return 0
   # A path in the command is relative to the directory git runs in, so only a
   # tree root names a library path unambiguously.
@@ -190,14 +204,9 @@ load_autonomy_library() {
   [ -f "$1" ] && . "$1" 2>/dev/null
   set -e
   ! library_is_loaded || return 0
-  local operation='' candidate library=".gaia/scripts/${1##*/}" pattern
+  local operation='' library=".gaia/scripts/${1##*/}" pattern
   if gaia_hook_payload_read "$payload" && [ "$GAIA_HOOK_TOOL_NAME" = Bash ]; then
-    for candidate in merge:MERGE_HEAD rebase:REBASE_HEAD cherry-pick:CHERRY_PICK_HEAD revert:REVERT_HEAD; do
-      if git -C "$GAIA_HOOK_CWD" rev-parse -q --verify "${candidate#*:}" >/dev/null 2>&1; then
-        operation=${candidate%%:*}
-        break
-      fi
-    done
+    operation=$(operation_in_progress "$GAIA_HOOK_CWD")
     if [ -n "$operation" ]; then
       pattern="^git( -C [A-Za-z0-9_./+@:-]+)? ($operation --abort|(checkout|restore) (--ours |--theirs )?-- ${library//./\\.})\$"
       if [[ "$GAIA_HOOK_COMMAND" =~ $pattern ]]; then
@@ -205,12 +214,7 @@ load_autonomy_library() {
       fi
     fi
   fi
-  printf 'BLOCKED: autonomy-gate.sh cannot load %s, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.' "${1##*/}" >&2
-  if [ -n "$operation" ]; then
-    printf ' A %s is in progress: run exactly one of: git %s --abort, git checkout --ours|--theirs -- %s, git restore --ours|--theirs -- %s. Choosing a side drops the other side'"'"'s changes to the library: re-apply them once it loads, before git add.' "$operation" "$operation" "$library" "$library" >&2
-  fi
-  printf '\n' >&2
-  exit 2
+  refuse_unloadable "$1" "$operation" "$library"
 }
 
 load_autonomy_library "$_gate_scripts/autonomy-lib.sh"

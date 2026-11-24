@@ -493,6 +493,14 @@ not_repair_commands() {
   cp "$BATS_TEST_TMPDIR/broken" "$LANE/.claude/hooks/lib/hook-payload.sh"
   call Bash "$(jq -nc --arg command "git -C $LANE merge --abort" '{command: $command}')" "$LANE" "$HOOK"
   library_blocked hook-payload.sh
+  [[ "$output" != *"is in progress"* ]]
+}
+
+@test "a refused call during a hooks/lib conflict names the repair commands" {
+  library_conflicted_lane .claude/hooks/lib/hook-payload.sh
+  call Bash "$(jq -nc --arg command "git -C $LANE checkout --theirs .claude/hooks/lib/hook-payload.sh" '{command: $command}')" "$LANE" "$HOOK"
+  library_blocked hook-payload.sh
+  [[ "$output" == *"A merge is in progress"*"git merge --abort"*"git checkout --ours|--theirs -- .claude/hooks/lib/hook-payload.sh"*"drops the other side's changes"* ]]
 }
 
 @test "a merge conflict in the audit-loop state library allows its repair and keeps the protected-write denials" {
