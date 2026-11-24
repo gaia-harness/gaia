@@ -70,7 +70,7 @@ The human-only list is `.gaia/autonomy-human-only-headers.json`. The checkpoint 
 
 ### Self-governing files
 
-Under the switch, a write to a file that governs the harness itself parks too. A prompt would stall the run, and allowing the write would let the run change its own guards. The set lives in `.gaia/autonomy-protected-paths.json`: `root` globs apply at the repository root, `package` globs under each package the registry lists. A path resolves to the checkout holding it, so a linked worktree's copy is in the set too. The set includes the gate's own data files and the libraries its hooks source. The gate reads Edit, Write, MultiEdit and NotebookEdit paths, and Bash and Monitor commands as far as the shared write parsers go.
+Under the switch, a write to a file that governs the harness itself parks too. A prompt would stall the run, and allowing the write would let the run change its own guards. The set lives in `.gaia/autonomy-protected-paths.json`: `root` globs apply at the repository root, `package` globs under each package the registry lists. A path resolves to the checkout holding it, so a linked worktree's copy is in the set too. The set includes the gate's own data files and the libraries the gate sources directly (the hook libraries under `.claude/hooks/`, `main-root-lib.sh`, `autonomy-lib.sh` and `audit-loop-state-lib.sh`). The libraries `audit-loop-state-lib.sh` itself sources are not in it. The gate reads Edit, Write, MultiEdit and NotebookEdit paths, and Bash and Monitor commands as far as the shared write parsers go.
 
 ### The decision log
 
