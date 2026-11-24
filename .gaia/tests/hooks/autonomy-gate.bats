@@ -231,7 +231,7 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
   denied
 }
 
-# bats test_tags=protected
+# bats test_tags=protected,whole-tree
 @test "the protected set matches the self-governing paths and none of the ordinary paths beside them" {
   local globs path
   globs=$(autonomy_protected_globs "$REPO_ROOT")
