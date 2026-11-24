@@ -40,9 +40,9 @@ GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 #     prescribes `git -C`; a quoted `$X` the shell would expand is not literal).
 #     The command carries no backtick, which the `| & ; ( )` split cannot open.
 #     A `cd`, `pushd`, `sh -c`, env prefix (`GIT_DIR=`), `-c core.worktree=`,
-#     `--git-dir` or `--work-tree` could carry git into the parent's tree, and
-#     the segment walk cannot see all of them, so any of them fails this test.
-# Needs acting_directory, parse_git_globals and git_global_words from
+#     `--git-dir` or `--work-tree` could carry git into the parent's tree, so
+#     any of them fails this test.
+# Needs acting_directory, parse_git_globals, git_global_words and git_cwd from
 # lib/main-git-guard-parse.sh.
 subagent_git_own_tree_command() {
   local agent_id="$1" command="$2" directory checkout_root segment target_root
