@@ -5,10 +5,12 @@
 # it, and it relies on the caller's _error, _load_vetoes, _valid_dispositions, _carried_keys,
 # _round_lookup, _live_lookup, _has_snapshot, _snapshot_path, _divert_line,
 # _RESIDUAL_REASON_JQ, _SECURITY_CLASS_JQ, _TEMPORARY_FILES, _TRIAGE_MEMBERS, gaia_exclusive_lock_take,
-# _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Sources audit-recorded-decision-lib.sh and runs nothing else at source time. Never `cd`s.
+# _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER, VETOES, FINDING_FILE and DECISION. Sources audit-recorded-decision-lib.sh and audit-decided-unattended-lib.sh and runs nothing else at source time. Never `cd`s.
 
 # shellcheck source=/dev/null
 . "$_GAIA_DISPOSITIONS_DIRECTORY/audit-recorded-decision-lib.sh"
+# shellcheck source=/dev/null
+. "$_GAIA_DISPOSITIONS_DIRECTORY/audit-decided-unattended-lib.sh"
 
 # _evaluator <subcommand> [args...]: audit-loop-eval.sh on ROOT, stderr dropped.
 # The dispositions check calls it too.
@@ -102,6 +104,7 @@ def section($head; $rows; fmt; $noun):
 . as $rows
 | ([$rows[] | select(.section != "divert")] | to_entries | map(.value + {clean: ($clean[.key] == true)})) as $screened
 | [ section("## Accepted residuals (recorded, not fixed)"; ($screened | map(select(.section == "accept"))); keyed; "accepted residual(s)"),
+    (if $decided == "" then empty else $decided end),
     section("## Out-of-scope machinery findings (recorded, not filed)"; ($screened | map(select(.section == "cross"))); keyed; "waived finding(s)"),
     section("## Waived below triage threshold (not filed)"; ($screened | map(select(.section == "triage"))); triage; "waived finding(s)"),
     section("## Cross-remit findings fixed after their round"; ($screened | map(select(.section == "fixed"))); fixed; "fixed finding(s)"),
@@ -206,7 +209,7 @@ _section_rows() {
 }
 
 _command_pr_sections() {
-  local rows texts text_file clean absent pending divert_count divert_line=""
+  local rows texts text_file clean absent pending divert_count divert_line="" decided
   _load_vetoes || return 3
   rows="$(_section_rows)" || return 3
   texts="$(printf '%s' "$rows" | jq -r '.[] | select(.section != "divert") | .reason')" || return 3
@@ -217,8 +220,9 @@ _command_pr_sections() {
   pending="$(_pending_count)"
   divert_count="$(printf '%s' "$rows" | jq '[.[] | select(.section == "divert")] | length')" || return 3
   [ "$divert_count" -eq 0 ] || divert_line="$(_divert_line "$divert_count")"
+  decided="$(_decided_unattended_section)" || return 3
   printf '%s' "$rows" | jq -r --argjson clean "$clean" --argjson absent "$absent" --argjson pending "$pending" \
-    --arg divert_line "$divert_line" "$_SECTIONS_JQ" || return 3
+    --arg divert_line "$divert_line" --arg decided "$decided" "$_SECTIONS_JQ" || return 3
 }
 
 # _command_residual_count: {"total","ask"} over the accepted residuals

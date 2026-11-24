@@ -297,6 +297,7 @@ auditors:
       - ".gaia/scripts/audit-gate-owed.sh"
       - ".gaia/scripts/audit-pr-sections-lib.sh"
       - ".gaia/scripts/audit-recorded-decision-lib.sh"
+      - ".gaia/scripts/audit-decided-unattended-lib.sh"
       - ".gaia/scripts/filing-outcomes-lib.sh"
       - ".gaia/scripts/audit-fix-verify.sh"
       - ".gaia/scripts/audit-fix-verify-state-lib.sh"
