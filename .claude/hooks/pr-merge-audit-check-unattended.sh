@@ -58,7 +58,7 @@ fi
 if autonomy_active "$_gate_payload_cwd"; then
   _gate_tree=$(git -C "$_gate_payload_cwd" rev-parse --show-toplevel 2>/dev/null) || _gate_tree=$_gate_payload_cwd
   if [ "$(autonomy_field may_merge "$_gate_payload_cwd" 2>/dev/null)" != true ]; then
-    jq -n --arg reason "Unattended run (the autonomy switch is live) with may_merge false: the PR is merge-ready, and only a human merges it. Park this run, with <n> the pull request this merge names: bash $_gate_tree/.gaia/scripts/autonomy-park.sh --reason merge-ready --pr <n> --root $_gate_tree, then stop. Do not retry the merge by another command or spelling.${gate_arm_note}" '{
+    jq -n --arg reason "Unattended run (the autonomy switch is live) with may_merge false: only a human merges this PR. Park this run, with <n> the pull request this merge names: bash $_gate_tree/.gaia/scripts/autonomy-park.sh --reason merge-ready --pr <n> --root $_gate_tree, then stop. Do not retry the merge by another command or spelling.${gate_arm_note}" '{
       hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}
     }'
     exit 0
