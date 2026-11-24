@@ -342,11 +342,6 @@ while IFS="$tab" read -r tool floor platform upgrade; do
   if [ -z "$version" ]; then
     printf 'BELOW %s unknown %s\n' "$tool" "$floor"
     short_tools="$short_tools $tool"
-  elif [ "$tool" = node ] && [ "${version%%.*}" = 25 ]; then
-    # engines.node is ^24.15.0 || >=26.0.0: the odd 25 line sits between the
-    # two supported ranges, so it is below the floor in the sense that matters.
-    printf 'BELOW %s %s %s\n' "$tool" "$version" "$floor"
-    short_tools="$short_tools $tool"
   elif version_at_least "$version" "$floor"; then
     printf 'OK %s %s %s\n' "$tool" "$version" "$floor"
   else

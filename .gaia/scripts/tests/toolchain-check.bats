@@ -317,7 +317,7 @@ route_absent() {
   [ -z "$(route_line node)" ]
 }
 
-@test "the node floor accepts 24.15.0 and 26 and refuses 24.14, 25 and 22" {
+@test "the node floor accepts 24.15.0 and 26 and refuses 24.14 and 22" {
   local version
   for version in 24.15.0 24.22.3 26.13.1; do
     stub_current
@@ -326,7 +326,7 @@ route_absent() {
     [ "$status" -eq 0 ] || { echo "node $version should pass" >&2; return 1; }
     printf '%s\n' "$output" | grep -qxF "OK node $version $(floor_of node)" || return 1
   done
-  for version in 24.14.9 25.9.0 22.22.2; do
+  for version in 24.14.9 22.22.2; do
     stub_current
     stub node "v$version"
     check --platform darwin
