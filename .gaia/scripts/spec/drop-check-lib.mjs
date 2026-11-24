@@ -86,7 +86,7 @@ function acceptanceBullets(markdownText) {
   return bullets.map(normalizeWhitespace);
 }
 
-// Each `<file name>: <bullet>` of the acceptance criteria of a plan directory.
+// Each `<file name>: <item>` of the acceptance criteria of a plan directory.
 function planBullets(directory) {
   return markdownFilesIn(directory).flatMap((name) =>
     acceptanceBullets(readText(join(directory, name))).map(
