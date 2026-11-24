@@ -875,7 +875,7 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
-  jq -e '.version == 3 and any(.lookup[]; .finding_class == "c/tri" and .triage == true and .triage_reason == "below threshold")' \
+  jq -e '.version == 4 and any(.lookup[]; .finding_class == "c/tri" and .triage == true and .triage_reason == "below threshold")' \
     "$SNAPSHOT_DIRECTORY/dispositions-1.checked.json" >/dev/null || { cat "$SNAPSHOT_DIRECTORY/dispositions-1.checked.json"; return 1; }
   alf_sidecar "$SHELL_MEMBER" "[$(jq -c 'del(.triage, .triage_reason)' <<<"$TRIAGE_ENTRY")]" 12
   open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
@@ -1217,7 +1217,7 @@ run_residual_count() {
   run bash "$SCRIPT" residual-count --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
 }
 
-@test "eligibility: accept-residual on a round whose default stop holds passes and freezes a version-3 snapshot of the stop's inputs" {
+@test "eligibility: accept-residual on a round whose default stop holds passes and freezes a version-4 snapshot of the stop's inputs" {
   local snapshot_file
   stop_base
   accept_all 3 "$(minor_rows f.txt 1 2)"
@@ -1225,7 +1225,7 @@ run_residual_count() {
   green || return 1
   snapshot_file="$SNAPSHOT_DIRECTORY/dispositions-3.checked.json"
   [ "$(jq -c '[.version, .default_stop, (.default_stop_keys | length), .human_accept, .satisfied_vetoes, .review_bases]' "$snapshot_file")" = \
-    "[3,true,2,false,[],{\"$MEMBER\":\"member-clearance\"}]" ] || { cat "$snapshot_file"; return 1; }
+    "[4,true,2,false,[],{\"$MEMBER\":\"member-clearance\"}]" ] || { cat "$snapshot_file"; return 1; }
   # Re-grade from the snapshot after the sidecar is overwritten and HEAD moves.
   alf_sidecar "$MEMBER" "$(minor_rows f.txt 7 7 rule/later)" 31
   alf_set_line other.txt 9 "after the round"
@@ -1382,6 +1382,61 @@ stop_false_case() {
       ;;
   esac
   accept_all "$LAST_ROUND" "$(jq -c '.findings | map({finding_class, path, line})' "$ALF_ROOT"/.gaia/local/audit/*."$ALF_SLUG.$MEMBER".findings.json)"
+}
+
+# accepted_key_rounds [round-2-entries]: rounds of 3 then 2 Minors on f.txt,
+# with f.txt:1 typed as audit-accept-finding at checkpoint 1.
+accepted_key_rounds() {
+  stop_rounds "$(minor_rows f.txt 1 3)" "${1:-$(minor_rows f.txt 1 2)}" || return 1
+  alf_add_checkpoint 1 fallback || return 1
+  alf_state_edit '.allowance.accepted_keys = [{checkpoint: 1, key: [$member, "rule/x", "f.txt", 1], source: "typed", at: "t", session_id: "s1"}]' --arg member "$MEMBER"
+}
+
+# fix_both <r>: dispositions-<r>.json disposing f.txt:1 and f.txt:2 fix.
+fix_both() {
+  write_dispositions "$1" "$(jq -n -c --arg member "$MEMBER" '[1, 2] | map({member: $member, finding_class: "rule/x", path: "f.txt", line: ., disposition: "fix", reason: ""})')"
+}
+
+# bats test_tags=protected
+@test "human-accepted-fix: a key a human accepted is refused fix unless a veto binds it or the round re-reports it security-class, and a version-3 snapshot keeps its predicate (case table)" {
+  printf 'case: %s\n' 'the accepted key disposed fix is refused, the other key is not; the mutant disarming the rule passes' >&2
+  accepted_key_rounds || return 1
+  fix_both 2
+  run_check 2
+  red human-accepted-fix "$(minor_key f.txt 1)" || return 1
+  grep -qF -- "$(minor_key f.txt 2)" <<<"$output" && { echo "unaccepted key refused: $output"; return 1; }
+  accept_all 2 "$(minor_rows f.txt 1 2)" "[$(disposition_entry f.txt 2 rule/x fix "")]"
+  run_check 2
+  green || return 1
+  fix_both 2
+  mutant_check_tree audit-dispositions-check.sh -e 's/\$version >= 4 and (\$is_vetoed/$version >= 5 and ($is_vetoed/' || return 1
+  run_check 2
+  green || return 1
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  printf 'case: %s\n' 'a veto binding the accepted key lets it be fixed' >&2
+  vetoes 2 rule/x f.txt 1
+  run_check 2
+  green || return 1
+  rm -f "$RUN_FOLDER/vetoes.json"
+  printf 'case: %s\n' 'a security-class re-report of the accepted key may be fixed' >&2
+  accepted_key_rounds "$(minor_rows f.txt 1 2 | jq -c 'map(if .line == 1 then .security = true else . end)')" || return 1
+  fix_both 2
+  run_check 2
+  green || return 1
+  printf 'case: %s\n' 'a version-3 snapshot re-grades without the rule; the same snapshot read as version 4 is refused' >&2
+  accepted_key_rounds || return 1
+  fix_both 2
+  mutant_check_tree audit-dispositions-check.sh -e 's/\$version >= 4 and (\$is_vetoed/$version >= 5 and ($is_vetoed/' -e 's/{version: 4, round/{version: 3, round/' || return 1
+  run_check 2 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  SCRIPT="$SCRIPTS/audit-dispositions-check.sh"
+  [ "$(jq '.version' "$SNAPSHOT_DIRECTORY/dispositions-2.checked.json")" = 3 ] || return 1
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  jq -c '.version = 4' "$SNAPSHOT_DIRECTORY/dispositions-2.checked.json" >"$BATS_TEST_TMPDIR/snapshot" &&
+    mv "$BATS_TEST_TMPDIR/snapshot" "$SNAPSHOT_DIRECTORY/dispositions-2.checked.json"
+  run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  red human-accepted-fix "$(minor_key f.txt 1)"
 }
 
 @test "eligibility: an honored triage mark on the stop round needs no entry beside the accepts" {
@@ -1944,7 +1999,7 @@ discard_refused() {
   [ "$output" = '{"total":4,"ask":3}' ] || { echo "$output"; return 1; }
   run_check 3 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
-  # From the version-3 snapshot, a later sidecar and HEAD change nothing.
+  # From the snapshot, a later sidecar and HEAD change nothing.
   alf_sidecar "$MEMBER" "$(minor_rows f.txt 7 7 rule/later)" 31
   alf_set_line other.txt 9 "after the round"
   alf_commit "after the round"
