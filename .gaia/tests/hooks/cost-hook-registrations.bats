@@ -40,11 +40,11 @@ merge_commands() {
   done
 }
 
-@test "pr-merge-cost.sh invokes only the libraries it loads and usage-merge.sh" {
+@test "pr-merge-cost.sh invokes only the libraries it loads, usage-merge.sh and usage.sh" {
   local hook="$SOURCE_ROOT/.claude/hooks/pr-merge-cost.sh" invoked expected
   invoked="$(grep -vE '^[[:space:]]*#' "$hook" | grep -oE '(^|[;&|[:space:]])(bash|\.)[[:space:]]+"[^"]+"' | grep -oE '[A-Za-z0-9_.-]+\.sh' | LC_ALL=C sort -u)"
   [ -n "$invoked" ]
-  expected="$(printf '%s\n' hook-payload.sh usage-merge.sh verb-arming.sh)"
+  expected="$(printf '%s\n' hook-payload.sh repo-scope.sh usage-merge.sh usage.sh verb-arming.sh)"
   [ "$invoked" = "$expected" ]
 }
 

@@ -184,7 +184,7 @@ build_late_join() {
 # line, run in the joining session at the pinned instant.
 run_join() {
   local line prefix="bash .gaia/scripts/usage.sh "
-  line="$(CLAUDE_CODE_SESSION_ID="$1" GAIA_USAGE_TEST_NOW="$(at "$3")" usage handoff)"
+  line="$(CLAUDE_CODE_SESSION_ID="$1" GAIA_USAGE_TEST_NOW="$(at "$3")" usage handoff | sed -n 1p)"
   [[ "$line" == "$prefix"* ]] || return 1
   # shellcheck disable=SC2086  # the printed line is word-split into arguments on purpose
   CLAUDE_CODE_SESSION_ID="$2" GAIA_USAGE_TEST_NOW="$(at "$3")" usage ${line#"$prefix"}
