@@ -291,16 +291,19 @@ comment_fixtures() {
   jq -e '.job == "backlog" and (.skipped | length) == 1' <<<"$output"
 }
 
-# lock_worktree <branch> <pid>: a worktree on the branch locked the way Claude
-# Code locks a session's worktree.
+# lock_worktree <branch> <pid> [start]: a worktree on the branch locked the way
+# Claude Code locks a session's worktree. The recorded start defaults to the
+# pid's own start time (UTC), so a live pid reads as the locking session.
 lock_worktree() {
+  local start="${3:-$(TZ=UTC ps -o lstart= -p "$2" 2>/dev/null | tr -s ' ' | sed 's/^ //; s/ $//')}"
+  [ -n "$start" ] || start="Tue Nov 24 15:12:16 2026"
   local directory="$BATS_TEST_TMPDIR/wt-${1//\//-}"
   if [ ! -d "$directory" ]; then
     git -C "$WORK" worktree add -q "$directory" "$1"
   else
     git -C "$WORK" worktree unlock "$directory"
   fi
-  git -C "$WORK" worktree lock --reason "claude session $1 (pid $2 start Tue Nov 24 15:12:16 2026)" "$directory"
+  git -C "$WORK" worktree lock --reason "claude session $1 (pid $2 start $start)" "$directory"
 }
 
 @test "a plan or pull request whose worktree a live foreign session locks is skipped with its pid; a dead-pid lock and the run's own ancestor's lock are picked" {
@@ -330,6 +333,16 @@ lock_worktree() {
   rm -f "$WORK/.notebook/plans/PLAN-001"/*
   running_plan PLAN-001 feat/1-plan-work
   pick
+  jq -e '.job == "plan" and .branch == "feat/1-plan-work"' <<<"$output"
+}
+
+@test "a lock whose pid is live but started at another time is stale and the plan is picked" {
+  running_plan PLAN-001 feat/1-plan-work
+  sleep 300 3>&- &
+  reused=$!
+  lock_worktree feat/1-plan-work "$reused" "Mon Jan  1 00:00:00 2001"
+  pick
+  kill "$reused"
   jq -e '.job == "plan" and .branch == "feat/1-plan-work"' <<<"$output"
 }
 

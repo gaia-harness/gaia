@@ -173,10 +173,12 @@ own_process_chain() {
 # foreign_session_pid <branch>: prints the pid of another live Claude session
 # that locks the branch's worktree (`locked claude session <branch> (pid N ...)`
 # in `git worktree list --porcelain`) and returns 0. Returns 1 when there is no
-# such lock, its pid is dead (a stale lock), or the pid is this run's own
-# process or one of its ancestors.
+# such lock, its pid is dead or reused (a stale lock), or the pid is this run's
+# own process or one of its ancestors. A lock that records `start <date>` (UTC)
+# names the session's process; a pid whose own start time differs now names an
+# unrelated process, so the lock is stale.
 foreign_session_pid() {
-  local lock pid
+  local lock pid recorded_start actual_start
   lock="$(git -C "$tree_root" worktree list --porcelain 2>/dev/null | awk -v ref="refs/heads/$1" '
     BEGIN { RS = ""; FS = "\n" }
     { found = 0; locked = ""
@@ -189,6 +191,11 @@ foreign_session_pid() {
   pid="$(printf '%s' "$lock" | sed -n 's/.*(pid \([0-9][0-9]*\)[ )].*/\1/p')"
   [ -n "$pid" ] || return 1
   kill -0 "$pid" 2>/dev/null || return 1
+  recorded_start="$(printf '%s' "$lock" | sed -n 's/.*(pid [0-9][0-9]* start \(.*\))[^)]*$/\1/p' | tr -s ' ')"
+  if [ -n "$recorded_start" ]; then
+    actual_start="$(TZ=UTC ps -o lstart= -p "$pid" 2>/dev/null | tr -s ' ' | sed 's/^ //; s/ $//')"
+    [ -z "$actual_start" ] || [ "$actual_start" = "$recorded_start" ] || return 1
+  fi
   [ -n "$OWN_PROCESS_CHAIN" ] || own_process_chain
   case "$OWN_PROCESS_CHAIN" in *" $pid "*) return 1 ;; esac
   printf '%s\n' "$pid"

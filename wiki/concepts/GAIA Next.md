@@ -33,7 +33,7 @@ While the [[Autonomy Switch]] is live, the picker skips, printing one `gaia-next
 
 ## Skips in every run
 
-A plan or pull request whose branch's worktree `git worktree list --porcelain` reports as `locked claude session <branch> (pid N ...)` is skipped, interactive or not, with the pid in the skip line, so two sessions never drive one branch. It applies only while that pid is alive and is not this run's own process or one of its ancestors; a dead-pid lock is stale and the item is picked.
+A plan or pull request whose branch's worktree `git worktree list --porcelain` reports as `locked claude session <branch> (pid N ...)` is skipped, interactive or not, with the pid in the skip line, so two sessions never drive one branch. It applies only while that pid is alive and is not this run's own process or one of its ancestors; a dead-pid lock is stale and the item is picked, and so is a lock whose recorded `start` time differs from the live pid's own start time (the OS reused the pid).
 
 ## Untrusted input
 
