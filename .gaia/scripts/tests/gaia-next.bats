@@ -295,7 +295,7 @@ comment_fixtures() {
 # Claude Code locks a session's worktree. The recorded start defaults to the
 # pid's own start time (UTC), so a live pid reads as the locking session.
 lock_worktree() {
-  local start="${3:-$(TZ=UTC ps -o lstart= -p "$2" 2>/dev/null | tr -s ' ' | sed 's/^ //; s/ $//')}"
+  local start="${3:-$(LC_ALL=C TZ=UTC ps -o lstart= -p "$2" 2>/dev/null | tr -s ' ' | sed 's/^ //; s/ $//')}"
   [ -n "$start" ] || start="Tue Nov 24 15:12:16 2026"
   local directory="$BATS_TEST_TMPDIR/wt-${1//\//-}"
   if [ ! -d "$directory" ]; then
@@ -334,6 +334,25 @@ lock_worktree() {
   running_plan PLAN-001 feat/1-plan-work
   pick
   jq -e '.job == "plan" and .branch == "feat/1-plan-work"' <<<"$output"
+}
+
+@test "a live foreign lock is still skipped when the caller's locale is not English" {
+  local localized=""
+  for candidate in ja_JP.UTF-8 de_DE.UTF-8 fr_FR.UTF-8; do
+    if locale -a 2>/dev/null | grep -qix "$candidate"; then localized="$candidate"; break; fi
+  done
+  [ -n "$localized" ] || skip "no non-English locale installed"
+  running_plan PLAN-001 feat/1-plan-work
+  sleep 300 3>&- &
+  foreign=$!
+  lock_worktree feat/1-plan-work "$foreign"
+  pick_start="$(LC_ALL="$localized" TZ=UTC ps -o lstart= -p "$foreign" | tr -s ' ' | sed 's/^ //; s/ $//')"
+  recorded_start="$(LC_ALL=C TZ=UTC ps -o lstart= -p "$foreign" | tr -s ' ' | sed 's/^ //; s/ $//')"
+  [ "$pick_start" != "$recorded_start" ] || { kill "$foreign"; skip "ps does not localize lstart on this host"; }
+  export LC_ALL="$localized"
+  pick
+  kill "$foreign"
+  jq -e '.skipped[0].reason | test("live Claude session")' <<<"$output"
 }
 
 @test "a lock whose pid is live but started at another time is stale and the plan is picked" {

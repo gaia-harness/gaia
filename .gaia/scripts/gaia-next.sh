@@ -193,7 +193,7 @@ foreign_session_pid() {
   kill -0 "$pid" 2>/dev/null || return 1
   recorded_start="$(printf '%s' "$lock" | sed -n 's/.*(pid [0-9][0-9]* start \(.*\))[^)]*$/\1/p' | tr -s ' ')"
   if [ -n "$recorded_start" ]; then
-    actual_start="$(TZ=UTC ps -o lstart= -p "$pid" 2>/dev/null | tr -s ' ' | sed 's/^ //; s/ $//')"
+    actual_start="$(LC_ALL=C TZ=UTC ps -o lstart= -p "$pid" 2>/dev/null | tr -s ' ' | sed 's/^ //; s/ $//')"
     [ -z "$actual_start" ] || [ "$actual_start" = "$recorded_start" ] || return 1
   fi
   [ -n "$OWN_PROCESS_CHAIN" ] || own_process_chain
