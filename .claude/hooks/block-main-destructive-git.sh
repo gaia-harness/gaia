@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 # PreToolUse Bash hook: block commits on main/master, force-push naming main/master,
-# any push from main/master or with a main/master/HEAD refspec source,
+# any push from main/master or with a main/master/HEAD refspec source or destination,
 # a `git reset --hard` that moves HEAD to another commit on any branch,
-# and block a peer session moving the main checkout's HEAD off a branch another
-# session holds there with an open pull request.
+# the history rules lib/main-git-guard-history.sh owns,
+# a `-c`, `--config-env` or `git config` write of a key git runs as a command
+# (lib/git-command-config.sh), and block a peer session moving the main
+# checkout's HEAD off a branch another session holds there with an open pull
+# request.
+#
+# Honest limits of the command-config rule: a file edit inside `.git/` is not a
+# git invocation (block-git-internals-write.sh denies the edit-tool route), and
+# the environment forms (`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_<n>`/
+# `GIT_CONFIG_VALUE_<n>`, `GIT_CONFIG_PARAMETERS`, `GIT_SSH_COMMAND` and the
+# like) ride an env-var prefix, which classify-git-command.sh never approves,
+# so a permission prompt still meets them.
 #
 # Command-position anchoring: the rules fire only when `git` is the command word
 # of a pipeline segment (start of command, after a `| & ; ( )` separator, or
@@ -184,6 +194,18 @@ if ! type hop_target >/dev/null 2>&1 || ! type hop_guard >/dev/null 2>&1; then
   printf 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-checkout-hop-guard.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
+set +e
+# shellcheck source=lib/main-git-guard-history.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/main-git-guard-history.sh" ] && . "$_jq_library_directory/main-git-guard-history.sh" 2>/dev/null
+# shellcheck source=lib/git-command-config.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/git-command-config.sh" ] && . "$_jq_library_directory/git-command-config.sh" 2>/dev/null
+set -e
+for _required in history_rule_reason:main-git-guard-history push_refspec_targets_main:main-git-guard-history gaia_git_config_key_class:git-command-config; do
+  if ! type "${_required%%:*}" >/dev/null 2>&1; then
+    printf 'BLOCKED: block-main-destructive-git.sh cannot load lib/%s.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' "${_required#*:}" >&2
+    exit 2
+  fi
+done
 
 # Walk each command-position segment. Separators (`| & ; ( )`, newlines) become
 # line breaks so every line begins at a command word; leading env-var
@@ -279,6 +301,9 @@ while IFS= read -r segment; do
   [[ "$segment_command" =~ ^git([[:space:]]|$) ]] || continue
 
   parse_git_globals "$segment"
+  # Config git runs as a command runs in any repository, so no skip below applies.
+  command_config_rule_reason
+  [ -z "$history_reason" ] || deny "$history_reason"
 
   # The hop check is the one arm here that can spend a bounded network lookup,
   # and the collapsed line re-emits the whole command, so a checkout whose
@@ -311,6 +336,10 @@ while IFS= read -r segment; do
       ;;
   esac
   [ "$foreign_repo" -eq 1 ] && continue
+
+  # History rules need no checkout resolution, so they answer before the case.
+  history_rule_reason
+  [ -z "$history_reason" ] || deny "$history_reason"
 
   # Only commit, push and reset have rules past this point. Every other
   # subcommand would pay the checkout resolution below, two `git rev-parse`
@@ -446,7 +475,7 @@ while IFS= read -r segment; do
     # operands after the subcommand, so neither a global option ahead of `push`
     # nor one ahead of the remote can carry the refspec out of reach.
     refspec_main=0
-    if push_refspec_names_main; then
+    if push_refspec_names_main || push_refspec_targets_main; then
       refspec_main=1
     fi
 

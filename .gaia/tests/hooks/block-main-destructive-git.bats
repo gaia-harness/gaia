@@ -698,6 +698,10 @@ degrade_staged_library() {
     '.claude/hooks/lib/main-git-guard-parse.sh|conflicted|git commit -m x|blocked'
     '.claude/hooks/lib/main-checkout-hop-guard.sh|absent|git commit -m x|blocked'
     '.claude/hooks/lib/main-checkout-hop-guard.sh|conflicted|git commit -m x|blocked'
+    '.claude/hooks/lib/main-git-guard-history.sh|absent|git commit -m x|blocked'
+    '.claude/hooks/lib/main-git-guard-history.sh|conflicted|git clean -fdx|blocked'
+    '.claude/hooks/lib/git-command-config.sh|absent|git commit -m x|blocked'
+    '.claude/hooks/lib/git-command-config.sh|conflicted|git status|blocked'
     '.claude/hooks/lib/main-git-guard-parse.sh|absent|ls|silent'
     '.claude/hooks/lib/hook-payload.sh|absent|git push --force origin main|blocked'
   )
@@ -730,6 +734,7 @@ degrade_staged_library() {
   local rows=(
     'deny|keep_feature|||git reset -q --hard HEAD~1'
     'deny|keep_feature|||git reset --hard --quiet HEAD^'
+    'deny|keep_feature|||git reset --har HEAD~1'
     'deny|keep_feature|||git -C @MAIN@ reset --hard HEAD~1'
     'deny|keep_feature|||git reset --hard no-such-ref'
     'deny|keep_feature|||cd "$SOMEWHERE" && git reset --hard @HEAD@'
@@ -763,6 +768,237 @@ degrade_staged_library() {
     echo "case: $row"
     run_row "$row"
   done
+}
+
+# --- history rules: main, the remote, the reflog and ignored local state ---
+
+# Ordinary git calls run without a prompt (classify-git-command.sh, and the
+# settings' narrower git allow rules such as `Bash(git branch:*)`), so these
+# denials are the only guard on these forms. Every row runs from a feature branch, where rules 1 to 3 allow a push.
+# bats test_tags=protected
+@test "history rules deny what reaches main, the remote, the reflog or ignored state" {
+  local row
+  local rows=(
+    'deny|feature|||git push origin feature:main'
+    'deny|feature|||git push origin +feature:main'
+    'deny|feature|||git push origin feature:refs/heads/master'
+    'deny|feature|||git push origin :main'
+    'deny|feature|||git push origin refs/heads/main'
+    'deny|feature|||git push origin --delete refs/heads/main'
+    'deny|feature|||git push --mirror origin'
+    'deny|feature|||git push --all origin'
+    'deny|feature|||git push --all --force origin'
+    'deny|feature|||git push --branches origin'
+    'deny|feature|||git clean -fdx'
+    'deny|feature|||git clean -xdf'
+    'deny|feature|||git clean -fX'
+    'deny|feature|||git -C @MAIN@ clean -f -x'
+    'deny|feature|||git config core.hooksPath /dev/null'
+    'deny|feature|||git config --local core.hooksPath .husky'
+    'deny|feature|||git config --unset core.hooksPath'
+    'deny|feature|||git config set core.HooksPath /tmp/none'
+    'deny|feature|||git update-ref -d refs/heads/main'
+    'deny|feature|||git update-ref refs/heads/master HEAD'
+    'deny|feature|||git update-ref --stdin'
+    'deny|feature|||git branch -D main'
+    'deny|feature|||git branch --delete --force master'
+    'deny|feature|||git branch -f main HEAD'
+    'deny|feature|||git branch -M main'
+    'deny|feature|||git reflog expire --expire=now --all'
+    'deny|feature|||git reflog delete HEAD@{1}'
+    'deny|feature|||git gc --prune=now'
+    'deny|feature|||git prune'
+    'deny|feature|||git filter-branch -f HEAD'
+    'deny|feature|||git filter-repo --path secrets --invert-paths'
+    'deny|feature|||git status && git clean -fdx'
+    'deny|feature|||git push origin feature:heads/main'
+    'deny|feature|||git push origin :'
+    'deny|feature|||git push origin +:'
+    'deny|feature|||git push origin refs/heads/*:refs/heads/*'
+    'deny|feature|||git push origin +refs/heads/*'
+    'deny|feature|||git push --mirr origin'
+    'deny|feature|||git push --al origin'
+    'deny|feature|||git push --bra origin'
+    'deny|feature|||git config core.hooksPath ""'
+    'deny|feature|||git config --unse core.hooksPath'
+    'deny|feature|||git config core.hooksPath get'
+    'deny|feature|||git config core.hooksPath list'
+    'deny|feature|||git config core.hooksPath remove-section'
+    'deny|feature|||git config --remove-section core'
+    'deny|feature|||git config rename-section core old'
+    'deny|feature|||git update-ref --stdi'
+    'deny|feature|||git update-ref HEAD HEAD~1'
+    'deny|feature|||git update-ref -m reason -d HEAD'
+    'deny|feature|||git branch --forc main HEAD'
+    'deny|feature|||git branch --mov main old-main'
+    'deny|feature|||git checkout -B main origin/main'
+    'deny|feature|||git checkout -fB master'
+    'deny|feature|||git checkout -Bmain'
+    'deny|feature|||git switch -C main'
+    'deny|feature|||git switch --force-create=master origin/master'
+    'deny|feature|||git switch --force-c main'
+    'deny|feature|||git reflog drop --all'
+    'deny|feature|||git gc --prun=now'
+    'deny|feature|||git worktree add -f -B main /tmp/other-tree HEAD'
+    'deny|feature|||git symbolic-ref refs/heads/main refs/heads/feature'
+    'deny|feature|||git symbolic-ref -d refs/heads/main'
+    'deny|feature|||git config --comment get core.hooksPath /dev/null'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+@test "history rules allow the everyday forms beside each rule" {
+  local row
+  local rows=(
+    'allow|feature|||git push --force-with-lease origin feature'
+    'allow|feature|||git push -u origin feature'
+    'allow|feature|||git push origin feature:feature-copy'
+    'allow|feature|||git push origin --delete feature-old'
+    'allow|feature|||git push origin --tags'
+    'allow|feature|||git clean -fd'
+    'allow|feature|||git clean -n'
+    'allow|feature|||git config --get core.hooksPath'
+    'allow|feature|||git config core.hooksPath'
+    'allow|feature|||git config core.hooksPath .githooks'
+    'allow|feature|||git config user.name Test'
+    'allow|feature|||git branch -D feature-old'
+    'allow|feature|||git branch -m feature-renamed'
+    'allow|feature|||git branch feature-two main'
+    'allow|feature|||git branch -u origin/main'
+    'allow|feature|||git update-ref refs/heads/feature-two HEAD'
+    'allow|feature|||git reflog'
+    'allow|feature|||git gc'
+    'allow|feature|||git gc --no-prune'
+    'allow|feature|||git rebase main'
+    'allow|feature|||echo "never run git clean -fdx here"'
+    'allow|feature|||git commit -m "do not git push --mirror"'
+    'allow|feature|||git push origin feature:feature/main'
+    'allow|feature|||git push origin refs/heads/feat/*:refs/heads/feat/*'
+    'allow|feature|||git push --atomic origin feature'
+    'allow|feature|||git config --get-all core.hooksPath'
+    'allow|feature|||git config --remove-section alias'
+    'allow|feature|||git update-ref refs/heads/feature-two HEAD~1'
+    'allow|feature|||git checkout -B feature-two main'
+    'allow|feature|||git checkout -b feature-two'
+    'allow|feature|||git switch -C feature-two main'
+    'allow|feature|||git switch -c feature-two'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# Each history denial says why and names the repair. Row: command|needle.
+@test "each history denial states its reason and the repair it names" {
+  local row command needle
+  local rows=(
+    'git push origin feature:main|git push -u origin <branch-name>'
+    'git push --mirror origin|deletes every remote branch this clone lacks'
+    'git push --all origin|main included'
+    'git clean -fdx|the notebook (specs, plans'
+    "git clean -fdx|'git clean -fd'"
+    "git config core.hooksPath /dev/null|'git config core.hooksPath .githooks'"
+    'git update-ref -d refs/heads/main|Main changes only through a merged pull request'
+    'git branch -D main|Ask the user to run it themselves'
+    'git reflog expire --expire=now --all|recovers a dropped commit'
+    'git gc --prune=now|no prune option'
+    'git filter-branch -f HEAD|ask them to run it themselves'
+  )
+  on_feature
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    IFS='|' read -r command needle <<<"$row"
+    run_hook "$command"
+    assert_denied_by_json
+    grep -qF -- "$needle" <<<"$output"
+  done
+}
+
+# The history rules are this repository's policy: a foreign -C stands them down
+# the way it stands down the commit and push rules.
+@test "a history rule aimed at a foreign repository is allowed" {
+  on_feature
+  run_hook "git -C $FOREIGN clean -fdx"
+  assert_allowed_by_json
+  run_hook "git -C $FOREIGN branch -D main"
+  assert_allowed_by_json
+}
+
+# A key git runs as a command turns any prompt-free git approval into an unprompted shell,
+# whether set inline, from the environment, or persisted by `git config`.
+# bats test_tags=protected
+@test "command-running config is denied inline, through --config-env and through git config" {
+  local row
+  local rows=(
+    "deny|feature|||git -c 'alias.zz=!echo ran' zz"
+    "deny|feature|||git -c 'alias.lg=-c core.pager=evil log' lg"
+    'deny|feature|||git -c core.sshCommand=evil fetch'
+    'deny|feature|||git -c CORE.PAGER=cat log'
+    'deny|feature|||git -c core.fsmonitor=./evil status'
+    'deny|feature|||git -c include.path=/tmp/x status'
+    'deny|feature|||git -c includeIf.gitdir:/x/.path=/tmp/x status'
+    'deny|feature|||git -c filter.lfs.smudge=evil status'
+    'deny|feature|||git -c diff.foo.textconv=evil diff'
+    'deny|feature|||git -c core.hooksPath=/tmp/hooks status'
+    'deny|feature|||git --config-env=core.editor=EDITOR status'
+    'deny|feature|||git --config-env core.pager=PAGER log'
+    "deny|feature|||git config alias.x '!echo hi'"
+    "deny|feature|||git config alias.x '-c core.sshCommand=evil fetch'"
+    "deny|feature|||git config --global core.sshCommand 'ssh -i key'"
+    'deny|feature|||git config --file /tmp/c credential.helper store'
+    'deny|feature|||git config set core.editor vim'
+    'deny|feature|||git config hook.pre.command evil'
+    'deny|feature|||git config --rename-section foo alias'
+    'deny|feature|||git config rename-section foo core'
+    'deny|feature|||git config --comment get core.sshCommand evil'
+    'deny|feature|||git config --comment list alias.x "!echo hi"'
+    'deny|feature|||git config trailer.x.cmd evil'
+    'deny|feature|||git config protocol.ext.allow always'
+    'deny|feature|||git config protocol.allow always'
+    'deny|feature|||git config browser.x.path evil'
+    'deny|feature|||git config --rename-section foo trailer'
+    'deny|feature|||git -c protocol.ext.allow=always fetch ext::sh'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+@test "config that runs nothing, reads and unsets pass the command-config rule" {
+  local row
+  local rows=(
+    'allow|feature|||git -c alias.co=checkout co'
+    'allow|feature|||git -c pager.log=false log'
+    'allow|feature|||git -c core.fsmonitor=true status'
+    'allow|feature|||git -c color.ui=always log'
+    'allow|feature|||git -c core.hooksPath=.githooks status'
+    'allow|feature|||git --config-env=user.name=NAME log'
+    'allow|feature|||git config alias.st status'
+    'allow|feature|||git config core.pager'
+    'allow|feature|||git config --default less core.pager'
+    'allow|feature|||git config --get core.sshCommand'
+    'allow|feature|||git config --unset alias.x'
+    'allow|feature|||git config --rename-section foo bar'
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    run_row "$row"
+  done
+}
+
+# The shell an alias runs does not care which repository it was named in, so
+# the foreign-repository skip that stands the other rules down does not apply.
+@test "command-running config aimed at a foreign repository is still denied" {
+  on_feature
+  run_hook "git -C $FOREIGN -c 'alias.zz=!echo ran' zz"
+  assert_denied_by_json
+  run_hook "git -C $FOREIGN config alias.x '!echo ran'"
+  assert_denied_by_json
 }
 
 # --- main-checkout hop guard, segment parsing and the -C early exit ---
