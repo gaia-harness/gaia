@@ -330,7 +330,7 @@ conflicted_lane() {
   git -C "$other" commit -q -am other
   git -C "$LANE" merge -q other >/dev/null 2>&1 || true
   [ -f "$(git -C "$LANE" rev-parse --git-path MERGE_HEAD)" ]
-  [ "$(git -C "$LANE" ls-files -u | wc -l)" -gt 0 ]
+  git -C "$LANE" ls-files -u -z | grep -qz .
   HOOK="$LANE/.claude/hooks/autonomy-gate.sh"
 }
 

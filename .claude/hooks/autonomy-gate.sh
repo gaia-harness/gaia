@@ -123,7 +123,7 @@ allow_library_conflict_repair() {
   local tool_pattern='"tool_name": ?"Bash"'
   local abort_pattern='^git( -C ([A-Za-z0-9_./+@:-]+))? (merge|rebase|cherry-pick|revert) --abort$'
   local pick_pattern='^git( -C ([A-Za-z0-9_./+@:-]+))? (checkout|restore) (--ours |--theirs )?-- ([A-Za-z0-9_./+-]+)$'
-  local directory='' verb='' file='' command_line target operation='' candidate unmerged unmerged_path found=0
+  local directory='' verb='' file='' command_line target operation='' candidate unmerged_path found=0
   [[ "$payload" =~ $tool_pattern ]] || return 0
   [[ "$payload" =~ $cwd_pattern ]] || return 0
   target=${BASH_REMATCH[1]}
@@ -139,11 +139,7 @@ allow_library_conflict_repair() {
   else
     return 0
   fi
-  case "$directory" in
-    '') ;;
-    /*) target=$directory ;;
-    *) target=$target/$directory ;;
-  esac
+  case "$directory" in '') ;; /*) target=$directory ;; *) target=$target/$directory ;; esac
   for candidate in merge:MERGE_HEAD rebase:REBASE_HEAD cherry-pick:CHERRY_PICK_HEAD revert:REVERT_HEAD; do
     if git -C "$target" rev-parse -q --verify "${candidate#*:}" >/dev/null 2>&1; then
       operation=${candidate%%:*}
@@ -151,21 +147,14 @@ allow_library_conflict_repair() {
     fi
   done
   [ -n "$operation" ] || return 0
-  unmerged=$(git -C "$target" ls-files -u 2>/dev/null) || return 0
-  if [ -n "$file" ]; then
-    # A path in the command is relative to the directory git runs in, so only
-    # a tree root names a library path unambiguously.
-    [ -z "$(git -C "$target" rev-parse --show-prefix 2>/dev/null)" ] || return 0
-    case $'\n'"$_gate_conflict_libraries" in *$'\n'"$file"$'\n'*) ;; *) return 0 ;; esac
-    while IFS=$'\t' read -r _ unmerged_path; do
-      [ "$unmerged_path" != "$file" ] || found=1
-    done <<<"$unmerged"
-  else
-    [ "$verb" = "$operation" ] || return 0
-    while IFS=$'\t' read -r _ unmerged_path; do
-      case $'\n'"$_gate_conflict_libraries" in *$'\n'"$unmerged_path"$'\n'*) found=1 ;; esac
-    done <<<"$unmerged"
-  fi
+  # A path in the command is relative to the directory git runs in, so only a
+  # tree root names a library path unambiguously.
+  [ -z "$file" ] || [ -z "$(git -C "$target" rev-parse --show-prefix 2>/dev/null)" ] || return 0
+  [ -n "$file" ] || [ "$verb" = "$operation" ] || return 0
+  while IFS=$'\t' read -r -d '' _ unmerged_path; do
+    case $'\n'"$_gate_conflict_libraries" in *$'\n'"$unmerged_path"$'\n'*) ;; *) continue ;; esac
+    if [ -z "$file" ] || [ "$unmerged_path" = "$file" ]; then found=1; fi
+  done < <(git -C "$target" ls-files -u -z 2>/dev/null)
   [ "$found" -eq 1 ] || return 0
   exit 0
 }
