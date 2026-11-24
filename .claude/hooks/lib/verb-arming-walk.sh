@@ -45,10 +45,11 @@
 #
 # The body runs from the newline ENDING the opener line, not from the heredoc
 # operator, so anything still on the opener line after the operator is ordinary
-# command text and keeps its arming power. That newline is masked with the body
-# it introduces, because it is the separator a body's first line would arm on.
-# The newline that ends the last body line is left alone: nothing after it is
-# body, and leaving it is the direction that suppresses less.
+# command text and keeps its arming power. That newline is kept, so the last
+# word on the opener line stays whole (`cat > f <<'EOF' && bash <script>`); the
+# body after it is masked to one line of filler, which arms nothing. The newline
+# that ends the last body line is left alone: nothing after it is body, and
+# leaving it is the direction that suppresses less.
 #
 # NOTHING ELSE IS PROOF. Quoted spans are never suppressed: a `bash -c` runs
 # what it is handed from inside one, and a runner reached through a variable
