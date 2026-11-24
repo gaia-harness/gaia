@@ -176,6 +176,7 @@ has_line() {
   stub node 'v24.11.0'
   stub fnm 'fnm 1.38.1'
   major="$(floor_of node)"
+  major="${major%%.*}"
   run env -i PATH="$STUBS" "$ABSOLUTE_BASH_PATH" "$bundle/.gaia/scripts/toolchain-check.sh" --platform darwin
   [ "$status" -eq 1 ]
   [[ "$(printf '%s\n' "$output" | grep '^ROUTE node ')" == "ROUTE node terminal fnm install $major && "* ]]
@@ -303,7 +304,7 @@ route_absent() {
   true
 }
 
-@test "Node 24 is below the floor: it blocks, and with no version manager the guide alone names the install and the pnpm reinstall" {
+@test "Node 24.11 is below the floor: it blocks, and with no version manager the guide alone names the install and the pnpm reinstall" {
   stub_current
   stub node 'v24.11.0'
   check --platform darwin
@@ -311,8 +312,27 @@ route_absent() {
   printf '%s\n' "$output" | grep -qxF "BELOW node 24.11.0 $(floor_of node)"
   local major
   major="$(floor_of node)"
+  major="${major%%.*}"
   [[ "$output" == *"GUIDE node: Install Node $major with nvm or fnm: run nvm install $major, nvm use $major and nvm alias default $major, or fnm install $major, fnm use $major and fnm default $major"*"npm install -g pnpm@latest"*"fresh terminal in the project folder"*"select Node $major there"*"Then start Claude Code"*"GAIA's CLI run on it."* ]] || return 1
   [ -z "$(route_line node)" ]
+}
+
+@test "the node floor accepts 24.15.0 and 26 and refuses 24.14 and 22" {
+  local version
+  for version in 24.15.0 24.22.3 26.13.1; do
+    stub_current
+    stub node "v$version"
+    check --platform darwin
+    [ "$status" -eq 0 ] || { echo "node $version should pass" >&2; return 1; }
+    printf '%s\n' "$output" | grep -qxF "OK node $version $(floor_of node)" || return 1
+  done
+  for version in 24.14.9 22.22.2; do
+    stub_current
+    stub node "v$version"
+    check --platform darwin
+    [ "$status" -eq 1 ] || { echo "node $version should fail" >&2; return 1; }
+    printf '%s\n' "$output" | grep -qxF "BELOW node $version $(floor_of node)" || return 1
+  done
 }
 
 @test "the per-folder switcher advice holds for asdf and mise: it says to select the floor's Node there, never an fnm or nvm command" {
@@ -321,6 +341,7 @@ route_absent() {
   stub fnm 'fnm 1.38.1'
   local major platform
   major="$(floor_of node)"
+  major="${major%%.*}"
   for platform in darwin windows; do
     check --platform "$platform"
     [[ "$output" == *"(fnm --use-on-cd, nvm auto-use, asdf, mise), select Node $major there, or the old pin is reselected"* ]] || return 1
@@ -334,6 +355,7 @@ route_absent() {
   stub node 'v24.11.0'
   local major
   major="$(floor_of node)"
+  major="${major%%.*}"
   check --platform darwin
   [[ "$output" == *"GUIDE node: "*"Neither nvm nor fnm is installed here, so install one of them first, or install Node $major another way and make it your default."* ]] || return 1
   check --platform windows
@@ -363,6 +385,7 @@ route_absent() {
   run env -i PATH="$STUBS" NVM_DIR="$STUBS/nvm" "$ABSOLUTE_BASH_PATH" "$CHECK" --platform darwin
   local pnpm_command major
   major="$(floor_of node)"
+  major="${major%%.*}"
   pnpm_command="$(route_line pnpm)"
   pnpm_command="${pnpm_command#ROUTE pnpm run }"
   [ -n "$pnpm_command" ]
@@ -388,6 +411,7 @@ route_absent() {
   stub pnpm '11.2.0'
   local platform guide_text major
   major="$(floor_of node)"
+  major="${major%%.*}"
   for platform in darwin windows; do
     check --platform "$platform"
     guide_text="$(printf '%s\n' "$output" | grep '^GUIDE ')"
