@@ -22,7 +22,7 @@ GAIA's spec and plan stages state behaviors and plan tasks; neither designs test
 - **One review wave, retargeted.** Five core lenses (TST, COV, SEC, BRIEF-FIT, FG) run in one turn on every spec, specialists only when the draft touches their area. There are no tiers and no lighter route.
 - **A refuter for criticals only.** One batched refuter runs, without a question, only when the wave raises a critical finding, and only over those.
 - **One case-preserving fixer.** The fixer applies every finding and writes `AUDIT.md`. A deterministic drop check refuses a fix that drops a case without a verifiable destination in the SPEC, or that changes a behavior sentence no fix line accounts for; what it still refuses after one retry goes to `clarifications.deferred[]`, never back into the body.
-- **A plan of tasks only.** One top-model planner writes the task graph, task docs and orchestration files. The review is decomposition and dependency soundness, contract grounding and SPEC coverage, with no refuters, skipped on a trivial plan.
+- **A plan of tasks only.** One top-model planner writes the task graph, task docs and the parts file, and the renderer writes `ORCHESTRATOR.md` and `KICKOFF.md` from the template and that parts file. The review is decomposition and dependency soundness, contract grounding and SPEC coverage, with no refuters, skipped on a trivial plan.
 - **Test design in its own stage.** [[Test Stage]] owns the per-task test lists, the closing flow-test phase and the security test writer's input. It is on by default and can be skipped.
 
 ### Why

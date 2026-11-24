@@ -2,9 +2,9 @@
 #
 # Doc-conformance suite for the planner's testing-trophy behavior.
 #
-# .claude/skills/gaia/references/plan/planner.md tells a planner to lint a
-# task executor's own files and to open each ORCHESTRATOR phase entry in the
-# form the phase-ownership check reads. The testing doctrine owns the rules a
+# .claude/skills/gaia/references/plan/orchestrator-template.md tells a task
+# executor to lint its own files, and planner.md tells a planner to open each
+# ORCHESTRATOR phase entry in the form the phase-ownership check reads. The testing doctrine owns the rules a
 # plan's tests follow (guards, case splits, flow tests, page headings). This
 # suite pins that text.
 #
@@ -15,6 +15,7 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
+  TEMPLATE_REL=".claude/skills/gaia/references/plan/orchestrator-template.md"
   DOCTRINE_REL=".claude/doctrine/testing.md"
 }
 
@@ -53,16 +54,16 @@ green() {
 
 check_executor_lint() {
   local range
-  range="$(range_of "$1/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | tr '\n' ' ' | tr -s ' ')"
+  range="$(range_of "$1/$TEMPLATE_REL" '## Sub-agent invocation' '## Orchestrator-owned git flow' | tr '\n' ' ' | tr -s ' ')"
   [ -n "$range" ] || { printf 'executor template range not found\n' >&2; return 1; }
-  need "$range" "**The prompt template MUST also require linting the sub-agent's own files before it returns**, with \`pnpm -C <package dir> exec eslint <its own files>\`, the paths relative to the package and no fix flag" || return 1
-  need "$range" 'it rewrites its edit until lint reports no problem its edit caused, error or warning, but `prettier/prettier`' || return 1
-  need "$range" 'and a problem its edit did not cause, such as an unresolved import of a file a sibling task has not written yet, goes under `### Findings`, not chased.' || return 1
+  need "$range" "Lint your own files before you return, with \`pnpm -C <package dir> exec eslint <its own files>\`, the paths relative to the package and no fix flag" || return 1
+  need "$range" 'Rewrite your edit until lint reports no problem your edit caused, error or warning, but `prettier/prettier`' || return 1
+  need "$range" 'a problem your edit did not cause, such as an unresolved import of a file a sibling task has not written yet, goes under `### Findings`, not chased.' || return 1
 }
 
 check_phase_entry_form() {
   local bullet
-  bullet="$(range_of "$1/$PLANNER_REL" '- **Phase order**' '- **Sub-agent yield handling.**' | tr '\n' ' ' | tr -s ' ')"
+  bullet="$(range_of "$1/$PLANNER_REL" '- **Phase order**' '- **Model per phase.**' | tr '\n' ' ' | tr -s ' ')"
   [ -n "$bullet" ] || { printf 'Phase order bullet not found\n' >&2; return 1; }
   need "$bullet" '**Phase <N>, <title>' || return 1
 }

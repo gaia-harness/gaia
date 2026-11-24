@@ -666,6 +666,8 @@ assert_out_of_order() {
   for sentinel in "${SPEC_ORDER[@]}"; do
     grep -qxF -- "$sentinel" "$TEMPLATE_MD" || { echo "template lacks $sentinel" >&2; return 1; }
   done
+
+  [ "$(grep -cF 'gaia:orchestrator-step' "$REPO_ROOT_REAL/.claude/skills/gaia/references/plan/planner.md")" -eq 0 ]
 }
 
 @test "plan-verify checks a spec-derived plan's flow lines: each flow has exactly one task line with the expected path and runner in the last phase, a command flow path matches test_path, no unknown flow ids, every task stem names exactly one README phase row, a uats SPEC is refused, and every refusal is reported in one run (a spec-less plan is not asked)" {

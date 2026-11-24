@@ -4,8 +4,8 @@
 # a new-session audit continue.
 #
 # Part A: the plan's merge question recommends merging when the merge is
-# ready and holding only for a named reason (planner.md, the merge question
-# bullet); user-questions.md no longer lists a plan build's merge among the
+# ready and holding only for a named reason (the orchestrator template, the
+# merge question); user-questions.md no longer lists a plan build's merge among the
 # never-Recommended options and states the situational merge rule.
 # Part B: a plan build resumed into the PR Merge Workflow (the checkpoint's
 # continuation prompt, or any other route) returns to the plan's
@@ -16,7 +16,7 @@
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
+  TEMPLATE_REL=".claude/skills/gaia/references/plan/orchestrator-template.md"
   RULE_REL=".claude/rules/user-questions.md"
   WORKFLOW_REL="wiki/concepts/PR Merge Workflow.md"
   HOOK_REL=".claude/hooks/audit-loop-ask-grant.sh"
@@ -62,10 +62,10 @@ green() {
 # Part A: the plan's merge question is situational.
 check_plan_merge_question() {
   local summary question
-  summary="$(range_of "$1/$PLANNER_REL" '- **Final summary.**' '- **Post-clearance')"
+  summary="$(range_of "$1/$TEMPLATE_REL" '## Final summary' '## Post-clearance')"
   need_text 'Final summary' "$summary" || return 1
   lacks "$summary" '`Hold the merge` (Recommended) or `Merge it`' || return 1
-  question="$(range_of "$1/$PLANNER_REL" '**The merge question.**' '- **Post-clearance')"
+  question="$(range_of "$1/$TEMPLATE_REL" '**The merge question.**' '## Post-clearance')"
   need_text 'merge question' "$question" || return 1
   has "$question" 'Recommend `Merge it` when the merge is ready' || return 1
   has "$question" 'Recommend `Hold the merge` only when one of these holds, and its description then says' || return 1

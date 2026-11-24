@@ -16,5 +16,5 @@ Read `.claude/skills/gaia/references/plan.md` from the project root and follow i
 - `.claude/skills/gaia/references/plan/planner.md`: never read on this thread; the planner sub-agent spawned at step 4 reads it first.
 - `.claude/skills/gaia/references/plan/orchestrator-template.md`: never read on this thread or by the planner; only `orchestrator-render.sh` and `plan-verify.sh` read it.
 - `.claude/skills/gaia/references/test-stage.md`: read only when step 5's Run fires, through the `gaia-test` skill.
-- `.claude/skills/gaia/references/spec/wiki-promote.md`: never read on this thread; `planner.md` routes the planner to it at the step that needs it.
-- `.claude/skills/gaia/references/simplify-pass.md`: never read on this thread; the orchestrator the planner writes reads it after the last phase commits.
+- `.claude/skills/gaia/references/spec/wiki-promote.md`: never read on this thread; the orchestrator template routes the orchestrator to it at the step that needs it.
+- `.claude/skills/gaia/references/simplify-pass.md`: never read on this thread; the orchestrator the renderer writes reads it after the last phase commits.

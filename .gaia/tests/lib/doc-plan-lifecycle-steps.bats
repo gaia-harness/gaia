@@ -2,16 +2,17 @@
 #
 # Doc-conformance suite for the generated orchestrator's lifecycle steps.
 #
-# planner.md holds the verbatim step blocks a planner copies into a generated
-# ORCHESTRATOR.md, each opening with a sentinel line plan-verify.sh checks.
-# This suite pins:
+# The orchestrator template holds the verbatim step blocks the renderer emits
+# into a generated ORCHESTRATOR.md, each opening with a sentinel line
+# plan-verify.sh checks. This suite pins:
 #
 #   - the sentinel list for each plan kind, from one array here: each sentinel
-#     sits once in planner.md, inside a fenced block, in that order, and the
-#     verbatim-block sentence names each in order and the compared set;
+#     sits once in the template, inside a fenced block, in that order, and the
+#     template's order sentence names each in order and the compared set;
 #   - nothing is archived or removed before a confirmed MERGED close, and the
 #     pre-flight sweep scans before it reaps;
-#   - the blocks, assembled the way a planner copies them, pass plan-verify.sh;
+#   - a plan rendered by the renderer from a minimal parts file passes
+#     plan-verify.sh, and a rendered block edited by one line fails it;
 #   - the new PROGRESS.md blocks never move plan-resume-point.sh's answer;
 #   - the adopter form names no maintainer-only step and markers stay balanced;
 #   - a page-markup rule is a plan-time directive.
@@ -40,6 +41,8 @@ UNCOMPARED_STEP=post-merge-close
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_MD="$REPO_ROOT/.claude/skills/gaia/references/plan/planner.md"
+  TEMPLATE_MD="$REPO_ROOT/.claude/skills/gaia/references/plan/orchestrator-template.md"
+  RENDERER="$REPO_ROOT/.gaia/scripts/spec/orchestrator-render.sh"
   LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
   WIKI_PROMOTE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/wiki-promote.md"
   AUDIT_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/audit.md"
@@ -118,7 +121,7 @@ check_sentinels_once_in_fences() {
       return 1
     fi
   done < <(steps_of spec-derived)
-  # The planner's own sentinel lines are an independent count of the set, so a
+  # The file's own sentinel lines are an independent count of the set, so a
   # block the list does not name, or one it names twice, fails here.
   want="$(grep -cE '^[[:space:]]*<!-- gaia:orchestrator-step [a-z-]+ -->[[:space:]]*$' "$file")"
   [ "$count" -eq "$SPEC_DERIVED_STEP_COUNT" ] && [ "$count" -eq "$want" ] || { printf 'listed %s steps, %s sentinel lines in %s\n' "$count" "$want" "$file" >&2; return 1; }
@@ -138,14 +141,14 @@ check_sentinel_file_order() {
   done < <(steps_of spec-derived)
 }
 
-# check_verbatim_sentence <file>: the verbatim-block sentence names every
+# check_verbatim_sentence <file>: the template's order sentence names every
 # step in order and no other, mentions spec-less plans, and
 # names every step but post-merge-close among the blocks plan-verify.sh
 # compares.
 check_verbatim_sentence() {
   local file="$1" sentence order compared step rest listed
-  sentence="$(grep -F '**Verbatim step blocks.**' "$file")"
-  [ -n "$sentence" ] || { printf 'no verbatim-block sentence in %s\n' "$file" >&2; return 1; }
+  sentence="$(grep -F 'The ten fixed blocks carry a sentinel line' "$file")"
+  [ -n "$sentence" ] || { printf 'no order sentence in %s\n' "$file" >&2; return 1; }
   order="${sentence#*in this order: }"
   [ "$order" != "$sentence" ] || { printf 'the sentence has no "in this order:" list\n' >&2; return 1; }
   order="${order%%. *}"
@@ -214,21 +217,52 @@ check_preflight_sites() {
   grep -E 'plan-reconcile\.sh' <<<"$section" | grep -F '"$PLAN_ID"' | grep -qE '"\$PLAN_ID" +"[^"]+"' || { printf 'post-merge close does not pass the PR number to plan-reconcile.sh\n' >&2; return 1; }
 }
 
-# assemble_orchestrator <plan.md> <out> <order...>: an ORCHESTRATOR.md made of
-# the extracted blocks, indentation kept, in the given sentinel order.
-assemble_orchestrator() {
-  local source="$1" out="$2" sentinel block
-  shift 2
-  # The last phase's entry runs the closing phase's flow test in its gate,
-  # the run line plan-verify.sh's closing-phase gate check reads.
-  printf '# Orchestrator\n\nResume detection, pre-flight isolation, RUNNING sentinel.\n\n**Phase 1, build the checkout.**\n\nQuality gate: pnpm typecheck && pnpm lint.\n\n**Phase 2, closing flow test.**\n\nQuality gate: pnpm typecheck && pnpm lint, then bash .gaia/scripts/bats5.sh %s < /dev/null; a failing run refuses the commit.\n\n' "$FIXTURE_FLOW_TEST" >"$out"
-  for sentinel in "$@"; do
-    block="$(fence_with "$source" "$sentinel")"
-    [ -n "$block" ] || { printf 'no block for %s\n' "$sentinel" >&2; return 1; }
-    block="${block//\{SPEC_PATH\}/$FIXTURE_SPEC}"
-    block="${block//\{PLAN_DIR\}/$FIXTURE_PLAN}"
-    printf '%s\n\nprose between steps\n\n' "$block" >>"$out"
-  done
+# write_parts_fixture: a minimal parts file for the fixture plan. The closing
+# phase's gate runs the flow test, the run line plan-verify.sh's closing-phase
+# gate check reads.
+write_parts_fixture() {
+  PARTS_FILE="$BATS_TEST_TMPDIR/orchestrator-parts.md"
+  cat >"$PARTS_FILE" <<EOF
+## Title
+
+Guest checkout
+Type: feat
+Slug: guest checkout
+
+## Phase loop
+
+Run each phase in order.
+
+## Phase entries
+
+**Phase 1, build the checkout.**
+
+Quality gate: pnpm typecheck && pnpm lint.
+
+**Phase 2, closing flow test.**
+
+Quality gate: pnpm typecheck && pnpm lint, then bash .gaia/scripts/bats5.sh $FIXTURE_FLOW_TEST < /dev/null; a failing run refuses the commit.
+
+## Kickoff goal
+
+Build guest checkout.
+
+## Kickoff outline
+
+1. Phase 1, then Phase 2.
+EOF
+}
+
+# render_fixture <spec-derived | spec-less>: renders the fixture plan's
+# ORCHESTRATOR.md and KICKOFF.md with the renderer.
+render_fixture() {
+  write_parts_fixture
+  if [ "$1" = spec-derived ]; then
+    run bash "$RENDERER" "$FIXTURE_PLAN" --parts "$PARTS_FILE" --audit unset --branch spec-901 --spec "$FIXTURE_SPEC"
+  else
+    run bash "$RENDERER" "$FIXTURE_PLAN" --parts "$PARTS_FILE" --audit unset --branch plan-901
+  fi
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
 # write_plan_fixture: a two-phase plan from a SPEC with one command flow. The
@@ -266,63 +300,53 @@ EOF
   printf 'status: ran\n' >"$FIXTURE_PLAN/TEST-STAGE"
 }
 
-# assembled_sentinels <spec-derived | spec-less>: the plan kind's sentinel
-# lines, in order, for assemble_orchestrator.
-assembled_sentinels() {
-  local step
-  while IFS= read -r step; do
-    sentinel_of "$step"
-    printf '\n'
-  done < <(steps_of "$1")
-}
-
 # ---------- sentinels and block contents ----------
 
-@test "each orchestrator sentinel sits once in planner.md, inside a fenced block" {
-  check_sentinels_once_in_fences "$PLANNER_MD"
+@test "each orchestrator sentinel sits once in the template, inside a fenced block" {
+  check_sentinels_once_in_fences "$TEMPLATE_MD"
 }
 
-@test "the sentinels sit in planner.md in the list's order, flow-checks between the simplify pass and the wiki promotion" {
-  check_sentinel_file_order "$PLANNER_MD"
+@test "the sentinels sit in the template in the list's order, flow-checks between the simplify pass and the wiki promotion" {
+  check_sentinel_file_order "$TEMPLATE_MD"
 }
 
-@test "the verbatim-block sentence names each step in order, the spec-less omission and the compared set" {
-  check_verbatim_sentence "$PLANNER_MD"
+@test "the template's order sentence names each step in order, the spec-less omission and the compared set" {
+  check_verbatim_sentence "$TEMPLATE_MD"
 }
 
 # ---------- close order: nothing irreversible before MERGED ----------
 
 @test "archive and removal wait for a confirmed MERGED close, and the sweep scans before it reaps" {
-  check_plan_close_order "$PLANNER_MD" || { printf 'case failed: planner.md archives and removes layers only in or after the post-merge close\n' >&2; return 1; }
+  check_plan_close_order "$TEMPLATE_MD" || { printf 'case failed: the template archives and removes layers only in or after the post-merge close\n' >&2; return 1; }
   check_lifecycle_close_order "$LIFECYCLE_MD" || { printf 'case failed: lifecycle.md post-merge close confirms MERGED before archive and removal\n' >&2; return 1; }
   check_preflight_sites "$LIFECYCLE_MD" || { printf 'case failed: the sweep scans before it reaps and the close passes the PR number\n' >&2; return 1; }
 }
 
 # ---------- assembled blocks pass plan-verify.sh ----------
 
-@test "blocks copied as a planner copies them pass plan-verify.sh --spec" {
-  local -a order=()
-  local sentinel
-  while IFS= read -r sentinel; do order+=("$sentinel"); done < <(assembled_sentinels spec-derived)
-  [ "${#order[@]}" -eq "$SPEC_DERIVED_STEP_COUNT" ]
+@test "a plan rendered by the renderer passes plan-verify.sh --spec" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "${order[@]}"
-  # The copy keeps the template's indentation, so the trim rule is exercised.
-  grep -qE "^[[:space:]]+<!-- gaia:orchestrator-step flow-checks -->$" "$FIXTURE_PLAN/ORCHESTRATOR.md"
+  render_fixture spec-derived
+  [ "$(grep -c 'gaia:orchestrator-step' "$FIXTURE_PLAN/ORCHESTRATOR.md")" -eq "$SPEC_DERIVED_STEP_COUNT" ]
+  grep -qF "$S_FLOW" "$FIXTURE_PLAN/ORCHESTRATOR.md"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  # One edited line of a rendered block fails the check.
+  sed -i.bak 's/^\*\*Simplify pass (every start/**Simplify pass EDITED (every start/' "$FIXTURE_PLAN/ORCHESTRATOR.md"
+  run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
+  [ "$status" -ne 0 ] || { echo "an edited block still verified" >&2; return 1; }
 }
 
-@test "blocks copied as a planner copies them pass plan-verify.sh without a spec" {
-  local -a order=()
-  local sentinel
-  while IFS= read -r sentinel; do order+=("$sentinel"); done < <(assembled_sentinels spec-less)
-  [ "${#order[@]}" -eq "$((SPEC_DERIVED_STEP_COUNT - 1))" ]
+@test "a plan rendered by the renderer passes plan-verify.sh without a spec" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "${order[@]}"
+  render_fixture spec-less
+  [ "$(grep -c 'gaia:orchestrator-step' "$FIXTURE_PLAN/ORCHESTRATOR.md")" -eq "$((SPEC_DERIVED_STEP_COUNT - 1))" ]
   grep -qF "$S_FLOW" "$FIXTURE_PLAN/ORCHESTRATOR.md" && return 1
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+  sed -i.bak 's/^\*\*Simplify pass (every start/**Simplify pass EDITED (every start/' "$FIXTURE_PLAN/ORCHESTRATOR.md"
+  run bash "$PLAN_VERIFY" "$FIXTURE_PLAN"
+  [ "$status" -ne 0 ] || { echo "an edited block still verified" >&2; return 1; }
 }
 
 # ---------- the resume helper ignores the new PROGRESS.md blocks ----------
@@ -424,11 +448,12 @@ check_adopter_form() {
 
 @test "adopter form names no maintainer-only step and markers stay balanced" {
   local file
+  check_adopter_form "$TEMPLATE_MD" || { printf 'case failed: the template adopter form\n' >&2; return 1; }
   check_adopter_form "$PLANNER_MD" || { printf 'case failed: planner.md adopter form\n' >&2; return 1; }
   check_adopter_form "$LIFECYCLE_MD" || { printf 'case failed: lifecycle.md adopter form\n' >&2; return 1; }
-  grep -qF 'verify-harness' "$PLANNER_MD" || { printf 'case failed: the marked pair holds the verify-harness mention in planner.md\n' >&2; return 1; }
+  grep -qF 'verify-harness' "$TEMPLATE_MD" || { printf 'case failed: the marked pair holds the verify-harness mention in the template\n' >&2; return 1; }
   for file in \
-    "$PLANNER_MD" "$LIFECYCLE_MD" "$WIKI_PROMOTE_MD" \
+    "$PLANNER_MD" "$TEMPLATE_MD" "$LIFECYCLE_MD" "$WIKI_PROMOTE_MD" \
     "$REPO_ROOT/wiki/concepts/Task Orchestration.md" \
     "$REPO_ROOT/wiki/concepts/GAIA Plan.md" \
     "$REPO_ROOT/wiki/concepts/Wiki Consolidate.md" \
