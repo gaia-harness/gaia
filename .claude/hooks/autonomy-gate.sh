@@ -49,9 +49,12 @@
 # carries no redirect and no write verb, so it passes too. A `cp` or `mv` that only reads a protected path is denied: the verb is
 # armed and the direction is not parsed, the over-deny being the safe side.
 #
-# Fail mode: a missing library refuses with exit 2; the one exception is an
-# unloadable autonomy-lib.sh during a merge, rebase, cherry-pick or revert,
-# which allows a fixed repair set (load_autonomy_library). A missing jq refuses
+# Fail mode: a missing library refuses with exit 2; the one exception is a merge,
+# rebase, cherry-pick or revert that conflicts in a library this hook sources,
+# which allows a fixed repair set: before any library loads for the libraries
+# in _gate_conflict_libraries (allow_library_conflict_repair, which reads the
+# payload with no library), and in load_autonomy_library for autonomy-lib.sh.
+# A missing jq refuses
 # only a call whose tool_input names a guarded spelling (never a bare
 # AskUserQuestion: with jq absent the switch reads as off, so it is allowed). A
 # deny is JSON on stdout with exit 0.
@@ -97,6 +100,79 @@ load() {
     exit 2
   fi
 }
+
+# Every library the hook sources before it can gate a call, relative to a tree
+# root. A conflict in one leaves a library that cannot load, and every repair
+# route is itself a gated call, so allow_library_conflict_repair reads the
+# payload with none of them. autonomy-lib.sh has its own repair arm below.
+_gate_conflict_libraries='
+.claude/hooks/lib/jq-availability.sh
+.claude/hooks/lib/hook-payload.sh
+.claude/hooks/lib/audit-loop-write-scan.sh
+.claude/hooks/lib/bash-write-target.sh
+.gaia/scripts/main-root-lib.sh
+.gaia/scripts/audit-loop-state-lib.sh
+'
+
+# allow_library_conflict_repair: exit 0 when the call is exactly the repair of a
+# merge, rebase, cherry-pick or revert that conflicts in a library above: its
+# own `--abort`, or a `checkout|restore [--ours|--theirs] -- <path>` of one
+# unmerged library path. The payload is read by raw pattern, never by a sourced
+# helper, and a spelling with a quote, a backslash or any other word falls
+# through to the ordinary load. The operation is looked up in the tree the
+# command names (`git -C <path>`), not only the session's cwd.
+allow_library_conflict_repair() {
+  local cwd_pattern='"cwd": ?"([^"\\]+)"' command_pattern='"command": ?"([^"\\]+)"'
+  local tool_pattern='"tool_name": ?"Bash"'
+  local abort_pattern='^git( -C ([A-Za-z0-9_./+@:-]+))? (merge|rebase|cherry-pick|revert) --abort$'
+  local pick_pattern='^git( -C ([A-Za-z0-9_./+@:-]+))? (checkout|restore) (--ours |--theirs )?-- ([A-Za-z0-9_./+-]+)$'
+  local directory='' verb='' file='' command_line target operation='' candidate unmerged unmerged_path found=0
+  [[ "$payload" =~ $tool_pattern ]] || return 0
+  [[ "$payload" =~ $cwd_pattern ]] || return 0
+  target=${BASH_REMATCH[1]}
+  [[ "$payload" =~ $command_pattern ]] || return 0
+  command_line=${BASH_REMATCH[1]}
+  case "$target" in /*) ;; *) return 0 ;; esac
+  if [[ "$command_line" =~ $abort_pattern ]]; then
+    directory=${BASH_REMATCH[2]}
+    verb=${BASH_REMATCH[3]}
+  elif [[ "$command_line" =~ $pick_pattern ]]; then
+    directory=${BASH_REMATCH[2]}
+    file=${BASH_REMATCH[5]}
+  else
+    return 0
+  fi
+  case "$directory" in
+    '') ;;
+    /*) target=$directory ;;
+    *) target=$target/$directory ;;
+  esac
+  for candidate in merge:MERGE_HEAD rebase:REBASE_HEAD cherry-pick:CHERRY_PICK_HEAD revert:REVERT_HEAD; do
+    if git -C "$target" rev-parse -q --verify "${candidate#*:}" >/dev/null 2>&1; then
+      operation=${candidate%%:*}
+      break
+    fi
+  done
+  [ -n "$operation" ] || return 0
+  unmerged=$(git -C "$target" ls-files -u 2>/dev/null) || return 0
+  if [ -n "$file" ]; then
+    # A path in the command is relative to the directory git runs in, so only
+    # a tree root names a library path unambiguously.
+    [ -z "$(git -C "$target" rev-parse --show-prefix 2>/dev/null)" ] || return 0
+    case $'\n'"$_gate_conflict_libraries" in *$'\n'"$file"$'\n'*) ;; *) return 0 ;; esac
+    while IFS=$'\t' read -r _ unmerged_path; do
+      [ "$unmerged_path" != "$file" ] || found=1
+    done <<<"$unmerged"
+  else
+    [ "$verb" = "$operation" ] || return 0
+    while IFS=$'\t' read -r _ unmerged_path; do
+      case $'\n'"$_gate_conflict_libraries" in *$'\n'"$unmerged_path"$'\n'*) found=1 ;; esac
+    done <<<"$unmerged"
+  fi
+  [ "$found" -eq 1 ] || return 0
+  exit 0
+}
+allow_library_conflict_repair
 
 load "$_gate_directory/lib/jq-availability.sh" gaia_require_jq
 gaia_require_jq 'the autonomy gate' "$payload" tool_input '.claude/' 'CLAUDE.md' 'CLAUDE.local.md' 'local/protected' 'autonomy-' '.gaia/scripts/'
