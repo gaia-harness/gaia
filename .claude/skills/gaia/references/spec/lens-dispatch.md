@@ -28,7 +28,7 @@ There is no tier below Minor: what is worth reporting is Minor, what is not is n
 | `major` | a significant gap or ambiguity a planner is forced to guess on; fix, or the human decides | a significant gap or hidden dependency the orchestrator is forced to guess on; fix, or the human decides | a significant gap or an extra test beyond the cap an executor is forced to guess on; fix, or the human decides |
 | `minor` | real but small; fixed by default | real but small; fixed by default | real but small; fixed by default |
 
-The code map slot is filled only for a map that is usable, by the test in `.claude/skills/gaia/references/spec/clarify-loop.md` `## The code map`. When `<CODE_MAP_PATH>` is empty the caller drops the whole code-map bullet from the preamble, so a run with no map sends the preamble it sends today.
+The code map slot is filled only for a map that is usable, by the test in `.claude/skills/gaia/references/spec/clarify-loop.md` `## The code map`. When `<CODE_MAP_PATH>` is empty the caller drops the whole code-map bullet from the preamble.
 
 A plan written from a spec is audited by `plan/decomposition-audit.md` (the plan's own decomposition audit), not by a re-run of the SPEC audit.
 
