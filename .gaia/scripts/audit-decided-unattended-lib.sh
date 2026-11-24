@@ -28,6 +28,7 @@ _decided_unattended_section() {
   [ -n "$branch" ] || return 0
   log="$(autonomy_log_file "$ROOT")" || return 0
   [ -f "$log" ] || return 0
+  [ -r "$log" ] || { _error "unreadable decision log $log"; return 3; }
   key="$(gaia_branch_normalize "$branch")"
   while IFS= read -r candidate; do
     [ -n "$candidate" ] && [ "$(gaia_branch_normalize "$candidate")" = "$key" ] || continue

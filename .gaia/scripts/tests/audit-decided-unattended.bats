@@ -105,3 +105,17 @@ mutant_script() {
   green || return 1
   [ "$(grep -n '^## ' <<<"$output" | cut -d: -f2-)" = "$(printf '%s\n' '## Accepted residuals (recorded, not fixed)' '## Decided unattended')" ] || { echo "$output"; return 1; }
 }
+
+@test "an unreadable decision log fails the section instead of dropping it" {
+  decision feat/disp 'Merge strategy' 'Squash (Recommended)'
+  chmod 000 "$LOG"
+  run_sections
+  chmod 600 "$LOG"
+  [ "$status" -ne 0 ] || { echo "unreadable log rendered: $output"; return 1; }
+  grep -qF -- 'unreadable decision log' <<<"$output" || { echo "no error named: $output"; return 1; }
+  mutant_script audit-decided-unattended-lib.sh -e '/\[ -r "\$log" \]/d' || return 1
+  chmod 000 "$LOG"
+  run_sections
+  chmod 600 "$LOG"
+  [ "$status" -eq 0 ] || { echo "twin did not drop the section: $status $output"; return 1; }
+}
