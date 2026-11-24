@@ -91,12 +91,35 @@ gaia_rate_limits_guard_runs_write() {
 }
 
 # gaia_rate_limits_guard_sets_config_dir <command>: rc 0 when the command sets
-# CLAUDE_CONFIG_DIR (an assignment prefix, `export`, `env`) and names
+# CLAUDE_CONFIG_DIR where the shell would act on it (an assignment prefix word
+# in command position, or a word after `export` or `env`) and names
 # rate-limits.sh as a word, so the CLI would read another folder's profile.
-# Reading the variable (`$CLAUDE_CONFIG_DIR`) is not setting it.
+# Reading the variable (`$CLAUDE_CONFIG_DIR`) and quoting or searching for the
+# spelling are not setting it. On an unsound reading (see shell_scan) the
+# spelling after a blank or separator counts wherever it stands.
 gaia_rate_limits_guard_sets_config_dir() {
   local sets_re='(^|[[:space:];&|(])CLAUDE_CONFIG_DIR=' script_re='rate-limits\.sh([[:space:]"'\'';|&)<>]|$)'
-  [[ "$1" =~ $sets_re ]] && [[ "$1" =~ $script_re ]]
+  local segment word command_seen
+  [[ "$1" =~ $sets_re ]] && [[ "$1" =~ $script_re ]] || return 1
+  shell_scan "$1"
+  [ "$SCAN_SOUND" -eq 1 ] || return 0
+  while IFS= read -r segment; do
+    command_seen=''
+    for word in $segment; do
+      case "$command_seen" in
+        '')
+          case "$word" in
+            CLAUDE_CONFIG_DIR=*) return 0 ;;
+            [A-Za-z_]*=* | '!') ;;
+            export | env) command_seen=sets ;;
+            *) command_seen=other ;;
+          esac
+          ;;
+        sets) [[ $word == CLAUDE_CONFIG_DIR=* ]] && return 0 ;;
+      esac
+    done
+  done < <(printf '%s\n' "$SCAN_BARE" | tr ';&|()`' '\n')
+  return 1
 }
 
 # gaia_rate_limits_guard_edits_tier <literal-path> <resolved-path> <raw-payload>

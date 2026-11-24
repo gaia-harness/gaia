@@ -165,6 +165,10 @@ cat $READING_RELATIVE
 jq . $READING_RELATIVE
 ls $FOLDER_RELATIVE
 jq .oauthAccount.organizationRateLimitTier $PROFILE
+printf '%s\n' 'the guard denies CLAUDE_CONFIG_DIR= before rate-limits.sh' > /tmp/findings-note.json
+git commit -m 'deny CLAUDE_CONFIG_DIR=x before rate-limits.sh'
+gh pr comment 1 --body 'CLAUDE_CONFIG_DIR=x then rate-limits.sh is denied'
+grep -n CLAUDE_CONFIG_DIR= .gaia/scripts/rate-limits.sh
 EOF3
   for tool in Write Edit MultiEdit; do
     allow_text "$tool" "$PROFILE" '{"mcpServers":{"example":{"command":"x"}}}' || return 1
