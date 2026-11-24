@@ -51,7 +51,7 @@ Expiry is read against the clock on every call, never cached at session start. E
 
 - no file, or `enabled: false`, or `expires_at` in the past
 - a malformed file: not one JSON object, an unknown field, a missing required field, a wrong type, or a timestamp in any other form or naming an impossible date
-- a symlinked file or `protected` folder, a symlinked `.gaia/local` in the main checkout, a missing `jq`, or a directory whose main checkout can't be resolved
+- a symlinked file or `protected` folder, a symlinked `.gaia` or `.gaia/local` in the main checkout, a missing `jq`, or a directory whose main checkout can't be resolved
 
 The two `audit_*` fields are the exception to malformed: missing, non-integer or negative reads as `0` (no budget is spent) and the file stays valid, so autonomy stays on without a budget.
 
