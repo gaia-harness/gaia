@@ -60,7 +60,7 @@ function behaviorSentences(markdownText) {
   return sentences;
 }
 
-// Each bullet (wrapped lines joined) under `## Acceptance criteria`.
+// Each bullet or numbered item (wrapped lines joined) under `## Acceptance criteria`.
 function acceptanceBullets(markdownText) {
   const bullets = [];
   let inSection = false;
@@ -73,7 +73,7 @@ function acceptanceBullets(markdownText) {
       continue;
     }
     if (!inSection) continue;
-    if (/^\s*[-*] /.test(line)) bullets.push(line);
+    if (/^\s*([-*]|\d+[.)]) /.test(line)) bullets.push(line);
     else if (/^\s+\S/.test(line) && bullets.length > 0) {
       bullets[bullets.length - 1] += ` ${line}`;
     }
