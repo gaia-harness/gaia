@@ -510,6 +510,12 @@ gaia_loop_pending_checkpoint() {
   return 0
 }
 
+# gaia_loop_input_is_pin <payload-json> <pin-json>: rc 0 when the payload's
+# tool_input, minus the harness-added answers and annotations, equals the pin.
+gaia_loop_input_is_pin() {
+  printf '%s' "${1-}" | jq -e --argjson pin "${2:-null}" '(.tool_input | type == "object") and (.tool_input | del(.answers, .annotations)) == $pin' >/dev/null 2>&1
+}
+
 # gaia_loop_next_closing <state-json>: `true` when the next recorded round is
 # the closing round an accept grants (the latest answer is an accept and the
 # round after its checkpoint is not yet recorded), else `false`.

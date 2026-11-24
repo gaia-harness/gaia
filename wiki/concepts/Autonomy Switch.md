@@ -59,6 +59,23 @@ The two `audit_*` fields are the exception to malformed: missing, non-integer or
 
 `.claude/hooks/autonomy-session-start.sh` shows the person and Claude that the session is unattended, with `expires_at` and `may_merge`, whenever the switch is live at session start. It is silent otherwise.
 
+## The question gate
+
+`.claude/hooks/autonomy-gate.sh` keeps an unattended run from stalling on a prompt. While the switch is live it denies every `AskUserQuestion`, and the denial tells Claude what to do instead:
+
+- **Take the recommendation.** A question with exactly one option ending ` (Recommended)` is answered with that option.
+- **Park.** The pinned audit checkpoint question, a question whose header is on the human-only list, a question with no recommended option or more than one, and a question whose recommended option is a merge (a label whose first word is `Merge`, in any case) while `may_merge` is not `true`: Claude runs `.gaia/scripts/autonomy-park.sh` with the reason code the denial names, and stops.
+
+The human-only list is `.gaia/autonomy-human-only-headers.json`. The checkpoint question is recognised by its whole content, never by its header.
+
+### Self-governing files
+
+Under the switch, a write to a file that governs the harness itself parks too. A prompt would stall the run, and allowing the write would let the run change its own guards. The set lives in `.gaia/autonomy-protected-paths.json`: `root` globs apply at the repository root, `package` globs under each package the registry lists. A path resolves to the checkout holding it, so a linked worktree's copy is in the set too. The set includes the gate's own data files and the libraries the gate sources directly (the hook libraries under `.claude/hooks/`, `main-root-lib.sh`, `autonomy-lib.sh` and `audit-loop-state-lib.sh`). The other libraries `audit-loop-state-lib.sh` sources are not in it. The gate reads Edit, Write, MultiEdit and NotebookEdit paths, and Bash and Monitor commands as far as the shared write parsers go.
+
+### The decision log
+
+`<main checkout>/.gaia/local/protected/autonomy-log.jsonl` records every option the gate told Claude to take, one JSON object per line: `time`, `session_id`, `branch`, `header`, `option`. The gate writes the entry before it denies, so the record never depends on Claude. A failed write parks instead. The log is main-anchored, so every worktree's decisions land in one file, and it sits in the protected folder, so Claude cannot rewrite it.
+
 ## The guard and its accepted residuals
 
 `.claude/hooks/block-audit-loop-write.sh` guards everything under `.gaia/local/protected/` by placement, so it denies Claude's Edit, Write, MultiEdit, Bash and Monitor writes that name the switch, in the main-checkout and worktree spellings. Like the audit-loop allowance in the same folder, the guard stops drift, not an adversary. These stay open on purpose:
