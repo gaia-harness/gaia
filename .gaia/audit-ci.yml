@@ -474,6 +474,7 @@ unowned:
   - ".claude/agents/worthiness-evaluator.md"
   - ".claude/agents/security-test-writer.md"
   - ".claude/commands/**/*.md"
+  - ".claude/loop.md"
   - ".gaia/cli/health/**/*.md"
   - ".github/forensics/prompt.md"
   - ".github/forensics/apply-fix-prompt.md"
