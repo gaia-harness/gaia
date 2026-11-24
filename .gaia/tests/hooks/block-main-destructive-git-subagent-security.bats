@@ -87,6 +87,13 @@ assert_denied() {
     "git -C $own -C $REPO commit -m change" \
     "git -C $own -c core.worktree=$REPO commit -m change" \
     "git -C $own --git-dir=$REPO/.git commit -m change" \
+    'git stash pop' \
+    'git stash drop' \
+    'git stash clear' \
+    'git stash push -m work' \
+    'git stash' \
+    "git -C $own stash pop" \
+    'git checkout --ignore-other-worktrees -B branch-main HEAD' \
     "git commit -m \"\$(cd $REPO && git reset --hard)\"" \
     "git commit -m \"\`cd $REPO; git reset --hard\`\""; do
     echo "case: $command"

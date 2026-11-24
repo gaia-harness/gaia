@@ -28,9 +28,26 @@ GAIA_SUBAGENT_GIT_STASH_READ_VERBS=(list show)
 # its own fix rounds, the doctrine's one sanctioned exception.
 GAIA_SUBAGENT_GIT_EXEMPT_AGENTS=(audit-loop-unit)
 
-# subagent_git_own_tree_command <agent id> <command>: 0 when the command can
-# only act on the sub-agent's own isolated worktree. The commit rule's reason
-# (siblings share one tree) does not hold for a tree only this agent uses.
+# subagent_git_shared_state_command <segment>: 0 when the segment
+# parse_git_globals last read writes state every linked worktree shares: a
+# stash write verb (the stash stack is one per repository) or
+# --ignore-other-worktrees (it lets a checkout take a branch another tree holds).
+subagent_git_shared_state_command() {
+  local read_verb
+  [[ " $1 " == *" --ignore-other-worktrees "* ]] && return 0
+  [ "$git_subcommand" = stash ] || return 1
+  for read_verb in ${GAIA_SUBAGENT_GIT_STASH_READ_VERBS[@]+"${GAIA_SUBAGENT_GIT_STASH_READ_VERBS[@]}"}; do
+    [ "${git_args[0]:-}" = "$read_verb" ] && return 1
+  done
+  return 0
+}
+
+# subagent_git_own_tree_command <agent id> <command>: 0 when the command acts
+# only on the sub-agent's own isolated worktree checkout (its files, index and
+# HEAD) and writes no state the linked worktrees share. The commit rule's reason
+# (siblings share one tree) does not hold for a tree only this agent uses; the
+# stash stack and branch refs are shared, so stash writes and
+# --ignore-other-worktrees still fail this test.
 #   - The acting directory's checkout root is a linked worktree (a `.git` file)
 #     named `agent-<agent id>`, the name isolation gives the worktree it makes
 #     for that sub-agent. The id is unique, so a sub-agent in its parent's tree,
@@ -56,6 +73,7 @@ subagent_git_own_tree_command() {
     [ -n "$segment" ] || continue
     [[ "$segment" =~ ^git[[:space:]] ]] || return 1
     parse_git_globals "$segment"
+    ! subagent_git_shared_state_command "$segment" || return 1
     [ -n "${git_global_words[*]+set}" ] || continue
     [ "${#git_global_words[@]}" -eq 2 ] && [ "${git_global_words[0]}" = -C ] || return 1
     [[ "$git_cwd" =~ ^[A-Za-z0-9._/+@,:=-]+$ ]] || return 1
