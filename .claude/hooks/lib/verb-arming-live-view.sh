@@ -7,6 +7,9 @@
 
 # shellcheck disable=SC2154  # constants and helpers come from verb-arming-walk.sh and verb-arming-live-helpers.sh
 
+# shellcheck disable=SC2034 # the source array the other copies of this set name in their markers; no code reads it
+GAIA_VERB_ARM_COMMAND_SEPARATORS=(';' '&' '|')
+
 gaia_verb_arm_live_view() {
   local text="$1"
   GAIA_VERB_ARM_LIVE="$text"
@@ -296,6 +299,7 @@ gaia_verb_arm_live_view() {
           remaining_text="${remaining_text:1}"
         fi
         ;;
+      # sanctioned copy of .claude/hooks/lib/verb-arming-live-view.sh#GAIA_VERB_ARM_COMMAND_SEPARATORS
       ';'|'&'|'|')
         # After `>` or `<` this completes a redirection operator (`>&`, `<&`,
         # `>|`) rather than ending the command, and the word after it is a

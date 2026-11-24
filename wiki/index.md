@@ -118,6 +118,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Local Test Runtime]]: `shell-lint.sh`'s own concurrency budget; the full bats corpus as a decided non-goal; the awk interpreter resolver's stated non-claim.
 <!-- gaia:maintainer-only:end -->
 - [[Quality Gate]]
+- [[Duplicate Value Set Check]]: the `gaia value-sets` check that fails a commit and CI when two TypeScript or shell value sets repeat or hand-narrow each other; scope, exclusions, exit codes, output forms and how to fix a finding.
 - [[Naming Conventions]]: Conventional Commits for commits and PR titles, canonical branch names, and the worktree branch rename; where the convention is read and what enforces it.
 - [[pnpm]]
 - [[Vendored Third-Party Skills]]: third-party skills are vendored byte-identical with a GAIA-owned version marker; GAIA guidance lives outside the vendored folder; updates re-vendor.

@@ -9,6 +9,7 @@ A set of values (statuses, roles, locales, route paths, config keys, file globs)
 - Before writing a constant list, type, schema, lookup map or helper, search the source and tests for one and reuse it. Search by its values, not its name: a duplicate usually has a different name.
 - Derive every other shape from the source, so a new member of the set reaches all of them. In shell, a value or helper two scripts need lives in one sourced library.
 - Tests and mocks import the source rather than retyping its values.
+- A literal set that must stay a copy carries `sanctioned copy of <path>#<name>`; a hand-chosen narrower literal set carries `subset of <path>#<name>`. The marker is a `#` comment in shell or a `//` comment in TypeScript (never a block comment), on the declaration's own line or the comment-only line directly above it. `<path>` is repo-relative and `<name>` a named set. `gaia value-sets` verifies each: a copy must equal its source, a subset must hold only values its source holds and lack at least one. A marker naming a missing set, or a set that itself carries a marker, fails. Everything else about the check: `wiki/decisions/Duplicate Value Set Check.md`.
 
 ## Instruction prose
 

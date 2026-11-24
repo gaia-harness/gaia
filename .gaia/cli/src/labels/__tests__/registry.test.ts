@@ -3,6 +3,7 @@ import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {isCreatable} from '../../schemas/labels.js';
+import type {LabelFeature} from '../../schemas/labels.js';
 import {resolveRepoRootFromImportMeta} from '../../util/repo-root-fixture.js';
 import {
   labelsRegistryPath,
@@ -19,7 +20,7 @@ const REMOVED_FEATURE_NAME = ['gaia', 'ci'].join('-');
 const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);
 const registry = readRegistry(repoRoot);
 
-type Feature = 'dependabot' | 'forensics' | 'tech-debt';
+type Feature = LabelFeature;
 
 const names = (
   audience: 'adopter' | 'maintainer',

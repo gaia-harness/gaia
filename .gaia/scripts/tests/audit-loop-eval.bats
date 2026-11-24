@@ -671,6 +671,7 @@ write_light_ledger() {
   ledger_path="$(light_ledger_path)"
   mkdir -p "$(dirname "$ledger_path")"
   : >"$ledger_path"
+  # sanctioned copy of .gaia/scripts/audit-light-mark.sh#light_review_outcomes
   verdicts=(clear escalate failed)
   for member in "$@"; do
     printf '{"member":"%s","digest":"%s","tree":"%s","verdict":"%s","at":"2026-01-01T00:00:00Z"}\n' \
@@ -1766,6 +1767,7 @@ stop_base_restore() {
     for token in "${tokens[@]}"; do
       review_base_all "$token"
       case "$token" in
+        # sanctioned copy of .gaia/scripts/audit-loop-signals-lib.sh#_GAIA_LOOP_INCREMENTAL_BASE_REASONS
         member-clearance | member-refusal | team-signal) want=true ;;
         *) want=false ;;
       esac

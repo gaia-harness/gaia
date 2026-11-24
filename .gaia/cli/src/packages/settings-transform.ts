@@ -11,7 +11,8 @@
 
 const PATH_RULE = /^(Edit|MultiEdit|NotebookEdit|Read|Write)\((.*)\)$/s;
 const SAFE_PATH = /^[\w./*{},~@+-]+$/;
-const PERMISSION_LISTS = ['allow', 'ask', 'deny'] as const;
+
+export const PERMISSION_LISTS = ['allow', 'ask', 'deny'] as const;
 const OVERLAY_PERMISSION_KEYS = new Set<string>(PERMISSION_LISTS);
 const OVERLAY_KEYS = new Set(['env', 'permissions']);
 

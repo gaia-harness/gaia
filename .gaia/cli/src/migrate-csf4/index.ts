@@ -1,23 +1,10 @@
-import {createRequire} from 'node:module';
-import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
+import {loadTypescript} from '../util/load-typescript.js';
 import {parseMigrateArgs} from './args.js';
 import * as repairs from './repairs/index.js';
-import type {Ts} from './repairs/index.js';
 import {runTool} from './run-tool.js';
 import {runMigrateCsf4} from './run.js';
-
-/** The adopter package's own TypeScript; never bundled into this binary. */
-const loadTypescript = (packageDir: string): Ts | undefined => {
-  try {
-    return createRequire(path.join(packageDir, 'package.json'))(
-      'typescript'
-    ) as Ts;
-  } catch {
-    return undefined;
-  }
-};
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 

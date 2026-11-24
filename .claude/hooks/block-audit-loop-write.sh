@@ -259,6 +259,7 @@ if ! type gaia_rate_limits_guard_path >/dev/null 2>&1; then
 fi
 
 case "$tool_name" in
+  # sanctioned copy of .claude/hooks/lib/hook-payload.sh#GAIA_HOOK_EDIT_TOOLS
   Edit | Write | MultiEdit)
     file_path="$GAIA_HOOK_FILE_PATH"
     [[ -n "$file_path" ]] || exit 0

@@ -117,4 +117,4 @@ Total machine time rises with fan-out even as wall-clock falls. Fan-out optimize
 ## Related
 
 - [[Code Audit Team]] for the merge gate that runs alongside it.
-- [[Quality Gate]] for the local gate, which has nothing to check on a YAML/bash/bats change.
+- [[Quality Gate]] for the local gate, which on a YAML/bash/bats change runs only its value-set step.
