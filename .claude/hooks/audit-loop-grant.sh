@@ -215,6 +215,7 @@ case "$parsed" in
     review_state="$(jq -r --arg id "$finding_id" 'if .outcome != "ran" then "not-ran"
       elif ([.findings[]? | select(.id == $id)] | length) == 0 then "unknown"
       elif ([.findings[]? | select(.id == $id and .disposition == null)] | length) == 0 then "disposed"
+      elif ([.findings[]? | select(.id == $id and (.severity == "Critical" or .security == true))] | length) > 0 then "fix-only"
       else "undecided" end' "$review_record" 2>/dev/null)" || review_state=""
     review_pr="$(jq -r '.pr // empty | select(type == "number")' "$review_record" 2>/dev/null)" || review_pr=""
     case "$review_state" in
@@ -225,6 +226,7 @@ case "$parsed" in
         not-ran) review_refusal="the PR review record on branch $branch did not run to an outcome" ;;
         unknown) review_refusal="the PR review record on branch $branch has no finding $finding_id" ;;
         disposed) review_refusal="finding $finding_id on branch $branch already has a disposition" ;;
+        fix-only) review_refusal="finding $finding_id on branch $branch is Critical or security-class, which takes fix and can never be accepted as a residual" ;;
         *) review_refusal="the PR review record on branch $branch could not be read" ;;
       esac
       _gl_say "Not recorded: $review_refusal."

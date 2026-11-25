@@ -323,6 +323,24 @@ EOF
   [ "$output" = "accept-residual needs a human accept: pr-3" ] || return 1
 }
 
+@test "a pr-review-accept line for a Critical or security-class finding records nothing and says it takes fix" {
+  local transcript_cli="$BATS_TEST_TMPDIR/tx-cli.jsonl" accept_file prompt_payload finding_number
+  printf '%s\n' '{"type":"mode","sessionId":"s1"}' '{"type":"user","entrypoint":"cli","sessionId":"s1"}' >"$transcript_cli"
+  accept_file="$ALF_ROOT/.gaia/local/protected/pr-review-accepts/feat/review.json"
+  review_folder feat/review
+  ran_review "$(entry src/a.sh 3 Critical false)" "$(entry src/a.sh 4 Minor true)" "$(entry src/a.sh 5 Minor false)" || return 1
+  for finding_number in 1 2; do
+    prompt_payload="$("$REPO_ROOT/.gaia/tests/hooks/helpers/mock-hook-input.sh" user-prompt-submit s1 "pr-review-accept pr-$finding_number" |
+      jq -c --arg cwd "$ALF_ROOT" --arg transcript_path "$transcript_cli" '.cwd = $cwd | .transcript_path = $transcript_path')"
+    run bash -c 'printf %s "$1" | bash "$2"' _ "$prompt_payload" "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh"
+    case "$output" in *"takes fix"*) ;; *) printf '%s\n' "$output" >&2; return 1 ;; esac
+    [ -e "$accept_file" ] && return 1
+  done
+  prompt_payload="$(jq -c '.prompt = "pr-review-accept pr-3"' <<<"$prompt_payload")"
+  run bash -c 'printf %s "$1" | bash "$2"' _ "$prompt_payload" "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh"
+  [ "$(jq -r '.accepted | map(.id) | join(",")' "$accept_file")" = "pr-3" ] || { printf '%s\n' "$output" >&2; return 1; }
+}
+
 @test "a dispatch that fails on an unloaded agent is not a no-op and records reviewer agent not loaded" {
   review_folder unloaded
   open_review || return 1
