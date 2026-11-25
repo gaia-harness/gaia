@@ -9,7 +9,7 @@
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   REFS="$ROOT/.claude/skills/gaia/references"
-  CLARIFY_MD="$REFS/spec/clarify-loop.md"
+  RESEARCH_MD="$REFS/spec/research.md"
   LENS_MD="$REFS/spec/lens-dispatch.md"
   AUDIT_MD="$REFS/spec/audit.md"
   DECOMP_MD="$REFS/plan/decomposition-audit.md"
@@ -30,8 +30,8 @@ section_of() {
 }
 
 @test "the lens slot row points to the code map section that resolves" {
-  section_of "$LENS_MD" "## Caller slots" | grep -F '<CODE_MAP_PATH>' | grep -qF 'clarify-loop.md` `## The code map`' || return 1
-  grep -qxF '## The code map' "$CLARIFY_MD"
+  section_of "$LENS_MD" "## Caller slots" | grep -F '<CODE_MAP_PATH>' | grep -qF 'research.md` `## The code map`' || return 1
+  grep -qxF '## The code map' "$RESEARCH_MD"
 }
 
 @test "each caller fills the lens slot" {

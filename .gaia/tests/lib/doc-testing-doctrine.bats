@@ -64,7 +64,7 @@ setup() {
     '.claude/agents/worthiness-evaluator.md'
     '.claude/rules/coding-guidelines.md'
     '.claude/skills/gaia/references/plan/orchestrator-template.md'
-    '.claude/skills/gaia/references/spec/audit.md'
+    '.claude/skills/gaia/references/spec/audit-fixer.md'
     '.claude/skills/gaia/references/work-lifecycle.md'
     '.claude/skills/gaia/references/worthiness-step.md'
     '.claude/skills/tdd/SKILL.md'

@@ -38,6 +38,7 @@
       "Bash(gh issue create:*)",
       "Bash(gh issue edit:*)",
       "Bash(gh issue list:*)",
+      "Bash(node .gaia/scripts/spec/test-stage-check.mjs --plan-dir:*)",
       "Bash(gh issue reopen:*)",
       "Bash(gh issue view:*)",
       "Bash(gh label list:*)",
