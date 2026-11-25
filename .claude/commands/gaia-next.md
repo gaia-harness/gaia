@@ -1,6 +1,6 @@
 ---
 name: gaia-next
-description: Runs the next GAIA job, one per run - resume a running plan, tend an open pull request, continue a draft spec (interactive runs only), or fix the top tech-debt issue - and ends a /loop when no work remains. A bare /loop runs it through .claude/loop.md. Use when the user asks what to work on next, to continue GAIA work, or to run GAIA in a loop.
+description: Runs the next GAIA job, one per run - resume a running plan, tend an open pull request, resume a stopped debt fix, continue a draft spec (interactive runs only), or fix the top tech-debt issue - and ends a /loop when no work remains. A bare /loop runs it through .claude/loop.md. Use when the user asks what to work on next, to continue GAIA work, or to run GAIA in a loop.
 ---
 
 Run one GAIA job, then end this run. The queue, its skips, and the permission mode an unattended run needs: `wiki/concepts/GAIA Next.md`.
@@ -14,7 +14,7 @@ When `bash .gaia/scripts/main-root-lib.sh --is-worktree` exits 0, a job from an 
 gaia_refuse_if_worktree "/gaia-next" || exit 1
 ```
 
-Then read the main checkout's branch with `git branch --show-current`. When it is not the default branch, check the default branch out if `git status --porcelain` prints nothing; otherwise report the branch and the dirty paths and end this run.
+Then read the main checkout's branch with `git branch --show-current`. When it is a debt branch (`debt/...`), report it and end this run: another session may be working it, and checking the default branch out would hide it from the resume check. When it is any other non-default branch, check the default branch out if `git status --porcelain` prints nothing; otherwise report the branch and the dirty paths and end this run.
 
 ## 2. Pick the job
 
@@ -26,6 +26,7 @@ Show every `gaia-next: skipped` line it prints. On a non-zero exit, report its s
 
 - **`plan`**: read `<plan_dir>/KICKOFF.md` and execute it. Its resume detection reconnects to the branch and picks the phase.
 - **`pr`**: re-enter the branch's worktree per `.claude/skills/gaia/references/isolation.md` (`### Resume`); when no worktree holds the branch, `git checkout <branch>` in the main checkout, and check the default branch back out when the run ends or parks. Read the comments with `bash .gaia/scripts/gaia-next.sh comments --pr <pr>`, never with `gh` directly: under autonomy it withholds comments from authors without write access. Then fix what failing required checks and the comments show, and drive the PR through `wiki/concepts/PR Merge Workflow.md`.
+- **`debt-resume`**: run `/gaia-debt <issue>`; it resumes the stopped fix on `<branch>`.
 - **`spec`**: run `/gaia-spec continue the draft <spec>`; its step 2 finds the draft and offers to resume it.
 - **`backlog`**: in a fresh directory, write the ordered backlog with the ordering command in `.claude/skills/gaia/references/debt.md` (`## Read and order the backlog (deterministic, no LLM evaluator)`), then the backlog pass report from it with `bash .gaia/scripts/debt-backlog.sh --backlog <backlog file> > <report file>`. Then run `bash .gaia/scripts/gaia-next.sh debt --backlog <backlog file> --report <report file>`, show its skipped lines, and act on its `job`: `debt` runs `/gaia-debt <issue>`; `none` ends the loop (step 3).
 
