@@ -877,6 +877,7 @@
     "wiki/decisions/Naming Conventions.md": "wiki-owned",
     "wiki/decisions/per-call-bash-hook-cost-cut.md": "wiki-owned",
     "wiki/decisions/pnpm.md": "wiki-owned",
+    "wiki/decisions/PR Review Step.md": "wiki-owned",
     "wiki/decisions/Quality Gate.md": "wiki-owned",
     "wiki/decisions/React Compiler.md": "wiki-owned",
     "wiki/decisions/Rendered Plan Orchestrator And Test-stage Lens Digest.md": "wiki-owned",
@@ -946,7 +947,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-25T09:04:56.887Z",
+  "generated": "2026-11-25T09:37:57.890Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
