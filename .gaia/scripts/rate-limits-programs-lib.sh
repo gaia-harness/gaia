@@ -19,7 +19,7 @@ _GAIA_RATE_LIMITS_PROGRAMS_LOADED=1
 
 # Definitions both programs share: the stored windows, the validity rule of a
 # stored entry, the scan of other sessions' files, the latest-change choice and
-# the windows shown, the one display rule the writer and the reader share.
+# `shown`, the windows both programs display.
 _GAIA_RATE_LIMITS_JQ_DEFINITIONS='
   def window_names: ["five_hour", "seven_day"];
   def maximum_length($name): if $name == "five_hour" then $five_hour_maximum else $window_maximum end;

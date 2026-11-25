@@ -19,8 +19,8 @@
 # Whatever the left side is, the right side always renders, and every render
 # also writes the session's context reading for the audit-loop bound hook (see
 # context-reading.sh) and writes the payload's usage windows to its own
-# session's rate-limit reading, which GAIA's left side displays (see
-# rate-limits-reading.sh).
+# session's rate-limit reading, and GAIA's left side displays the windows the
+# writer returns (see rate-limits-reading.sh).
 #
 # The hot path stays no-network: no network calls, no `pnpm` calls. It is no
 # longer under 50ms, and that target is retired rather than quietly missed:

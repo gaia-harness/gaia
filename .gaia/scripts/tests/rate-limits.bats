@@ -321,7 +321,7 @@ EOF
   CLAUDE_CODE_SESSION_ID="$SESSION_A" expect_reader "flat figure" $((start + 1200)) "five_hour 80% *changed 20m ago unconfirmed"
 }
 
-@test "a reading outside its bounds is refused and a refused render still shows the latest change" {
+@test "a reading outside its bounds is refused and a refused render still shows the stored reading" {
   local now=1795440000 before
   prepare_render
   rate_limits_seed_session "$MAIN" "$SESSION_A" $((now - 1000)) true five_hour 50 1795449600 seven_day 80 1795449600
@@ -330,7 +330,7 @@ EOF
 
   render "$now" "$SESSION_A" '{"five_hour":{"used_percentage":60,"resets_at":1795458601},"seven_day":{"used_percentage":90,"resets_at":1795449600}}'
   case $PLAIN_OUTPUT in
-    *"🕔 50%"*"📅 22%"*) ;;
+    *"🕔 50%"*"📅 80%"*) ;;
     *) echo "refused render: $PLAIN_OUTPUT"; return 1 ;;
   esac
   [ "$(cat "$FOLDER/$SESSION_A.json")" = "$before" ] || return 1
@@ -398,8 +398,8 @@ EOF
   [ "$(stored "$SESSION_C" '.windows.five_hour | [.used_percentage, .confirmed, .changed_at, (.history | length)]')" = "[20,false,$now,1]" ]
 }
 
-@test "outside a session the reader and the statusline show the latest change, confirmed before unconfirmed" {
-  local now=1795440000 reset=1795449600 seven_reset=1795900000 t1=1795430000 t2=1795435000 t3=1795438000 index
+@test "outside a session the reader shows the latest change, confirmed before unconfirmed" {
+  local now=1795440000 reset=1795449600 t1=1795430000 t2=1795435000 t3=1795438000 index
   local low=11111111-1111-4111-8111-111111111111 high=22222222-2222-4222-8222-222222222222
 
   rm -rf "$FOLDER"
@@ -447,18 +447,7 @@ EOF
     rate_limits_seed_session "$MAIN" "$(printf '%08d-0000-4000-8000-000000000000' "$index")" "$t1" true five_hour 10 "$reset"
   done
   [ "$(find "$FOLDER" -name '*.json' | wc -l | tr -d ' ')" = 33 ] || return 1
-  expect_reader "a 33rd, older file" "$now" "five_hour 10% *" || return 1
-
-  # The statusline of an idle session shows another session's later change.
-  rm -rf "$FOLDER"
-  prepare_render
-  rate_limits_seed_session "$MAIN" "$SESSION_B" "$t1" true seven_day 60 "$seven_reset"
-  rate_limits_seed_session "$MAIN" "$SESSION_A" "$t2" true seven_day 22 "$seven_reset"
-  render "$now" "$SESSION_B" "{\"seven_day\":{\"used_percentage\":60,\"resets_at\":$seven_reset}}"
-  case $PLAIN_OUTPUT in
-    *"📅 22%"*) ;;
-    *) echo "idle render: $PLAIN_OUTPUT"; return 1 ;;
-  esac
+  expect_reader "a 33rd, older file" "$now" "five_hour 10% *"
 }
 
 @test "inside a session with its own reading the reader prints only that reading, never filling a missing window from another session" {
@@ -729,7 +718,7 @@ EOF
   true
 }
 
-@test "after a limit reset the dispatch, the reader and an idle session's statusline all follow the lower figure" {
+@test "after a limit reset the dispatch and the reader follow the lower figure, and an idle session's statusline keeps its own" {
   local now=1795440000 reset=1795449600 five_hour
   prepare_render
 
@@ -751,10 +740,11 @@ EOF
   dispatch_hook "$now" "$SESSION_A"
   [ -z "$output" ] || { echo "dispatch after the reset spoke: $output"; return 1; }
 
-  # Idle B repeats its old figure; that changes nothing, and its own statusline follows A.
+  # Idle B repeats its old figure; that changes nothing, and its own statusline
+  # keeps it, since another session's file may belong to another account.
   now=$((now + 60))
   render "$now" "$SESSION_B" "{\"five_hour\":{\"used_percentage\":99,\"resets_at\":$reset}}"
-  grep -qF "🕔 3%" <<<"$PLAIN_OUTPUT" || { echo "B's left side: $PLAIN_OUTPUT"; return 1; }
+  grep -qF "🕔 99%" <<<"$PLAIN_OUTPUT" || { echo "B's left side: $PLAIN_OUTPUT"; return 1; }
   run rate_limits "$now" read
   [ "$status" -eq 0 ] || return 1
   case ${lines[0]:-} in
