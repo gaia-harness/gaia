@@ -722,6 +722,8 @@ EOF
 
 # bats test_tags=protected
 @test "a quoted git command word is judged by the git path, never approved through a settings allow rule" {
+  mkdir -p "$REPO/.claude"
+  jq -n '{permissions: {allow: ["Bash(git branch:*)", "Bash(git checkout:*)"]}}' >"$REPO/.claude/settings.json"
   expect fall "git status; 'git' branch -D main"
   expect fall 'git status; "git" branch -D main'
   expect fall "git status; 'git' checkout HEAD~3 -- .claude/settings.json"
