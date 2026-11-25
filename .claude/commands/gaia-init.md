@@ -89,7 +89,7 @@ When the user chose Automatic, first detect the project folder name (`basename "
 > | Primary language          | {detected language, e.g. English (en)}                                                  | Costly, re-run i18n                                        |
 > | Additional languages      | None, i18n scaffolding kept                                                             | Yes, fully                                                 |
 > | Project title             | {title-cased folder name}                                                               | Yes, re-run rename                                         |
-> | Slug                      | {folder name}                                                                           | Yes, re-run rename                                         |
+> | Slug                      | {slug from the folder name, or `app`}                                                   | Yes, re-run rename                                         |
 > | CODEOWNERS handle         | {gh-detected handle when available, else `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder} | Placeholder: `/setup-gaia` sets it before the first push. Detected handle: none |
 > | API casing                | camelCase                                                                               | Yes, rerun `gaia init configure-data-layer --casing`       |
 > | TanStack Query            | No                                                                                      | Yes, rerun `gaia init configure-data-layer --query true`   |
@@ -105,7 +105,7 @@ Then apply the defaults and proceed without stopping (the user chose Automatic; 
 - Additional languages / i18n (Q2): primary-only, keep i18n scaffolding (`STRIP_I18N=false`). The teardown is never auto-selected.
 - CODEOWNERS (Q3): the gh-detected handle when available; otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder, flagged as a required Step 10 follow-up.
 - Project title (Q4): title-cased folder name.
-- kebab slug (Q5): folder name.
+- kebab slug (Q5): the slug derived from the folder name, or `app` when that derives nothing.
 - API casing (Step 2): `camelCase` (`CASING=camel`).
 - TanStack Query (Step 2): `No` (`QUERY=false`).
 
@@ -208,7 +208,7 @@ Resolve two values from the answer:
 
 ### Q3–Q5, Project identity (one AskUserQuestion; the slug is derived)
 
-_Non-response: title is HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. The slug is never asked: it is derived from the chosen title. Automatic mode: title-cased folder name (title), folder name (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 10 follow-up._
+_Non-response: title is HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. The slug is never asked: it is derived from the chosen title. Automatic mode: title-cased folder name (title), the slug derived from the folder name or `app` when that derives nothing (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 10 follow-up._
 
 Ask Q3 and Q4 in a single AskUserQuestion call. Each question carries exactly the two real options below, its default first and marked ` (Recommended)`; the tool's own Other takes a typed value. Never add an option that only points at Other (such as "Enter another" or "Type a value"): the tool adds its own, and a hand-added one is an inert button that returns no value.
 
@@ -224,7 +224,7 @@ A different handle arrives through Other. Suggest `@username` format; store the 
 - `{title-cased folder name} (Recommended)`, description: `slug {the slug it derives}`.
 - `{folder name as-is}`, description: `slug {the slug it derives}`. When the folder name already equals its title-cased form (e.g. `Convene`), offer the folder name lowercased instead.
 
-**Q5, kebab-case slug (derived, not asked).** Derive the slug from the chosen title: lowercase it, replace each run of characters other than `a-z` and `0-9` with one hyphen, and trim leading and trailing hyphens. When that leaves nothing (a title with no ASCII letters or digits, such as one in a non-Latin script), ask for the slug as a plain chat message, since its answer is free text, and re-ask until it is valid kebab-case; automatic mode uses the fixed slug `app` and lists the slug as a follow-up for the human in the final summary. A title typed through Other re-derives the slug from it. A typed reply of the form `Title / slug` (e.g. `Convene / convene-app`) sets both: the part before ` / ` is the title and the part after is the slug, used as typed once it is valid kebab-case (re-ask if it is not).
+**Q5, kebab-case slug (derived, not asked).** Derive the slug from the chosen title: lowercase it, replace each run of characters other than `a-z` and `0-9` with one hyphen, and trim leading and trailing hyphens. When that leaves nothing (a title with no ASCII letters or digits, such as one in a non-Latin script), ask for the slug as a plain chat message, since its answer is free text, and re-ask until it is valid kebab-case; automatic mode uses `app`. A title typed through Other re-derives the slug from it. A typed reply of the form `Title / slug` (e.g. `Convene / convene-app`) sets both: the part before ` / ` is the title and the part after is the slug, used as typed once it is valid kebab-case (re-ask if it is not).
 
 ### Q6, API casing (asked alone)
 
