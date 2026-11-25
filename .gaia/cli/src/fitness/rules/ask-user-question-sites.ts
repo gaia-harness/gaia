@@ -51,12 +51,6 @@ const UNATTENDED_FALLBACK =
   /\b(?:unattended|auto(?:matic)? mode|autonomy|non-interactive|never ask)\b/i;
 const FENCE = /^\s*(?:```|~~~)/;
 
-export type Block = {
-  /** 1-based line of the block's first line. */
-  line: number;
-  text: string;
-};
-
 export type Classified = {
   /** A free-text question asked in chat: the block and whether it names an unattended fallback. */
   freeText: readonly {block: Block; hasFallback: boolean}[];
@@ -80,12 +74,18 @@ export type Site = {
   recommendedLabels: ReadonlySet<string>;
 };
 
+type Block = {
+  /** 1-based line of the block's first line. */
+  line: number;
+  text: string;
+};
+
 /**
  * Paragraph blocks of `text`: runs of non-blank lines, a fenced code block
  * kept whole, and a block ending in a colon joined to the block after it so
  * the lead-in and its option list read as one.
  */
-export const blocksOf = (text: string): Block[] => {
+const blocksOf = (text: string): Block[] => {
   const lines = text.split('\n');
   const raw: Block[] = [];
   let current: string[] = [];
