@@ -14,7 +14,7 @@ When `bash .gaia/scripts/main-root-lib.sh --is-worktree` exits 0, a job from an 
 gaia_refuse_if_worktree "/gaia-next" || exit 1
 ```
 
-Then read the main checkout's branch with `git branch --show-current`. When it is not the default branch, check the default branch out if `git status --porcelain` prints nothing; otherwise report the branch and the dirty paths and end this run.
+Then read the main checkout's branch with `git branch --show-current`. When it is a debt branch (`debt/...`), report it and end this run: another session may be working it, and checking the default branch out would hide it from the resume check. When it is any other non-default branch, check the default branch out if `git status --porcelain` prints nothing; otherwise report the branch and the dirty paths and end this run.
 
 ## 2. Pick the job
 

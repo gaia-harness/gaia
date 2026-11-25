@@ -17,7 +17,7 @@ setup() {
   BIN="$BATS_TEST_TMPDIR/bin"
   export GH_FIXTURES="$BATS_TEST_TMPDIR/gh"
   export GH_PRS=""
-  # GH_CLAIMS: the claimed-issue list and GH_PR_HEADS the open-PR list that
+  # GH_CLAIMS: the claimed-issue list and GH_PR_HEADS the PR list that
   # debt-stuck-fixes.sh reads; both empty unless a test sets them.
   export GH_CLAIMS="[]" GH_PR_HEADS="[]"
   mkdir -p "$BATS_TEST_TMPDIR/work/apps/web" "$BATS_TEST_TMPDIR/work/.notebook" "$BIN" "$GH_FIXTURES"
@@ -27,7 +27,7 @@ setup() {
   printf '.notebook\n.gaia/local\n' > "$WORK/.gitignore"
   printf '{"version":1,"items":[]}\n' > "$WORK/.notebook/catalog.json"
   printf '%s\n' '#!/usr/bin/env bash' \
-    'if [ "$1 $2" = "pr list" ]; then case "$*" in *--jq*) printf "%b" "$GH_PRS" ;; *) printf "%s" "$GH_PR_HEADS" ;; esac; exit 0; fi' \
+    'if [ "$1 $2" = "pr list" ]; then case "$*" in *--jq*) printf "%b" "$GH_PRS" ;; *--head*) while [ "$#" -gt 0 ]; do [ "$1" = --head ] && pr_head="$2"; shift; done; printf "%s" "$GH_PR_HEADS" | jq -c --arg h "$pr_head" "[.[] | select(.headRefName == \$h)]" ;; *) printf "%s" "$GH_PR_HEADS" ;; esac; exit 0; fi' \
     'if [ "$1 $2" = "issue list" ]; then printf "%s" "$GH_CLAIMS"; exit 0; fi' \
     'if [ "$1 $2" = "issue view" ]; then cat "$GH_FIXTURES/issue-body-$3.txt" 2>/dev/null; exit 0; fi' \
     '[ "$1" = api ] || exit 9' \

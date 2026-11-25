@@ -14,7 +14,8 @@
 #   local   the branch is a local branch: a remote-tracking ref alone cannot
 #           be re-entered from this clone
 #   no PR   no pull request in any state (open, closed or merged) has the branch
-#           as its head: a pull request a human closed unmerged is a rejection,
+#           as its head, asked of each claimed candidate branch on its own so
+#           no list cap can hide an old one: a pull request a human closed unmerged is a rejection,
 #           and resuming it would reopen what they turned down
 # The issue printed is the lowest claimed member of the branch, or the one
 # --issue names.
@@ -27,8 +28,8 @@
 #   bash .gaia/scripts/debt-stuck-fixes.sh [--dir <repo>] [--issue <number>]
 #
 # Test seams (each replaces one live read): --claims-json <file> (the
-# `gh issue list` array of {number}), --prs-json <file> (the `gh pr list` array
-# of {headRefName}) and --branches <file> (local branch names, one per line).
+# `gh issue list` array of {number}), --prs-json <file> (an array of
+# {headRefName}, standing in for the per-branch `gh pr list --head` reads) and --branches <file> (local branch names, one per line).
 #
 # Exit: 0 verdict printed (possibly empty), 2 usage error, 3 an input could not
 # be read.
@@ -89,16 +90,30 @@ claimed="$(printf '%s' "$claims" | jq -r '.[].number')" \
   || die_input "the claims list could not be read"
 [ -n "$claimed" ] || exit 0
 
+pr_heads=""
 if [ -n "$prs_file" ]; then
   prs="$(cat "$prs_file")" || die_input "cannot read $prs_file"
-else
-  prs="$(gh pr list --state all --limit 1000 --json headRefName)" \
-    || die_input "gh pr list failed (auth, network, or rate limit)"
+  printf '%s' "$prs" | jq -e 'type == "array"' >/dev/null 2>&1 \
+    || die_input "the pull-request list is not a JSON array"
+  pr_heads="$(printf '%s' "$prs" | jq -r '.[].headRefName // empty')" \
+    || die_input "the pull-request head branches could not be read"
 fi
-printf '%s' "$prs" | jq -e 'type == "array"' >/dev/null 2>&1 \
-  || die_input "the pull-request list is not a JSON array"
-pr_heads="$(printf '%s' "$prs" | jq -r '.[].headRefName // empty')" \
-  || die_input "the pull-request head branches could not be read"
+
+# Whether any pull request, in any state, has the branch as its head. A
+# per-branch read, because a bulk list caps at the newest N and would miss an
+# older closed or merged pull request.
+branch_has_pull_request() {
+  local branch_head="$1" found
+  if [ -n "$prs_file" ]; then
+    grep -qxF -- "$branch_head" <<<"$pr_heads"
+    return
+  fi
+  found="$(gh pr list --head "$branch_head" --state all --limit 1 --json number)" \
+    || die_input "gh pr list failed for $branch_head (auth, network, or rate limit)"
+  printf '%s' "$found" | jq -e 'type == "array"' >/dev/null 2>&1 \
+    || die_input "the pull-request read for $branch_head is not a JSON array"
+  [ "$(printf '%s' "$found" | jq 'length')" -gt 0 ]
+}
 
 if [ -n "$branches_file" ]; then
   branches="$(cat "$branches_file")" || die_input "cannot read $branches_file"
@@ -111,7 +126,6 @@ fi
 
 while IFS= read -r branch_name; do
   [ -n "$branch_name" ] || continue
-  grep -qxF -- "$branch_name" <<<"$pr_heads" && continue
   first_claimed=""
   while IFS= read -r member; do
     [ -n "$member" ] || continue
@@ -122,6 +136,8 @@ while IFS= read -r branch_name; do
       [ -n "$first_claimed" ] || first_claimed="$member"
     fi
   done < <(gaia_branch_members "$branch_name")
-  [ -n "$first_claimed" ] && printf '%s\t%s\n' "$first_claimed" "$branch_name"
+  [ -n "$first_claimed" ] || continue
+  branch_has_pull_request "$branch_name" && continue
+  printf '%s\t%s\n' "$first_claimed" "$branch_name"
 done <<<"$branches"
 exit 0

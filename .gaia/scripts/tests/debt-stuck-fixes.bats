@@ -77,16 +77,30 @@ verdict() {
   [ "$status" -eq 3 ]
 }
 
-@test "the live pull-request read covers every state, so a branch whose pull request was closed unmerged is not stopped" {
+@test "the live read asks about each candidate branch in every state, so a closed-unmerged or older pull request is found" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'if [ "$1 $2" = "issue list" ]; then printf "[{\"number\":11},{\"number\":12}]"; exit 0; fi' \
+    'if [ "$1 $2" = "pr list" ]; then' \
+    '  case "$*" in *"--state all"*) ;; *) printf "[]"; exit 0 ;; esac' \
+    '  case "$*" in *"--head debt/11-some-fix"*) printf "[{\"number\":5}]" ;; *) printf "[]" ;; esac; exit 0; fi' \
+    'exit 1' >"$BATS_TEST_TMPDIR/bin/gh"
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh"
+  printf 'debt/11-some-fix\ndebt/12-other-fix\n' >"$BATS_TEST_TMPDIR/branches"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --branches "$BATS_TEST_TMPDIR/branches"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf '12\tdebt/12-other-fix')" ]
+}
+
+@test "a failed per-branch pull-request read prints nothing and exits 3" {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   printf '%s\n' '#!/usr/bin/env bash' \
     'if [ "$1 $2" = "issue list" ]; then printf "[{\"number\":11}]"; exit 0; fi' \
-    'if [ "$1 $2" = "pr list" ]; then case "$*" in *"--state all"*) printf "[{\"headRefName\":\"debt/11-some-fix\"}]" ;; *) printf "[]" ;; esac; exit 0; fi' \
     'exit 1' >"$BATS_TEST_TMPDIR/bin/gh"
   chmod +x "$BATS_TEST_TMPDIR/bin/gh"
   printf 'debt/11-some-fix\n' >"$BATS_TEST_TMPDIR/branches"
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --branches "$BATS_TEST_TMPDIR/branches"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 3 ]
   [ -z "$output" ]
 }
 
