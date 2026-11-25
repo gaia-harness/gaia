@@ -327,7 +327,8 @@ run_shellcheck_pass() {
     # Run from the repo root so the paths the linter prints are repo-relative.
     (
       cd "$REPO_ROOT" || exit 2
-      shellcheck --severity="$severity" --exclude="$TOOLING_EXCLUDE" "${files[@]:$start:$chunk_length}"
+      # -x: without it shellcheck follows a sourced file only when it sits in the same chunk, so the split decides the findings.
+      shellcheck -x --severity="$severity" --exclude="$TOOLING_EXCLUDE" "${files[@]:$start:$chunk_length}"
     ) >"$LINT_TEMPORARY_DIRECTORY/$slug.$worker_index.log" 2>&1 &
     pids+=("$!")
     worker_index=$((worker_index + 1))
