@@ -45,7 +45,6 @@ setup() {
   RENDERER="$REPO_ROOT/.gaia/scripts/spec/orchestrator-render.sh"
   LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
   WIKI_PROMOTE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/wiki-promote.md"
-  AUDIT_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/audit.md"
   SPEC_TEMPLATE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/spec-template.md"
   PLAN_VERIFY="$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
