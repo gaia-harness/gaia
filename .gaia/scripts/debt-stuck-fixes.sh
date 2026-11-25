@@ -109,11 +109,11 @@ fi
 
 while IFS= read -r branch_name; do
   [ -n "$branch_name" ] || continue
-  printf '%s\n' "$pr_heads" | grep -qxF -- "$branch_name" && continue
+  grep -qxF -- "$branch_name" <<<"$pr_heads" && continue
   first_claimed=""
   while IFS= read -r member; do
     [ -n "$member" ] || continue
-    printf '%s\n' "$claimed" | grep -qxF -- "$member" || continue
+    grep -qxF -- "$member" <<<"$claimed" || continue
     if [ -n "$issue" ]; then
       [ "$member" = "$issue" ] && first_claimed="$member"
     else
