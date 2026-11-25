@@ -323,6 +323,8 @@ golden_setup() {
   # an allow that has none), and fails everything else, so the table never
   # reaches the developer's own gh.
   GOLDEN_GH_BIN="$GREPO.bin"
+  PLANT_REVIEW_HELPER="$REPO_ROOT/.gaia/tests/helpers/plant-review-record.sh"
+  export PLANT_REVIEW_HELPER
   mkdir -p "$GOLDEN_GH_BIN"
   cat > "$GOLDEN_GH_BIN/gh" <<EOF
 #!/usr/bin/env bash
@@ -331,6 +333,7 @@ EOF
   cat >> "$GOLDEN_GH_BIN/gh" <<'EOF'
 case "$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
 if [ "$1 ${2-}" = "pr view" ]; then
+  . "$PLANT_REVIEW_HELPER"; plant_review_record feature 30 "$(git -C "$golden_repository" rev-parse HEAD)" "$golden_repository"
   jq -n --arg head "$(git -C "$golden_repository" rev-parse HEAD)" \
     '{title:"", baseRefName:"main", number:30, headRefOid:$head, headRefName:"feature", body:("<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'
   exit 0

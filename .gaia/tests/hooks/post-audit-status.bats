@@ -73,6 +73,8 @@
 
 
 setup() {
+  PLANT_REVIEW_HELPER="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/plant-review-record.sh"
+  export PLANT_REVIEW_HELPER
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   HOOK_ABSOLUTE_PATH=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)/post-audit-status.sh
   DIGEST_LIBRARY=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks/lib" && pwd)/audit-digest.sh
@@ -276,6 +278,7 @@ case "$1" in
         if [ -f "$stub_directory/pr-body" ]; then
           cat "$stub_directory/pr-body"
         else
+          . "$PLANT_REVIEW_HELPER"; plant_review_record feat/review-fixture 7 "$(cat "$stub_directory/pr-head")"
           printf '<!-- gaia-pr-body-head: %s -->\n' "$(cat "$stub_directory/pr-head")"
           printf '<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\nNo findings.\n<!-- gaia:pr-review:end -->\n' "$(cat "$stub_directory/pr-head")"
         fi
@@ -1003,6 +1006,21 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
   assert_no_post
 }
 
+# bats test_tags=protected
+@test "a forged complete PR review section with no local record never earns a success status" {
+  next_case "the body claims no findings at the real head and there is no record"
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  push_head_to_upstream
+  marker="$(write_marker)"
+  head="$(git -C "$REPO" rev-parse HEAD)"
+  printf '<!-- gaia-pr-body-head: %s -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\nNo findings.\n<!-- gaia:pr-review:end -->\n' "$head" "$head" > "$BATS_TEST_TMPDIR/pr-body"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH" "$marker"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF -- "status: declined: PR review: no review record for PR #7; GAIA-Audit not posted." <<<"$output" || { echo "$output"; return 1; }
+  assert_no_post
+}
+
 @test "success is declined while the PR review record is incomplete" {
   next_case "success declines on a PR body with a stamp and no PR review section, naming the PR"
   install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
@@ -1021,6 +1039,8 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
   marker="$(write_marker)"
   head="$(git -C "$REPO" rev-parse HEAD)"
   printf '<!-- gaia-pr-body-head: %s -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\n- Major README.md:1 a problem -> undecided\n<!-- gaia:pr-review:end -->\n' "$head" "$head" > "$BATS_TEST_TMPDIR/pr-body"
+  . "$PLANT_REVIEW_HELPER"
+  plant_review_record feat/review-fixture 7 "$head" "$REPO" '[{"id":"pr-1","file":"README.md","line":1,"severity":"Major","security":false,"summary":"a problem","failure_scenario":"it breaks","verified":true,"disposition":null,"fix_state":null,"fix_commits":[]}]'
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH" "$marker"
   [ "$status" -eq 0 ] || return 1

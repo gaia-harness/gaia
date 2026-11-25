@@ -16,7 +16,7 @@ The review runs once per pull request and never re-runs on its own fixes or on a
 bash .gaia/scripts/pr-review-record.sh read --run-folder <RUN_FOLDER>
 ```
 
-A record whose `pr` is `<N>` and whose `outcome` is `ran` means no dispatch: go to step 5 and continue from the first finding with no disposition, or the first `fix` finding not yet `fixed`. A record whose `outcome` is `not-run` is a stop a human decides (step 4's question). Exit 5 (unreadable, or findings changed after the outcome) stops `needs-human` with the printed line. No record, a record keyed to another PR, or one with no outcome yet (a session that ended mid-dispatch) continues at step 2.
+A record whose `pr` is `<N>` and whose `outcome` is `ran` means no dispatch: go to step 5 and continue from the first finding with no disposition, or the first `fix` finding not yet `fixed`. A record whose `outcome` is `not-run` is a stop a human decides (step 4's question). Exit 5 (unreadable, or findings changed after the outcome) stops `needs-human` with the printed line. No record, a record keyed to another PR, or one with no outcome yet (a session that ended mid-dispatch) continues at step 2. The PR body's section is never read as the record: the merge gates deny a pull request with no local record, so a merge from a clone that lacks it runs the review there (`wiki/decisions/PR Review Step.md`).
 
 ## 2. Read the required checks once
 

@@ -19,7 +19,9 @@
 # pr_review_verdict exits 0 when the review is complete, else 1 printing one
 # reason with no `PR review:` prefix and no trailing period; each gate site
 # adds its own wrapper. The record's findings are fixed at its outcome, so a
-# recomputed digest that differs is a refusal, not a repair.
+# recomputed digest that differs is a refusal, not a repair. An empty record
+# is a refusal too: the PR body section is only checked against the record,
+# never read as one, since the body is editable by anyone.
 #
 # Two libraries are sourced. audit-loop-state-lib.sh owns the run-folder format
 # (gaia_loop_run_directory) and pulls in branch-name-lib.sh, main-root-lib.sh,
@@ -94,35 +96,6 @@ _PR_REVIEW_RECORD_VIEW_JQ='
 ([.findings[] | select(.disposition == null)] | length),
 ([.findings[] | select(.disposition == "fix" and .fix_state != "fixed")] | length),
 (.reviewed_head // "")
-'
-
-# The body section read as a record: the same five lines. A line that is not
-# the section'"'"'s own form makes the whole section malformed. The head is
-# greedy, so the decision is the last arrow that leaves a valid decision: an
-# arrow inside a summary or a reason never shifts the split.
-# shellcheck disable=SC2016
-_PR_REVIEW_BODY_VIEW_JQ='
-def parsed:
-  map(select(. != "" and . != $heading and . != "Coverage: no spec." and (startswith("<!--") | not))) as $lines
-  | ($lines | map(select(test("^Reviewed head: [0-9a-f]{40}$")))) as $heads
-  | ($lines | map(select(startswith("Not run: ")))) as $not_run
-  | ($lines | map(select(. == "No findings."))) as $none
-  | ($lines | map(select(startswith("- ")))) as $items
-  | ($items | map(capture("^- (?<head>.*) -> (?<text>undecided|fixed|fix|dismiss: .*|file: #[0-9]+|accept-residual: .*|waive-out-of-scope: .*)$"))) as $entries
-  | if ($heads | length) != 1
-      or (($not_run | length) + ($none | length) + ($items | length)) != ($lines | length) - 1
-      or ([($not_run | length) > 0, ($none | length) > 0, ($items | length) > 0] | map(select(.)) | length) != 1
-      or ($not_run | length) > 1 or ($none | length) > 1
-      or ($entries | length) != ($items | length)
-    then ["malformed", "", "0", "0", ""]
-    else
-      [(if ($not_run | length) == 1 then "not-run" else "ran" end),
-       (if ($not_run | length) == 1 then ($not_run[0] | ltrimstr("Not run: ") | rtrimstr(".")) else "" end),
-       ($entries | map(select(.text == "undecided")) | length | tostring),
-       ($entries | map(select(.text == "fix")) | length | tostring),
-       ($heads[0] | ltrimstr("Reviewed head: "))]
-    end;
-[inputs] | parsed | .[]
 '
 
 pr_review_record_path() {
@@ -253,7 +226,7 @@ _pr_review_plural() {
 
 pr_review_verdict() {
   local record="$1" pr="$2" body="$3" out_of_scope="$4" repo_directory="$5" head_sha="$6" base_tip="$7"
-  local section view form="" reason="" undecided=0 unfixed=0 reviewed_head="" local_record=0
+  local section view form="" reason="" undecided=0 unfixed=0 reviewed_head=""
   local fix_commits="" strays status
 
   case "$pr" in
@@ -277,10 +250,7 @@ pr_review_verdict() {
       printf 'no review record for PR #%s\n' "$pr"
       return 1
     fi
-    local_record=1
     view="$(printf '%s' "$record" | jq -r "$_PR_REVIEW_RECORD_VIEW_JQ")"
-  elif [ -n "$section" ]; then
-    view="$(printf '%s\n' "$section" | jq -rRn --arg heading "$PR_BODY_HEADING_PR_REVIEW" "$_PR_REVIEW_BODY_VIEW_JQ")"
   else
     printf 'no review record for PR #%s\n' "$pr"
     return 1
@@ -299,15 +269,13 @@ EOF
     printf 'no review record for PR #%s\n' "$pr"
     return 1
   fi
-  if [ "$local_record" -eq 1 ]; then
-    local recorded_digest
-    recorded_digest="$(printf '%s' "$record" | jq -r '.findings_sha256 // ""')"
-    if [ -n "$recorded_digest" ] || [ "$form" = ran ] \
-      || [ "$(printf '%s' "$record" | jq '.findings | length')" -ne 0 ]; then
-      if [ "$recorded_digest" != "$(pr_review_findings_digest "$record")" ]; then
-        printf 'record findings changed after outcome on PR #%s\n' "$pr"
-        return 1
-      fi
+  local recorded_digest
+  recorded_digest="$(printf '%s' "$record" | jq -r '.findings_sha256 // ""')"
+  if [ -n "$recorded_digest" ] || [ "$form" = ran ] \
+    || [ "$(printf '%s' "$record" | jq '.findings | length')" -ne 0 ]; then
+    if [ "$recorded_digest" != "$(pr_review_findings_digest "$record")" ]; then
+      printf 'record findings changed after outcome on PR #%s\n' "$pr"
+      return 1
     fi
   fi
   if [ "$form" = not-run ]; then
@@ -326,16 +294,13 @@ EOF
     printf 'PR body section missing or stale on PR #%s\n' "$pr"
     return 1
   fi
-  if [ "$local_record" -eq 1 ] \
-    && [ "$section" != "$(pr_review_render_section "$record")" ]; then
+  if [ "$section" != "$(pr_review_render_section "$record")" ]; then
     printf 'PR body section missing or stale on PR #%s\n' "$pr"
     return 1
   fi
 
   if [ "$out_of_scope" = 1 ]; then
-    if [ "$local_record" -eq 1 ]; then
-      fix_commits="$(printf '%s' "$record" | jq -r '.review_fix_commits[]? | strings')"
-    fi
+    fix_commits="$(printf '%s' "$record" | jq -r '.review_fix_commits[]? | strings')"
     status=0
     strays="$(_pr_review_stray_commits "$repo_directory" "$reviewed_head" "$head_sha" "$base_tip" "$fix_commits")" || status=$?
     if [ "$status" -ne 0 ]; then

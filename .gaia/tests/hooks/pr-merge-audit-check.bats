@@ -50,6 +50,8 @@
 bats_require_minimum_version 1.5.0
 
 setup() {
+  PLANT_REVIEW_HELPER="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/plant-review-record.sh"
+  export PLANT_REVIEW_HELPER
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/path.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
@@ -357,6 +359,7 @@ case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
   pr) head="$(cat "$head_override_file" 2>/dev/null || git -C "$repo_directory" rev-parse HEAD 2>/dev/null)"
+      . "$PLANT_REVIEW_HELPER"; plant_review_record feature 30 "$head" "$repo_directory"
       jq -n --arg head "$head" '{title:"", baseRefName:"main", number:"30", headRefOid:$head, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + $head + " -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'; exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) printf 'null\n'; exit 0 ;;
@@ -395,7 +398,8 @@ case "$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
 case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
-  pr) jq -n --arg title "$(cat "$title_file")" --slurpfile files "$files_file" --arg head "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" \
+  pr) . "$PLANT_REVIEW_HELPER"; plant_review_record feature 30 "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" "$repo_directory"
+      jq -n --arg title "$(cat "$title_file")" --slurpfile files "$files_file" --arg head "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" \
         '{title:$title, baseRefName:"main", number:"30", files: $files[0], headRefOid:$head, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + $head + " -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'
       exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
@@ -432,7 +436,8 @@ case "$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
 case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
-  pr) jq -n --arg head "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" '{title:"", baseRefName:"main", number:"30", headRefOid:$head, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + $head + " -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'; exit 0 ;;
+  pr) . "$PLANT_REVIEW_HELPER"; plant_review_record feature 30 "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" "$repo_directory"
+      jq -n --arg head "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" '{title:"", baseRefName:"main", number:"30", headRefOid:$head, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + $head + " -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'; exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) cat "$status_file"; exit 0 ;;
   *) exit 0 ;;
@@ -1665,7 +1670,8 @@ case "$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
 case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
-  pr) jq -n --arg base "$(cat "$base_file")" --arg head "$(cat "$head_file")" \
+  pr) . "$PLANT_REVIEW_HELPER"; plant_review_record feature "$(cat "$number_file")" "$(cat "$head_file")" "$PWD"
+      jq -n --arg base "$(cat "$base_file")" --arg head "$(cat "$head_file")" \
         --arg number "$(cat "$number_file")" \
         '{title:"", baseRefName:$base, headRefOid:$head, number:$number, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + $head + " -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'; exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;

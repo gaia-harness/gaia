@@ -256,7 +256,7 @@ It runs once per pull request and never again on its own fixes:
 - Never a GAIA release PR (`chore(release): v<x.y.z>`) whose whole change is release bookkeeping: it needs no review record, since the merge gate and the `GAIA-Audit` status poster both waive it through `.claude/hooks/lib/pr-review-waiver.sh`. A release PR with any other change runs the review.
 <!-- gaia:maintainer-only:end -->
 
-The merge hook, the `GAIA-Audit` success poster (`.claude/hooks/post-audit-status.sh`) and `gaia wiki chain finish` each refuse until the review record is complete; `.claude/hooks/lib/pr-review-verdict.sh` owns what complete means, and each refusal names what is still owed.
+The merge hook, the `GAIA-Audit` success poster (`.claude/hooks/post-audit-status.sh`) and `gaia wiki chain finish` each refuse until the review record is complete; `.claude/hooks/lib/pr-review-verdict.sh` owns what complete means, and each refusal names what is still owed. A pull request with no local review record is refused, never read from its PR body section; a merge from a clone without the record needs the review run there ([[PR Review Step]]).
 
 Small and docs-only PRs do not skip it.
 

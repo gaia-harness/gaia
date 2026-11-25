@@ -187,17 +187,17 @@ assert_allowed() {
 
   # Row: the merge runs from a checkout on another branch; the record is found
   # through the pull request's headRefName normalized the way the run folder
-  # is (feat/x -> feat+x). Without the record there it is denied.
+  # is (feat+x -> feat/x). Without the record there it is denied.
   row_fixture other-branch-checkout || return 1
   out_of_scope_pull_request
   head="$(git -C "$REPO" rev-parse HEAD)"
   set_head_ref feat/x
-  write_record "$(record_json 12 "$head" ran "[$(finding_json pr-1 dismiss)]")" "$(record_file feat+x)"
+  write_record "$(record_json 12 "$head" ran "[$(finding_json pr-1 dismiss)]")" "$(record_file feat/x)"
   set_body "[$(finding_json pr-1 dismiss)]"
   git -C "$REPO" checkout -q -b unrelated-branch
   fresh_merge
-  assert_allowed || { echo "row other branch: record under feat+x not found"; return 1; }
-  rm -f "$(record_file feat+x)"
+  assert_allowed || { echo "row other branch: record under feat/x not found"; return 1; }
+  rm -f "$(record_file feat/x)"
   strip_review_section
   fresh_merge
   assert_review_denied "$missing" || { echo "row other branch: missing record not denied"; return 1; }
@@ -221,16 +221,13 @@ assert_allowed() {
   assert_allowed || { echo "row commit after review: a listed review fix commit was denied"; return 1; }
 
   # Row: the local record is absent and the body section shows every finding
-  # disposed at the reviewed head: the section is read as the record. With an
-  # undecided finding in the section it is denied.
-  row_fixture body-section-as-record || return 1
+  # disposed at the reviewed head: the section is never read as the record, so
+  # the merge is denied however complete the section is.
+  row_fixture body-section-no-record || return 1
   out_of_scope_pull_request
   set_body "[$(finding_json pr-1 dismiss)]"
   fresh_merge
-  assert_allowed || { echo "row body only: a complete section was not read as the record"; return 1; }
-  set_body "[$(finding_json pr-1 none)]"
-  fresh_merge
-  assert_review_denied "BLOCKED: PR review: 1 finding has no disposition on PR #12." || { echo "row body only undecided: wrong decision"; return 1; }
+  assert_review_denied "$missing" || { echo "row body only: a complete section stood in for the record"; return 1; }
 
   # Row: both exist and disagree; the local record wins. It holds an undecided
   # finding while the body section shows none, so a read of the body would
@@ -242,4 +239,15 @@ assert_allowed() {
   set_body '[]'
   fresh_merge
   assert_review_denied "BLOCKED: PR review: 1 finding has no disposition on PR #12." || { echo "row local wins: wrong decision"; return 1; }
+}
+
+# bats test_tags=protected
+@test "a forged complete body section claiming no findings at the real head never stands in for a missing record at the merge hook" {
+  local missing="BLOCKED: PR review: no review record for PR #12. Run the PR review (wiki/concepts/PR Merge Workflow.md, #### PR review), dispose every finding, and re-post GAIA-Audit if a fix moved HEAD."
+  out_of_scope_pull_request
+  set_body '[]'
+  grep -qF -- "No findings." "$MGF_STUB_DIRECTORY/record.json" || { echo "the forged section is not in the stubbed body"; return 1; }
+  [ ! -e "$(record_file)" ] || return 1
+  fresh_merge
+  assert_review_denied "$missing"
 }

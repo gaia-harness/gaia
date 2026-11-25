@@ -73,6 +73,8 @@
 #      leaves it pending, and a frontend refusal still outranks the waiver.
 
 setup() {
+  PLANT_REVIEW_HELPER="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/plant-review-record.sh"
+  export PLANT_REVIEW_HELPER
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../../../.claude/hooks/post-audit-status.sh"
@@ -175,6 +177,7 @@ case "$1" in
         if [ -f "$pr_body_file" ]; then
           cat "$pr_body_file"
         else
+          . "$PLANT_REVIEW_HELPER"; plant_review_record feat/review-fixture 7 "$(cat "$pushed_head_file")"
           printf '<!-- gaia-pr-body-head: %s -->\n' "$(cat "$pushed_head_file")"
           printf '<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\nNo findings.\n<!-- gaia:pr-review:end -->\n' "$(cat "$pushed_head_file")"
         fi
@@ -770,6 +773,8 @@ refresh_stub() {
   GH_STUB_BASE_TIP="${1:-$(git -C "$SANDBOX" rev-parse refs/remotes/origin/main)}"
   GH_STUB_PR_JSON="$(jq -n --arg head "$(git -C "$SANDBOX" rev-parse HEAD)" '{headRefOid: $head, number: 7, headRefName: "feat/review-fixture", title: "", files: [], body: "<!-- gaia-pr-body-head: \($head) -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: \($head)\nNo findings.\n<!-- gaia:pr-review:end -->"}')"
   export GH_STUB_BASE_TIP GH_STUB_PR_JSON
+  . "$THIS_DIRECTORY/../../../.gaia/tests/helpers/plant-review-record.sh"
+  plant_review_record feat/review-fixture 7 "$(git -C "$SANDBOX" rev-parse HEAD)" "$SANDBOX"
 }
 
 install_base_stub() {

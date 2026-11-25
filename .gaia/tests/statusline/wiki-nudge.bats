@@ -54,6 +54,7 @@ teardown() {
 # queued, PR still open); `pr view` reports MERGED only after a merge, and answers
 # the stamp precondition query with the branch's own file list, head, and base.
 write_stub_gh() {
+  export GAIA_TEST_REPO_ROOT="$REPO_ROOT"
   cat > "$1" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$GH_LOG"
@@ -72,8 +73,17 @@ case "$1" in
         case "$*" in
           *headRefName,headRefOid,baseRefName,body*)
             head=$(git rev-parse HEAD)
-            body=$(printf '<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\nNo findings.\n<!-- gaia:pr-review:end -->\n' "$head")
-            jq -n --arg branch "$(git rev-parse --abbrev-ref HEAD)" --arg head "$head" --arg body "$body" \
+            branch=$(git rev-parse --abbrev-ref HEAD)
+            # The gate reads the local review record, never the body alone: plant a
+            # complete one (no findings) for this branch under the main checkout.
+            main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+            record=$(. "$GAIA_TEST_REPO_ROOT/.gaia/scripts/pr-body-sections-lib.sh"; . "$GAIA_TEST_REPO_ROOT/.claude/hooks/lib/pr-review-verdict.sh"
+              r=$(jq -n -c --arg head "$head" '{pr: 7, reviewed_head: $head, spec: "present", outcome: "ran", findings: []}')
+              jq -c --arg digest "$(pr_review_findings_digest "$r")" '.findings_sha256 = $digest' <<<"$r")
+            mkdir -p "$main_root/.gaia/local/runs/$branch"
+            printf '%s\n' "$record" > "$main_root/.gaia/local/runs/$branch/pr-review.json"
+            body=$(. "$GAIA_TEST_REPO_ROOT/.gaia/scripts/pr-body-sections-lib.sh"; . "$GAIA_TEST_REPO_ROOT/.claude/hooks/lib/pr-review-verdict.sh"; pr_review_render_section "$record")
+            jq -n --arg branch "$branch" --arg head "$head" --arg body "$body" \
               '{headRefName: $branch, headRefOid: $head, baseRefName: "main", body: $body}'
             exit 0
             ;;

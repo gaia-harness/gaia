@@ -399,6 +399,20 @@ EOF
   chmod +x "$GH_BIN/gh"
 }
 
+# plant_review_record <root> <invoking-dir>: the local review record the merge gate requires
+# (a body section alone never stands in for it), complete with no findings for
+# the head the gh stub reports, under the run folder of branch `feature`. The
+# stub's pull request body carries the matching section.
+plant_review_record() {
+  local root="$1" head record
+  head="$(git -C "$2" rev-parse HEAD)"
+  record="$(bash -c '. "$1/.gaia/scripts/pr-body-sections-lib.sh"; . "$1/.claude/hooks/lib/pr-review-verdict.sh"
+    r="$(jq -n -c --arg head "$2" "{pr: 30, reviewed_head: \$head, spec: \"present\", outcome: \"ran\", findings: []}")"
+    jq -c --arg digest "$(pr_review_findings_digest "$r")" ".findings_sha256 = \$digest" <<<"$r"' _ "$MAIN" "$head")"
+  mkdir -p "$root/.gaia/local/runs/feature"
+  printf '%s\n' "$record" > "$root/.gaia/local/runs/feature/pr-review.json"
+}
+
 # invoke_merge_hook_in <dir> <payload-file>: run the merge gate from <dir>
 # with the stub above first on PATH. The gate asks gh whether the pull request
 # is a fork before it reads any marker, and denies when gh cannot answer, so
@@ -407,6 +421,8 @@ EOF
 invoke_merge_hook_in() {
   install_gh_stub
   install_gate_base_lookup
+  plant_review_record "$MAIN" "$1"
+  [ ! -d "$WORKTREE" ] || plant_review_record "$WORKTREE" "$1"
   PATH="$GH_BIN:$PATH" invoke_hook_in "$1" "$(cat "$2")" "$HOOK_MERGE"
 }
 

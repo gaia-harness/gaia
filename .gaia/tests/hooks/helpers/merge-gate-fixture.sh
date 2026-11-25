@@ -172,6 +172,14 @@ mgf_record() {
       body: ("Summary.\n\n<!-- gaia-pr-body-head: " + $head_object_id + " -->\n\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head_object_id + "\nNo findings.\n<!-- gaia:pr-review:end -->"),
       files: (split("\n") | map(select(length > 0)) | map({path: .}))}' \
     > "$MGF_STUB_DIRECTORY/record.json"
+  # Opt-in: a suite whose allows rest on a complete review sets
+  # MGF_PLANT_REVIEW, and the local record the gates require is planted for this
+  # head (the section above never stands in for it). A suite that tests a
+  # missing record leaves it unset.
+  if [ -n "${MGF_PLANT_REVIEW:-}" ]; then
+    . "$MGF_REPO_ROOT/.gaia/tests/helpers/plant-review-record.sh"
+    plant_review_record "$head_ref" "$number" "$head" "$REPO"
+  fi
 }
 
 # mgf_member_digest <member>: the member's branch-own digest for REPO's HEAD

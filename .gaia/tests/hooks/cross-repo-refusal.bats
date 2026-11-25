@@ -17,6 +17,7 @@
 bats_require_minimum_version 1.5.0
 
 setup() {
+  export MGF_PLANT_REVIEW=1
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   . "$BATS_TEST_DIRNAME/helpers/merge-gate-fixture.sh"

@@ -205,12 +205,21 @@ gate_setup() {
 set_record_body() {
   jq -c --arg body "$1" '.body = ($body + "\n\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + .headRefOid + "\nNo findings.\n<!-- gaia:pr-review:end -->")' "$MGF_STUB_DIRECTORY/record.json" > "$MGF_STUB_DIRECTORY/record.next"
   mv "$MGF_STUB_DIRECTORY/record.next" "$MGF_STUB_DIRECTORY/record.json"
+  plant_current_review_record
+}
+
+# plant_current_review_record: the local record the merge gate requires, for
+# the recorded pull request's current head (the section above never stands in).
+plant_current_review_record() {
+  . "$REPO_ROOT/.gaia/tests/helpers/plant-review-record.sh"
+  plant_review_record "$(jq -r '.headRefName' "$MGF_STUB_DIRECTORY/record.json")" 12 "$(jq -r '.headRefOid' "$MGF_STUB_DIRECTORY/record.json")" "$REPO"
 }
 
 marker_cleared_app_pr() {
   mgf_commit "apps/web/app/x.ts" "export const x = 1"
   mgf_record 12 false "feat: x" "apps/web/app/x.ts"
   mgf_marker code-audit-frontend >/dev/null
+  plant_current_review_record
 }
 
 # bats test_tags=protected
