@@ -586,7 +586,7 @@ EOF
   expect fall 'git checkout main && git commit -m x'
 }
 
-# A variable is read as the literal an earlier, always-run segment assigned it,
+# A variable is read only as a latest assignment the shell is sure to have run,
 # so every git rule judges the command that will run.
 # bats test_tags=protected
 @test "a literal path variable allows where its value would, and any other expansion falls through" {
@@ -598,6 +598,8 @@ EOF
   expect fall "R=$FOREIGN; git -C \"\$R\" status"
   expect fall "true && R=$REPO; git -C \"\$R\" status"
   expect fall "R=$REPO | true; git -C \"\$R\" status"
+  expect fall "R=$REPO; true && R=$FOREIGN; git -C \"\$R\" status"
+  expect fall "R=$REPO; false || R=$FOREIGN; git -C \"\$R\" status"
   expect fall "R=$REPO; git -C \$R:h status"
   expect fall "R=$REPO; git -C \"\$R[1]\" status"
   expect fall "R='$REPO x'; git status"

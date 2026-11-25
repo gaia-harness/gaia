@@ -13,8 +13,9 @@
 #     newline or a pipe, with no background `&`, no redirect other than one that
 #     discards or duplicates a stream (`2>&1`, `2>/dev/null`), no substitution,
 #     no expansion (a backtick, a glob, a brace list, any `$` but `$?` outside a
-#     git segment and a variable an earlier segment assigned a literal outside
-#     a pipe and before any `&&`, `||` or pipe), no subshell, no
+#     git segment and a variable whose latest assignment, in an earlier
+#     segment, is a literal outside a pipe and before any `&&`, `||` or pipe),
+#     no subshell, no
 #     backslash and no comment outside single quotes. `git commit -F -` may read
 #     a heredoc whose delimiter is quoted, so its body never expands;
 #   - at least one segment begins with the bare word `git`, and every other

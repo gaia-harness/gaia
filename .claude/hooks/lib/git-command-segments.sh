@@ -18,10 +18,10 @@
 # through; `@{u}` and `HEAD^{tree}` hold neither and do not expand.
 #
 # The only expansions read are `$?`, kept as written since it expands to a
-# number, and a reference to a variable an earlier segment assigned a literal
-# outside a pipe and before any `&&`, `||` or pipe (expand_parameter_reference
-# below). A quoted
-# heredoc is dropped from its segment, the body unread; segment_heredocs marks
+# number, and a reference to a variable whose latest assignment, in an earlier
+# segment, is a literal outside a pipe and before any `&&`, `||` or pipe
+# (expand_parameter_reference below). A quoted heredoc is dropped from its
+# segment, the body unread; segment_heredocs marks
 # each segment that read one.
 # `assignment_names` and `assignment_values` hold the literal assignments read
 # so far, and the caller judges whether each assignment segment may run.
@@ -34,19 +34,25 @@ single_quoted_assignment_pattern="^([A-Za-z_][A-Za-z0-9_]*)='([A-Za-z0-9_./:@%+,
 # literal assignment that always runs, then note the operator that ends it. An
 # assignment counts only while every operator before it is `;` or a newline:
 # after `&&` or `||` it may not run, and in a pipe stage it runs in a subshell,
-# so a later reference would expand to something this walk never read. Reads
-# and sets the caller's locals by bash's dynamic scope.
+# so a later reference would expand to something this walk never read. Such an
+# assignment is recorded with an empty value, which no literal pattern matches,
+# so the name stays unreadable even after an earlier always-run assignment of
+# it. Reads and sets the caller's locals by bash's dynamic scope.
 finish_segment() {
   local text="$1" trimmed
   segments+=("$text")
   segment_heredocs+=("$heredoc"); heredoc=0
   trimmed="${text#"${text%%[![:space:]]*}"}"
   trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
-  if [ "$unconditional" -eq 1 ] && [ "$2" != '|' ] && { [[ "$trimmed" =~ $literal_assignment_pattern ]] \
+  if [[ "$trimmed" =~ $literal_assignment_pattern ]] \
        || [[ "$trimmed" =~ $double_quoted_assignment_pattern ]] \
-       || [[ "$trimmed" =~ $single_quoted_assignment_pattern ]]; }; then
+       || [[ "$trimmed" =~ $single_quoted_assignment_pattern ]]; then
     assignment_names+=("${BASH_REMATCH[1]}")
-    assignment_values+=("${BASH_REMATCH[2]}")
+    if [ "$unconditional" -eq 1 ] && [ "$2" != '|' ]; then
+      assignment_values+=("${BASH_REMATCH[2]}")
+    else
+      assignment_values+=("")
+    fi
   fi
   case "$2" in ';') ;; *) unconditional=0 ;; esac
 }
@@ -77,7 +83,8 @@ expand_parameter_reference() {
     position=$((position - 1))
     if [ "${assignment_names[$position]}" = "$name" ]; then
       parameter_value="${assignment_values[$position]}"
-      return 0
+      [ -n "$parameter_value" ]
+      return
     fi
   done
   return 1
