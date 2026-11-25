@@ -135,12 +135,25 @@
       "kind": "file",
       "scope": "shared",
       "keyed_by": "singleton per machine, one line per decision, each line keyed by its branch",
-      "why": "The decisions an unattended run took: the autonomy gate hook appends the recommended option it told Claude to take, with the session and branch, and the audit renders a branch's lines into its pull request body. Lives in the protected folder, so Claude tool writes to it are denied by block-audit-loop-write.sh.",
+      "why": "The decisions an unattended run took, with the session and branch: the recommended option the autonomy gate hook told Claude to take, each audit unit the audit loop bound hook spent from the autonomy budget, and each merge the PR merge gate allowed. The audit renders a branch's lines into its pull request body. Lives in the protected folder, so Claude tool writes to it are denied by block-audit-loop-write.sh.",
       "writer": "code",
       "retention": {
         "class": "branch-spent",
         "days": 7,
         "key": "line-branch"
+      }
+    },
+    {
+      "id": "audit-budget-spend",
+      "path": "protected/audit-budget/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "main-only",
+      "keyed_by": null,
+      "why": "The audit units an unattended run spent from the autonomy budget, one record per autonomy switch content, so a human rewrite of the switch starts a fresh budget. Kept rather than reaped per branch because the pool spans every branch. Written only by the audit loop bound hook; lives in the protected folder, so Claude tool writes to it are denied by block-audit-loop-write.sh.",
+      "writer": "code",
+      "retention": {
+        "class": "keep"
       }
     },
     {

@@ -376,6 +376,43 @@ assert_denied_class() {
   done
 }
 
+# bats test_tags=protected
+@test "the audit budget's spend record is never written by an edit tool, Bash or Monitor, and reading it is allowed" {
+  local row
+  local spend="$MAIN/.gaia/local/protected/audit-budget/0123abcd.json"
+  local worktree_spend="$WORKTREE/.gaia/local/protected/audit-budget/0123abcd.json"
+  mkdir -p "${spend%/*}"
+  local rows=(
+    "Write~$spend~~"
+    "Write~$worktree_spend~$WORKTREE~"
+    "Write~.gaia/local/protected/audit-budget/0123abcd.json~$WORKTREE~"
+    "MultiEdit~$spend~~"
+    "Bash~echo '{\"pool_spent\":0}' > $spend~~"
+    "Bash~printf '{}' >.gaia/local/protected/audit-budget/0123abcd.json~$WORKTREE~"
+    "Bash~jq -n '{pool_spent: 0}' | tee $worktree_spend~$WORKTREE~"
+    "Bash~mv /tmp/spend.json $spend~~"
+    "Bash~rm -f $spend~~"
+    "Bash~rm -rf ${spend%/*}~~"
+    "Monitor~echo '{}' > $spend~~"
+  )
+  for row in "${rows[@]}"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_denied_class 'Claude never creates, writes, edits, moves or deletes anything in it'
+  done
+  printf '{}' >"$spend"
+  echo "case: Edit of an existing spend record"
+  run_edit Edit "$worktree_spend" "$WORKTREE"
+  assert_denied_class 'Claude never creates, writes, edits, moves or deletes anything in it'
+  for row in "Bash~cat $spend~~" "Bash~jq . $worktree_spend~$WORKTREE~"; do
+    echo "case: $row"
+    parse_row "$row"
+    run_as "$row_tool" "$row_input" "$row_cwd"
+    assert_row_allowed
+  done
+}
+
 @test "writes to settings files and the opt-ins file are allowed" {
   local row
   local rows=(

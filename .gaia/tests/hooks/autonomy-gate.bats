@@ -293,7 +293,7 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
     .claude/commands/c.md apps/web/.claude/agents/a.md apps/web/.claude/skills/s/SKILL.md \
     apps/web/.claude/commands/c.md .gaia/local/protected/autonomy.json CLAUDE.md apps/web/CLAUDE.md \
     .gaia/autonomy-protected-paths.json .gaia/autonomy-human-only-headers.json .gaia/scripts/autonomy-lib.sh \
-    .gaia/scripts/autonomy-park.sh .gaia/scripts/main-root-lib.sh .gaia/scripts/audit-loop-state-lib.sh \
+    .gaia/scripts/autonomy-park.sh .gaia/scripts/main-root-lib.sh .gaia/scripts/audit-loop-state-lib.sh .gaia/scripts/audit-budget-lib.sh \
     CLAUDE.local.md apps/web/CLAUDE.local.md apps/web/.claude/settings.local.json; do
     autonomy_protected_match "$path" "$globs" || { echo "unmatched: $path"; return 1; }
   done
