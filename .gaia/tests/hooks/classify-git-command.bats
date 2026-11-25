@@ -671,6 +671,10 @@ EOF
   expect fall 'git status; jq env data.json'
   expect fall "git status; jq '\$ENV.TOKEN' data.json"
   expect fall "git status; jq '.x, env.TOKEN' data.json"
+  expect fall "git status; jq 'import \"secret\" as \$d {search: \"$FOREIGN\"}; \$d' data.json"
+  expect fall "git status; jq 'include \"secret\" {search: \"$FOREIGN\"}; .x' data.json"
+  expect fall "git status; jq 'modulemeta' data.json"
+  expect fall "git status; jq -L $FOREIGN '.x' data.json"
 }
 
 # bats test_tags=protected

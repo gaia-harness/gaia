@@ -145,9 +145,11 @@ reader_is_approved() {
     fi
     if [ "$text_first" = yes ] && [ "$text_seen" -eq 0 ]; then
       text_seen=1
-      # jq's `env` and `$ENV` print the environment, secrets included.
+      # jq's `env` and `$ENV` print the environment, secrets included, and
+      # `import "x" as $d {search: "/dir"}` reads a JSON file from any
+      # directory; a filter naming either falls through to the prompt.
       if [ "${words[0]}" = jq ]; then
-        case "$word" in *env* | *ENV*) return 1 ;; esac
+        case "$word" in *env* | *ENV* | *import* | *include* | *modulemeta*) return 1 ;; esac
       fi
       continue
     fi
