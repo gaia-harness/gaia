@@ -405,7 +405,7 @@ budget_answer() {
   fi
   while IFS= read -r spend_key_line; do spend_keys+=("$spend_key_line"); done < <(gaia_audit_budget_keys "$WORKING_STATE" "$BRANCH_KEY")
   spend_key="${spend_keys[0]}"
-  result=$(gaia_audit_budget_spend "$main" "${spend_keys[@]}") || status=$?
+  result=$(gaia_audit_budget_spend "$main" ${spend_keys[@]+"${spend_keys[@]}"}) || status=$?
   case "$status:$result" in
     0:spent\ *) ;;
     1:'refused no-budget')
