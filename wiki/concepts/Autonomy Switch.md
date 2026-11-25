@@ -8,7 +8,7 @@ tags: [concepts, autonomy]
 
 # Autonomy switch
 
-One file decides whether GAIA runs unattended, for example under `/loop`. Only a human writes it, from their own terminal, and Claude can't set it for itself. Autonomy is off by default: GAIA ships no switch file, and the maintainer repo reads it exactly as an adopter project does.
+One file decides whether GAIA runs unattended, for example under `/loop` ([[GAIA Next]]). Only a human writes it, from their own terminal, and Claude can't set it for itself. Autonomy is off by default: GAIA ships no switch file, and the maintainer repo reads it exactly as an adopter project does.
 
 ## The file
 
