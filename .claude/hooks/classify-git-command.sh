@@ -9,16 +9,18 @@
 # rules still apply after an allow.
 #
 # A command is approved only when every one of these holds:
-#   - its structure is a list of simple commands joined by `&&`, `||`, `;` or a
-#     newline, with no background `&`, no redirect other than one that discards
-#     or duplicates a stream (`2>&1`, `2>/dev/null`), no substitution, no
-#     expansion (`$`, a backtick, a glob, a brace list), no subshell, no
-#     backslash and no comment outside single quotes. Two exceptions: a command
-#     may end in one pipe into `head` or `tail` (with at most a numeric `-N` or
-#     `-n N`) or `wc -l`, and `git commit -F -` may read a heredoc whose
-#     delimiter is quoted, so its body never expands;
-#   - every segment begins with the bare word `git`: an env prefix, a wrapper,
-#     a path to git, or any other program falls through;
+#   - its structure is a list of simple commands joined by `&&`, `||`, `;`, a
+#     newline or a pipe, with no background `&`, no redirect other than one that
+#     discards or duplicates a stream (`2>&1`, `2>/dev/null`), no substitution,
+#     no expansion (a backtick, a glob, a brace list, any `$` but `$?` outside a
+#     git segment and a variable whose latest assignment, in an earlier
+#     segment, is a literal outside a pipe and before any `&&`, `||` or pipe),
+#     no subshell, no
+#     backslash and no comment outside single quotes. `git commit -F -` may read
+#     a heredoc whose delimiter is quoted, so its body never expands;
+#   - at least one segment begins with the bare word `git`, and every other
+#     segment is one lib/compound-segment-programs.sh approves: a git segment
+#     with an env prefix, a wrapper or a path to git falls through;
 #   - its global options are only `-C <directory>` (once), `-c <key>=<value>`
 #     for a key on the safe list in lib/git-command-config.sh, `--no-pager`,
 #     `-P` and `--no-optional-locks`;
@@ -30,9 +32,11 @@
 #     its fall-through options;
 #   - neither the destructive-git guard's history and command-config rules nor
 #     the branch questions main_branch_rule_matches reads (a superset of the
-#     guard's main-branch and hard-reset rules) match the segment; the guard's
-#     peer-session checkout rule is left to that hook, whose deny beats this
-#     allow.
+#     guard's main-branch and hard-reset rules) match the segment, with every
+#     variable read as its assigned literal; the guard's peer-session checkout
+#     rule is left to that hook, whose deny beats this allow, except that the
+#     guard reads the raw text and cannot see a variable, so a checkout or
+#     switch segment that expanded one falls through here.
 #
 # Fail to fall-through, never fail to allow: a missing library, a missing jq, a
 # parse this file cannot finish, and every form not listed above exit 0 with no
@@ -81,21 +85,14 @@ case "$command" in git | git[[:space:]]* | *[[:space:]]git[[:space:]]* | *[\;\&\
 . "$library_directory/git-allow-list.sh" 2>/dev/null || exit 0
 # shellcheck source=lib/git-command-segments.sh
 . "$library_directory/git-command-segments.sh" 2>/dev/null || exit 0
+# shellcheck source=lib/compound-segment-programs.sh
+. "$library_directory/compound-segment-programs.sh" 2>/dev/null || exit 0
 for required_function in parse_git_globals history_rule_reason command_config_rule_reason \
     _history_option_is push_refspec_names_main push_refspec_targets_main reset_hard_moves_head \
-    gaia_resolve_common_directory split_command_segments; do
+    gaia_resolve_common_directory split_command_segments in_this_repository non_git_segment_is_approved; do
   type "$required_function" >/dev/null 2>&1 || exit 0
 done
 [ "${#GAIA_GIT_ALLOWED_SUBCOMMANDS[@]}" -gt 0 ] && [ "${#GAIA_GIT_SAFE_CONFIG_KEYS[@]}" -gt 0 ] || exit 0
-
-# in_this_repository <directory>: 0 when git run in <directory> discovers the
-# repository this hook belongs to, through any of its checkouts.
-in_this_repository() {
-  local own given
-  own=$(gaia_resolve_common_directory "$hook_root" 2>/dev/null) || return 1
-  given=$(gaia_resolve_common_directory "$1" 2>/dev/null) || return 1
-  [ -n "$own" ] && [ "$own" = "$given" ]
-}
 
 # globals_are_approved: 0 when every global option of the segment
 # parse_git_globals just read is one this file vouches for. Sets
@@ -195,6 +192,9 @@ checkout_names_pathspec() {
   for argument in ${git_args[@]+"${git_args[@]}"}; do
     case "$argument" in
       --) return 0 ;;
+      # `--path*` is any unambiguous prefix of --pathspec-from-file and
+      # --pathspec-file-nul, which read the pathspec from a file or stdin.
+      --path*) return 0 ;;
       --orphan | --orphan=*) allowed=2 ;;
       --*) ;;
       -*[bB]*) allowed=2 ;;
@@ -207,8 +207,8 @@ checkout_names_pathspec() {
 
 # main_branch_rule_matches: 0 when the segment must not be approved on a branch
 # question: a commit-creating subcommand from main or master (or from a branch
-# an earlier checkout, switch or symbolic-ref segment of this command may have
-# changed, since HEAD is read once before any segment runs), a push whose
+# an earlier checkout, switch, symbolic-ref or settings-rule segment of this
+# command may have changed, since HEAD is read once before any segment runs), a push whose
 # refspec names main as source or destination, a hard reset that moves HEAD, or
 # a fetch or pull refspec or --refmap, whose destination can force-move local
 # main, or, from main, a reset or a pull naming a branch, which moves it onto
@@ -262,54 +262,6 @@ option_matches() {
       return 1 ;;
   esac
   return 1
-}
-
-# config_is_read_only: 0 when the `git config` operands write nothing.
-config_is_read_only() {
-  local argument lowered operand_count=0 skip_next=0 read_flag=0
-  for argument in ${git_args[@]+"${git_args[@]}"}; do
-    if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
-    lowered=$(printf '%s' "$argument" | tr '[:upper:]' '[:lower:]')
-    case "$lowered" in
-      --*=*) ;;
-      --*) if _history_option_is "$lowered" --comment; then skip_next=1; continue; fi ;;
-    esac
-    if _history_option_is "$lowered" --unset --unset-all --add --replace-all \
-         --rename-section --remove-section --edit || [ "$lowered" = -e ]; then
-      return 1
-    fi
-    if _history_option_is "$lowered" --get --get-all --get-regexp --get-urlmatch --list \
-         || [ "$lowered" = -l ]; then
-      read_flag=1; continue
-    fi
-    case "$lowered" in
-      --file | -f | --blob | --default | --type) skip_next=1; continue ;;
-      -*) continue ;;
-    esac
-    operand_count=$((operand_count + 1))
-    if [ "$operand_count" -eq 1 ]; then
-      case "$lowered" in
-        get | list) read_flag=1; continue ;;
-        set | unset | rename-section | remove-section | edit) return 1 ;;
-      esac
-    fi
-  done
-  [ "$read_flag" -eq 1 ] && return 0
-  [ "$operand_count" -le 1 ]
-}
-
-# remote_is_read_only: 0 for `git remote` with no operand, `get-url` or `show`,
-# each optionally after `-v`. Any other word is a write subcommand.
-remote_is_read_only() {
-  local argument
-  for argument in ${git_args[@]+"${git_args[@]}"}; do
-    case "$argument" in
-      -v | --verbose) continue ;;
-      get-url | show) return 0 ;;
-    esac
-    return 1
-  done
-  return 0
 }
 
 # subcommand_is_approved: 0 when the segment's subcommand is on the allow list
@@ -366,7 +318,15 @@ for segment_index in "${!segments[@]}"; do
   segment="${segments[$segment_index]}"
   segment="${segment#"${segment%%[![:space:]]*}"}"
   [ -n "$segment" ] || continue
-  case "$segment" in git | git[[:space:]]*) ;; *) exit 0 ;; esac
+  case "$segment" in
+    git | git[[:space:]]*) ;;
+    *)
+      [ "${segment_heredocs[$segment_index]}" = 0 ] && non_git_segment_is_approved "$segment" || exit 0
+      [ "$segment_runs_program" -eq 0 ] || branch_may_have_changed=1
+      continue ;;
+  esac
+  # `$?` reads as text to the git word parser, so a git segment carrying it falls through.
+  case "$segment" in *'$?'*) exit 0 ;; esac
   parse_git_globals "$segment"
   [ -n "$git_subcommand" ] || exit 0
   if [ "${segment_heredocs[$segment_index]}" = 1 ]; then commit_reads_stdin || exit 0; fi
@@ -379,6 +339,7 @@ for segment_index in "${!segments[@]}"; do
   [ -z "$history_reason" ] || exit 0
   main_branch_rule_matches && exit 0
   case "$git_subcommand" in checkout | switch | symbolic-ref) branch_may_have_changed=1 ;; esac
+  case "$git_subcommand" in checkout | switch) [ "${segment_expansions[$segment_index]}" = 0 ] || exit 0 ;; esac
   approved=1
 done
 [ "$approved" -eq 1 ] || exit 0
@@ -387,7 +348,7 @@ jq -n '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "allow",
-    permissionDecisionReason: "classify-git-command.sh: every segment is a listed git command in this repository"
+    permissionDecisionReason: "classify-git-command.sh: every git segment is a listed git command in this repository and every other segment approved"
   }
 }'
 exit 0
