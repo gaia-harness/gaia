@@ -175,6 +175,7 @@
     ".claude/skills/gaia/references/isolation.md": "owned",
     ".claude/skills/gaia/references/plan.md": "owned",
     ".claude/skills/gaia/references/plan/decomposition-audit.md": "owned",
+    ".claude/skills/gaia/references/plan/orchestrator-template.md": "owned",
     ".claude/skills/gaia/references/plan/planner.md": "owned",
     ".claude/skills/gaia/references/residue.md": "owned",
     ".claude/skills/gaia/references/security-writer.md": "owned",
@@ -411,6 +412,8 @@
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
     ".gaia/scripts/spec/ledger-update.sh": "owned",
     ".gaia/scripts/spec/lint.sh": "owned",
+    ".gaia/scripts/spec/orchestrator-render-lib.sh": "owned",
+    ".gaia/scripts/spec/orchestrator-render.sh": "owned",
     ".gaia/scripts/spec/page-use-fixtures.mjs": "owned",
     ".gaia/scripts/spec/page-use.mjs": "owned",
     ".gaia/scripts/spec/plan-allocator.sh": "owned",
@@ -427,6 +430,7 @@
     ".gaia/scripts/spec/spec-save.sh": "owned",
     ".gaia/scripts/spec/spec-session-lock.sh": "owned",
     ".gaia/scripts/spec/test-stage-check.mjs": "owned",
+    ".gaia/scripts/spec/test-stage-digest.mjs": "owned",
     ".gaia/scripts/spec/title-normalize.sh": "owned",
     ".gaia/scripts/spec/with-ledger-lock.sh": "owned",
     ".gaia/scripts/spec/working-doc-id-scan.sh": "owned",
@@ -856,6 +860,7 @@
     "wiki/decisions/pnpm.md": "wiki-owned",
     "wiki/decisions/Quality Gate.md": "wiki-owned",
     "wiki/decisions/React Compiler.md": "wiki-owned",
+    "wiki/decisions/Rendered Plan Orchestrator And Test-stage Lens Digest.md": "wiki-owned",
     "wiki/decisions/shadcn Component Layer.md": "wiki-owned",
     "wiki/decisions/Shared Codify Declines.md": "wiki-owned",
     "wiki/decisions/Spec And Plan Without Test Design.md": "wiki-owned",
@@ -922,7 +927,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-25T01:43:20.586Z",
+  "generated": "2026-11-25T02:32:31.677Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

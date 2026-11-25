@@ -2,11 +2,11 @@
 #
 # Doc-conformance suite for the plan orchestrator's phase gate retry.
 #
-# .claude/skills/gaia/references/plan/planner.md holds the gate-retry step
-# block a planner copies into a generated ORCHESTRATOR.md, the executor's
-# self-check in the task prompt template, the Stop conditions halt question,
-# the resume detection's dirty-tree question and the ledger record the retry
-# writes. A model executes that text, so an
+# .claude/skills/gaia/references/plan/orchestrator-template.md holds the
+# gate-retry step block the renderer emits into a generated ORCHESTRATOR.md,
+# the executor's self-check in the task prompt template, the Stop conditions
+# halt question, the resume detection's dirty-tree question and the ledger
+# record the retry writes. A model executes that text, so an
 # edit that drops one clause (the attribution rule, the per-kind cap,
 # the conservative first option, the resume-time dirty-tree question) would
 # ship silently. This suite pins each clause, and drives plan-resume-point.sh
@@ -19,8 +19,9 @@
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
+  TEMPLATE_REL=".claude/skills/gaia/references/plan/orchestrator-template.md"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
+  PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
   S_RETRY='<!-- gaia:orchestrator-step gate-retry -->'
 }
 
@@ -86,12 +87,12 @@ record_lines() {
     inside { print }'
 }
 
-retry_block() { fence_with "$1/$PLANNER_REL" "$S_RETRY" | trim_lines; }
-invocation_range() { range_of "$1/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | trim_lines; }
-ledger_range() { range_of "$1/$PLANNER_REL" '**Phase findings ledger (' '- **Stop conditions.**' | trim_lines; }
-stop_range() { range_of "$1/$PLANNER_REL" '- **Stop conditions.**' '- **Final summary.**' | trim_lines; }
-resume_range() { range_of "$1/$PLANNER_REL" '**Resume detection (cold-start' '- **Pre-flight isolation.**' | trim_lines; }
-summary_range() { grep -F -- '- **Final summary.**' "$1/$PLANNER_REL" | trim_lines; }
+retry_block() { fence_with "$1/$TEMPLATE_REL" "$S_RETRY" | trim_lines; }
+invocation_range() { range_of "$1/$TEMPLATE_REL" '## Sub-agent invocation' '## Orchestrator-owned git flow' | trim_lines; }
+ledger_range() { range_of "$1/$TEMPLATE_REL" '## Phase findings ledger' '## Stop conditions' | trim_lines; }
+stop_range() { range_of "$1/$TEMPLATE_REL" '## Stop conditions' '## Simplify pass' | trim_lines; }
+resume_range() { range_of "$1/$TEMPLATE_REL" '**Resume detection (cold-start' '## Pre-flight isolation' | trim_lines; }
+summary_range() { range_of "$1/$TEMPLATE_REL" '## Final summary' '**The merge question.**' | trim_lines; }
 
 green() {
   run "$1" "$REPO_ROOT"
@@ -176,7 +177,7 @@ check_retry_redispatch() {
 
 check_yield_opt_in_excepts_retry() {
   local block
-  block="$(fence_with "$1/$PLANNER_REL" '<!-- gaia:orchestrator-step yield-handling -->' | trim_lines)"
+  block="$(fence_with "$1/$TEMPLATE_REL" '<!-- gaia:orchestrator-step yield-handling -->' | trim_lines)"
   need_text 'yield-handling block' "$block" || return 1
   in_order "$block" 'Every task executor dispatch except a phase gate retry opts into the sub-agent context checkpoint' || return 1
 }
@@ -251,15 +252,19 @@ check_in_phase_arm() {
     '- **Re-run the gate.** Once every re-dispatched executor returns, including a cause owner'"'"'s,' || return 1
 }
 
-# The planner never writes a gate's retry or halt rule into a step of its own:
-# an improvised "not retryable" sentence contradicts the gate-retry block.
+# The gate-retry block alone owns which gate failures retry: every other
+# failure halts under Stop conditions, and Stop conditions defers to the retry.
 check_step_owns_no_retry() {
-  local line
-  line="$(grep -F -- '- **Phase gate retry.**' "$1/$PLANNER_REL" | trim_lines)"
-  need_text 'gate-retry placement line' "$line" || return 1
-  in_order "$line" \
-    'A plan step never states its own retry or halt rule for a gate failure; the gate-retry block owns which failures retry.' \
-    'Place this block inside the phase loop' || return 1
+  local block range
+  block="$(retry_block "$1")"
+  need_text 'gate-retry block' "$block" || return 1
+  in_order "$block" \
+    'Any other gate failure halts under Stop conditions with no retry.' || return 1
+  range="$(stop_range "$1")"
+  need_text 'Stop conditions' "$range" || return 1
+  in_order "$range" 'a quality-gate failure the phase gate retry does not settle' || return 1
+  in_order "$(trim_lines <"$1/$PLANNER_REL")" \
+    'A phase entry never states its own retry or halt rule for a gate failure; the fixed gate-retry block owns which failures retry.' || return 1
 }
 
 check_executor_self_check() {
@@ -268,10 +273,10 @@ check_executor_self_check() {
   need_text 'executor template range' "$range" || return 1
   in_order "$range" \
     'the project'"'"'s typecheck script or route typegen' \
-    '**The prompt template MUST also require a typecheck of the sub-agent'"'"'s own work before it returns**' \
+    'Typecheck your own work before you return' \
     'in a wave of one task, `pnpm -C <package dir> typecheck`' \
     'in a wave of more than one, `pnpm -C <package dir> exec tsc --noEmit`' \
-    'in either wave the sub-agent acts only on errors in files its task owns' \
+    'In either wave act only on errors in files your task owns' \
     'goes under `### Findings`' || return 1
 }
 
@@ -374,7 +379,7 @@ resume_point() {
   green check_in_phase_arm
 }
 
-@test "a plan step never states its own retry or halt rule for a gate failure" {
+@test "the gate-retry block alone owns which gate failures retry, every other failure halting" {
   green check_step_owns_no_retry
 }
 

@@ -29,7 +29,7 @@ setup() {
   GATED=(
     "$REFERENCES/spec.md|/gaia-spec|### 3. Allocate, anchor, stamp|spec-allocator.sh next|exit code"
     "$REFERENCES/plan.md|/gaia-plan|### 0. Pre-flight sweep|plan-allocator.sh next|exit code"
-    "$REFERENCES/plan/planner.md|/gaia-plan|**Resume detection (cold-start|**Pre-flight isolation.** The generated|non-zero exit"
+    "$REFERENCES/plan/orchestrator-template.md|/gaia-plan|**Resume detection (cold-start|## Pre-flight isolation|non-zero exit"
     ".claude/commands/gaia-debt.md|/gaia-debt|$REFUSAL|$DISPATCH|exit code"
     ".claude/commands/gaia-codify.md|/gaia-codify|$REFUSAL|$DISPATCH|exit code"
     ".claude/commands/gaia-cleanse.md|/gaia-cleanse|$REFUSAL|$DISPATCH|exit code"

@@ -19,7 +19,7 @@ setup() {
   SCRIPT="$REPO_ROOT_REAL/.gaia/scripts/spec/plan-verify.sh"
   PLAN="$BATS_TEST_TMPDIR/plan"
   SPEC="$BATS_TEST_TMPDIR/SPEC.md"
-  PLANNER_MD="$REPO_ROOT_REAL/.claude/skills/gaia/references/plan/planner.md"
+  TEMPLATE_MD="$REPO_ROOT_REAL/.claude/skills/gaia/references/plan/orchestrator-template.md"
   mkdir -p "$PLAN"
   S_RESUME='<!-- gaia:orchestrator-step resume-detection -->'
   S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
@@ -86,8 +86,8 @@ flow_readme() {
 EOF2
 }
 
-# block_of <sentinel> [<indent>]: the block that sentinel opens, as the planner
-# file in BLOCK_SOURCE (default planner.md) holds it, re-indented to <indent>
+# block_of <sentinel> [<indent>]: the block that sentinel opens, as the template
+# file in BLOCK_SOURCE (default the orchestrator template) holds it, re-indented to <indent>
 # spaces, with the plan-directory and SPEC-path placeholders replaced by this
 # fixture's values.
 block_of() {
@@ -105,7 +105,7 @@ block_of() {
       line = $0
       sub(/^ {6}/, "", line)
       buffer = buffer (line == "" ? "" : pad line) "\n"
-    }' "${BLOCK_SOURCE:-$PLANNER_MD}")"
+    }' "${BLOCK_SOURCE:-$TEMPLATE_MD}")"
   [ -n "$block" ] || return 1
   block="${block//\{PLAN_DIR\}/$PLAN}"
   printf '%s\n' "${block//\{SPEC_PATH\}/$SPEC}"
@@ -243,7 +243,7 @@ refusal_line() {
 }
 
 # copy_script_tree <root>: a tree holding plan-verify.sh and the libraries and
-# registry it reads, so a case can give it its own planner.md.
+# registry it reads, so a case can give it its own template.
 copy_script_tree() {
   local relative
   rm -rf "$1"
@@ -282,11 +282,11 @@ mutate_orchestrator() {
   awk -v plan="$PLAN" "$1" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new" && mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
 }
 
-# marker_tree <planner file>: a script tree whose planner.md is the given file.
+# marker_tree <template file>: a script tree whose orchestrator template is the given file.
 marker_tree() {
   MARKER_TREE="$BATS_TEST_TMPDIR/tree"
   copy_script_tree "$MARKER_TREE"
-  cp "$1" "$MARKER_TREE/.claude/skills/gaia/references/plan/planner.md"
+  cp "$1" "$MARKER_TREE/.claude/skills/gaia/references/plan/orchestrator-template.md"
 }
 
 # strip_marked <in> <out>: the file with each maintainer-only marker pair and
@@ -300,7 +300,7 @@ strip_marked() {
 }
 
 # append_after_sentinel <sentinel>: the first non-blank line after the sentinel
-# line gets extra words, so that block no longer matches planner.md.
+# line gets extra words, so that block no longer matches the template.
 append_after_sentinel() {
   awk -v sentinel="$1" '
     { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) }
@@ -419,7 +419,7 @@ assert_out_of_order() {
     append_after_sentinel "$S_SECWRITER"
     verify_arm "$arm"
     [ "$status" -eq 1 ] || { echo "$arm paraphrase exited $status" >&2; return 1; }
-    grep -qF 'the security-writer block does not match planner.md' <<<"$output" || { echo "$arm: $output" >&2; return 1; }
+    grep -qF "the security-writer block does not match the template's copy" <<<"$output" || { echo "$arm: $output" >&2; return 1; }
   done
 }
 
@@ -441,7 +441,7 @@ assert_out_of_order() {
   done
 }
 
-@test "plan-verify fails a verbatim block that differs from planner.md and names the line and block: a reworded sentence, a dropped line, a cut-short block, a leftover placeholder, a missing fenced block, a reworded dirty-tree option, a dropped flow-checks target" {
+@test "plan-verify fails a verbatim block that differs from the template and names the line and block: a reworded sentence, a dropped line, a cut-short block, a leftover placeholder, a missing fenced block, a reworded dirty-tree option, a dropped flow-checks target" {
   local line tree entry name from to arm before
   spec_fixture
   awk -v flow="$S_FLOW" '
@@ -454,7 +454,7 @@ assert_out_of_order() {
   [ -n "$line" ] || { echo 'the flow-checks block holds no flow-coverage.sh line' >&2; return 1; }
   verify_spec
   [ "$status" -eq 1 ]
-  refusal_line "ORCHESTRATOR.md:$line:" 'the flow-checks block does not match planner.md'
+  refusal_line "ORCHESTRATOR.md:$line:" "the flow-checks block does not match the template's copy"
 
   spec_less_fixture
   mutate_orchestrator '/^[[:space:]]*Sibling executors in the same wave/ { sub(/continue unaffected/, "carry on regardless") } { print }'
@@ -462,13 +462,13 @@ assert_out_of_order() {
   verify_spec_less
   [ "$status" -eq 1 ]
   line="$(grep -nF 'carry on regardless' "$PLAN/ORCHESTRATOR.md" | cut -d: -f1)"
-  echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF "yield-handling block does not match planner.md"
+  echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF "yield-handling block does not match the template's copy"
 
   spec_less_fixture
   mutate_orchestrator '/^[[:space:]]*Each task keeps its own yield count/ { next } { print }'
   verify_spec_less
   [ "$status" -eq 1 ]
-  echo "$output" | grep -qF "yield-handling block does not match planner.md"
+  echo "$output" | grep -qF "yield-handling block does not match the template's copy"
 
   spec_less_fixture
   {
@@ -478,27 +478,29 @@ assert_out_of_order() {
   printf '%s\n%s\n' "$S_WIKI" "$S_CLOSE" >>"$PLAN/ORCHESTRATOR.md"
   verify_spec_less
   [ "$status" -eq 1 ]
-  echo "$output" | grep -qF "yield-handling block does not match planner.md"
+  echo "$output" | grep -qF "yield-handling block does not match the template's copy"
 
   spec_less_fixture
   mutate_orchestrator '{ while ((i = index($0, plan)) > 0) $0 = substr($0, 1, i - 1) "{PLAN_DIR}" substr($0, i + length(plan)) } { print }'
   grep -qF '{PLAN_DIR}' "$PLAN/ORCHESTRATOR.md"
   verify_spec_less
   [ "$status" -eq 1 ]
-  echo "$output" | grep -qF "yield-handling block does not match planner.md"
+  echo "$output" | grep -qF "yield-handling block does not match the template's copy"
   echo "$output" | grep -qF 'unsubstituted placeholder {PLAN_DIR}'
 
   tree="$BATS_TEST_TMPDIR/tree"
   copy_script_tree "$tree"
-  grep -vE '^[[:space:]]*```' "$PLANNER_MD" >"$tree/.claude/skills/gaia/references/plan/planner.md"
+  grep -vE '^[[:space:]]*```' "$TEMPLATE_MD" >"$tree/.claude/skills/gaia/references/plan/orchestrator-template.md"
   spec_less_fixture
   run bash "$tree/.gaia/scripts/spec/plan-verify.sh" "$PLAN"
   [ "$status" -eq 1 ]
-  echo "$output" | grep -F 'planner.md' | grep -qF 'no fenced resume-detection block'
-  rm "$tree/.claude/skills/gaia/references/plan/planner.md"
+  echo "$output" | grep -F 'orchestrator template' | grep -qF 'no fenced resume-detection block'
+  rm "$tree/.claude/skills/gaia/references/plan/orchestrator-template.md"
   run bash "$tree/.gaia/scripts/spec/plan-verify.sh" "$PLAN"
   [ "$status" -eq 1 ]
-  echo "$output" | grep -F 'planner.md' | grep -qF 'no fenced resume-detection block'
+  [ "$(grep -c 'the orchestrator template is missing' <<<"$output")" -eq 1 ]
+  grep -qF 'block does not match' <<<"$output" && return 1
+  grep -qF 'no fenced' <<<"$output" && return 1
 
   for entry in \
     'wiki-promotion|no re-consolidation|maybe re-consolidation' \
@@ -516,7 +518,7 @@ assert_out_of_order() {
     [ -n "$line" ] || { echo "'$from' is not in the $name block" >&2; return 1; }
     verify_spec
     [ "$status" -eq 1 ] || { echo "$name reworded exited $status" >&2; return 1; }
-    echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF "$name block does not match planner.md" || { echo "$name: $output" >&2; return 1; }
+    echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF "$name block does not match the template's copy" || { echo "$name: $output" >&2; return 1; }
   done
 
   for arm in spec spec_less; do
@@ -526,7 +528,7 @@ assert_out_of_order() {
     [ -n "$line" ] || { echo 'the dirty-tree option is not in the resume-detection block' >&2; return 1; }
     verify_arm "$arm"
     [ "$status" -eq 1 ] || return 1
-    echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF 'resume-detection block does not match planner.md' || { echo "$arm: $output" >&2; return 1; }
+    echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF "resume-detection block does not match the template's copy" || { echo "$arm: $output" >&2; return 1; }
   done
 
   spec_fixture
@@ -536,7 +538,7 @@ assert_out_of_order() {
   line="$(grep -nF -m1 -- 'M+1' "$PLAN/ORCHESTRATOR.md" | cut -d: -f1)"
   verify_spec
   [ "$status" -eq 1 ] || return 1
-  echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF 'resume-detection block does not match planner.md' || { echo "$output" >&2; return 1; }
+  echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF "resume-detection block does not match the template's copy" || { echo "$output" >&2; return 1; }
 }
 
 @test "plan-verify matches an indented sentinel, a block copied as the planner indents it and a trailing tab, and does not match a sentinel line carrying trailing prose" {
@@ -578,12 +580,12 @@ assert_out_of_order() {
   echo "$output" | grep -qF 'task-*.md'
 }
 
-# The planner substitutes the absolute values for these tokens in every file it
+# The renderer substitutes the absolute values for these tokens in every file it
 # writes; a surviving token sends a cold orchestrator to a literal brace path.
-@test "plan-verify fails naming the file and token for each unsubstituted placeholder in a generated plan file (both arms, one line each) and ignores files the planner does not generate" {
+@test "plan-verify fails naming the file and token for each unsubstituted placeholder in a generated plan file (both arms, one line each) and ignores files the renderer does not generate" {
   local token file
   for file in ORCHESTRATOR.md KICKOFF.md README.md task-one.md; do
-    for token in '{PLAN_DIR}' '{SPEC_PATH}' '{AUDIT_PATH}'; do
+    for token in '{PLAN_DIR}' '{SPEC_PATH}' '{AUDIT_PATH}' '{BRANCH_ID}'; do
       spec_less_fixture
       printf 'Read %s/README.md first.\n' "$token" >>"$PLAN/$file"
       verify_spec_less
@@ -612,15 +614,15 @@ assert_out_of_order() {
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
-@test "plan-verify honours maintainer-only marked pairs: a plan copying a marked pair passes, a stripped planner passes with stripped blocks, a plan that dropped the pair its planner keeps fails naming the line" {
-  local stripped="$BATS_TEST_TMPDIR/planner-stripped.md"
+@test "plan-verify honours maintainer-only marked pairs: a plan copying a marked pair passes, a stripped template passes with stripped blocks, a plan that dropped the pair its template keeps fails naming the line" {
+  local stripped="$BATS_TEST_TMPDIR/template-stripped.md"
   spec_fixture
   grep -qF 'gaia:maintainer-only:start' "$PLAN/ORCHESTRATOR.md"
-  marker_tree "$PLANNER_MD"
+  marker_tree "$TEMPLATE_MD"
   run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 
-  strip_marked "$PLANNER_MD" "$stripped"
+  strip_marked "$TEMPLATE_MD" "$stripped"
   grep -qF 'gaia:maintainer-only:start' "$stripped" && return 1
   BLOCK_SOURCE="$stripped"
   spec_fixture
@@ -629,10 +631,43 @@ assert_out_of_order() {
   run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 
-  marker_tree "$PLANNER_MD"
+  marker_tree "$TEMPLATE_MD"
   run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
   [ "$status" -eq 1 ]
-  echo "$output" | grep -E 'ORCHESTRATOR.md:[0-9]+:' | grep -qF 'block does not match planner.md'
+  echo "$output" | grep -E 'ORCHESTRATOR.md:[0-9]+:' | grep -qF "block does not match the template's copy"
+}
+
+@test "names the template in its header and on a block mismatch, fails once when it is missing, passes a plan rendered from a release-scrubbed template, and the moved sections are in the template and absent from planner.md" {
+  local stripped="$BATS_TEST_TMPDIR/template-stripped.md" line sentinel
+  [ "$(grep -c 'planner.md' "$SCRIPT")" -eq 0 ]
+  sed -n '1,25p' "$SCRIPT" | grep -qF 'orchestrator-template.md'
+
+  spec_fixture
+  append_after_sentinel "$S_AUDIT"
+  verify_spec
+  [ "$status" -eq 1 ]
+  line="$(echo "$output" | grep -E 'ORCHESTRATOR.md:[0-9]+:' | grep -F 'code-audit block does not match the template' | head -n1)"
+  [ -n "$line" ] || { echo "$output" >&2; return 1; }
+
+  marker_tree "$TEMPLATE_MD"
+  rm "$MARKER_TREE/.claude/skills/gaia/references/plan/orchestrator-template.md"
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 1 ]
+  [ "$(grep -c 'the orchestrator template is missing' <<<"$output")" -eq 1 ]
+  grep -qF 'block does not match' <<<"$output" && return 1
+
+  strip_marked "$TEMPLATE_MD" "$stripped"
+  BLOCK_SOURCE="$stripped"
+  spec_fixture
+  marker_tree "$stripped"
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+
+  for sentinel in "${SPEC_ORDER[@]}"; do
+    grep -qxF -- "$sentinel" "$TEMPLATE_MD" || { echo "template lacks $sentinel" >&2; return 1; }
+  done
+
+  [ "$(grep -cF 'gaia:orchestrator-step' "$REPO_ROOT_REAL/.claude/skills/gaia/references/plan/planner.md")" -eq 0 ]
 }
 
 @test "plan-verify checks a spec-derived plan's flow lines: each flow has exactly one task line with the expected path and runner in the last phase, a command flow path matches test_path, no unknown flow ids, every task stem names exactly one README phase row, a uats SPEC is refused, and every refusal is reported in one run (a spec-less plan is not asked)" {

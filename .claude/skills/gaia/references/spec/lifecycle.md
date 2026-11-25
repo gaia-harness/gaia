@@ -1,6 +1,6 @@
 # SPEC and plan lifecycle procedures
 
-The procedures a generated `ORCHESTRATOR.md` and both pre-flights point at. `.claude/skills/gaia/references/plan/planner.md` owns the order of the orchestrator's steps and the verbatim blocks a planner copies; this page owns what each step does. Every command runs from the directory each section names, with the placeholders the orchestrator holds: `<SPEC_PATH>` (the absolute, main-anchored `SPEC.md`, stored in the main checkout: the clone's primary working directory, on any branch), `<PLAN_DIR>` (the absolute, main-anchored plan folder), `<RESOLVED_ROOT>` (the working copy the isolation reference resolved) and `<N>` (the PR number).
+The procedures a generated `ORCHESTRATOR.md` and both pre-flights point at. `.claude/skills/gaia/references/plan/orchestrator-template.md` owns the order of the orchestrator's steps and the verbatim blocks, and `orchestrator-render.sh` writes them; this page owns what each step does. Every command runs from the directory each section names, with the placeholders the orchestrator holds: `<SPEC_PATH>` (the absolute, main-anchored `SPEC.md`, stored in the main checkout: the clone's primary working directory, on any branch), `<PLAN_DIR>` (the absolute, main-anchored plan folder), `<RESOLVED_ROOT>` (the working copy the isolation reference resolved) and `<N>` (the PR number).
 
 Contents: Pre-audit flow checks; Consolidation; Post-merge close; Pre-flight sweep.
 
@@ -19,7 +19,7 @@ bash .gaia/scripts/spec/flow-coverage.sh --spec <SPEC_PATH> --root <RESOLVED_ROO
 - Exit 2: a usage error or a refused SPEC (a `uats:` key, or no `flows:`); the block halts.
 - Exit 3: an operational failure, such as a Playwright listing that could not run; the block halts.
 
-The fixer, the retry bound of one and the `## Flow checks (HALTED)` record are the `flow-checks` block's, in `.claude/skills/gaia/references/plan/planner.md`. A failure here is a HALT, never an audit finding to fix inside a fix round.
+The fixer, the retry bound of one and the `## Flow checks (HALTED)` record are the `flow-checks` block's, in `.claude/skills/gaia/references/plan/orchestrator-template.md`. A failure here is a HALT, never an audit finding to fix inside a fix round.
 
 ## Consolidation
 

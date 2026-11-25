@@ -89,13 +89,14 @@ security_writer_check() {
   done
 }
 
-# The planner substitutes absolute values for these tokens in every file it
-# writes; one left behind sends a cold orchestrator to a literal brace path.
+# The planner (README.md, task docs) and the renderer (ORCHESTRATOR.md,
+# KICKOFF.md) substitute absolute values for these tokens; one left behind
+# sends a cold orchestrator to a literal brace path.
 placeholder_check() {
   local generated_file placeholder hit_line
   for generated_file in "$readme" "$orchestrator" "$plan_directory/KICKOFF.md" ${task_files[@]+"${task_files[@]}"}; do
     [ -f "$generated_file" ] || continue
-    for placeholder in '{PLAN_DIR}' '{SPEC_PATH}' '{AUDIT_PATH}'; do
+    for placeholder in '{PLAN_DIR}' '{SPEC_PATH}' '{AUDIT_PATH}' '{BRANCH_ID}'; do
       while IFS=: read -r hit_line _; do
         [ -n "$hit_line" ] || continue
         fail "$(basename "$generated_file"):$hit_line holds the unsubstituted placeholder $placeholder"

@@ -2,8 +2,9 @@
 #
 # Doc-conformance suite for the two dispatch lines the sub-agent context
 # checkpoint hook (.claude/hooks/context-checkpoint-subagent.sh) parses: the
-# executor prompt template in .claude/skills/gaia/references/plan/planner.md
-# and the planner dispatch fence in .claude/skills/gaia/references/plan.md must
+# executor prompt template in
+# .claude/skills/gaia/references/plan/orchestrator-template.md and the planner
+# dispatch fence in .claude/skills/gaia/references/plan.md must
 # each end with a `Yield handoff: <path>` line in the dispatcher's shape, or
 # the hook never sees the opt-in.
 #
@@ -11,7 +12,7 @@
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
+  TEMPLATE_REL=".claude/skills/gaia/references/plan/orchestrator-template.md"
   PLAN_REL=".claude/skills/gaia/references/plan.md"
 }
 
@@ -52,11 +53,11 @@ need_text() {
 
 check_executor_template_yield_line() {
   local range
-  range="$(range_of "$REPO_ROOT/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | trim_lines)"
+  range="$(range_of "$REPO_ROOT/$TEMPLATE_REL" '## Sub-agent invocation' '## Orchestrator-owned git flow' | trim_lines)"
   need_text 'executor template range' "$range" || return 1
   in_order "$range" \
     'Yield exemption: only when' \
-    '**The prompt template MUST end with the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-yield-<k>.md`**' \
+    'Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-yield-<k>.md' \
     "the dispatch prompt's final line" || return 1
 }
 

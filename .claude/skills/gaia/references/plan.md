@@ -2,7 +2,7 @@
 
 Plan a complex feature using the task orchestration pattern. Do not implement anything. Term: flow (a critical user flow the SPEC names, tested after the build).
 
-This command is the plan-specific case of the Workflow Doctrine (`wiki/concepts/Workflow Doctrine.md`), which defines roles, git ownership, checkpoint and resume, and model choice. For plan runs, the plan contract in `.claude/skills/gaia/references/plan/planner.md` (per-phase commits and gates, `PROGRESS.md`, the orchestrator's executor pins) governs where the two differ.
+This command is the plan-specific case of the Workflow Doctrine (`wiki/concepts/Workflow Doctrine.md`), which defines roles, git ownership, checkpoint and resume, and model choice. For plan runs, the plan contract in `.claude/skills/gaia/references/plan/orchestrator-template.md` (per-phase commits and gates, `PROGRESS.md`, the orchestrator's executor pins) governs where the two differ.
 
 Contents: `## Argument parsing`; `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 planner model; 3 plan directory; 4 planning agent; 4.5 verify output; 4.6 plan review; 4.7 record the run; 5 test stage; 6 report and kickoff prompt).
 
@@ -15,7 +15,7 @@ Tokenize the first whitespace-separated word of `$ARGUMENTS`:
 
 A first word of `auto` is always the mode token, so a description that starts with the word "auto" must be rephrased. With `auto_mode = true` and an empty remainder, abort before step 0 with the one line `"/gaia-plan auto requires a description. Re-invoke as: /gaia-plan auto <description>"`: no prompt, no sweep, no plan folder.
 
-Steps 1 and 1a read the remainder as `$ARGUMENTS`, so `auto SPEC-NNN` takes step 1a's bare-id form exactly as `SPEC-NNN` does. `/gaia-spec` step 11 invokes this skill in the same session with `SPEC-NNN`, or `auto SPEC-NNN` in auto mode.
+Steps 1 and 1a read the remainder as `$ARGUMENTS`, so `auto SPEC-NNN` takes step 1a's bare-id form exactly as `SPEC-NNN` does. `/gaia-spec` step 12 invokes this skill in the same session with `SPEC-NNN`, or `auto SPEC-NNN` in auto mode.
 
 `auto_mode` selects three branches: step 2 defaults the planner to Opus with no model prompt, step 4.6b surfaces no question (it auto-applies or records under the README's `## Audit notes`), and step 5 takes Run. A non-interactive run (step 2), with or without `auto_mode`, also takes step 2's Opus default. Every other step runs identically, and none of them prompts.
 
@@ -97,7 +97,7 @@ The deep synthesis runs in the planner spawned at step 4, and the planner's mode
   - If the user picks the current model: spawn without a model override (inherit current).
 - Whichever model the planner gets, the inherited one included, its dispatches pass no `effort` parameter: the planner runs at the session effort, so the plan is drafted at the level the user chose. Every other subagent in this skill runs at the session effort too.
 
-This decision governs the **planner** only. The plan's **execution** sub-agents are a separate decision: they default to Sonnet, pinned in the `ORCHESTRATOR.md`/`KICKOFF.md` the planner writes (see the Sub-agent invocation bullet in `.claude/skills/gaia/references/plan/planner.md`). Do not conflate the two.
+This decision governs the **planner** only. The plan's **execution** sub-agents are a separate decision: they default to Sonnet, pinned in the `ORCHESTRATOR.md`/`KICKOFF.md` the renderer writes (see the Sub-agent invocation section in `.claude/skills/gaia/references/plan/orchestrator-template.md`). Do not conflate the two.
 
 ### 3. Resolve plan directory
 
@@ -182,12 +182,13 @@ PLAN_REL="${PLAN_DIR#"$ROOT/"}"
 test -f "$PLAN_DIR/README.md" \
   && test -f "$PLAN_DIR/ORCHESTRATOR.md" \
   && test -f "$PLAN_DIR/KICKOFF.md" \
+  && test -f "$PLAN_DIR/orchestrator-parts.md" \
   && ls "$PLAN_DIR"/task-*.md >/dev/null 2>&1
 ```
 
 If any required file is missing, surface the failure to the user with the planner's return payload. Do not retry silently, the user decides through `AskUserQuestion`: `Investigate first` (Recommended) or `Re-spawn the planner`. Never proceed to step 4.6 with an incomplete plan folder.
 
-Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching `planner.md`'s copy, that each task doc maps to one README phase row, and, per the `TEST-STAGE` record `test-stage.md` owns, that no Flow test line appears before the test stage has run. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}` or `{AUDIT_PATH}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
+Then run the deterministic plan check. It confirms the generated `ORCHESTRATOR.md` carries every verbatim step sentinel the plan needs, in order, with each verbatim block matching the copy in `.claude/skills/gaia/references/plan/orchestrator-template.md`, that each task doc maps to one README phase row, and, per the `TEST-STAGE` record `test-stage.md` owns, that no Flow test line appears before the test stage has run. It also rejects an unsubstituted `{PLAN_DIR}`, `{SPEC_PATH}`, `{AUDIT_PATH}` or `{BRANCH_ID}` in any generated plan file (`ORCHESTRATOR.md`, `KICKOFF.md`, `README.md`, `task-*.md`):
 
 ```bash
 if [[ -n "${SPEC_PATH:-}" ]]; then
