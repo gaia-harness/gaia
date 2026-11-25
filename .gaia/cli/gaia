@@ -28906,12 +28906,12 @@ var labelBefore = (text, markerIndex) => {
   const lead = Math.max(tail.lastIndexOf(" or "), tail.lastIndexOf(" and "));
   return (lead === -1 ? tail : tail.slice(tail.indexOf(" ", lead + 1) + 1)).trim();
 };
-var OPTIONS_CLAUSE = /\boptions?\b[^.\n]{0,60}[`*“"](?!AskUserQuestion)[A-Z]/;
+var OPTIONS_CLAUSE = /\boptions?\b[:,]?\s*(?:[-*]\s*|\d+\.\s*)?[`*“"](?!AskUserQuestion)[A-Z]/;
 var HEADER_WORD = /\bheader\b/gi;
 var HUMAN_ONLY = /human-only/i;
 var NEUTRAL = /recommends? nothing|no recommendation|no option is|no option marked|neither marked|never carries the recommended mark/i;
 var FREE_TEXT = /\b(?:plain chat (?:message|prompt|question)|plain[- ]text (?:message|prompt|question)|free[- ]text (?:question|prompt)|in plain chat|as a plain (?:chat )?(?:message|prompt|question))\b/i;
-var UNATTENDED_FALLBACK = /\b(?:unattended|auto mode|autonomy|non-interactive|never ask)\b/i;
+var UNATTENDED_FALLBACK = /\b(?:unattended|auto(?:matic)? mode|autonomy|non-interactive|never ask)\b/i;
 var FENCE = /^\s*(?:```|~~~)/;
 var blocksOf = (text) => {
   const lines = text.split("\n");
@@ -29027,7 +29027,7 @@ var humanOnlyHeaders = (context) => {
   }
 };
 var recommendationFindings = (file2, site) => {
-  const marked = site.recommendedLabels.size;
+  const marked = site.recommendedLabels.size === 0 && site.hasMarker ? site.questionCount : site.recommendedLabels.size;
   if (site.isNeutral) return [];
   if (marked === site.questionCount) return [];
   return [

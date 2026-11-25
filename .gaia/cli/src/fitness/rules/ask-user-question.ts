@@ -40,7 +40,11 @@ const recommendationFindings = (
   file: ProjectFile,
   site: Site
 ): RawFinding[] => {
-  const marked = site.recommendedLabels.size;
+  // A bare `(Recommended)` names the mark to apply to a runtime-built option set.
+  const marked =
+    site.recommendedLabels.size === 0 && site.hasMarker ?
+      site.questionCount
+    : site.recommendedLabels.size;
 
   if (site.isNeutral) return [];
 

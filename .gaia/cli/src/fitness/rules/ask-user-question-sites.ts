@@ -38,7 +38,8 @@ const labelBefore = (text: string, markerIndex: number): string => {
   return (
     lead === -1 ? tail : tail.slice(tail.indexOf(' ', lead + 1) + 1)).trim();
 };
-const OPTIONS_CLAUSE = /\boptions?\b[^.\n]{0,60}[`*“"](?!AskUserQuestion)[A-Z]/;
+const OPTIONS_CLAUSE =
+  /\boptions?\b[:,]?\s*(?:[-*]\s*|\d+\.\s*)?[`*“"](?!AskUserQuestion)[A-Z]/;
 const HEADER_WORD = /\bheader\b/gi;
 const HUMAN_ONLY = /human-only/i;
 const NEUTRAL =
@@ -46,7 +47,7 @@ const NEUTRAL =
 const FREE_TEXT =
   /\b(?:plain chat (?:message|prompt|question)|plain[- ]text (?:message|prompt|question)|free[- ]text (?:question|prompt)|in plain chat|as a plain (?:chat )?(?:message|prompt|question))\b/i;
 const UNATTENDED_FALLBACK =
-  /\b(?:unattended|auto mode|autonomy|non-interactive|never ask)\b/i;
+  /\b(?:unattended|auto(?:matic)? mode|autonomy|non-interactive|never ask)\b/i;
 const FENCE = /^\s*(?:```|~~~)/;
 
 export type Block = {

@@ -193,7 +193,7 @@ The primary is now known, so its name can appear in the labels below. Ask this a
 
 Mark "{primary} only, keep i18n scaffolding" as the recommended/default option.
 
-If the user picks "Add more languages now", ask for the languages as a plain chat message, not AskUserQuestion (its preset options cannot capture free text, and a hand-added "Other" option is an inert button), and wait for the user to type their reply in the prompt.
+If the user picks "Add more languages now", ask for the languages as a plain chat message, not AskUserQuestion (its preset options cannot capture free text, and a hand-added "Other" option is an inert button), and wait for the user to type their reply in the prompt. Automatic mode never reaches this question: it keeps primary-only.
 
 > Which languages? List them however you like, names or codes, in English or their own script, separated by commas (e.g. `fr, german, 日本語`).
 
@@ -224,7 +224,7 @@ A different handle arrives through Other. Suggest `@username` format; store the 
 - `{title-cased folder name} (Recommended)`, description: `slug {the slug it derives}`.
 - `{folder name as-is}`, description: `slug {the slug it derives}`. When the folder name already equals its title-cased form (e.g. `Convene`), offer the folder name lowercased instead.
 
-**Q5, kebab-case slug (derived, not asked).** Derive the slug from the chosen title: lowercase it, replace each run of characters other than `a-z` and `0-9` with one hyphen, and trim leading and trailing hyphens. When that leaves nothing (a title with no ASCII letters or digits, such as one in a non-Latin script), ask for the slug as a plain chat message, since its answer is free text, and re-ask until it is valid kebab-case. A title typed through Other re-derives the slug from it. A typed reply of the form `Title / slug` (e.g. `Convene / convene-app`) sets both: the part before ` / ` is the title and the part after is the slug, used as typed once it is valid kebab-case (re-ask if it is not).
+**Q5, kebab-case slug (derived, not asked).** Derive the slug from the chosen title: lowercase it, replace each run of characters other than `a-z` and `0-9` with one hyphen, and trim leading and trailing hyphens. When that leaves nothing (a title with no ASCII letters or digits, such as one in a non-Latin script), ask for the slug as a plain chat message, since its answer is free text, and re-ask until it is valid kebab-case; automatic mode uses the folder name as the slug. A title typed through Other re-derives the slug from it. A typed reply of the form `Title / slug` (e.g. `Convene / convene-app`) sets both: the part before ` / ` is the title and the part after is the slug, used as typed once it is valid kebab-case (re-ask if it is not).
 
 ### Q6, API casing (asked alone)
 
