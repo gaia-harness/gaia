@@ -1740,6 +1740,9 @@ install_recording_hook_copy() {
   mkdir -p "$REPO/.claude/hooks/lib"
   cp "$HOOK_ABSOLUTE_PATH" "${HOOK_ABSOLUTE_PATH%.sh}"-*.sh "$REPO/.claude/hooks/"
   cp "$LIBRARY_DIRECTORY"/*.sh "$REPO/.claude/hooks/lib/"
+  # The copied gate loads the autonomy library from its own tree's .gaia/scripts
+  # and denies without it, before the provenance call this copy records.
+  cp "$BATS_TEST_DIRNAME/../../scripts/autonomy-lib.sh" "$BATS_TEST_DIRNAME/../../scripts/main-root-lib.sh" "$REPO/.gaia/scripts/"
   cat > "$REPO/.claude/hooks/lib/audit-base-provenance.sh" <<EOF
 #!/usr/bin/env bash
 . "$LIBRARY_DIRECTORY/audit-base-provenance.sh"
@@ -2668,11 +2671,19 @@ padded_heredoc_command() {
 # its OWN on-disk location via BASH_SOURCE, so deleting from $REPO's sandbox
 # lib/ (used elsewhere in this file for the two resolver-script copies)
 # removes nothing this hook itself reads; only a staged copy's absence is.
+# stage_hooks_copy <root>: copy the hooks directory to <root>/.claude/hooks
+# beside the autonomy library the copied gate loads from <root>/.gaia/scripts.
+stage_hooks_copy() {
+  mkdir -p "$1/.claude" "$1/.gaia/scripts"
+  cp -R "$(dirname "$HOOK_ABSOLUTE_PATH")" "$1/.claude/hooks"
+  cp "$BATS_TEST_DIRNAME/../../scripts/autonomy-lib.sh" "$BATS_TEST_DIRNAME/../../scripts/main-root-lib.sh" "$1/.gaia/scripts/"
+}
+
 run_merge_hook_library_absent() {
   local library_name="$1" command_line="$2" json stage
-  stage="$BATS_TEST_TMPDIR/staged-hooks-${library_name}"
+  stage="$BATS_TEST_TMPDIR/staged-${library_name}/.claude/hooks"
   if [ ! -d "$stage" ]; then
-    cp -r "$(dirname "$HOOK_ABSOLUTE_PATH")" "$stage"
+    stage_hooks_copy "$BATS_TEST_TMPDIR/staged-${library_name}"
     rm -f "$stage/lib/$library_name"
   fi
   json=$(jq -n --arg command_line "$command_line" '{tool_name: "Bash", tool_input: {command: $command_line}}')
@@ -2922,15 +2933,14 @@ row_lib_hook_payload_sh_absent_a_payload_the_hook_would_deny_exi() {
   # would exit 0 with no decision, which is an allow.
   local hooks_directory scratch_hooks payload sibling_file sibling_name checked=0
   hooks_directory=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
-  scratch_hooks="$BATS_TEST_TMPDIR/sibling-hooks"
+  scratch_hooks="$BATS_TEST_TMPDIR/sibling-root/.claude/hooks"
   commit_files ".claude/skills/release-notes/SKILL.md" "updated"
   payload=$(jq -nc --arg command 'gh pr merge 30 --squash --delete-branch' '{tool_name: "Bash", tool_input: {command: $command}}')
   for sibling_file in "$hooks_directory"/pr-merge-audit-check-*.sh; do
     [ -f "$sibling_file" ] || continue
     sibling_name="${sibling_file##*/}"
-    rm -rf "$scratch_hooks"
-    mkdir -p "$scratch_hooks"
-    cp -R "$hooks_directory/." "$scratch_hooks/"
+    rm -rf "$BATS_TEST_TMPDIR/sibling-root"
+    stage_hooks_copy "$BATS_TEST_TMPDIR/sibling-root"
     # Positive control: the full copy allows this out-of-scope diff, so a deny
     # below is the sibling's doing and not the fixture's.
     invoke_hook_in "$REPO" "$payload" "$scratch_hooks/pr-merge-audit-check.sh"
@@ -2950,9 +2960,10 @@ row_lib_hook_payload_sh_absent_a_payload_the_hook_would_deny_exi() {
     grep -qF "$sibling_name': it is missing" <<<"$output" || return 1
     checked=$((checked + 1))
   done
-  # Non-vacuity: every sibling the loader names was exercised.
+  # Non-vacuity: every sibling the loader names, and the unattended sibling
+  # sourced before it, was exercised.
   [ "$checked" -gt 0 ]
-  [ "$checked" -eq "$(grep -cE '^  [a-z]+:[a-z_]*$' "$hooks_directory/pr-merge-audit-check.sh")" ]
+  [ "$checked" -eq "$(( $(grep -cE '^  [a-z]+:[a-z_]*$' "$hooks_directory/pr-merge-audit-check.sh") + $(grep -cF '/pr-merge-audit-check-unattended.sh"' "$hooks_directory/pr-merge-audit-check.sh") ))" ]
 }
 
 @test "a non-arming Bash payload spawns exactly one jq process" {
@@ -3112,4 +3123,116 @@ row_release_bookkeeping_the_clear_fails_against_a_bypass_that_ne() {
   run_case_rows \
     row_release_bookkeeping_the_out_of_scope_bypass_clears_a_bookkee \
     row_release_bookkeeping_the_clear_fails_against_a_bypass_that_ne
+}
+
+# --- unattended runs: the autonomy switch's may_merge ---------------------------
+
+# write_switch <may_merge> [expires-offset-seconds] [raw-json]: the autonomy
+# switch for $REPO; a raw JSON argument replaces the whole file.
+write_switch() {
+  mkdir -p "$REPO/.gaia/local/protected"
+  if [ -n "${3-}" ]; then
+    printf '%s\n' "$3" > "$REPO/.gaia/local/protected/autonomy.json"
+    return 0
+  fi
+  jq -n -c --argjson may_merge "$1" --argjson offset "${2:-3600}" \
+    '{enabled: true, expires_at: (now + $offset | floor | todate), may_merge: $may_merge}' \
+    > "$REPO/.gaia/local/protected/autonomy.json"
+}
+
+# merge_log_lines: the decision log's line count, 0 when absent.
+merge_log_lines() {
+  local log="$REPO/.gaia/local/protected/autonomy-log.jsonl"
+  if [ -f "$log" ]; then wc -l < "$log" | tr -d ' '; else printf '0\n'; fi
+}
+
+# bats test_tags=protected
+@test "unattended: with may_merge false every merge the gate arms on is denied with the park command, cleared or not" {
+  local command_line
+  commit_files "Makefile" "all:"
+  write_marker "code-audit-frontend"
+  run_merge_hook
+  assert_allowed_by_json
+  write_switch false
+  for command_line in 'gh pr merge 30 --squash --delete-branch' 'gh pr merge 30 --auto --squash' \
+    'gh pr merge --squash --match-head-commit 0123456789abcdef0123456789abcdef01234567 30' 'gh pr merge -R someone/elsewhere 7 --squash'; do
+    echo "case: $command_line"
+    run_merge_hook "$command_line"
+    assert_denied_by_json
+    jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'with may_merge false: only a human merges this PR'
+    jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- "autonomy-park.sh --reason merge-ready --pr <n> --root"
+  done
+  [ "$(merge_log_lines)" -eq 0 ]
+}
+
+# bats test_tags=protected
+@test "unattended: with may_merge true the clearance check decides, an allowed merge is logged first, and a failed log denies" {
+  write_switch true
+  commit_files "Makefile" "all:"
+  run_merge_hook
+  assert_denied_by_json
+  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'only a human merges this PR' && return 1
+  [ "$(merge_log_lines)" -eq 0 ]
+  write_marker "code-audit-frontend"
+  run_merge_hook 'gh pr merge 30 --auto --squash'
+  assert_allowed_by_json
+  [ "$(merge_log_lines)" -eq 1 ]
+  [ "$(jq -r '.header' "$REPO/.gaia/local/protected/autonomy-log.jsonl")" = 'Unattended merge' ]
+  jq -r '.option' "$REPO/.gaia/local/protected/autonomy-log.jsonl" | grep -qF -- 'gh pr merge 30 --auto --squash'
+  echo "case: a decision log that cannot be appended turns the allow into a deny"
+  rm -f "$REPO/.gaia/local/protected/autonomy-log.jsonl"
+  ln -s "$BATS_TEST_TMPDIR/elsewhere.jsonl" "$REPO/.gaia/local/protected/autonomy-log.jsonl"
+  run_merge_hook
+  assert_denied_by_json
+  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'cannot append it to the decision log'
+  [ ! -e "$BATS_TEST_TMPDIR/elsewhere.jsonl" ]
+}
+
+# The question gate's merge arm parks only a recommended label whose first word is Merge;
+# an "Apply ..." option whose path ends in a merge is taken. The merge gate is
+# the enforcement point: with may_merge false the merge that follows parks.
+# bats test_tags=protected
+@test "unattended: a taken non-Merge option whose path ends in a merge parks at the merge gate with may_merge false" {
+  local gate_hook question_payload
+  gate_hook="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.claude/hooks/autonomy-gate.sh"
+  commit_files "Makefile" "all:"
+  write_marker "code-audit-frontend"
+  # Positive control: attended, the cleared merge is allowed.
+  run_merge_hook 'gh pr merge 30 --squash'
+  assert_allowed_by_json
+  write_switch false
+  question_payload=$(jq -nc --arg cwd "$REPO" '{session_id: "s1", cwd: $cwd, hook_event_name: "PreToolUse", tool_name: "AskUserQuestion",
+    tool_input: {questions: [{question: "Apply the fixes, then merge the pull request?", header: "Finish", multiSelect: false,
+      options: [{label: "Apply and finish (Recommended)", description: "applies the fixes, then runs gh pr merge"}, {label: "Hold", description: "stops"}]}]}}')
+  invoke_hook_in "$REPO" "$question_payload" "$gate_hook"
+  assert_denied_by_json
+  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- "Take 'Apply and finish (Recommended)' for 'Finish'"
+  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'autonomy-park.sh' && return 1
+  [ "$(merge_log_lines)" -eq 1 ]
+  run_merge_hook 'gh pr merge 30 --squash'
+  assert_denied_by_json
+  jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'autonomy-park.sh --reason merge-ready --pr <n> --root'
+  [ "$(merge_log_lines)" -eq 1 ]
+  [ "$(jq -r '.header' "$REPO/.gaia/local/protected/autonomy-log.jsonl")" = 'Finish' ]
+}
+
+@test "unattended: a missing, expired or malformed switch leaves the gate exactly as attended" {
+  local row
+  commit_files "Makefile" "all:"
+  for row in missing expired malformed; do
+    echo "case: $row"
+    rm -f "$REPO/.gaia/local/protected/autonomy.json" "$REPO/.gaia/local/audit/"*.ok
+    case "$row" in
+      missing) ;;
+      expired) write_switch false -60 ;;
+      malformed) write_switch false 3600 '{"enabled":true,"expires_at":"soon","may_merge":false}' ;;
+    esac
+    run_merge_hook
+    assert_denied_by_json
+    jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output" | grep -qF -- 'only a human merges this PR' && return 1
+    write_marker "code-audit-frontend"
+    run_merge_hook
+    assert_allowed_by_json
+  done
+  [ "$(merge_log_lines)" -eq 0 ]
 }

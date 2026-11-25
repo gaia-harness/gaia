@@ -1176,7 +1176,7 @@ scratch_copy() {
   rm -rf "$scratch_directory"
   mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
   for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
-    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-dispositions-check.sh audit-dispositions-grade-lib.sh audit-dispositions-snapshot-lib.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh audit-decided-unattended-lib.sh autonomy-lib.sh audit-member-digest.sh; do
+    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-dispositions-check.sh audit-dispositions-grade-lib.sh audit-dispositions-snapshot-lib.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh audit-decided-unattended-lib.sh autonomy-lib.sh audit-member-digest.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$scratch_directory/.gaia/scripts/$script_name"
   done
   ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
@@ -2139,4 +2139,205 @@ earn_markers() {
   assert_reopened 4 || return 1
   [ "$(state_field '.history.rounds[2].snapshot.default_stop')" = true ] || return 1
   [ $((end_milliseconds - start_milliseconds)) -lt 10000 ]
+}
+
+# --- the autonomy budget --------------------------------------------------------
+
+# write_switch [budget-fields-json] [enabled]: a live autonomy switch for the
+# fixture's main checkout, with the given budget fields merged in.
+write_switch() {
+  mkdir -p "$ALF_ROOT/.gaia/local/protected"
+  jq -n -c --argjson budget "${1:-{\}}" --argjson enabled "${2:-true}" \
+    '{enabled: $enabled, expires_at: (now + 3600 | floor | todate), may_merge: false} + $budget' \
+    >"$ALF_ROOT/.gaia/local/protected/autonomy.json"
+}
+
+# budget_records: the spend records, one path per line.
+budget_records() {
+  find "$ALF_ROOT/.gaia/local/protected/audit-budget" -maxdepth 1 -type f -name '*.json' 2>/dev/null
+}
+
+# budget_field <jq-filter>: one read of the only spend record.
+budget_field() {
+  [ "$(budget_records | wc -l | tr -d ' ')" -eq 1 ] || { printf 'want one spend record, have: %s\n' "$(budget_records)" >&2; return 1; }
+  jq -r "$1" "$(budget_records)"
+}
+
+# decision_log_lines: the decision log's line count, 0 when absent.
+decision_log_lines() {
+  local log="$ALF_ROOT/.gaia/local/protected/autonomy-log.jsonl"
+  if [ -f "$log" ]; then wc -l <"$log" | tr -d ' '; else printf '0\n'; fi
+}
+
+# bats test_tags=protected
+@test "budget: a live switch answers a checkpoint with one logged unit as a grant window; the PR limit, then the empty pool, pin" {
+  local through
+  through="$(minimum_of $((6 + GAIA_CONTEXT_UNIT_ROUNDS)) "$_GAIA_LOOP_HARD_CAP")"
+  write_switch '{"audit_extra_units_per_pr":1,"audit_units_pool":2}'
+  echo "case: a stalled checkpoint is admitted as a grant window and spends one unit"
+  seed_rounds 6 "$(sig_snap stalled true)"
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round, .budget] | map(tostring) | join(" ")')" = "grant 7 $through true" ]
+  [ "$(state_field '.history.checkpoints | length')" -eq 0 ]
+  [ "$(state_field '.allowance.answers | length')" -eq 0 ]
+  [ "$(budget_field '.pool_spent')" -eq 1 ]
+  [ "$(budget_field '.spent["branch:feat/loop"]')" -eq 1 ]
+  [ "$(decision_log_lines)" -eq 1 ]
+  [ "$(jq -r '.header' "$ALF_ROOT/.gaia/local/protected/autonomy-log.jsonl")" = 'Audit budget' ]
+  jq -r '.option' "$ALF_ROOT/.gaia/local/protected/autonomy-log.jsonl" | grep -qF -- 'for branch:feat/loop: 1 spent there, 1 left in the pool'
+  echo "case: the window lifts the stalled signal for the unit's own members"
+  new_tree
+  nested
+  assert_allowed
+  [ "$(nrounds)" -eq 7 ]
+  echo "case: the branch at its per-PR limit pins although the pool has a unit"
+  seed_rounds 6 "$(sig_snap stalled true)"
+  unit_dispatch
+  assert_pinned rubric:stalled
+  reason | grep -qF -- 'Autonomy budget: no unit spent, because branch:feat/loop has spent its audit_extra_units_per_pr units.'
+  [ "$(budget_field '.pool_spent')" -eq 1 ]
+  echo "case: another branch spends the pool's last unit"
+  alf_branch feat/two
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.units[-1] | [.admitted_on, .budget] | map(tostring) | join(" ")')" = "grant true" ]
+  [ "$(budget_field '.pool_spent')" -eq 2 ]
+  [ "$(decision_log_lines)" -eq 2 ]
+  tail -n 1 "$ALF_ROOT/.gaia/local/protected/autonomy-log.jsonl" | jq -r '.option' | grep -qF -- '0 left in the pool'
+  [ "$(_gaia_loop_cli record-values --root "$ALF_ROOT" | jq -c '[.grants, .budget_grants]')" = '[0,1]' ]
+  echo "case: the empty pool pins a third branch"
+  alf_branch feat/three
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_pinned fallback
+  reason | grep -qF -- 'Autonomy budget: no unit spent, because the audit_units_pool is spent.'
+  [ "$(budget_field '.pool_spent')" -eq 2 ]
+  [ "$(decision_log_lines)" -eq 2 ]
+  [ "$(_gaia_loop_cli record-values --root "$ALF_ROOT" | jq -c '[.grants, (.budget_grants // 0)]')" = '[0,0]' ]
+}
+
+# bats test_tags=protected
+@test "budget: the context, reintroduced, waiver-drift and cap triggers, an accepted loop and a main-thread member never spend" {
+  local row
+  for row in context reintroduced waiver-drift cap accept main-member; do
+    echo "case: $row"
+    fresh_fixture
+    write_switch '{"audit_extra_units_per_pr":3,"audit_units_pool":3}'
+    case "$row" in
+      context)
+        alf_sequence 6 5
+        above
+        unit_dispatch
+        assert_pinned context
+        ;;
+      reintroduced | waiver-drift)
+        below
+        seed_rounds 6 "$(sig_snap "$row" true)"
+        unit_dispatch
+        assert_pinned "rubric:$row"
+        ;;
+      cap)
+        below
+        seed_rounds "$_GAIA_LOOP_HARD_CAP" "$(sig_snap stalled true)"
+        unit_dispatch
+        assert_pinned cap
+        ;;
+      accept)
+        seed_rounds 6 '{"verdict":"continue","A":1}'
+        alf_add_checkpoint 5 fallback
+        alf_add_answer 1 accept
+        unit_dispatch
+        assert_pinned fallback
+        reason | grep -qF -- 'the budget never reopens the loop after an accept'
+        ;;
+      main-member)
+        seed_rounds 6 '{"verdict":"continue","A":1}'
+        new_tree
+        main_member
+        assert_pinned fallback
+        ;;
+    esac
+    [ -z "$(budget_records)" ]
+    [ "$(decision_log_lines)" -eq 0 ]
+  done
+}
+
+# bats test_tags=protected
+@test "budget: a missing, malformed or wrong-type budget field reads as 0 and admits nothing; a switch that is off spends nothing and says nothing" {
+  local row
+  for row in '{}' '{"audit_extra_units_per_pr":1}' '{"audit_units_pool":3}' \
+    '{"audit_extra_units_per_pr":"1","audit_units_pool":3}' '{"audit_extra_units_per_pr":1,"audit_units_pool":-3}' \
+    '{"audit_extra_units_per_pr":1.5,"audit_units_pool":3}' '{"audit_extra_units_per_pr":1,"audit_units_pool":null}'; do
+    echo "case: $row"
+    fresh_fixture
+    write_switch "$row"
+    seed_rounds 6 '{"verdict":"continue","A":1}'
+    unit_dispatch
+    assert_pinned fallback
+    reason | grep -qF -- 'Autonomy budget: no unit spent, because the autonomy switch sets no audit budget.'
+    [ "$(state_field '.history.units // [] | length')" -eq 0 ]
+    [ -z "$(budget_records)" ]
+    [ "$(decision_log_lines)" -eq 0 ]
+  done
+  echo "case: enabled false"
+  fresh_fixture
+  write_switch '{"audit_extra_units_per_pr":1,"audit_units_pool":3}' false
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_pinned fallback
+  reason | grep -qF -- 'Autonomy budget' && return 1
+  [ -z "$(budget_records)" ]
+}
+
+@test "budget: units spent before the pull request linked count toward its per-PR limit, and a merged pull request's number is no spend key" {
+  write_switch '{"audit_extra_units_per_pr":2,"audit_units_pool":9}'
+  echo "case: one unit is spent while the branch has no pull request"
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_allowed
+  [ "$(budget_field '.spent["branch:feat/loop"]')" -eq 1 ]
+  echo "case: the pull request links, and the unit spent before it counts"
+  printf '{"number":100,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.pr')" -eq 100 ]
+  [ "$(budget_field '.spent["pr:100"]')" -eq 1 ]
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_pinned fallback
+  reason | grep -qF -- 'Autonomy budget: no unit spent, because pr:100 has spent its audit_extra_units_per_pr units.'
+  [ "$(budget_field '.pool_spent')" -eq 2 ]
+  echo "case: a merged pull request the state does not link is no spend key"
+  fresh_fixture
+  write_switch '{"audit_extra_units_per_pr":1,"audit_units_pool":3}'
+  printf '{"number":40,"state":"MERGED"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_allowed
+  [ "$(budget_field '.spent | keys | join(",")')" = 'branch:feat/loop' ]
+  [ "$(_gaia_loop_cli record-values --root "$ALF_ROOT" | jq -c '.budget_grants')" = 1 ]
+}
+
+@test "budget: a human rewrite of the switch starts a fresh budget, and the maintainer tree spends it the same way" {
+  write_switch '{"audit_extra_units_per_pr":1,"audit_units_pool":1}'
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_allowed
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_pinned fallback
+  echo "case: the rewritten switch, in a tree carrying the maintainer marker"
+  mkdir -p "$ALF_ROOT/.claude/rules/maintainers"
+  : >"$ALF_ROOT/.claude/rules/maintainers/harness-triage-threshold.md"
+  sleep 1
+  write_switch '{"audit_extra_units_per_pr":1,"audit_units_pool":1}'
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.units[-1].budget')" = true ]
+  [ "$(budget_records | wc -l | tr -d ' ')" -eq 2 ]
+  [ "$(decision_log_lines)" -eq 2 ]
 }

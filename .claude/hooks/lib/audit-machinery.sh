@@ -48,6 +48,7 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .claude/hooks/pr-merge-audit-check-signals.sh
 .claude/hooks/pr-merge-audit-check-binding.sh
 .claude/hooks/pr-merge-audit-check-bypass.sh
+.claude/hooks/pr-merge-audit-check-unattended.sh
 .claude/hooks/pr-merge-audit-check-dispatch.sh
 .claude/hooks/post-audit-status.sh
 .claude/hooks/lib/**

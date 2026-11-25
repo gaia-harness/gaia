@@ -18,7 +18,7 @@
 #   <!-- gaia:audit-rounds:start -->
 #   ## Audit rounds
 #
-#   Total rounds: <int>; per member: <member> <int>, <member> <int>; light reviews: <member> <int>, <member> <int>; quick review, no full member: <member>, <member>; human grants: <int>.
+#   Total rounds: <int>; per member: <member> <int>, <member> <int>; light reviews: <member> <int>, <member> <int>; quick review, no full member: <member>, <member>; human grants: <int>; budget grants: <int>.
 #   <!-- gaia:audit-rounds:end -->
 #
 # The block is rewritten in place between the markers and appended after one
@@ -36,7 +36,9 @@
 # per-member review counts. Integers must be non-negative, member names
 # `code-audit-[a-z0-9-]+` (light and quick names included), no extra keys.
 # Values without `light` or `quick`, or with one empty or all zero, render the
-# line without that clause.
+# line without that clause. An optional `budget_grants` integer, the units the
+# autonomy budget answered, renders as `budget grants:` and reads 0 when
+# absent; `grants` counts human grants only.
 #
 # `review` (optional, the object `audit-code-review-record.sh publish-values`
 # prints) appends one code-review clause after the grants count and is left out
@@ -167,9 +169,10 @@ fi
 if ! jq -e '
     def uint: type == "number" and . >= 0 and . == floor and . < 1000000000;
     type == "object"
-    and ((keys - ["total", "members", "grants", "light", "quick", "review"]) | length) == 0
+    and ((keys - ["total", "members", "grants", "budget_grants", "light", "quick", "review"]) | length) == 0
     and (.total | uint)
     and (.grants | uint)
+    and ((has("budget_grants") | not) or (.budget_grants | uint))
     and (.members | type) == "object"
     and (.members | to_entries | all(.key | test("\\Acode-audit-[a-z0-9-]+\\z")))
     and (.members | to_entries | all(.value | uint))
@@ -225,6 +228,7 @@ fi
 
 TOTAL="$(jq -r '.total' "$WORK/values.json")"
 GRANTS="$(jq -r '.grants' "$WORK/values.json")"
+BUDGET_GRANTS="$(jq -r '.budget_grants // 0' "$WORK/values.json")"
 MEMBERS="$(jq -r '.members | to_entries | sort_by(.key) | map("\(.key) \(.value)") | join(", ")' "$WORK/values.json")"
 [ -n "$MEMBERS" ] || MEMBERS="none"
 LIGHT_CLAUSE=""
@@ -258,7 +262,7 @@ REVIEW_CLAUSE="$(jq -r '
 printf '%s\n%s\n\n%s\n%s\n' \
   "$START_MARKER" \
   '## Audit rounds' \
-  "Total rounds: ${TOTAL}; per member: ${MEMBERS};${LIGHT_CLAUSE}${QUICK_CLAUSE} human grants: ${GRANTS}${GRANTS_END}" \
+  "Total rounds: ${TOTAL}; per member: ${MEMBERS};${LIGHT_CLAUSE}${QUICK_CLAUSE} human grants: ${GRANTS}; budget grants: ${BUDGET_GRANTS}${GRANTS_END}" \
   "$END_MARKER" > "$WORK/section.md"
 
 # ---------------------------------------------------------------------------

@@ -187,13 +187,13 @@ setup() {
   for script_name in resolve-audit-members.sh audit-member-digest.sh \
            audit-write-clearance.sh audit-write-clearance-args.sh audit-write-clearance-gates.sh \
            audit-write-clearance-accounting.sh audit-write-clearance-publish.sh \
-           audit-write-clearance-ledger.sh main-root-lib.sh audit-key-lib.sh; do
+           audit-write-clearance-ledger.sh main-root-lib.sh audit-key-lib.sh autonomy-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$MAIN/.gaia/scripts/$script_name"
     chmod +x "$MAIN/.gaia/scripts/$script_name"
   done
   for script_name in pr-merge-audit-check.sh pr-merge-audit-check-context.sh pr-merge-audit-check-signals.sh \
            pr-merge-audit-check-binding.sh pr-merge-audit-check-bypass.sh pr-merge-audit-check-dispatch.sh \
-           post-audit-status.sh; do
+           pr-merge-audit-check-unattended.sh post-audit-status.sh; do
     cp "$REPO_ROOT/.claude/hooks/$script_name" "$MAIN/.claude/hooks/$script_name"
     chmod +x "$MAIN/.claude/hooks/$script_name"
   done
