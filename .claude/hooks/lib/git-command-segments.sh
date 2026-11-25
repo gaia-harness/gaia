@@ -18,8 +18,8 @@
 # through; `@{u}` and `HEAD^{tree}` hold neither and do not expand.
 #
 # The only expansions read are `$?`, kept as written since it expands to a
-# number, and a reference to a variable an earlier segment assigned a literal
-# (expand_parameter_reference below). A quoted heredoc is dropped from its
+# number, and a reference to a variable an earlier always-run segment assigned
+# a literal (expand_parameter_reference below). A quoted heredoc is dropped from its
 # segment, the body unread; segment_heredocs marks each segment that read one.
 # `assignment_names` and `assignment_values` hold the literal assignments read
 # so far, and the caller judges whether each assignment segment may run.

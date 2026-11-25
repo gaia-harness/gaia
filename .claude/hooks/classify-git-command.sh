@@ -389,7 +389,7 @@ jq -n '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "allow",
-    permissionDecisionReason: "classify-git-command.sh: every git segment is a listed git command in this repository and every other segment an approved program"
+    permissionDecisionReason: "classify-git-command.sh: every git segment is a listed git command in this repository and every other segment approved"
   }
 }'
 exit 0
