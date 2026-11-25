@@ -78,6 +78,7 @@
     ".claude/hooks/lib/audit-scope-release.sh": "owned",
     ".claude/hooks/lib/audit-scope.sh": "owned",
     ".claude/hooks/lib/bash-write-target.sh": "owned",
+    ".claude/hooks/lib/compound-segment-programs.sh": "owned",
     ".claude/hooks/lib/cross-repo-refusal.sh": "owned",
     ".claude/hooks/lib/gaia-packages.sh": "owned",
     ".claude/hooks/lib/gaia-version.sh": "owned",
@@ -936,7 +937,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-25T08:14:35.308Z",
+  "generated": "2026-11-25T11:56:28.926Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
