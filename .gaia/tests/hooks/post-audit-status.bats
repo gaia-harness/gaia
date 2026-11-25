@@ -1039,6 +1039,7 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
   marker="$(write_marker)"
   head="$(git -C "$REPO" rev-parse HEAD)"
   printf '<!-- gaia-pr-body-head: %s -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\n- Major README.md:1 a problem -> undecided\n<!-- gaia:pr-review:end -->\n' "$head" "$head" > "$BATS_TEST_TMPDIR/pr-body"
+  # shellcheck source=/dev/null
   . "$PLANT_REVIEW_HELPER"
   plant_review_record feat/review-fixture 7 "$head" "$REPO" '[{"id":"pr-1","file":"README.md","line":1,"severity":"Major","security":false,"summary":"a problem","failure_scenario":"it breaks","verified":true,"disposition":null,"fix_state":null,"fix_commits":[]}]'
   cd "$REPO"
