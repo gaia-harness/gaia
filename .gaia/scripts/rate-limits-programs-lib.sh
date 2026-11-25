@@ -18,7 +18,8 @@
 _GAIA_RATE_LIMITS_PROGRAMS_LOADED=1
 
 # Definitions both programs share: the stored windows, the validity rule of a
-# stored entry, the scan of other sessions' files and the latest-change choice.
+# stored entry, the scan of other sessions' files, the latest-change choice and
+# the windows shown, the one display rule the writer and the reader share.
 _GAIA_RATE_LIMITS_JQ_DEFINITIONS='
   def window_names: ["five_hour", "seven_day"];
   def maximum_length($name): if $name == "five_hour" then $five_hour_maximum else $window_maximum end;
@@ -45,17 +46,21 @@ _GAIA_RATE_LIMITS_JQ_DEFINITIONS='
   def latest($candidates; $name):
     [ $candidates[] | .session as $session | .windows[$name] | select(. != null) | {session: $session, value: .} ]
     | sort_by(rank) | if length > 0 then .[0].value else null end;
+  def shown($own_windows; others): if $own_windows != null then $own_windows
+    else [ window_names[] as $name | latest(others; $name) | select(. != null) | {key: $name, value: .} ]
+      | from_entries end;
 '
 
 # The writer: validate the payload, apply the writer rules to the own file's
 # windows, and emit "<status>", "<new file body or empty>", then the display
-# records, each the latest-change choice with the own file as written. Status
-# is invalid, unchanged or write. The new body depends on the own file, the
+# records of the windows shown, with the own file as written. Status is
+# invalid, unchanged or write. The new body depends on the own file, the
 # payload and the clock alone; other sessions' files feed only the display.
 _GAIA_RATE_LIMITS_WRITE_PROGRAM='
   def record($name): "\($name)\t\(.used_percentage | whole)\t\(.resets_at)\t\(if .resets_at <= $now then "reset" else "live" end)";
-  def display($candidates): window_names[] as $name | latest($candidates; $name) | select(. != null) | record($name);
-  (reading_windows // {}) as $current
+  def display($windows): window_names[] as $name | $windows[$name] | select(. != null) | record($name);
+  reading_windows as $own_file
+  | ($own_file // {}) as $current
   | ($input | try fromjson catch null) as $reading
   | (($reading | type) == "object" and ($reading.windows | type) == "object"
      and all(window_names[]; . as $name | $reading.windows[$name]
@@ -63,7 +68,7 @@ _GAIA_RATE_LIMITS_WRITE_PROGRAM='
                        and (.resets_at | . == null or is_reset($name))))) as $valid
   | scanned as $others
   | if ($valid | not) then
-      "invalid", "", display([ $others[] | if .session == $own then .windows = $current else . end ])
+      "invalid", "", display(shown($own_file; $others))
     else
       (reduce (window_names[] as $name | $reading.windows[$name] | select(. != null) | {name: $name, value: .}) as $entry ($current;
         $entry.name as $name | $entry.value as $incoming | .[$name] as $stored
@@ -80,11 +85,8 @@ _GAIA_RATE_LIMITS_WRITE_PROGRAM='
               history: ((($stored.history | if type == "array" then . else [] end) + [$change]) | .[-$history_limit:])})
           end)) as $windows
       | ($windows != $current) as $changed
-      | (if any($others[]; .session == $own) then [ $others[] | if .session == $own then .windows = $windows else . end ]
-         elif $changed then ([{session: $own, windows: $windows}] + $others) | .[:$scan_limit]
-         else $others end) as $candidates
       | (if $changed then "write", ({version: $version, windows: $windows} | tojson) else "unchanged", "" end),
-        display($candidates)
+        display(shown(if $changed then $windows else $own_file end; $others))
     end
 '
 
@@ -131,11 +133,7 @@ _GAIA_RATE_LIMITS_REPORT_PROGRAM='
   reading_windows as $own_windows
   | if $mode == "own" and $own_windows == null then empty
     else
-      ($own_windows // {}) as $own_entries
-      | (if $mode == "own" or $own_windows != null then $own_entries
-         else scanned as $others
-           | [ window_names[] as $name | latest($others; $name)
-               | select(. != null) | {key: $name, value: .} ] | from_entries end) as $chosen
+      shown($own_windows; scanned) as $chosen
       | ($sets | map(.[0]) | min) as $lowest_warning
       | ($chosen.seven_day | . != null and .resets_at > $now and (.used_percentage | whole) >= $lowest_warning) as $needs_tier
       | ($marker | try fromjson catch null | if type == "object" then . else {} end) as $marker_entries

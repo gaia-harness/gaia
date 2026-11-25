@@ -2,7 +2,8 @@
 #
 # Suite for how the statusline produces and displays the rate-limit reading:
 # every render writes its payload's windows to its own session's file under the
-# main checkout, and GAIA's left side draws the latest change across sessions.
+# main checkout, and GAIA's left side draws the session's own windows once its
+# file is valid, else the latest change across sessions.
 # Renders run the real gaia-statusline.sh against a scratch git checkout with
 # the clock pinned.
 #
@@ -14,6 +15,7 @@ bats_require_minimum_version 1.5.0
 NOW=1795440000
 SESSION_A="0a1b2c3d-1111-4222-8333-444455556666"
 SESSION_B="1b2c3d4e-2222-4333-8444-555566667777"
+SESSION_C="2c3d4e5f-3333-4444-8555-666677778888"
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -127,16 +129,31 @@ expect_color() {
   [ "$output" = "five_hour reset" ] || { echo "reader: $output"; return 1; }
 }
 
-@test "an idle session's left side follows the session whose figure changed most recently" {
+@test "a session with a reading shows its own figure, and one without follows the session whose figure changed most recently" {
   rate_limits_seed_session "$MAIN" "$SESSION_A" "$((NOW - 1000))" true seven_day 60 "$SEVEN_DAY_RESETS_AT"
   rate_limits_seed_session "$MAIN" "$SESSION_B" "$((NOW - 10))" true seven_day 22 "$SEVEN_DAY_RESETS_AT"
   render "$MAIN" "{\"seven_day\":{\"used_percentage\":60,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
-  grep -qF "📅 22%" <<<"$PLAIN_OUTPUT" || { echo "idle session did not follow: $PLAIN_OUTPUT"; return 1; }
+  grep -qF "📅 60%" <<<"$PLAIN_OUTPUT" || { echo "own figure not shown: $PLAIN_OUTPUT"; return 1; }
   [ "$(stored '.windows.seven_day.used_percentage')" = "60" ] || { echo "own file changed: $(cat "$FILE")"; return 1; }
 
+  rm -f "$FILE"
+  render "$MAIN" -
+  grep -qF "📅 22%" <<<"$PLAIN_OUTPUT" || { echo "no reading, did not follow: $PLAIN_OUTPUT"; return 1; }
+
+  rate_limits_seed_session "$MAIN" "$SESSION_C" "$((NOW - 500))" true seven_day 30 "$SEVEN_DAY_RESETS_AT"
   printf '{' >"$OTHER_FILE"
-  render "$MAIN" "{\"seven_day\":{\"used_percentage\":60,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
-  grep -qF "📅 60%" <<<"$PLAIN_OUTPUT" || { echo "unparseable file not skipped: $PLAIN_OUTPUT"; return 1; }
+  render "$MAIN" -
+  grep -qF "📅 30%" <<<"$PLAIN_OUTPUT" || { echo "unparseable file not skipped: $PLAIN_OUTPUT"; return 1; }
+  true
+}
+
+# The foreign file is another account's in a cache two profiles share; the
+# payload is an Ultra account's, which reports no five-hour window.
+@test "a window the session's own reading lacks is never drawn from another session's file" {
+  rate_limits_seed_session "$MAIN" "$SESSION_B" "$NOW" true five_hour 75 "$FIVE_HOUR_RESETS_AT" seven_day 58 "$SEVEN_DAY_RESETS_AT"
+  render "$MAIN" "{\"seven_day\":{\"used_percentage\":57,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
+  grep -qF "📅 57%" <<<"$PLAIN_OUTPUT" || { echo "own figure not shown: $PLAIN_OUTPUT"; return 1; }
+  grep -qF "🕔" <<<"$PLAIN_OUTPUT" && { echo "foreign clock segment drawn: $PLAIN_OUTPUT"; return 1; }
   true
 }
 
@@ -164,7 +181,7 @@ expect_color() {
   true
 }
 
-@test "a payload window with no reset time is shown, and shown from another session's confirmed entry when one exists" {
+@test "a payload window with no reset time is shown, and shown from another session's confirmed entry while the session has no reading" {
   render "$MAIN" '{"five_hour":{"used_percentage":40}}'
   grep -qF "🕔 40%" <<<"$PLAIN_OUTPUT" || { echo "not shown: $PLAIN_OUTPUT"; return 1; }
   grep -qF "🕔 40% (" <<<"$PLAIN_OUTPUT" && { echo "countdown: $PLAIN_OUTPUT"; return 1; }

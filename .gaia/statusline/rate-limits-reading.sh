@@ -7,9 +7,9 @@
 # Why it exists: the statusline is the only place the account's rate-limit
 # windows arrive, so every render hands what it saw to the writer
 # (scripts/rate-limits-lib.sh), which stores it in that session's own reading
-# file, and displays the latest change across sessions instead of its own
-# possibly outdated payload. The file shape, the write rules, the latest-change
-# choice and the bands live in that library; this file only turns the
+# file, and displays the windows that library chooses (the own file's once it
+# is valid, else the latest change across sessions). The file shape, the write
+# rules, that choice and the bands live in that library; this file only turns the
 # payload's two windows into the writer's input and the writer's display
 # records into the four values the left side draws.
 #
