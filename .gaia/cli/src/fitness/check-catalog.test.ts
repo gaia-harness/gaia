@@ -19,6 +19,9 @@ type RuleListing = {
 
 /** The catalog as published, hard-coded because the document that defines it is not tracked. */
 const EXPECTED_RULE_IDS = [
+  'authoring.ask-user-question.free-text-fallback',
+  'authoring.ask-user-question.human-only-header',
+  'authoring.ask-user-question.recommendation',
   'authoring.content.time-sensitive',
   'authoring.harness.ceiling-stale',
   'authoring.harness.max-lines',
