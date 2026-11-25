@@ -83,7 +83,10 @@ _GAIA_RATE_LIMITS_WRITE_PROGRAM='
           else .[$name] = ($stored + {used_percentage: $incoming.used_percentage, resets_at: $resets_at,
               changed_at: $now, confirmed: true,
               history: ((($stored.history | if type == "array" then . else [] end) + [$change]) | .[-$history_limit:])})
-          end)) as $windows
+          end)) as $reduced
+      | ([window_names[] as $name | $reading.windows[$name] | select(. != null and .resets_at != null)
+          | select($current[$name] != null and distance(.resets_at; $current[$name].resets_at) > $same_window)] | length > 0) as $replaced
+      | (if $replaced then $reduced | with_entries(select(.key as $name | $reading.windows[$name] != null)) else $reduced end) as $windows
       | ($windows != $current) as $changed
       | (if $changed then "write", ({version: $version, windows: $windows} | tojson) else "unchanged", "" end),
         display(shown(if $changed then $windows else $own_file end; $others))

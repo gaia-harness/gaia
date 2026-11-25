@@ -250,3 +250,12 @@ read_as_session_a() {
   [ "$status" -eq 0 ] || return 1
   [ "$output" = "five_hour 20% resets 10:00 (in 2h33m) projected unknown changed 0m ago" ] || { echo "own five_hour: $output"; return 1; }
 }
+
+@test "an account switch that replaces a window drops the stored windows the new payload lacks" {
+  seed_file five_hour 75 "$FIVE_HOUR_RESETS_AT" seven_day 40 "$SEVEN_DAY_RESETS_AT"
+  render "$MAIN" "{\"seven_day\":{\"used_percentage\":10,\"resets_at\":$((SEVEN_DAY_RESETS_AT + 100000))}}"
+  [ "$(stored '.windows | keys')" = '["seven_day"]' ] || { echo "keys: $(cat "$FILE")"; return 1; }
+  grep -qF "🕔" <<<"$PLAIN_OUTPUT" && { echo "clock segment drawn: $PLAIN_OUTPUT"; return 1; }
+  grep -qF "📅 10%" <<<"$PLAIN_OUTPUT" || { echo "no calendar segment: $PLAIN_OUTPUT"; return 1; }
+  true
+}

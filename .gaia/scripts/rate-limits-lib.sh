@@ -27,7 +27,8 @@
 #   - first reading of the window: stored with confirmed false, changed_at now;
 #   - a reset time more than GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS away, earlier
 #     or later (a new window or another account): the window, history
-#     included, is replaced, confirmed true, changed_at now;
+#     included, is replaced, confirmed true, changed_at now, and every stored
+#     window the payload lacks is dropped (the account changed);
 #   - same window, a different figure, in either direction: the figure and the
 #     incoming reset time replace the stored ones, one history entry is
 #     appended, confirmed true, changed_at now;
