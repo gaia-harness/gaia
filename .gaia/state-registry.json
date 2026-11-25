@@ -43,7 +43,7 @@
       "kind": "dir",
       "scope": "shared",
       "keyed_by": "session id, one file per Claude Code session (<session_id>.json)",
-      "why": "The statusline writes each session's own rate-limit reading (<session_id>.json, tmp + mv); the dispatch checkpoint reads its own session's file, and the reader and statusline choose the latest change across them. Anchored to the main root so every worktree's render lands in one place. Must precede cache-shared, whose prefix would otherwise claim these files first.",
+      "why": "The statusline writes each session's own rate-limit reading (<session_id>.json, tmp + mv); the dispatch checkpoint reads its own session's file, and the reader and statusline show the session's own file once it is valid, else the latest change across them. Anchored to the main root so every worktree's render lands in one place. Must precede cache-shared, whose prefix would otherwise claim these files first.",
       "writer": "code",
       "retention": {
         "class": "age",

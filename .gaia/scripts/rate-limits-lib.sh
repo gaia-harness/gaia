@@ -24,10 +24,13 @@
 # History holds changes only, the newest GAIA_RATE_LIMITS_HISTORY_LIMIT.
 #
 # Writer rules per window, on the session's own file alone:
+#   - a reset time more than the window's maximum length in the past: nothing
+#     is stored, replaced or dropped;
 #   - first reading of the window: stored with confirmed false, changed_at now;
 #   - a reset time more than GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS away, earlier
 #     or later (a new window or another account): the window, history
-#     included, is replaced, confirmed true, changed_at now;
+#     included, is replaced, confirmed true, changed_at now, and every stored
+#     window the payload lacks is dropped;
 #   - same window, a different figure, in either direction: the figure and the
 #     incoming reset time replace the stored ones, one history entry is
 #     appended, confirmed true, changed_at now;
@@ -44,8 +47,9 @@
 # and its confirmed a boolean. Ranking: unexpired over expired, confirmed over
 # unconfirmed, newest changed_at among confirmed, oldest among unconfirmed (a
 # new session's first figure may predate its first response, so it never
-# displaces a confirmed one), then the lower session id. The statusline always shows this choice.
-# The reader shows only the session's own windows once its file is valid:
+# displaces a confirmed one), then the lower session id. The statusline and
+# the reader show this choice only while the session has no valid file; once
+# it has one, they show only its own windows:
 # another session's file may belong to another account sharing this cache (a
 # second profile), so a window the own file lacks is never filled from it.
 #
@@ -226,7 +230,6 @@ _gaia_rate_limits_jq() {
     --argjson same_window "$GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS" \
     --argjson history_limit "$GAIA_RATE_LIMITS_HISTORY_LIMIT" \
     --argjson burn_seconds "$GAIA_RATE_LIMITS_BURN_SECONDS" \
-    --argjson scan_limit "$GAIA_RATE_LIMITS_SCAN_LIMIT" \
     --argjson future_skew "$GAIA_RATE_LIMITS_FUTURE_SKEW_SECONDS" \
     --argjson five_hour_maximum "$GAIA_RATE_LIMITS_FIVE_HOUR_MAXIMUM_SECONDS" \
     --argjson window_maximum "$GAIA_RATE_LIMITS_WINDOW_MAXIMUM_SECONDS" \
@@ -241,8 +244,8 @@ _gaia_rate_limits_jq() {
 # reading`, the file untouched); rc 1 the write failed, a bad `now`, no jq or
 # a session id that is not UUID-shaped (the last three with no output and
 # nothing created). Stdout on rc 0, 1 and 2: at most one display record per
-# window, five_hour before seven_day, each the latest-change choice after this
-# write:
+# window, five_hour before seven_day, from the own file as this write leaves it
+# when that file is valid, else the latest-change choice:
 #   <name><TAB><whole percentage><TAB><resets_at><TAB><live|reset>
 gaia_rate_limits_write() {
   local root="${1:-}" now="${2:-}" session_id="${3:-}" input="${4:-}" pattern='^[0-9]{1,12}$'
@@ -258,7 +261,7 @@ gaia_rate_limits_write() {
   [ -f "$file" ] && [ -r "$file" ] && source="$file"
   _gaia_rate_limits_scan "$directory"
   output=$(_gaia_rate_limits_jq "$now" "$_GAIA_RATE_LIMITS_WRITE_PROGRAM" \
-    --arg input "$input" --arg own "$session_id" 2>/dev/null <"$source") || return 1
+    --arg input "$input" 2>/dev/null <"$source") || return 1
   status="${output%%$'\n'*}"
   case $output in
     *$'\n'*) output="${output#*$'\n'}" ;;
