@@ -101,6 +101,15 @@ else .[0]
     )] | .[0] // empty
 end'
 
+# install_record_with_digest: install the record on stdin with its findings
+# digest set, fixing the findings at this outcome.
+install_record_with_digest() {
+  local record digest
+  record="$(cat)"
+  digest="$(pr_review_findings_digest "$record")"
+  printf '%s' "$record" | jq --arg digest "$digest" '.findings_sha256 = $digest' | install_record
+}
+
 # record_refusal <line>: the refusal closes the open attempt as a no-op. With no
 # attempt open, the latest attempt the classifier passed is the one the schema
 # contradicts.
@@ -118,7 +127,7 @@ cmd_outcome() {
   require_record
   require_open_record
   [ -f "$CHANGED_FILES_COPY" ] || die_usage "no changed-file list beside the record: open the review first"
-  local refusal record_with_findings digest
+  local refusal
   refusal="$(jq -r -s --rawfile changed "$CHANGED_FILES_COPY" --argjson changelog "$(jq '.changelog_present' "$RECORD_FILE")" \
     --arg not_an_array "$NOT_AN_ARRAY_REFUSAL" "$REVIEWER_FILE_JQ" "$FINDINGS_FILE" 2>/dev/null)" || refusal="$NOT_AN_ARRAY_REFUSAL"
   if [ -n "$refusal" ]; then
@@ -126,19 +135,16 @@ cmd_outcome() {
     printf '%s\n' "$refusal"
     exit 3
   fi
-  record_with_findings="$(jq --slurpfile reviewer "$FINDINGS_FILE" '
+  jq --slurpfile reviewer "$FINDINGS_FILE" '
     .outcome = "ran"
     | .attempts |= map(if .state == "open" then .state = "closed" | .classifier_exit = 0 else . end)
     | .findings = [$reviewer[0] | to_entries[] | .key as $index | .value | {id: "pr-\($index + 1)", file, line, severity,
         security: (if (.security | type) == "boolean" then .security else true end), summary, failure_scenario, verified,
         disposition: null, reason: null, issue: null, basis: null, fix_route: null, fix_state: null, dropped_by: null, fix_commits: []}]' \
-    "$RECORD_FILE")"
-  digest="$(pr_review_findings_digest "$record_with_findings")"
-  printf '%s' "$record_with_findings" | jq --arg digest "$digest" '.findings_sha256 = $digest' | install_record
+    "$RECORD_FILE" | install_record_with_digest
 }
 
 cmd_not_run() {
-  local record_with_reason digest
   case "$REASON" in
     'reviewer silent twice' | 'reviewer agent not loaded') ;;
     *) refuse "unknown not-run reason" ;;
@@ -152,9 +158,7 @@ cmd_not_run() {
     jq -e '(.attempts | last) as $latest | $latest != null and $latest.state == "closed" and $latest.dispatch_failed == true' "$RECORD_FILE" >/dev/null ||
       refuse "not run needs two closed no-op attempts"
   fi
-  record_with_reason="$(jq --arg reason "$REASON" '.outcome = "not-run" | .not_run_reason = $reason | .findings = []' "$RECORD_FILE")"
-  digest="$(pr_review_findings_digest "$record_with_reason")"
-  printf '%s' "$record_with_reason" | jq --arg digest "$digest" '.findings_sha256 = $digest' | install_record
+  jq --arg reason "$REASON" '.outcome = "not-run" | .not_run_reason = $reason | .findings = []' "$RECORD_FILE" | install_record_with_digest
 }
 
 # --- dispositions ---------------------------------------------------------------
@@ -236,13 +240,19 @@ decide_route() {
   if [ -n "$owner" ]; then printf 'veto %s\n' "$owner"; else printf 'human\n'; fi
 }
 
+# veto_row: the finding's veto row, the key the veto ledger records it under.
+veto_row() {
+  jq -n -c --arg class "pr-review/$FINDING_ID" --arg path "$(finding_field '.file')" --argjson line "$(finding_field '.line // 1')" \
+    '{member: "pr-reviewer", finding_class: $class, path: $path, line: $line}'
+}
+
 cmd_route_fix() {
   require_main_root_match
   require_record
   require_finding
   [ "$(finding_field '.disposition')" = fix ] || refuse "$FINDING_ID is not disposed fix"
   [ "$(finding_field '.fix_state')" != fixed ] || refuse "$FINDING_ID is already fixed"
-  local file line summary route first_time=1 finding_file row
+  local file summary route first_time=1 finding_file row
   file="$(finding_field '.file')"
   [ "$(finding_field '.fix_state')" != routed ] || first_time=0
   ROOT="$(audited_root)"
@@ -250,11 +260,9 @@ cmd_route_fix() {
   case "$route" in
     veto*)
       if [ "$first_time" -eq 1 ]; then
-        line="$(finding_field '.line // 1')"
         summary="$(finding_field '.summary | gsub("[\\r\\n]+"; " ")')"
         finding_file="$(mktemp)"
-        row="$(jq -n -c --arg class "pr-review/$FINDING_ID" --arg path "$file" --argjson line "$line" \
-          '{member: "pr-reviewer", finding_class: $class, path: $path, line: $line}')"
+        row="$(veto_row)"
         jq -n --arg reason "$summary" '{reason: $reason}' >"$finding_file"
         FINDING_FILE="$finding_file"
         _veto_recorded_fix "$row" || { rm -f "$finding_file"; exit 2; }
@@ -284,7 +292,7 @@ cmd_fixed() {
   route="$(finding_field '.fix_route')"
   ROOT="$(audited_root)"
   if [ "$route" = veto ]; then
-    key="$(finding_field '[.file, (.line // 1)] | tojson' | jq -c --arg id "$FINDING_ID" '["pr-reviewer", "pr-review/\($id)"] + .')"
+    key="$(veto_row | jq -c '[.member, .finding_class, .path, .line]')"
     _evaluator veto-state | jq -e --argjson key "$key" '.satisfied | any(. == $key)' >/dev/null ||
       refuse "$FINDING_ID: the veto is not satisfied yet"
   fi
@@ -307,10 +315,7 @@ cmd_dropped() {
   [ "$(finding_field '.fix_state')" = routed ] || refuse "$FINDING_ID has no routed fix to drop"
   if [ "$(finding_field '.fix_route')" = veto ]; then
     # A binding veto left unsatisfied would keep the dispositions check failing.
-    local row
-    row="$(jq -n -c --arg class "pr-review/$FINDING_ID" --arg path "$(finding_field '.file')" --argjson line "$(finding_field '.line // 1')" \
-      '{member: "pr-reviewer", finding_class: $class, path: $path, line: $line}')"
-    _veto_withdraw "$row" || exit 2
+    _veto_withdraw "$(veto_row)" || exit 2
   fi
   update_finding '.dropped_by = "\($member): \($evidence | gsub("[\\r\\n]+"; " "))" | .fix_state = "dropped" | .disposition = null | .reason = null' \
     --arg member "$MEMBER" --arg evidence "$EVIDENCE"

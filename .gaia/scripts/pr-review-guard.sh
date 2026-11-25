@@ -73,11 +73,6 @@ dirty_paths() {
   done | LC_ALL=C sort
 }
 
-# join_lines: stdin lines as one comma-separated line.
-join_lines() {
-  paste -sd, -
-}
-
 # folder_listing <main-root> <folder>: a JSON object mapping each file under
 # <folder> to its content hash, keyed by the path relative to <main-root> when
 # inside it. An absent folder is an empty object.
@@ -138,7 +133,7 @@ run_snapshot() {
     usage_error 'snapshot needs --root, --run-folder, --pr and --out'
   [ -d "$root" ] || usage_error "snapshot: no such root $root"
 
-  dirty=$(dirty_paths "$root" "$out" | join_lines)
+  dirty=$(dirty_paths "$root" "$out" | paste -sd, -)
   if [ -n "$dirty" ]; then
     printf 'PR review: tree dirty before dispatch: %s\n' "$dirty"
     exit 1

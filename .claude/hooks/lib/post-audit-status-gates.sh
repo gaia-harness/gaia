@@ -369,11 +369,7 @@ post_audit_status_gates() {
         emit_decline "PR review check unavailable (.claude/hooks/lib/pr-review-verdict.sh)"
         return 1
       fi
-      review_record=""
-      review_path="$(pr_review_record_path "$store_root" "$pr_head_ref" 2>/dev/null)" || review_path=""
-      if [ -n "$review_path" ] && [ -f "$review_path" ]; then
-        review_record="$(cat "$review_path" 2>/dev/null)" || review_record=""
-      fi
+      review_record="$(pr_review_load_record "$store_root" "$pr_head_ref")"
       if ! pr_review_verdict "$review_record" "$pr_number" "$pr_body" 0 "$repo_root" "$head_sha" "" >/dev/null; then
         emit_decline "PR review: no complete review record for PR #${pr_number}; GAIA-Audit not posted."
         return 1

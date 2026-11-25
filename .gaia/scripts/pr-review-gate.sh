@@ -110,7 +110,6 @@ if [ "$action" = publish ] && { [ -n "$body_in" ] || [ -n "$body_out" ]; }; then
   }
   [ -n "$branch" ] || branch="$(git -C "$root" branch --show-current 2>/dev/null)"
   pr_view_json=""
-  body="$(cat "$body_in")"
 else
   pr_view_json="$( (cd "$root" && gh pr view "$pr" --json headRefName,headRefOid,baseRefName,body) 2>/dev/null)" || pr_view_json=""
   if ! printf '%s' "$pr_view_json" | jq -e '.headRefName and .headRefOid' >/dev/null 2>&1; then
@@ -118,7 +117,6 @@ else
     exit 2
   fi
   branch="$(printf '%s' "$pr_view_json" | jq -r '.headRefName')"
-  body="$(printf '%s' "$pr_view_json" | jq -r '.body // ""')"
 fi
 
 record_path="$(pr_review_record_path "$main_root" "$branch")" || {
@@ -130,6 +128,7 @@ record=""
 
 if [ "$action" = check ]; then
   head_sha="$(printf '%s' "$pr_view_json" | jq -r '.headRefOid')"
+  body="$(printf '%s' "$pr_view_json" | jq -r '.body // ""')"
   base_name="$(printf '%s' "$pr_view_json" | jq -r '.baseRefName // ""')"
   base_tip=""
   [ -z "$base_name" ] || base_tip="$(git -C "$root" rev-parse --verify -q "refs/remotes/origin/$base_name" 2>/dev/null)" || base_tip=""

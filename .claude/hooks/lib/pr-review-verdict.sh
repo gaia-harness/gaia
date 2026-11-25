@@ -7,6 +7,7 @@
 # only and does no work at source time.
 #
 #   pr_review_record_path <main-root> <head-ref-name>
+#   pr_review_load_record <main-root> <head-ref-name>
 #   pr_review_findings_digest <record-json>
 #   pr_review_render_section <record-json>
 #   pr_review_render_report <record-json>
@@ -56,13 +57,13 @@ def item:
   if secure then "- \(.severity) security finding -> \(secure_text)"
   else "- \(.severity) \(.file // "PR body" | one)\(if .line == null then "" else ":\(.line)" end) \(.summary | one) -> \(disposition_text)" end;
 def section_lines:
-  ["<!-- gaia:pr-review:start -->", "## PR review", "", "Reviewed head: \(.reviewed_head)"]
+  [$start, "## PR review", "", "Reviewed head: \(.reviewed_head)"]
   + (if .spec == "none" then ["Coverage: no spec."] else [] end)
   + (if .outcome == "not-run" then ["Not run: \(.not_run_reason // "" | one)."]
      elif .outcome != "ran" then ["Not run: review not finished."]
      elif (.findings | length) == 0 then ["No findings."]
      else [.findings[] | item] end)
-  + ["<!-- gaia:pr-review:end -->"];
+  + [$end];
 def tally:
   (.findings | map(.disposition // "undecided")) as $held
   | ["fix", "dismiss", "file", "accept-residual", "waive-out-of-scope", "undecided"]
@@ -126,6 +127,15 @@ pr_review_record_path() {
   printf '%s/pr-review.json\n' "$(gaia_loop_run_directory "$main_root" "$key")"
 }
 
+# pr_review_load_record <main-root> <head-ref-name>: the branch's review record,
+# or nothing when it has none or its path cannot be derived.
+pr_review_load_record() {
+  local record_file
+  record_file="$(pr_review_record_path "$1" "$2" 2>/dev/null)" || return 0
+  [ -f "$record_file" ] || return 0
+  cat "$record_file" 2>/dev/null || true
+}
+
 _pr_review_sha256() {
   if command -v shasum >/dev/null 2>&1; then
     shasum -a 256 | cut -d ' ' -f 1
@@ -141,11 +151,11 @@ pr_review_findings_digest() {
 }
 
 pr_review_render_section() {
-  printf '%s' "$1" | jq -r "$_PR_REVIEW_JQ"' section_lines | .[]'
+  printf '%s' "$1" | jq -r --arg start "$_PR_REVIEW_START_MARKER" --arg end "$_PR_REVIEW_END_MARKER" "$_PR_REVIEW_JQ"' section_lines | .[]'
 }
 
 pr_review_render_report() {
-  printf '%s' "$1" | jq -r "$_PR_REVIEW_JQ"' report_lines | .[]'
+  printf '%s' "$1" | jq -r --arg start "$_PR_REVIEW_START_MARKER" --arg end "$_PR_REVIEW_END_MARKER" "$_PR_REVIEW_JQ"' report_lines | .[]'
 }
 
 # pr_review_marker_scan <file>: six numbers on one line: start markers, end

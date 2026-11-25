@@ -170,7 +170,7 @@ gate_require_body_stamp() {
 # remote-tracking ref of the base branch the record names, empty (so no merge
 # is exempt) when that ref does not verify.
 gate_require_pr_review() {
-  local out_of_scope="${1:-0}" review_reason review_record="" record_file base_tip="" release_merge_base=""
+  local out_of_scope="${1:-0}" review_reason review_record base_tip="" release_merge_base=""
   resolve_pr_record
   # shellcheck source=lib/pr-review-verdict.sh
   if [ ! -f "$_library_directory/pr-review-verdict.sh" ] || ! . "$_library_directory/pr-review-verdict.sh"; then
@@ -190,9 +190,7 @@ gate_require_pr_review() {
      && pr_review_release_waived "$tree_root" "$pr_record_title" "$release_merge_base" "$pr_record_head"; then
     return 0
   fi
-  if record_file="$(pr_review_record_path "$root" "$pr_record_head_ref")" && [ -f "$record_file" ]; then
-    review_record="$(cat "$record_file" 2>/dev/null)" || review_record=""
-  fi
+  review_record="$(pr_review_load_record "$root" "$pr_record_head_ref")"
   if [ "$out_of_scope" = 1 ]; then
     gate_resolve_base
     if [ "$gate_anchor" = pr-record ] && [ -n "$pr_record_base" ]; then

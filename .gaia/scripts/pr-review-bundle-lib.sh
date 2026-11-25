@@ -168,7 +168,7 @@ EOF_GLOBS
 # contribute. A nested rules directory contributes only when a changed path
 # lies under the directory that holds it.
 prb_select_rules() {
-  local root="$1" changed_file="$2" tracked changed directory rule base touched candidate
+  local root="$1" changed_file="$2" tracked changed directory rule base touched
   tracked="$(git -C "$root" ls-files -z | tr '\0' '\n')" || return 1
 
   {
@@ -188,11 +188,7 @@ prb_select_rules() {
           break
         fi
       done
-    done <"$changed_file" | sort -u | while IFS= read -r candidate; do
-      if printf '%s\n' "$tracked" | grep -qxF -- "$candidate"; then
-        printf '%s\n' "$candidate"
-      fi
-    done
+    done <"$changed_file" | sort -u | grep -xF -f <(printf '%s\n' "$tracked") || true
 
     printf '%s\n' "$tracked" | grep -E '(^|/)\.claude/rules/.+\.md$' | while IFS= read -r rule; do
       case "$rule" in

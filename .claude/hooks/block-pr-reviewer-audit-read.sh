@@ -32,6 +32,12 @@
 set -euo pipefail
 
 payload=$(cat)
+# Pure-bash prefilter: a payload without the literal cannot carry the reviewer's
+# agent type, so every other call leaves before any library loads.
+case "$payload" in
+  *pr-reviewer*) ;;
+  *) exit 0 ;;
+esac
 # jq-availability arm: refuse loudly rather than fail open when jq is absent.
 # The literal is the one thing whose absence proves the call is not the
 # reviewer's: only that agent type is bound here.
@@ -131,22 +137,29 @@ state_root_search() {
   esac
   resolved=$(cd -P "$directory" 2>/dev/null && pwd -P) || return 1
   [ -n "$resolved" ] || return 1
+  resolve_main_root
   [ -n "${main_root:-}" ] || return 1
   state_root=$(cd -P "$main_root/.gaia/local" 2>/dev/null && pwd -P) || return 1
   [ "$resolved" = "$state_root" ]
 }
 
-# The state root comes from the shared resolver, for state_root_search only; a
+# resolve_main_root: set main_root from the shared resolver, once, for
+# state_root_search only, so the Read, Bash and Monitor arms never pay for it. A
 # checkout that cannot resolve one leaves that arm off and keeps the text arms.
 main_root=''
-set +e
-# shellcheck source=../../.gaia/scripts/main-root-lib.sh
-_main_root_library="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)/.gaia/scripts/main-root-lib.sh"
-[ -f "$_main_root_library" ] && . "$_main_root_library" 2>/dev/null
-if type gaia_resolve_main_root >/dev/null 2>&1; then
-  main_root=$(gaia_resolve_main_root "${GAIA_HOOK_CWD:-.}" 2>/dev/null) || main_root=''
-fi
-set -e
+_main_root_resolved=0
+resolve_main_root() {
+  [ "$_main_root_resolved" -eq 0 ] || return 0
+  _main_root_resolved=1
+  set +e
+  _main_root_library="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)/.gaia/scripts/main-root-lib.sh"
+  # shellcheck source=../../.gaia/scripts/main-root-lib.sh
+  [ -f "$_main_root_library" ] && . "$_main_root_library" 2>/dev/null
+  if type gaia_resolve_main_root >/dev/null 2>&1; then
+    main_root=$(gaia_resolve_main_root "${GAIA_HOOK_CWD:-.}" 2>/dev/null) || main_root=''
+  fi
+  set -e
+}
 
 case "$GAIA_HOOK_TOOL_NAME" in
   Read)

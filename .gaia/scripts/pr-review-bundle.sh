@@ -135,16 +135,13 @@ while IFS= read -r issue_number; do
   if [ -z "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
     section="$issue_body"
   fi
+  collaborator=1
+  is_collaborator "$association" || { collaborator=0; author_not_collaborator="true"; }
   {
     printf '\n#%s\n' "$issue_number"
-    if ! is_collaborator "$association"; then
-      printf 'spec author: not a collaborator\n'
-    fi
+    [ "$collaborator" -eq 1 ] || printf 'spec author: not a collaborator\n'
     printf '%s\n' "$section"
   } >>"$spec_file"
-  if ! is_collaborator "$association"; then
-    author_not_collaborator="true"
-  fi
   spec_present="present"
 done <<EOF_ISSUES
 $(prb_closed_issues "$pull_request_body")
@@ -159,22 +156,18 @@ fi
 prb_select_rules "$root" "$out_directory/changed-files.txt" >"$out_directory/rules.txt"
 
 changelog_present="false"
-changelog_line="CHANGELOG.md: absent"
 if git -C "$root" ls-files --error-unmatch CHANGELOG.md >/dev/null 2>&1; then
   changelog_present="true"
-  changelog_line="CHANGELOG.md: present"
 fi
 
-template_present="false"
-template_line="PR template: absent"
+template_path=""
 for template_candidate in \
   .github/pull_request_template.md \
   .github/PULL_REQUEST_TEMPLATE.md \
   pull_request_template.md \
   docs/pull_request_template.md; do
   if git -C "$root" ls-files --error-unmatch "$template_candidate" >/dev/null 2>&1; then
-    template_present="true"
-    template_line="PR template: $template_candidate"
+    template_path="$template_candidate"
     break
   fi
 done
@@ -186,7 +179,7 @@ jq -n \
   --arg spec "$spec_present" \
   --argjson spec_author_not_collaborator "$author_not_collaborator" \
   --argjson changelog_present "$changelog_present" \
-  --argjson template_present "$template_present" \
+  --argjson template_present "$([ -n "$template_path" ] && printf true || printf false)" \
   '{pr: $pr, reviewed_head: $reviewed_head, base: $base, spec: $spec,
     spec_author_not_collaborator: $spec_author_not_collaborator,
     changelog_present: $changelog_present, template_present: $template_present}' \
@@ -204,8 +197,8 @@ jq -n \
   printf -- '- pr-body.md: the PR body without its audit-written sections\n'
   printf -- '- rules.txt: CLAUDE.md and rule files to read whole\n'
   printf -- '- meta.json\n\n'
-  printf '%s\n' "$changelog_line"
-  printf '%s\n' "$template_line"
+  if [ "$changelog_present" = true ]; then printf 'CHANGELOG.md: present\n'; else printf 'CHANGELOG.md: absent\n'; fi
+  printf 'PR template: %s\n' "${template_path:-absent}"
 } >"$out_directory/bundle.md"
 
 printf '%s\n' "$out_directory"
