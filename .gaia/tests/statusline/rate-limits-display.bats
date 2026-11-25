@@ -204,3 +204,32 @@ expect_color() {
   grep -qi "rate-limits" <<<"$PLAIN_OUTPUT" && { echo "noise: $PLAIN_OUTPUT"; return 1; }
   true
 }
+
+# read_as_session_a <now>: the reader as session A, clock pinned.
+read_as_session_a() {
+  run env -u CLAUDE_CONFIG_DIR HOME="$TEMPORARY_HOME" CLAUDE_CODE_SESSION_ID="$SESSION_A" GAIA_RATE_LIMITS_NOW="$1" \
+    bash -c "cd '$MAIN' && bash '$CLI' read"
+}
+
+# The foreign reading is a copy of a real file that an ended session on another
+# account left in a shared cache; the own reading is an Ultra account's, which
+# reports no five-hour window.
+@test "the reader shows only the session's own windows once it has a reading, and falls back across sessions before" {
+  local now=1795591624
+  mkdir -p "$FOLDER"
+  printf '%s\n' '{"version":2,"windows":{"five_hour":{"used_percentage":75,"resets_at":1795600800,"changed_at":1795588275,"confirmed":true,"history":[{"used_percentage":74,"changed_at":1795588243},{"used_percentage":75,"changed_at":1795588275}]},"seven_day":{"used_percentage":58,"resets_at":1795946400,"changed_at":1795588243,"confirmed":false,"history":[{"used_percentage":58,"changed_at":1795588243}]}}}' >"$OTHER_FILE"
+
+  read_as_session_a "$now"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF "five_hour 75% warning" <<<"$output" || { echo "no own reading, fallback lost: $output"; return 1; }
+
+  printf '%s\n' '{"version":2,"windows":{"seven_day":{"used_percentage":57,"resets_at":1796054400,"changed_at":1795591592,"confirmed":false,"history":[{"used_percentage":57,"changed_at":1795591592}]}}}' >"$FILE"
+  read_as_session_a "$now"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "seven_day 57% resets Mon 16:00 (in 5d8h) projected unknown changed 0m ago unconfirmed" ] || { echo "own reading: $output"; return 1; }
+
+  rate_limits_seed_session "$MAIN" "$SESSION_A" "$now" true five_hour 20 1795600800
+  read_as_session_a "$now"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "five_hour 20% resets 10:00 (in 2h33m) projected unknown changed 0m ago" ] || { echo "own five_hour: $output"; return 1; }
+}
