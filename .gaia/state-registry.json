@@ -561,6 +561,21 @@
       }
     },
     {
+      "id": "pr-review-accepts",
+      "path": "protected/pr-review-accepts/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "main-only",
+      "keyed_by": null,
+      "why": "Per-branch list of the PR review findings a human accepted by typing the accept line, resolved to main so every tree reads one file. Written by the audit loop grant hook, read by the PR review record script when it records an accept-residual disposition.",
+      "writer": "code",
+      "retention": {
+        "class": "branch-spent",
+        "days": 7,
+        "key": "normalized-file"
+      }
+    },
+    {
       "id": "harness-verify-pass",
       "path": "protected/verify-pass/",
       "match": "prefix",

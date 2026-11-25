@@ -67,6 +67,13 @@
 # bash 3.2 and BWK awk safe; never changes directory.
 set -eu
 
+case "${BASH_SOURCE[0]}" in
+  */*) _record_directory="${BASH_SOURCE[0]%/*}" ;;
+  *) _record_directory="." ;;
+esac
+# shellcheck source=/dev/null
+. "$_record_directory/pr-body-sections-lib.sh"
+
 START_MARKER='<!-- gaia:audit-rounds:start -->'
 END_MARKER='<!-- gaia:audit-rounds:end -->'
 
@@ -261,7 +268,7 @@ REVIEW_CLAUSE="$(jq -r '
 
 printf '%s\n%s\n\n%s\n%s\n' \
   "$START_MARKER" \
-  '## Audit rounds' \
+  "$PR_BODY_HEADING_AUDIT_ROUNDS" \
   "Total rounds: ${TOTAL}; per member: ${MEMBERS};${LIGHT_CLAUSE}${QUICK_CLAUSE} human grants: ${GRANTS}; budget grants: ${BUDGET_GRANTS}${GRANTS_END}" \
   "$END_MARKER" > "$WORK/section.md"
 

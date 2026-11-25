@@ -10,7 +10,7 @@
 # that payload carries no documented field telling it from a typed prompt, so
 # the recorder cannot refuse it on arrival. This guard denies the four tool
 # calls named above: a call whose tool_input holds any string that is, whole, an
-# audit line under gaia_loop_parse_line (audit-loop-state-lib.sh owns the
+# audit or PR review accept line under gaia_loop_parse_line (audit-loop-state-lib.sh owns the
 # grammar) is denied. A string that only mentions a line parses as malformed and
 # is allowed, the same split the recorder makes. Each string is also checked with
 # every Unicode space, separator and format character stripped from its edges,
@@ -39,7 +39,7 @@ if [ ! -t 0 ]; then
 fi
 
 case "$payload" in
-  *audit-grant* | *audit-accept*) ;;
+  *audit-grant* | *audit-accept* | *pr-review-accept*) ;;
   *) exit 0 ;;
 esac
 
@@ -51,7 +51,7 @@ if ! type gaia_require_jq >/dev/null 2>&1; then
   printf 'BLOCKED: block-scheduled-audit-line.sh cannot load lib/jq-availability.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
-gaia_require_jq 'the scheduled audit line guard' "$payload" tool_input 'audit-grant' 'audit-accept'
+gaia_require_jq 'the scheduled audit line guard' "$payload" tool_input 'audit-grant' 'audit-accept' 'pr-review-accept'
 
 _scheduled_line_state_library="$_scheduled_line_hook_directory/../../.gaia/scripts/audit-loop-state-lib.sh"
 # shellcheck source=/dev/null
@@ -72,7 +72,7 @@ leaves_file="$(mktemp "${TMPDIR:-/tmp}/scheduled-audit-line.XXXXXX")" || {
 }
 trap 'rm -f "$leaves_file"' EXIT
 if ! printf '%s' "$payload" |
-  jq -j 'if type == "object" then (.tool_input // {}) | .. | strings | select(test("audit-(grant|accept)")) | (., gsub("^[\\s\\p{Z}\\p{Cf}]+|[\\s\\p{Z}\\p{Cf}]+$"; "")) + "\u0000" else error("not an object") end' \
+  jq -j 'if type == "object" then (.tool_input // {}) | .. | strings | select(test("audit-(grant|accept)|pr-review-accept")) | (., gsub("^[\\s\\p{Z}\\p{Cf}]+|[\\s\\p{Z}\\p{Cf}]+$"; "")) + "\u0000" else error("not an object") end' \
     >"$leaves_file" 2>/dev/null; then
   printf 'BLOCKED: block-scheduled-audit-line.sh could not parse the tool payload, so this call cannot be checked.\n' >&2
   exit 2
@@ -81,7 +81,7 @@ fi
 found=""
 while IFS= read -r -d '' leaf; do
   case "$(gaia_loop_parse_line "$leaf")" in
-    "grant "* | accept | "accept-finding "*)
+    "grant "* | accept | "accept-finding "* | "pr-review-accept "*)
       found=1
       break
       ;;
@@ -90,6 +90,6 @@ done <"$leaves_file"
 [ -n "$found" ] || exit 0
 
 grant_line="$(gaia_loop_grant_line 1)"
-reason="BLOCKED: only a human types an audit checkpoint answer (${grant_line% 1} <n>, $(gaia_loop_accept_line), audit-accept-finding <n>). A prompt or message Claude schedules or sends never carries one, because it would reach the grant recorder as if typed. Claude: do not retry by another tool or spelling; ask the person at the checkpoint."
+reason="BLOCKED: only a human types an audit checkpoint answer (${grant_line% 1} <n>, $(gaia_loop_accept_line), audit-accept-finding <n>, pr-review-accept pr-<n>). A prompt or message Claude schedules or sends never carries one, because it would reach the grant recorder as if typed. Claude: do not retry by another tool or spelling; ask the person at the checkpoint."
 jq -n --arg reason "$reason" '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}}'
 exit 0

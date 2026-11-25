@@ -25374,6 +25374,8 @@ var PROSE_PATH_ALLOWLIST = /* @__PURE__ */ new Set([
   ".claude/skills/tailwind",
   ".claude/skills/typescript",
   ".gaia/packages",
+  ".github/PULL_REQUEST_TEMPLATE.md",
+  ".github/pull_request_template.md",
   ".github/workflows"
 ]);
 var PATH_BODY_CHAR = /[\w./-]/;

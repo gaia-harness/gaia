@@ -13,7 +13,7 @@
 # grant):
 #
 #   1. The whole submitted prompt is exactly the line `audit-grant <n>`,
-#      `audit-accept` or `audit-accept-finding <n>`. A line pasted inside
+#      `audit-accept`, `audit-accept-finding <n>` or `pr-review-accept pr-<n>`. A line pasted inside
 #      longer text, quoted in a question or mentioned in passing is rejected,
 #      so no copied, quoted or generated text ever grants. The grammar and its parser live in
 #      audit-loop-state-lib.sh (gaia_loop_parse_line); this hook never
@@ -35,6 +35,10 @@
 #      The UserPromptSubmit event alone is not proof a person typed the line.
 #      A session's first prompt can fail this check too: until a record
 #      carrying `entrypoint` is written, it is refused.
+#
+# `pr-review-accept pr-<n>` needs no checkpoint: it records one undecided
+# finding of the branch's PR review record as accepted, and says why when it
+# declines (rule 2 does not apply to it).
 #
 # Other channels. An AskUserQuestion selection is recorded only by
 # audit-loop-ask-grant.sh, and only against a question the bound hook pinned
@@ -113,7 +117,7 @@ fi
 
 # Cheap exit: neither keyword anywhere in the payload.
 case "$payload" in
-  *audit-grant* | *audit-accept*) ;;
+  *audit-grant* | *audit-accept* | *pr-review-accept*) ;;
   *) exit 0 ;;
 esac
 
@@ -151,7 +155,7 @@ case "$parsed" in
   malformed)
     gline="$(gaia_loop_grant_line 1)"
     gline="${gline% 1} <n>"
-    malformed_message="Not recorded: the whole prompt must be exactly $gline (n from 1 to 10), exactly $(gaia_loop_accept_line), or exactly audit-accept-finding <n> (n from the checkpoint's list), with nothing else in the message."
+    malformed_message="Not recorded: the whole prompt must be exactly $gline (n from 1 to 10), exactly $(gaia_loop_accept_line), exactly audit-accept-finding <n> (n from the checkpoint's list), or exactly pr-review-accept pr-<n>, with nothing else in the message."
     _gl_say "$malformed_message" "$malformed_message $_GL_NOTHING_RECORDED_FOR_CLAUDE If the person was only mentioning the line, answer them normally; otherwise tell them this."
     exit 0
     ;;
@@ -192,6 +196,57 @@ fi
 
 branch=""
 branch="$(gaia_loop_key "$cwd" 2>/dev/null)" || branch=""
+
+# A PR review accept needs no pending checkpoint: it names one undecided finding
+# of the branch's review record and appends to the accept file the record
+# script reads.
+case "$parsed" in
+  "pr-review-accept "*)
+    finding_id="${parsed#pr-review-accept }"
+    if [ -z "$branch" ]; then
+      _gl_say "Not recorded: the session's working directory is not on a branch, so no PR review record was found."
+      exit 0
+    fi
+    review_record="$(gaia_loop_run_directory "$main" "$branch")/pr-review.json"
+    if [ ! -f "$review_record" ]; then
+      _gl_say "Not recorded: branch $branch has no PR review record, so $finding_id is not a finding of one. Type the line in a session on the pull request's head branch."
+      exit 0
+    fi
+    review_state="$(jq -r --arg id "$finding_id" 'if .outcome != "ran" then "not-ran"
+      elif ([.findings[]? | select(.id == $id)] | length) == 0 then "unknown"
+      elif ([.findings[]? | select(.id == $id and .disposition == null)] | length) == 0 then "disposed"
+      else "undecided" end' "$review_record" 2>/dev/null)" || review_state=""
+    review_pr="$(jq -r '.pr // empty | select(type == "number")' "$review_record" 2>/dev/null)" || review_pr=""
+    case "$review_state" in
+      undecided) [ -n "$review_pr" ] || review_state="unreadable" ;;
+    esac
+    if [ "$review_state" != undecided ]; then
+      case "$review_state" in
+        not-ran) review_refusal="the PR review record on branch $branch did not run to an outcome" ;;
+        unknown) review_refusal="the PR review record on branch $branch has no finding $finding_id" ;;
+        disposed) review_refusal="finding $finding_id on branch $branch already has a disposition" ;;
+        *) review_refusal="the PR review record on branch $branch could not be read" ;;
+      esac
+      _gl_say "Not recorded: $review_refusal."
+      exit 0
+    fi
+    accept_file="$main/.gaia/local/protected/pr-review-accepts/$branch.json"
+    accepted_before="$(jq -c '.' "$accept_file" 2>/dev/null)" || accepted_before=""
+    [ -n "$accepted_before" ] || accepted_before='{"version":1,"accepted":[]}'
+    accepted_after="$(printf '%s' "$accepted_before" | jq -c --argjson pr "$review_pr" --arg id "$finding_id" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      '.accepted = ((.accepted // []) + [{pr: $pr, id: $id, at: $at}])' 2>/dev/null)" || accepted_after=""
+    accept_temporary="$accept_file.tmp.$$"
+    if [ -z "$accepted_after" ] || ! mkdir -p "$(dirname "$accept_file")" 2>/dev/null ||
+      ! printf '%s\n' "$accepted_after" >"$accept_temporary" 2>/dev/null || ! mv "$accept_temporary" "$accept_file" 2>/dev/null; then
+      rm -f "$accept_temporary" 2>/dev/null
+      _gl_say "Not recorded: the PR review accept file could not be written. Retry the line."
+      exit 0
+    fi
+    recorded_message="Recorded: pr-review-accept $finding_id on branch $branch."
+    _gl_say "$recorded_message" "$recorded_message Claude: the human typed this line; $finding_id may now be disposed accept-residual with the human's reason."
+    exit 0
+    ;;
+esac
 
 _gl_corrupt() {
   _gl_say "Not recorded: the audit state file $1 is corrupt. A human must repair it outside Claude (restore a valid copy, or move it aside with mv to start the branch fresh); it was left untouched."

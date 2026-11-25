@@ -357,6 +357,16 @@
         ]
       },
       {
+        "matcher": "Read|Grep|Glob|Bash|Monitor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-pr-reviewer-audit-read.sh\"",
+            "statusMessage": "Checking reviewer audit-state read guard…"
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {

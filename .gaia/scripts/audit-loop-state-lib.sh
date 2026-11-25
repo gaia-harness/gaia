@@ -280,8 +280,8 @@ gaia_loop_accept_line() {
 }
 
 # gaia_loop_parse_line <text>: prints `grant <n>`, `accept`, `accept-finding <n>`,
-# `malformed` or `none`. The whole prompt, trimmed of spaces, tabs, CR and LF, must be the
-# line; a line inside longer text mentions the keyword and is `malformed`,
+# `pr-review-accept pr-<n>`, `malformed` or `none`. The whole prompt, trimmed of
+# spaces, tabs, CR and LF, must be the line; a line inside longer text mentions the keyword and is `malformed`,
 # so pasted text never grants. Builtins only.
 gaia_loop_parse_line() {
   local LC_ALL=C text="${1-}" whitespace=$' \t\r\n' edge
@@ -293,7 +293,8 @@ gaia_loop_parse_line() {
     audit-accept) printf 'accept\n' ;;
     "audit-grant "[1-9] | "audit-grant 10") printf 'grant %s\n' "${text#audit-grant }" ;;
     "audit-accept-finding "[1-9] | "audit-accept-finding "[1-9][0-9]) printf 'accept-finding %s\n' "${text#audit-accept-finding }" ;;
-    *audit-grant* | *audit-accept*) printf 'malformed\n' ;;
+    "pr-review-accept pr-"[1-9] | "pr-review-accept pr-"[1-9][0-9]) printf '%s\n' "$text" ;;
+    *audit-grant* | *audit-accept* | *pr-review-accept*) printf 'malformed\n' ;;
     *) printf 'none\n' ;;
   esac
 }

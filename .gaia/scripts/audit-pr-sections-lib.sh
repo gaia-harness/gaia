@@ -11,6 +11,8 @@
 . "$_GAIA_DISPOSITIONS_DIRECTORY/audit-recorded-decision-lib.sh"
 # shellcheck source=/dev/null
 . "$_GAIA_DISPOSITIONS_DIRECTORY/audit-decided-unattended-lib.sh"
+# shellcheck source=/dev/null
+. "$_GAIA_DISPOSITIONS_DIRECTORY/pr-body-sections-lib.sh"
 
 # _evaluator <subcommand> [args...]: audit-loop-eval.sh on ROOT, stderr dropped.
 # The dispositions check calls it too.
@@ -103,14 +105,14 @@ def section($head; $rows; fmt; $noun):
     | ([$head, ""] + ($shown | map(fmt)) + (if $withheld_count > 0 then [withheld($withheld_count; $noun)] else [] end)) | join("\n") end;
 . as $rows
 | ([$rows[] | select(.section != "divert")] | to_entries | map(.value + {clean: ($clean[.key] == true)})) as $screened
-| [ section("## Accepted residuals (recorded, not fixed)"; ($screened | map(select(.section == "accept"))); keyed; "accepted residual(s)"),
+| [ section($accepted_heading; ($screened | map(select(.section == "accept"))); keyed; "accepted residual(s)"),
     (if $decided == "" then empty else $decided end),
-    section("## Out-of-scope machinery findings (recorded, not filed)"; ($screened | map(select(.section == "cross"))); keyed; "waived finding(s)"),
-    section("## Waived below triage threshold (not filed)"; ($screened | map(select(.section == "triage"))); triage; "waived finding(s)"),
-    section("## Cross-remit findings fixed after their round"; ($screened | map(select(.section == "fixed"))); fixed; "fixed finding(s)"),
+    section($out_of_scope_heading; ($screened | map(select(.section == "cross"))); keyed; "waived finding(s)"),
+    section($waived_heading; ($screened | map(select(.section == "triage"))); triage; "waived finding(s)"),
+    section($fixed_heading; ($screened | map(select(.section == "fixed"))); fixed; "fixed finding(s)"),
     (if $divert_line == "" then empty else $divert_line end),
     (if ($absent | length) == 0 and $pending == 0 then empty
-     else (["## Not filed (no issue backend)", ""]
+     else ([$not_filed_heading, ""]
        + ($absent | map("- \(.member) \(.path):\(line_number) (\(.finding_class)): not filed, no issue backend"))
        + (if $pending > 0 then ["- \($pending) finding(s) pending: the issue backend was unreachable; retried next round"] else [] end))
        | join("\n") end) ]
@@ -222,7 +224,10 @@ _command_pr_sections() {
   [ "$divert_count" -eq 0 ] || divert_line="$(_divert_line "$divert_count")"
   decided="$(_decided_unattended_section)" || return 3
   printf '%s' "$rows" | jq -r --argjson clean "$clean" --argjson absent "$absent" --argjson pending "$pending" \
-    --arg divert_line "$divert_line" --arg decided "$decided" "$_SECTIONS_JQ" || return 3
+    --arg divert_line "$divert_line" --arg decided "$decided" \
+    --arg accepted_heading "$PR_BODY_HEADING_ACCEPTED_RESIDUALS" --arg out_of_scope_heading "$PR_BODY_HEADING_OUT_OF_SCOPE" \
+    --arg waived_heading "$PR_BODY_HEADING_WAIVED" --arg fixed_heading "$PR_BODY_HEADING_CROSS_REMIT_FIXED" \
+    --arg not_filed_heading "$PR_BODY_HEADING_NOT_FILED" "$_SECTIONS_JQ" || return 3
 }
 
 # _command_residual_count: {"total","ask"} over the accepted residuals
