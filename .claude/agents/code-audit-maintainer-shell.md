@@ -81,11 +81,9 @@ A narrower `CHANGED` shifts one risk onto you: it can begin after a commit this 
 
 For every in-remit changed script:
 
-- **Quoting / word-splitting.** Unquoted `$var` and `$(cmd)` expansions that can split on whitespace or glob; missing `"$@"` quoting in loops; array vs. scalar confusion.
-- **`set -euo pipefail` discipline.** A script that mutates state or gates a merge should fail loudly on an unset variable or a failed command in a pipeline, unless a specific line is deliberately guarded (`|| true`, `2>/dev/null`, an explicit `if` check). Flag a bare command that can fail silently and let a wrong result flow forward.
+- See `.claude/agents/code-audit-shell.md` (Review dimensions (shared correctness core)).
 - **Fail-open vs. fail-closed correctness.** Judge each guard against what it protects: a merge gate should default to blocking on ambiguity (fail-closed); a hook that could brick a session should default to allowing (fail-open, see the hook-contract lens below). Flag a guard that defaults the wrong way for its role.
-- **Bash 3.2 compatibility** (macOS ships 3.2 as `/bin/bash`, and this bash runs there): no associative arrays (`declare -A`), no `mapfile`/`readarray`, no `${var^^}`/`${var,,}`, no `&>>`. Indexed arrays, `read -r`, and POSIX parameter expansion are fine.
-- **BSD-vs-GNU portability.** `sed -i` needs a backup-suffix argument on BSD (`sed -i ''` vs GNU's `sed -i`), `date -d` is a GNU-ism, `awk`/`grep` flag sets differ (e.g. no `grep -P` on BSD grep). Flag a construct that only works under one flavor when the script has to run on both.
+- **Bash 3.2 compatibility** (macOS ships 3.2 as `/bin/bash`, and this bash runs there). See `.claude/agents/code-audit-shell.md` (Review dimensions (shared correctness core)).
 - **Repo-relative paths and no-`cd`**: no hardcoded machine-specific absolute paths; no bare `cd` that leaves the caller's working directory altered for the rest of a session-scoped hook chain. A script that needs an absolute path derives it (`git rev-parse --show-toplevel`) rather than assuming the CWD.
 - **What the lint gate cannot model.** `.gaia/tests/shell-lint.sh` runs shellcheck over every tracked script and `.bats` suite (a bats file parses as bash, so an unquoted expansion inside a `@test` body is covered), and the harness verification (`verify-harness.sh branch` before the first dispatch, `verify-harness.sh round` every round) is what enforces a clean tree, so you are dispatched on a tree that already passed it. Do not re-run shellcheck; spend the read on defects a linter has no model for: a guard that defaults the wrong way, a hook that can brick a session, a contract a caller no longer meets.
 - **Duplicate definitions.** For each array, `case` pattern list, regex, path or glob list, `jq` filter, or function the diff adds, search the whole repo with `git grep` for an existing definition of the same set or behavior, matching on values (a member of the list, a distinctive pattern, the function body's key command) and not only on names; the copy a diff duplicates usually sits outside the diff. A hit is `holistic/drifting-duplicate`, repaired by sourcing the existing definition or moving it into one sourced library both scripts load; GAIA's shared libraries are `.gaia/scripts/*-lib.sh`, where a value or helper two framework scripts need belongs.
@@ -94,8 +92,7 @@ For every in-remit changed script:
 
 When a changed file is under `.claude/hooks/**/*.sh`, additionally check:
 
-- **Stdin-JSON input shape.** The hook reads its invocation context as JSON on stdin (`input=$(cat)`), and parses fields defensively (`jq -r '.tool_name // ""' 2>/dev/null`, checked before use). Flag a hook that assumes a field is present without a `// default` fallback, or that pipes `jq` output straight into a command without a guard.
-- **Permission-decision output shape.** A hook that returns a permission decision emits `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow"|"deny"|"ask", "permissionDecisionReason": "..."}}`, built via `jq -n --arg` (never raw string interpolation of a dynamic reason into the JSON template, that is an injection risk into the emitted JSON). Flag a malformed or hand-built JSON string in place of `jq -n`.
+- See `.claude/agents/code-audit-shell.md` (Conditional hook-contract lens).
 - **Never-brick-the-session fail-open.** A hook must not abort the session on its own internal error: missing `jq`/`gh`, an unexpected input shape, or a failed lookup should degrade to exiting 0 (a no-op) rather than propagating a non-zero exit or an uncaught `set -e` failure that could break the tool call pipeline. Flag any code path in a hook where an unexpected condition could exit non-zero without an explicit, deliberate reason to block.
 
 This lens activates only for hook scripts; it does not apply to `.gaia/` or `.github/` scripts.
@@ -104,7 +101,7 @@ This lens activates only for hook scripts; it does not apply to `.gaia/` or `.gi
 
 When a changed file is a `.bats` suite, the shared correctness core above still applies (it is bash), and additionally check that the suite **actually enforces what it claims**. A hollow assertion is worse than a missing one: it reports green forever and nobody looks again.
 
-- **Assertions that cannot fail**, per `.claude/rules/bats-assertions.md`. On bash 3.2 (macOS `/bin/bash`, what bats resolves to by default there) a false bare `[[ ... ]]` in a non-final line does not fail the test. Separately, on **every** bash version, `set -e` exempts a `!`-negated command, so a non-final `! grep -q ...` absence assertion never fails. Flag either shape: the fixes are POSIX `[ ... ]` / `grep -qF ... <<<"$output" || return 1`, and `<positive-match-for-the-bad-case> && return 1`.
+- **Assertions that cannot fail**, per `.claude/rules/bats-assertions.md`. Flag either shape: the fixes are POSIX `[ ... ]` / `grep -qF ... <<<"$output" || return 1`, and `<positive-match-for-the-bad-case> && return 1`.
 - **A weakened or deleted assertion.** Read the diff's removals, not just its additions. An assertion deleted, loosened (an exact `[ "$output" = ... ]` downgraded to a substring grep), or a `@test` silently dropped is a coverage regression: the guarded script keeps its gate in name only. Require the diff to justify a removal; an unexplained one is a finding.
 - **`skip` that hides a failure.** A `skip` added to a previously-running test, or a guard broad enough to skip in CI (a missing-binary check that is always true there), silently retires coverage. A legitimate skip names a genuine unavailable precondition.
 
@@ -187,7 +184,7 @@ The protocol's "Holistic class assignment" section owns the class list, each cla
 - `holistic/unbounded-invocation`: a `gh` call in a loop with no timeout or page cap.
 - `holistic/overclaimed-guarantee`: a header crediting a pin with catching every drift when it catches one spelling.
 - `holistic/incomplete-enumeration`: a header listing the surfaces a scan walks while the scan walks one more.
-- `holistic/repeated-round-trip`: a loop spawning `git check-ignore` or `grep -q` once per path, or `jq` once per field of one JSON document, where one batched call over the whole set returns the same answers.
+- See `.claude/agents/code-audit-shell.md` (Domain examples per holistic class).
 
 ## Methodology
 

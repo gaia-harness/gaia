@@ -121,7 +121,7 @@ On a release run whose `BASELINE_TAG` is a dev tag:
 bash .gaia/scripts/update-gaia-preflight.sh verify-bundles --baseline <BASELINE> --baseline-tag <BASELINE_TAG> --latest-tag <LATEST_TAG>
 ```
 
-Each adds one `--extra-tag <tag>` per extra baseline tag, as Step 3c does. Persist `BASELINE_DIR`, `LATEST_DIR` and each `EXTRA_DIR` line as printed. Beyond Step 3c's lines:
+Each adds one `--extra-tag <tag>` per extra baseline tag, as Step 3c does. Beyond Step 3c's lines:
 
 - `VERIFIED_LOCAL <tag>`: a bundle checked only against its locally computed checksum.
 - `CACHE_MISSING <LOCAL_TAG>`: the cache lost the bundle since the source step. Stop and tell the user to re-run with the tarball.
@@ -152,6 +152,7 @@ Build commit: <LOCAL_COMMIT>
 Name each `AFTER_MERGE` note as Step 4 does, and each `NOT_RUN` note as `<version> (<mode>) <path>: not run, follow it by hand to test it`. Then use `AskUserQuestion`:
 
 - **Question**: "Sync GAIA v<BASELINE> to the local, unverified bundle <LOCAL_TAG>?"
+- **Header**: `Local bundle`
 - **Options**: `Proceed` (Recommended) / `Abort`.
 
 The question's text adds one line for the baseline:

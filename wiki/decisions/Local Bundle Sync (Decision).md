@@ -19,7 +19,7 @@ The local path is reached only through the explicit `--local` argument. Without 
 
 ## Build identity
 
-A local bundle is identified by its build id, `dev.<sha>`: the first twelve hex characters of the commit it was built from. The project's version file keeps a plain `x.y.z` release version, because many readers of that file parse it strictly and several fail silently on a suffix. The build is recorded instead in a committed sidecar, the `VERSION-dev` file in the project's `.gaia` folder, which only `/update-gaia` reads. Wherever the updater needs a tag (the update cache key, the run's target tag, the update branch prefix, a deferred item's baseline tag), a local build uses the prerelease-shaped tag `v<core>-dev.<sha>`, where `<core>` is the bundle's plain release version. That tag never reaches the version file.
+See [[Local Bundle Sync (Concept)#Build identity]].
 
 The build record is adopter-owned: the release manifest never lists it, the merge walk never overwrites or flags it, and the release manifest build refuses a GAIA source tree that tracks it, because a release tarball is staged from tracked files.
 
@@ -35,7 +35,7 @@ A local sync's update branch is `update/v<core>-dev.<sha>-<timestamp>`. Because 
 
 ## After a local sync
 
-The next update, local or release, merges against the synced build while this machine still caches it, so only the changes between the two builds reach the project. A release update reads the recorded build as its baseline, bypasses the "up to date" exit when the project's version equals the latest release, and removes the build record in its record step. The cache prune keeps the run's baseline tag, dev or release, alongside the latest release and every deferred item's tag. Dev tags are ranked by semver, where `v2.2.0-dev.<sha>` sorts below `v2.2.0`; nothing ranks cached tags with `sort -V`, which orders them the other way.
+See [[Local Bundle Sync (Concept)#After a local sync]].
 
 A deferral made on a local sync records the run's baseline tag, the tag the deferred file was last merged against, so the next run merges that item against the same tree. Rolling back a broken dev sync is a revert of its update pull request.
 

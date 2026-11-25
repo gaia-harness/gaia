@@ -114,6 +114,7 @@ command -v gh
 
 - **`gh` installed:** offer issue creation via `AskUserQuestion`:
   - question: `"File a GitHub issue for this report?"`
+  - header: `"File issue"`
   - options:
     - `{ label: "Yes, file the issue (Recommended)", description: "Creates an issue on gaia-harness/gaia with the gaia-forensics label." }`
     - `{ label: "No, save locally only", description: "The report is already saved locally; no issue will be filed." }`

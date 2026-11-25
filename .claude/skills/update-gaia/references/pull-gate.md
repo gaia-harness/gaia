@@ -18,7 +18,7 @@ The session is inside a linked worktree, and the gate already printed a `Next st
 
 ## Step 2: Ask (exit 1)
 
-Ask once with `AskUserQuestion`: "Pull now and restart <command> (Recommended)" or "Stop". In auto mode, which means the command was invoked with its `auto` token, choose the Recommended option without asking, and keep the `auto` token in the restart arguments.
+Ask once with `AskUserQuestion` (header `Pull gate`): "Pull now and restart <command> (Recommended)" or "Stop". In auto mode, which means the command was invoked with its `auto` token, choose the Recommended option without asking, and keep the `auto` token in the restart arguments.
 
 ## Step 3: Stop
 

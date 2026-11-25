@@ -6,7 +6,7 @@ The value is a committed **recommendation** only, never an enablement: each mach
 
 ## The question
 
-Use AskUserQuestion with this question and these options, all in the user's language:
+Use AskUserQuestion (header `Sandbox`) with this question and these options, all in the user's language:
 
 > Recommend Claude Code's OS-level Bash sandbox to your team? Each machine still decides at /setup-gaia; this only records the recommendation.
 >

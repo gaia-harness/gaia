@@ -57,7 +57,7 @@ The per-topic revisit counter and the escape option above both fit inside this b
 
 ## 5a. AskUserQuestion mediation (closed-set questions)
 
-For every question with discrete possible answers, surface it via `AskUserQuestion`. The tool takes at most four options and adds its own free-text `Other` to every question, so list exactly these, in this order:
+For every question with discrete possible answers, surface it via `AskUserQuestion` (header `Clarify`). The tool takes at most four options and adds its own free-text `Other` to every question, so list exactly these, in this order:
 
 1. **Recommended option FIRST**: labeled `"<option text> (Recommended)"`. Use the PO's best judgment; the recommendation is annotated with code-context where helpful (e.g. `"Cards (reuses existing Card component)"`).
 2. **Up to two alternatives**: the next most plausible options, in descending order of plausibility. When more than two alternatives are viable, list the strongest two and name the rest in the question text, so none is dropped silently and the user can still pick one through `Other`.
