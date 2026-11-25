@@ -9,16 +9,16 @@
 # rules still apply after an allow.
 #
 # A command is approved only when every one of these holds:
-#   - its structure is a list of simple commands joined by `&&`, `||`, `;` or a
-#     newline, with no background `&`, no redirect other than one that discards
-#     or duplicates a stream (`2>&1`, `2>/dev/null`), no substitution, no
-#     expansion (`$`, a backtick, a glob, a brace list), no subshell, no
-#     backslash and no comment outside single quotes. Two exceptions: a command
-#     may end in one pipe into `head` or `tail` (with at most a numeric `-N` or
-#     `-n N`) or `wc -l`, and `git commit -F -` may read a heredoc whose
-#     delimiter is quoted, so its body never expands;
-#   - every segment begins with the bare word `git`: an env prefix, a wrapper,
-#     a path to git, or any other program falls through;
+#   - its structure is a list of simple commands joined by `&&`, `||`, `;`, a
+#     newline or a pipe, with no background `&`, no redirect other than one that
+#     discards or duplicates a stream (`2>&1`, `2>/dev/null`), no substitution,
+#     no expansion (a backtick, a glob, a brace list, any `$` but `$?` and a
+#     variable an earlier segment assigned a literal), no subshell, no
+#     backslash and no comment outside single quotes. `git commit -F -` may read
+#     a heredoc whose delimiter is quoted, so its body never expands;
+#   - at least one segment begins with the bare word `git`, and every other
+#     segment is one lib/compound-segment-programs.sh approves: a git segment
+#     with an env prefix, a wrapper or a path to git falls through;
 #   - its global options are only `-C <directory>` (once), `-c <key>=<value>`
 #     for a key on the safe list in lib/git-command-config.sh, `--no-pager`,
 #     `-P` and `--no-optional-locks`;
@@ -30,9 +30,9 @@
 #     its fall-through options;
 #   - neither the destructive-git guard's history and command-config rules nor
 #     the branch questions main_branch_rule_matches reads (a superset of the
-#     guard's main-branch and hard-reset rules) match the segment; the guard's
-#     peer-session checkout rule is left to that hook, whose deny beats this
-#     allow.
+#     guard's main-branch and hard-reset rules) match the segment, with every
+#     variable read as its assigned literal; the guard's peer-session checkout
+#     rule is left to that hook, whose deny beats this allow.
 #
 # Fail to fall-through, never fail to allow: a missing library, a missing jq, a
 # parse this file cannot finish, and every form not listed above exit 0 with no
@@ -81,21 +81,14 @@ case "$command" in git | git[[:space:]]* | *[[:space:]]git[[:space:]]* | *[\;\&\
 . "$library_directory/git-allow-list.sh" 2>/dev/null || exit 0
 # shellcheck source=lib/git-command-segments.sh
 . "$library_directory/git-command-segments.sh" 2>/dev/null || exit 0
+# shellcheck source=lib/compound-segment-programs.sh
+. "$library_directory/compound-segment-programs.sh" 2>/dev/null || exit 0
 for required_function in parse_git_globals history_rule_reason command_config_rule_reason \
     _history_option_is push_refspec_names_main push_refspec_targets_main reset_hard_moves_head \
-    gaia_resolve_common_directory split_command_segments; do
+    gaia_resolve_common_directory split_command_segments in_this_repository non_git_segment_is_approved; do
   type "$required_function" >/dev/null 2>&1 || exit 0
 done
 [ "${#GAIA_GIT_ALLOWED_SUBCOMMANDS[@]}" -gt 0 ] && [ "${#GAIA_GIT_SAFE_CONFIG_KEYS[@]}" -gt 0 ] || exit 0
-
-# in_this_repository <directory>: 0 when git run in <directory> discovers the
-# repository this hook belongs to, through any of its checkouts.
-in_this_repository() {
-  local own given
-  own=$(gaia_resolve_common_directory "$hook_root" 2>/dev/null) || return 1
-  given=$(gaia_resolve_common_directory "$1" 2>/dev/null) || return 1
-  [ -n "$own" ] && [ "$own" = "$given" ]
-}
 
 # globals_are_approved: 0 when every global option of the segment
 # parse_git_globals just read is one this file vouches for. Sets
@@ -366,7 +359,15 @@ for segment_index in "${!segments[@]}"; do
   segment="${segments[$segment_index]}"
   segment="${segment#"${segment%%[![:space:]]*}"}"
   [ -n "$segment" ] || continue
-  case "$segment" in git | git[[:space:]]*) ;; *) exit 0 ;; esac
+  case "$segment" in
+    git | git[[:space:]]*) ;;
+    *)
+      [ "${segment_heredocs[$segment_index]}" = 0 ] && non_git_segment_is_approved "$segment" || exit 0
+      [ "$segment_runs_program" -eq 0 ] || branch_may_have_changed=1
+      continue ;;
+  esac
+  # `$?` reads as text to the git word parser; a git segment never carries it.
+  case "$segment" in *'$?'*) exit 0 ;; esac
   parse_git_globals "$segment"
   [ -n "$git_subcommand" ] || exit 0
   if [ "${segment_heredocs[$segment_index]}" = 1 ]; then commit_reads_stdin || exit 0; fi
