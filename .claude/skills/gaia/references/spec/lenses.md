@@ -1,6 +1,6 @@
 # /gaia-spec: lens focus text
 
-The focus text of each SPEC review lens. Each lens agent `spec/audit.md` `## The lenses` dispatches reads only its own section, named by its id prefix; every other section belongs to another lens. The main thread never reads this file, except that a lens the main thread runs inline reads its own section.
+The focus text of each SPEC review lens. Each lens agent `spec/audit.md` `## The lenses` dispatches reads only its own section, named by its id prefix; every other section belongs to another lens. The main thread reads only the section of a lens it runs inline.
 
 ## Core lenses
 
