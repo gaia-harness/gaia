@@ -25,7 +25,7 @@
 #   - spec_id matches SPEC-NNN
 #   - flows validate through flows-lib.sh: a uats: key, a missing flows: key, or a
 #     malformed flow is refused, each under the finding code flows-lib reports
-#   - a command flow's test_path matches a runner's paths glob in flow-runners-lib.sh
+#   - a command flow's test_path matches a runner's paths glob in the flow-runners-lib.sh table
 #     (finding code unrunnable_test_path, or flow_runners_unreadable when the
 #     runner table cannot be read)
 #   - a ## Behaviors section holds at least one behavior outside a code fence
