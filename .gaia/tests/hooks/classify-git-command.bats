@@ -471,6 +471,9 @@ EOF
   expect fall 'git checkout -- .claude/settings.json'
   expect allow 'git checkout feature'
   expect allow 'git checkout -b feature origin/main'
+  expect fall 'git checkout HEAD~5 --pathspec-from-file=list'
+  expect fall 'git checkout HEAD~5 --pathspec-file-nul --pathspec-from-file=-'
+  expect fall 'git checkout HEAD~5 --pathspec-fr=-'
 }
 
 @test "apply, and a restore from another tree, fall through" {
@@ -605,6 +608,13 @@ EOF
   expect fall "R='$REPO x'; git status"
   expect fall "R=$REPO git status"
   expect fall "r=$REPO; git -C \"\$r\" status"
+  expect fall 'N=-n; git commit -m x "$N"'
+  expect fall 'N=--no-verify; git push "$N"'
+  expect fall "R=$REPO; git -C \"\$R\" checkout other"
+  expect fall "R=$REPO; git -C \$R switch other"
+  mkdir -p "$REPO/wiki"
+  expect fall "R=$REPO/wiki; git -C \${R}2>/dev/null status"
+  expect allow "R=$REPO/wiki; git -C \${R} status 2>/dev/null"
   local name
   for name in PATH HOME IFS CDPATH GIT_DIR LD_PRELOAD BASH_ENV ZDOTDIR GAIA_HOOK_CWD; do
     expect fall "$name=$REPO; git status"
@@ -637,6 +647,12 @@ EOF
   expect fall 'git status; cat ../outside'
   expect fall 'git status; grep -f /etc/hosts data.json'
   expect fall 'git status; jq --rawfile a data.json -n 1'
+  expect fall 'git status; jq -n env'
+  expect fall "git status; jq --null-input '\$ENV'"
+  expect fall 'git status; jq env data.json'
+  expect fall "git status; jq '\$ENV.HOME' data.json"
+  ln -s "$FOREIGN/secret" "$REPO/link"
+  expect fall 'git status; cat link'
   expect fall 'git status; sort -o data.json data.json'
   expect fall 'git status; uniq data.json out'
   expect fall 'git status; tail -f data.json'
@@ -644,10 +660,25 @@ EOF
 }
 
 # bats test_tags=protected
+@test "jq beside git never prints the environment" {
+  printf '{"x":1}\n' >"$REPO/data.json"
+  export TOKEN=secret-token-value
+  expect allow "git status; jq -r '.x' data.json"
+  expect fall 'git status; jq -n env'
+  expect fall 'git status; jq --null-input env'
+  expect fall "git status; jq -n '\$ENV.TOKEN'"
+  expect fall "git status; jq --null-input '\$ENV'"
+  expect fall 'git status; jq env data.json'
+  expect fall "git status; jq '\$ENV.TOKEN' data.json"
+  expect fall "git status; jq '.x, env.TOKEN' data.json"
+}
+
+# bats test_tags=protected
 @test "a segment a settings allow rule matches allows, word for word, and counts as a branch change" {
   mkdir -p "$REPO/.claude"
   jq -n '{permissions: {allow: [
-    "Bash(bash .gaia/scripts/tool.sh:*)", "Bash(gh pr view:*)", "Bash(pnpm lint)", "Bash(rm -rf .gaia/local/cache/*)"
+    "Bash(bash .gaia/scripts/tool.sh:*)", "Bash(gh pr view:*)", "Bash(pnpm lint)", "Bash(rm -rf .gaia/local/cache/*)",
+    "Bash(git branch:*)"
   ]}}' >"$REPO/.claude/settings.json"
   expect allow 'bash .gaia/scripts/tool.sh --root x; git status'
   expect allow "bash $REPO/.gaia/scripts/tool.sh; git status"
@@ -655,6 +686,8 @@ EOF
   expect allow 'pnpm lint && git status'
   expect fall 'pnpm lint --fix && git status'
   expect fall '"gh pr" view 1; git status'
+  expect fall "git status; 'git' branch -D main"
+  expect fall 'git status; "git" branch -D main'
   expect fall 'bash .gaia/scripts/tool.sh.x; git status'
   expect fall 'bash .gaia/scripts/other.sh; git status'
   expect fall "bash $FOREIGN/.gaia/scripts/tool.sh; git status"
@@ -671,4 +704,38 @@ EOF
   run bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$REPO" "$json" "$SOURCE_ROOT/.claude/hooks/block-no-verify.sh"
   [ "$status" -eq 0 ]
   grep -qF -- '"permissionDecision": "deny"' <<<"$output"
+}
+
+# bats test_tags=protected
+@test "a flag held in a shell variable never reaches git through the classifier" {
+  expect fall 'N=-n; git commit -m x "$N"'
+  expect fall 'N=--no-verify; git push "$N"'
+  expect fall 'N=--no-verify; git commit -m x "$N"'
+  expect fall 'N=-n; git push "$N"'
+  expect fall 'N=-anything; git commit -m x $N'
+  expect fall 'N=--no-verify && git commit -m x "${N}"'
+}
+
+# bats test_tags=protected
+@test "a quoted git command word is judged by the git path, never approved through a settings allow rule" {
+  expect fall "git status; 'git' branch -D main"
+  expect fall 'git status; "git" branch -D main'
+  expect fall "git status; 'git' checkout HEAD~3 -- .claude/settings.json"
+  expect fall 'git status; "git" checkout HEAD~3 -- .claude/settings.json'
+}
+
+# bats test_tags=protected
+@test "a reader on a symlink to a file outside the repository falls through, whichever reader" {
+  printf 'outside-secret\n' >"$FOREIGN/secret"
+  printf '{"x":1}\n' >"$FOREIGN/secret.json"
+  mkdir -p "$REPO/docs"
+  ln -s "$FOREIGN/secret" "$REPO/docs/link"
+  ln -s "$FOREIGN/secret.json" "$REPO/docs/link.json"
+  expect fall 'git status; cat docs/link'
+  expect fall 'git status; head -n 1 docs/link'
+  expect fall 'git status; tail -n 1 docs/link'
+  expect fall 'git status; wc -l docs/link'
+  expect fall 'git status; grep x docs/link'
+  expect fall "git status; cat $REPO/docs/link"
+  expect fall "git status; jq -r '.x' docs/link.json"
 }

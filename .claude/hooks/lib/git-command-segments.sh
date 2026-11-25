@@ -23,6 +23,7 @@
 # (expand_parameter_reference below). A quoted heredoc is dropped from its
 # segment, the body unread; segment_heredocs marks
 # each segment that read one.
+# `segment_expansions` holds, per segment, 1 when a variable expanded inside it.
 # `assignment_names` and `assignment_values` hold the literal assignments read
 # so far, and the caller judges whether each assignment segment may run.
 heredoc_pattern=$'^<<[[:space:]]*([\'"])([A-Za-z_][A-Za-z0-9_]*)([\'"])[[:space:]]*\n'
@@ -42,6 +43,7 @@ finish_segment() {
   local text="$1" trimmed
   segments+=("$text")
   segment_heredocs+=("$heredoc"); heredoc=0
+  segment_expansions+=("$expanded"); expanded=0
   trimmed="${text#"${text%%[![:space:]]*}"}"
   trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
   if [[ "$trimmed" =~ $literal_assignment_pattern ]] \
@@ -83,6 +85,9 @@ expand_parameter_reference() {
     position=$((position - 1))
     if [ "${assignment_names[$position]}" = "$name" ]; then
       parameter_value="${assignment_values[$position]}"
+      # A value that opens with `-` would reach git as an option the raw text
+      # never shows, such as `--no-verify`, so it is never read.
+      case "$parameter_value" in -*) return 1 ;; esac
       [ -n "$parameter_value" ]
       return
     fi
@@ -92,10 +97,11 @@ expand_parameter_reference() {
 
 split_command_segments() {
   local text="$1" length index=0 copy_from=0 character next quote="" segment="" lookahead token span
-  local rest delimiter body heredoc=0 unconditional=1 newline=$'\n' parameter_value parameter_length
+  local rest delimiter body heredoc=0 expanded=0 expansion_end=-1 unconditional=1 newline=$'\n' parameter_value parameter_length
   length=${#text}
   segments=()
   segment_heredocs=()
+  segment_expansions=()
   assignment_names=()
   assignment_values=()
   while [ "$index" -lt "$length" ]; do
@@ -109,7 +115,7 @@ split_command_segments() {
       '$')
         expand_parameter_reference "$text" "$index" || return 1
         segment="$segment${text:$copy_from:$((index - copy_from))}$parameter_value"
-        index=$((index + parameter_length)); copy_from=$index; continue ;;
+        index=$((index + parameter_length)); copy_from=$index; expansion_end=$index; expanded=1; continue ;;
     esac
     if [ "$quote" = '"' ]; then
       [ "$character" = '"' ] && quote=""
@@ -119,7 +125,9 @@ split_command_segments() {
     # dropped from the segment so the word parser never reads it as an operand.
     case "$character" in
       1 | 2 | '>' | '&')
-        if [ "$index" -eq "$copy_from" ] || [[ "${text:$((index - 1)):1}" == [[:space:]] ]]; then
+        # An expansion ends no word: `${R}2>/dev/null` is one word, so only
+        # whitespace or an operator makes a word start here.
+        if { [ "$index" -eq "$copy_from" ] && [ "$index" -ne "$expansion_end" ]; } || [[ "${text:$((index - 1)):1}" == [[:space:]] ]]; then
           lookahead="${text:$index:12}"
           for token in '2>&1' '2>/dev/null' '>/dev/null' '1>/dev/null' '&>/dev/null'; do
             case "$lookahead" in

@@ -36,7 +36,7 @@ GAIA_READER_PROGRAMS=(
   'cut|bcdf||-|no|'
   'grep|ABCDdefm||color= colour= count extended-regexp fixed-strings ignore-case invert-match line-number no-filename only-matching quiet recursive with-filename word-regexp|yes|'
   'head|cn||bytes= lines=|no|'
-  'jq||fL|arg argjson ascii-output color-output compact-output exit-status indent join-output monochrome-output null-input raw-input raw-output slurp sort-keys tab|yes|'
+  'jq||fLn|arg argjson ascii-output color-output compact-output exit-status indent join-output monochrome-output raw-input raw-output slurp sort-keys tab|yes|'
   'ls|||-|no|'
   'sort|ktS|oT|-|no|'
   'tail|cn|fF|bytes= lines=|no|'
@@ -62,6 +62,8 @@ path_is_in_this_repository() {
     /*) path="$1" ;;
     *) case "$GAIA_HOOK_CWD" in /*) path="$GAIA_HOOK_CWD/$1" ;; *) return 1 ;; esac ;;
   esac
+  # A symlink in the repository can point at a file outside it.
+  [ ! -L "$path" ] || return 1
   [ -d "$path" ] || path=$(dirname "$path")
   in_this_repository "$path"
 }
@@ -143,6 +145,10 @@ reader_is_approved() {
     fi
     if [ "$text_first" = yes ] && [ "$text_seen" -eq 0 ]; then
       text_seen=1
+      # jq's `env` and `$ENV` print the environment, secrets included.
+      if [ "${words[0]}" = jq ]; then
+        case "$word" in *env* | *ENV*) return 1 ;; esac
+      fi
       continue
     fi
     operand_count=$((operand_count + 1))
@@ -222,6 +228,9 @@ non_git_segment_is_approved() {
   split_git_words "$segment"
   [ "${#words[@]}" -gt 0 ] || return 1
   case "${words[0]}" in
+    # A quoted `'git'` reaches here on its raw first word; only the git path
+    # judges a git invocation.
+    git) return 1 ;;
     echo | true | false | pwd) return 0 ;;
     # `printf -v` assigns a variable, which can be PATH.
     printf) case "${words[1]:-}" in -v*) return 1 ;; esac; return 0 ;;
@@ -235,5 +244,53 @@ non_git_segment_is_approved() {
   done
   matches_allow_rule || return 1
   segment_runs_program=1
+  return 0
+}
+
+# config_is_read_only: 0 when the `git config` operands write nothing.
+config_is_read_only() {
+  local argument lowered operand_count=0 skip_next=0 read_flag=0
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
+    lowered=$(printf '%s' "$argument" | tr '[:upper:]' '[:lower:]')
+    case "$lowered" in
+      --*=*) ;;
+      --*) if _history_option_is "$lowered" --comment; then skip_next=1; continue; fi ;;
+    esac
+    if _history_option_is "$lowered" --unset --unset-all --add --replace-all \
+         --rename-section --remove-section --edit || [ "$lowered" = -e ]; then
+      return 1
+    fi
+    if _history_option_is "$lowered" --get --get-all --get-regexp --get-urlmatch --list \
+         || [ "$lowered" = -l ]; then
+      read_flag=1; continue
+    fi
+    case "$lowered" in
+      --file | -f | --blob | --default | --type) skip_next=1; continue ;;
+      -*) continue ;;
+    esac
+    operand_count=$((operand_count + 1))
+    if [ "$operand_count" -eq 1 ]; then
+      case "$lowered" in
+        get | list) read_flag=1; continue ;;
+        set | unset | rename-section | remove-section | edit) return 1 ;;
+      esac
+    fi
+  done
+  [ "$read_flag" -eq 1 ] && return 0
+  [ "$operand_count" -le 1 ]
+}
+
+# remote_is_read_only: 0 for `git remote` with no operand, `get-url` or `show`,
+# each optionally after `-v`. Any other word is a write subcommand.
+remote_is_read_only() {
+  local argument
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    case "$argument" in
+      -v | --verbose) continue ;;
+      get-url | show) return 0 ;;
+    esac
+    return 1
+  done
   return 0
 }

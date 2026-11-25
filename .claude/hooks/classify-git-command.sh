@@ -34,7 +34,9 @@
 #     the branch questions main_branch_rule_matches reads (a superset of the
 #     guard's main-branch and hard-reset rules) match the segment, with every
 #     variable read as its assigned literal; the guard's peer-session checkout
-#     rule is left to that hook, whose deny beats this allow.
+#     rule is left to that hook, whose deny beats this allow, except that the
+#     guard reads the raw text and cannot see a variable, so a checkout or
+#     switch segment that expanded one falls through here.
 #
 # Fail to fall-through, never fail to allow: a missing library, a missing jq, a
 # parse this file cannot finish, and every form not listed above exit 0 with no
@@ -190,6 +192,9 @@ checkout_names_pathspec() {
   for argument in ${git_args[@]+"${git_args[@]}"}; do
     case "$argument" in
       --) return 0 ;;
+      # `--path*` is any unambiguous prefix of --pathspec-from-file and
+      # --pathspec-file-nul, which read the pathspec from a file or stdin.
+      --path*) return 0 ;;
       --orphan | --orphan=*) allowed=2 ;;
       --*) ;;
       -*[bB]*) allowed=2 ;;
@@ -257,54 +262,6 @@ option_matches() {
       return 1 ;;
   esac
   return 1
-}
-
-# config_is_read_only: 0 when the `git config` operands write nothing.
-config_is_read_only() {
-  local argument lowered operand_count=0 skip_next=0 read_flag=0
-  for argument in ${git_args[@]+"${git_args[@]}"}; do
-    if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
-    lowered=$(printf '%s' "$argument" | tr '[:upper:]' '[:lower:]')
-    case "$lowered" in
-      --*=*) ;;
-      --*) if _history_option_is "$lowered" --comment; then skip_next=1; continue; fi ;;
-    esac
-    if _history_option_is "$lowered" --unset --unset-all --add --replace-all \
-         --rename-section --remove-section --edit || [ "$lowered" = -e ]; then
-      return 1
-    fi
-    if _history_option_is "$lowered" --get --get-all --get-regexp --get-urlmatch --list \
-         || [ "$lowered" = -l ]; then
-      read_flag=1; continue
-    fi
-    case "$lowered" in
-      --file | -f | --blob | --default | --type) skip_next=1; continue ;;
-      -*) continue ;;
-    esac
-    operand_count=$((operand_count + 1))
-    if [ "$operand_count" -eq 1 ]; then
-      case "$lowered" in
-        get | list) read_flag=1; continue ;;
-        set | unset | rename-section | remove-section | edit) return 1 ;;
-      esac
-    fi
-  done
-  [ "$read_flag" -eq 1 ] && return 0
-  [ "$operand_count" -le 1 ]
-}
-
-# remote_is_read_only: 0 for `git remote` with no operand, `get-url` or `show`,
-# each optionally after `-v`. Any other word is a write subcommand.
-remote_is_read_only() {
-  local argument
-  for argument in ${git_args[@]+"${git_args[@]}"}; do
-    case "$argument" in
-      -v | --verbose) continue ;;
-      get-url | show) return 0 ;;
-    esac
-    return 1
-  done
-  return 0
 }
 
 # subcommand_is_approved: 0 when the segment's subcommand is on the allow list
@@ -382,6 +339,7 @@ for segment_index in "${!segments[@]}"; do
   [ -z "$history_reason" ] || exit 0
   main_branch_rule_matches && exit 0
   case "$git_subcommand" in checkout | switch | symbolic-ref) branch_may_have_changed=1 ;; esac
+  case "$git_subcommand" in checkout | switch) [ "${segment_expansions[$segment_index]}" = 0 ] || exit 0 ;; esac
   approved=1
 done
 [ "$approved" -eq 1 ] || exit 0
