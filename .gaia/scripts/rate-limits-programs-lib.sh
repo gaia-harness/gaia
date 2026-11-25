@@ -132,9 +132,9 @@ _GAIA_RATE_LIMITS_REPORT_PROGRAM='
   | if $mode == "own" and $own_windows == null then empty
     else
       ($own_windows // {}) as $own_entries
-      | (if $mode == "own" then $own_entries
+      | (if $mode == "own" or $own_windows != null then $own_entries
          else scanned as $others
-           | [ window_names[] as $name | ($own_entries[$name] // latest($others; $name))
+           | [ window_names[] as $name | latest($others; $name)
                | select(. != null) | {key: $name, value: .} ] | from_entries end) as $chosen
       | ($sets | map(.[0]) | min) as $lowest_warning
       | ($chosen.seven_day | . != null and .resets_at > $now and (.used_percentage | whole) >= $lowest_warning) as $needs_tier

@@ -9,10 +9,10 @@
 #                                                 written or unchanged, 1 write
 #                                                 failed, 2 invalid reading)
 #
-# `read` shows, per window, the reading of the session CLAUDE_CODE_SESSION_ID
-# names (Claude Code exports it to Bash tool commands) when that session's file
-# holds the window, else the reading whose figure changed most recently across
-# sessions; a value that is not UUID-shaped reads as absent. `write` refuses a
+# `read` shows only the windows of the session CLAUDE_CODE_SESSION_ID names
+# (Claude Code exports it to Bash tool commands) once that session has a valid
+# reading file, else, per window, the reading whose figure changed most
+# recently across sessions; a value that is not UUID-shaped reads as absent. `write` refuses a
 # session id that is not UUID-shaped (usage, exit 2), since the id forms the file's path.
 #
 # Any other verb or argument count prints usage on stderr and exits 2. The

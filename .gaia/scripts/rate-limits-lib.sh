@@ -44,8 +44,11 @@
 # and its confirmed a boolean. Ranking: unexpired over expired, confirmed over
 # unconfirmed, newest changed_at among confirmed, oldest among unconfirmed (a
 # new session's first figure may predate its first response, so it never
-# displaces a confirmed one), then the lower session id. The statusline always shows this choice;
-# the reader shows the session's own entry per window when it has one.
+# displaces a confirmed one), then the lower session id. The statusline always shows this choice.
+# The reader shows only the session's own windows once its file is valid: the
+# file holds every window its account reports, and another session's file may
+# belong to another account sharing this cache (a second profile), so a
+# window the own file lacks is one this account does not have.
 #
 # Bands. The 5-hour window uses the standard set on every tier: warning late
 # costs a limit hit mid-task, warning early costs one question. The 7-day
@@ -293,9 +296,9 @@ gaia_rate_limits_write() {
 # the one reader, used by the CLI (reader) and the dispatch hook (own, with
 # its marker file). `own` reads only the session's own file: rc 1 and no
 # output when the id is not UUID-shaped or the file is missing, unreadable,
-# unparseable or not version 2. `reader` takes, per window, the own entry when
-# the id is UUID-shaped and its file holds a valid one, else the latest-change
-# choice. Stdout, windows sorted by name:
+# unparseable or not version 2. `reader` takes the own file's valid entries
+# alone when the id is UUID-shaped and that file is valid, else the
+# latest-change choice per window. Stdout, windows sorted by name:
 #   line<TAB><reader line>
 #   due<TAB><name><TAB><warning|critical><TAB><whole percentage><TAB><resets label><TAB><resets_at>
 #   marker<TAB><compact JSON marker body>
