@@ -72,7 +72,7 @@ jq -er '[.inventory[] | select(.ownership == "adopter" or .ownership == "gaia-sh
 
 **Otherwise:**
 
-1. Write the input file. It holds the paths the filter prints plus every tracked Markdown file under a `.claude/` folder at any depth or under `wiki/` that names `AskUserQuestion`, minus any path the inventory marks `third-party` or `ignored`; linked worktrees under `.claude/worktrees/` are untracked, so never enter it. Each file's content sits between begin and end marker lines, declared as data, and every content line carries its line number within that file, so the judge copies a finding's line rather than counting it in the input file. A symlink is skipped, so the judge never reads outside the project through one:
+1. Write the input file. It holds the paths the filter prints plus every tracked Markdown file under a `.claude/` folder at any depth or under `wiki/` that names `AskUserQuestion`, minus any path the inventory marks `third-party` or `ignored`; linked worktrees under `.claude/worktrees/` are untracked, so they never enter it. Each file's content sits between begin and end marker lines, declared as data, and every content line carries its line number within that file, so the judge copies a finding's line rather than counting it in the input file. A symlink is skipped, so the judge never reads outside the project through one:
 
    ```bash
    {
