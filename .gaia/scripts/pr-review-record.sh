@@ -221,11 +221,15 @@ cmd_open() {
         return 0
       fi
       # An outcome-less record the head has moved past is reviewed at the new head:
-      # the attempts stay, the head and the changed-file list follow the bundle.
+      # the attempts stay, the head, the changed-file list and the bundle's spec
+      # fields follow the bundle (a body edit can add or drop a closed issue).
       if [ "$(jq -r '.reviewed_head' "$RECORD_FILE")" != "$HEAD_SHA" ]; then
         cp "$BUNDLE/changed-files.txt" "$CHANGED_FILES_COPY.tmp.$$" || die_usage "cannot copy the bundle's changed-file list"
         mv -f "$CHANGED_FILES_COPY.tmp.$$" "$CHANGED_FILES_COPY"
-        jq --arg head "$HEAD_SHA" '.reviewed_head = $head' "$RECORD_FILE" | install_record
+        jq --arg head "$HEAD_SHA" --slurpfile meta "$BUNDLE/meta.json" '.reviewed_head = $head
+          | .spec = $meta[0].spec
+          | .spec_author_not_collaborator = ($meta[0].spec_author_not_collaborator == true)
+          | .changelog_present = ($meta[0].changelog_present == true)' "$RECORD_FILE" | install_record
       fi
       printf 'opened\n'
       return 0

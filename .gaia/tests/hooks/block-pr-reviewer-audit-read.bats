@@ -46,3 +46,24 @@ payload() {
   invoke_hook "$(payload Read '{"file_path":".gaia/local/audit/abc.findings.json"}' code-audit-shell)" "$HOOK_ABSOLUTE_PATH"
   assert_allowed_by_json
 }
+
+@test "the reviewer is denied a dot-segment, doubled-slash or folded spelling of the audit folders, and a deny names what to search instead" {
+  local spelling
+  for spelling in '.gaia/local/./runs/x' '.gaia//local/runs/x' '.gaia/local/cache/../audit/x' './.gaia/local/audit/x' '/repo/.gaia/local/./runs/x'; do
+    invoke_hook "$(payload Read "$(jq -n -c --arg path "$spelling" '{file_path: $path}')" pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+    assert_denied_by_json || { echo "Read allowed: $spelling" >&2; return 1; }
+    invoke_hook "$(payload Bash "$(jq -n -c --arg command "cat $spelling" '{command: $command}')" pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+    assert_denied_by_json || { echo "Bash allowed: $spelling" >&2; return 1; }
+  done
+
+  # A search whose pattern merely names the folders is denied, and the line says where to search.
+  invoke_hook "$(payload Bash '{"command":"git grep -n .gaia/local/runs -- .gaia/scripts"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+  assert_denied_by_json || return 1
+  grep -qF "search the bundle's diff.patch or the changed files instead" <<<"$output" || return 1
+
+  # Paths that merely look similar stay allowed, and so does a leading ../ with nothing to fold.
+  invoke_hook "$(payload Read '{"file_path":".gaia/local-notes/runs/x"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+  assert_allowed_by_json || return 1
+  invoke_hook "$(payload Read '{"file_path":"../../apps/web/a.ts"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+  assert_allowed_by_json || return 1
+}

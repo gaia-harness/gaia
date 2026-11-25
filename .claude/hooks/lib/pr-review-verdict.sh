@@ -21,11 +21,13 @@
 # adds its own wrapper. The record's findings are fixed at its outcome, so a
 # recomputed digest that differs is a refusal, not a repair.
 #
-# Only audit-loop-state-lib.sh is sourced, which owns the run-folder format
+# Two libraries are sourced. audit-loop-state-lib.sh owns the run-folder format
 # (gaia_loop_run_directory) and pulls in branch-name-lib.sh, main-root-lib.sh,
 # audit-key-lib.sh, exclusive-lock-lib.sh, branch-authorship-lib.sh and
-# filing-outcomes-lib.sh; a sandbox that copies libraries one by one carries
-# all seven.
+# filing-outcomes-lib.sh; pr-body-sections-lib.sh owns the section's heading
+# (PR_BODY_HEADING_PR_REVIEW). A sandbox that copies libraries one by one
+# carries all eight; with the heading library absent the renderers print
+# nothing and the verdict refuses.
 #
 # Bash 3.2 compatible. Never changes directory.
 
@@ -36,6 +38,8 @@ _pr_review_library_directory="${BASH_SOURCE[0]%/*}"
 [ "$_pr_review_library_directory" = "${BASH_SOURCE[0]}" ] && _pr_review_library_directory="."
 # shellcheck source=/dev/null
 . "$_pr_review_library_directory/../../../.gaia/scripts/audit-loop-state-lib.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+. "$_pr_review_library_directory/../../../.gaia/scripts/pr-body-sections-lib.sh" 2>/dev/null || true
 
 # The disposition orderings live in these jq programs only. A summary and a
 # reason are one line with comment markers removed, so neither can end the
@@ -57,7 +61,7 @@ def item:
   if secure then "- \(.severity) security finding -> \(secure_text)"
   else "- \(.severity) \(.file // "PR body" | one)\(if .line == null then "" else ":\(.line)" end) \(.summary | one) -> \(disposition_text)" end;
 def section_lines:
-  [$start, "## PR review", "", "Reviewed head: \(.reviewed_head)"]
+  [$start, $heading, "", "Reviewed head: \(.reviewed_head)"]
   + (if .spec == "none" then ["Coverage: no spec."] else [] end)
   + (if .outcome == "not-run" then ["Not run: \(.not_run_reason // "" | one)."]
      elif .outcome != "ran" then ["Not run: review not finished."]
@@ -93,16 +97,18 @@ _PR_REVIEW_RECORD_VIEW_JQ='
 '
 
 # The body section read as a record: the same five lines. A line that is not
-# the section'"'"'s own form makes the whole section malformed.
+# the section'"'"'s own form makes the whole section malformed. The head is
+# greedy, so the decision is the last arrow that leaves a valid decision: an
+# arrow inside a summary or a reason never shifts the split.
 # shellcheck disable=SC2016
 _PR_REVIEW_BODY_VIEW_JQ='
 def parsed:
-  map(select(. != "" and . != "## PR review" and . != "Coverage: no spec." and (startswith("<!--") | not))) as $lines
+  map(select(. != "" and . != $heading and . != "Coverage: no spec." and (startswith("<!--") | not))) as $lines
   | ($lines | map(select(test("^Reviewed head: [0-9a-f]{40}$")))) as $heads
   | ($lines | map(select(startswith("Not run: ")))) as $not_run
   | ($lines | map(select(. == "No findings."))) as $none
   | ($lines | map(select(startswith("- ")))) as $items
-  | ($items | map(capture("^- (?<head>.*?) -> (?<text>undecided|fixed|fix|dismiss: .*|file: #[0-9]+|accept-residual: .*|waive-out-of-scope: .*)$"))) as $entries
+  | ($items | map(capture("^- (?<head>.*) -> (?<text>undecided|fixed|fix|dismiss: .*|file: #[0-9]+|accept-residual: .*|waive-out-of-scope: .*)$"))) as $entries
   | if ($heads | length) != 1
       or (($not_run | length) + ($none | length) + ($items | length)) != ($lines | length) - 1
       or ([($not_run | length) > 0, ($none | length) > 0, ($items | length) > 0] | map(select(.)) | length) != 1
@@ -151,11 +157,12 @@ pr_review_findings_digest() {
 }
 
 pr_review_render_section() {
-  printf '%s' "$1" | jq -r --arg start "$_PR_REVIEW_START_MARKER" --arg end "$_PR_REVIEW_END_MARKER" "$_PR_REVIEW_JQ"' section_lines | .[]'
+  [ -n "${PR_BODY_HEADING_PR_REVIEW:-}" ] || return 1
+  printf '%s' "$1" | jq -r --arg start "$_PR_REVIEW_START_MARKER" --arg end "$_PR_REVIEW_END_MARKER" --arg heading "$PR_BODY_HEADING_PR_REVIEW" "$_PR_REVIEW_JQ"' section_lines | .[]'
 }
 
 pr_review_render_report() {
-  printf '%s' "$1" | jq -r --arg start "$_PR_REVIEW_START_MARKER" --arg end "$_PR_REVIEW_END_MARKER" "$_PR_REVIEW_JQ"' report_lines | .[]'
+  printf '%s' "$1" | jq -r --arg start "$_PR_REVIEW_START_MARKER" --arg end "$_PR_REVIEW_END_MARKER" --arg heading "${PR_BODY_HEADING_PR_REVIEW:-}" "$_PR_REVIEW_JQ"' report_lines | .[]'
 }
 
 # pr_review_marker_scan <file>: six numbers on one line: start markers, end
@@ -255,6 +262,10 @@ pr_review_verdict() {
       return 1
       ;;
   esac
+  if [ -z "${PR_BODY_HEADING_PR_REVIEW:-}" ]; then
+    printf 'PR review heading library missing (.gaia/scripts/pr-body-sections-lib.sh) for PR #%s\n' "$pr"
+    return 1
+  fi
   section="$(pr_review_body_section "$body")"
 
   if [ -n "$record" ]; then
@@ -269,7 +280,7 @@ pr_review_verdict() {
     local_record=1
     view="$(printf '%s' "$record" | jq -r "$_PR_REVIEW_RECORD_VIEW_JQ")"
   elif [ -n "$section" ]; then
-    view="$(printf '%s\n' "$section" | jq -rRn "$_PR_REVIEW_BODY_VIEW_JQ")"
+    view="$(printf '%s\n' "$section" | jq -rRn --arg heading "$PR_BODY_HEADING_PR_REVIEW" "$_PR_REVIEW_BODY_VIEW_JQ")"
   else
     printf 'no review record for PR #%s\n' "$pr"
     return 1

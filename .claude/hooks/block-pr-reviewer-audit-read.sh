@@ -16,12 +16,18 @@
 # WHAT IT DENIES. A call whose Read `file_path`, Grep `path` or `glob`, Glob
 # `path` or `pattern`, or Bash or Monitor command text names the audit state
 # folder or the run folders under the local state root, in relative or absolute
-# form (the escaped regex below). It fails closed on two near misses: a command
+# form (the escaped regex below). Each word of the text is also read with its
+# path made lexical first (`.` segments and doubled slashes dropped, `x/..`
+# folded), so `.gaia/local/./runs`, `.gaia//local/runs` and
+# `.gaia/local/cache/../audit` count as the folders they name. It fails closed on two near misses: a command
 # token naming that root with a glob or variable that could expand into either
 # folder, and a Grep or Glob search rooted at the state root itself, which
 # reads both recursively. The deny line is
 # `BLOCKED: pr-reviewer may not read audit state: <path>`, where <path> is the
-# offending path or command token as the call named it.
+# offending path or command token as the call named it, followed by one
+# sentence naming what the reviewer may search instead (its bundle's diff.patch
+# and the changed files), because a search whose pattern merely names the
+# folders is denied too and the reviewer has no judgement to find its way out.
 #
 # HONEST LIMITS. This is heuristic defense-in-depth, not a sandbox. It
 # pattern-matches call text, so a path the shell assembles at run time
@@ -76,7 +82,7 @@ confirmed_type=$(jq -r '.agent_type // "" | if type == "string" then . else "" e
 gaia_hook_payload_read "$payload" || exit 0
 
 deny() {
-  jq -n --arg reason "BLOCKED: pr-reviewer may not read audit state: $1" '{
+  jq -n --arg reason "BLOCKED: pr-reviewer may not read audit state: $1. Naming those folders in any call is denied, a search pattern included; search the bundle's diff.patch or the changed files instead." '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
@@ -119,12 +125,50 @@ first_audit_token() {
   printf '%s' "$text"
 }
 
-# check_text <text>: deny when <text> names audit state.
+# lexical_paths <text>: <text> with each whitespace-delimited word's path made
+# lexical: empty and `.` segments dropped, `seg/..` folded away. A leading `..`
+# that has nothing to fold stays, and a word without a slash is unchanged.
+lexical_paths() {
+  local text="$1" word segment rooted result=''
+  local -a words segments stack
+  read -r -a words <<<"$(printf '%s' "$text" | tr '\n' ' ')"
+  for word in ${words[@]+"${words[@]}"}; do
+    case "$word" in
+      */*)
+        rooted=''
+        case "$word" in /*) rooted='/' ;; esac
+        stack=()
+        IFS='/' read -r -a segments <<<"$word"
+        for segment in ${segments[@]+"${segments[@]}"}; do
+          case "$segment" in
+            '' | .) ;;
+            ..)
+              if [ "${#stack[@]}" -gt 0 ] && [ "${stack[${#stack[@]}-1]}" != '..' ]; then
+                unset "stack[${#stack[@]}-1]"
+                stack=(${stack[@]+"${stack[@]}"})
+              else
+                stack+=('..')
+              fi
+              ;;
+            *) stack+=("$segment") ;;
+          esac
+        done
+        word="$rooted$(IFS=/; printf '%s' "${stack[*]-}")"
+        ;;
+    esac
+    result="${result}${result:+ }${word}"
+  done
+  printf '%s' "$result"
+}
+
+# check_text <text>: deny when <text> names audit state, as written or once its
+# paths are made lexical.
 check_text() {
   local hit
   [ -n "$1" ] || return 0
-  hit=$(first_audit_token "$1") || return 0
-  deny "$hit"
+  if hit=$(first_audit_token "$1"); then deny "$hit"; fi
+  if hit=$(first_audit_token "$(lexical_paths "$1")"); then deny "$hit"; fi
+  return 0
 }
 
 # state_root_search <directory>: true when a search rooted at <directory> would

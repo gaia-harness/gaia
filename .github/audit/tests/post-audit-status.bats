@@ -488,9 +488,8 @@ a frontend refusal keeps frontend pending under a dep-bump title|chore(deps): bu
     cases=$((cases + 1))
     reset_case
     [ -z "$title" ] || printf '%s' "$title" > "$BATS_TEST_TMPDIR/pr-title"
-    # A waived PR records its review before its merge, so its body carries the
-    # head stamp and no PR review section.
-    printf '<!-- gaia-pr-body-head: %s -->\n' "$PUSHED_HEAD" > "$BATS_TEST_TMPDIR/pr-body"
+    # A waived PR is reviewed like any other, so the mock's default body carries
+    # the head stamp and a complete PR review section.
     # shellcheck disable=SC2086 # the paths column is a space-separated list
     [ -z "$files" ] || install_pr_files $files
     [ "$refused" = no ] || write_refusal_body "$SANDBOX/.gaia/local/audit/${frontend_digest}.refused" code-audit-frontend
@@ -515,6 +514,24 @@ a frontend refusal keeps frontend pending under a dep-bump title|chore(deps): bu
     fi
   done <<<"$CHORE_DEPS_CASES"
   [ "$cases" -eq 8 ]
+}
+
+# A dep-bump pull request waives the frontend marker only, never the PR review:
+# GitHub auto-merge completes on this status alone, so a manifest-only PR whose
+# body carries no PR review section is declined with the verdict's own reason.
+@test "chore(deps) waiver: a waived dep-bump with no PR review section is declined for the missing review" {
+  install_gh_mock ok
+  install_resolver
+  install_chore_deps_predicate
+  commit_mixed_diff
+  reset_case
+  printf '%s' 'chore(deps): bump vite to 8.3.0' > "$BATS_TEST_TMPDIR/pr-title"
+  install_pr_files package.json pnpm-lock.yaml
+  printf '<!-- gaia-pr-body-head: %s -->\n' "$PUSHED_HEAD" > "$BATS_TEST_TMPDIR/pr-body"
+  run_shell_member_handshake
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "status: declined: PR review: no review record for PR #7; GAIA-Audit not posted." ] || return 1
+  [ ! -f "$POST_LOG" ] || return 1
 }
 
 # The order-independence the helper's header promises, and that a commit key

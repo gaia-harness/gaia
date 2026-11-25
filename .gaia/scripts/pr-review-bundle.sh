@@ -127,10 +127,12 @@ fi
 
 while IFS= read -r issue_number; do
   [ -n "$issue_number" ] || continue
-  issue_json="$(cd "$root" && gh issue view "$issue_number" --json body,authorAssociation)" \
+  # gh issue view offers no author-association field; the REST issue record does.
+  issue_json="$(cd "$root" && gh issue view "$issue_number" --json body)" \
     || fail "gh could not read closed issue #$issue_number"
   issue_body="$(printf '%s' "$issue_json" | jq -r '.body // ""')"
-  association="$(printf '%s' "$issue_json" | jq -r '.authorAssociation // ""')"
+  association="$(cd "$root" && gh api "repos/{owner}/{repo}/issues/$issue_number" --jq '.author_association // ""')" \
+    || fail "gh could not read the author of closed issue #$issue_number"
   section="$(printf '%s\n' "$issue_body" | prb_done_when)"
   if [ -z "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
     section="$issue_body"

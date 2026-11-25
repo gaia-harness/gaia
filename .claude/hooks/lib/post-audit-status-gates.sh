@@ -352,11 +352,18 @@ post_audit_status_gates() {
     # alone and never runs the merge hook, so success is withheld while a
     # finding is undecided or an accepted fix is not yet made. A failure post
     # never reaches here, so a refusal is never held back by a disposition.
-    # A waived dependency bump records its review before its merge, which the
-    # merge hook still enforces, and a release pull request needs none. A
+    # A release pull request needs no review. A dependency bump whose frontend
+    # marker is waived is reviewed like any other, on the out-of-scope footing
+    # the merge hook gives it (commits after the reviewed head are strays). A
     # missing waiver library waives nothing.
     review_library="$_repository_root_directory/.claude/hooks/lib/pr-review-verdict.sh"
-    review_waived="$frontend_waived"
+    review_waived="false"
+    review_out_of_scope=0
+    review_base_tip=""
+    if [ "$frontend_waived" = "true" ]; then
+      review_out_of_scope=1
+      review_base_tip="${base_tip:-}"
+    fi
     waiver_library="$_repository_root_directory/.claude/hooks/lib/pr-review-waiver.sh"
     # shellcheck source=lib/pr-review-waiver.sh
     if [ "$review_waived" != "true" ] && [ -n "$_repository_root_directory" ] && [ -f "$waiver_library" ] \
@@ -370,8 +377,8 @@ post_audit_status_gates() {
         return 1
       fi
       review_record="$(pr_review_load_record "$store_root" "$pr_head_ref")"
-      if ! pr_review_verdict "$review_record" "$pr_number" "$pr_body" 0 "$repo_root" "$head_sha" "" >/dev/null; then
-        emit_decline "PR review: no complete review record for PR #${pr_number}; GAIA-Audit not posted."
+      if ! review_reason="$(pr_review_verdict "$review_record" "$pr_number" "$pr_body" "$review_out_of_scope" "$repo_root" "$head_sha" "$review_base_tip")"; then
+        emit_decline "PR review: ${review_reason}; GAIA-Audit not posted."
         return 1
       fi
     fi

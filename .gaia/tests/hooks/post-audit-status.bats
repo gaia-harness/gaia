@@ -148,7 +148,7 @@ use_hook_copy() {
   cp "$real_root/.gaia/scripts/main-root-lib.sh" "$real_root/.gaia/scripts/audit-key-lib.sh" "$HOOK_TREE/.gaia/scripts/"
   cp "$real_root/.gaia/scripts/audit-loop-state-lib.sh" "$real_root/.gaia/scripts/branch-name-lib.sh" \
     "$real_root/.gaia/scripts/exclusive-lock-lib.sh" "$real_root/.gaia/scripts/branch-authorship-lib.sh" \
-    "$real_root/.gaia/scripts/filing-outcomes-lib.sh" "$HOOK_TREE/.gaia/scripts/"
+    "$real_root/.gaia/scripts/filing-outcomes-lib.sh" "$real_root/.gaia/scripts/pr-body-sections-lib.sh" "$HOOK_TREE/.gaia/scripts/"
   copy_notebook_libraries "$real_root" "$HOOK_TREE"
   HOOK_ABSOLUTE_PATH="$HOOK_TREE/.claude/hooks/post-audit-status.sh"
   set_gate_owed_status "${1:-0}"
@@ -1012,7 +1012,7 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH" "$marker"
   [ "$status" -eq 0 ] || return 1
-  grep -qF -- "status: declined: PR review: no complete review record for PR #7; GAIA-Audit not posted." <<<"$output" || return 1
+  grep -qF -- "status: declined: PR review: no review record for PR #7; GAIA-Audit not posted." <<<"$output" || return 1
   assert_no_post
 
   next_case "success declines on a section that leaves a finding undecided"
@@ -1024,7 +1024,7 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH" "$marker"
   [ "$status" -eq 0 ] || return 1
-  grep -qF -- "status: declined: PR review: no complete review record for PR #7; GAIA-Audit not posted." <<<"$output" || return 1
+  grep -qF -- "status: declined: PR review: 1 finding has no disposition on PR #7; GAIA-Audit not posted." <<<"$output" || return 1
   assert_no_post
 
   next_case "a release pull request over a bookkeeping change posts success with no review section"
@@ -1057,7 +1057,7 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH" "$marker"
   [ "$status" -eq 0 ] || return 1
-  grep -qF -- "status: declined: PR review: no complete review record for PR #7; GAIA-Audit not posted." <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- "status: declined: PR review: no review record for PR #7; GAIA-Audit not posted." <<<"$output" || { echo "$output"; return 1; }
   assert_no_post
 
   next_case "a refusal posts failure whatever the review record says"

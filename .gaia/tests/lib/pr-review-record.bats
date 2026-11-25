@@ -293,6 +293,15 @@ EOF
   [ "$(recorded '.reviewed_head')" = "$HEAD_SHA" ] || return 1
   [ "$(recorded '.attempts | length')" -eq 1 ] || return 1
   grep -qx 'src/new.sh' "$RUN_FOLDER/pr-review-changed-files.txt" || return 1
+  # The bundle's spec fields follow too: a body edit moved the closed issue.
+  [ "$(recorded '.spec')" = present ] || return 1
+  jq -n -c '{spec: "none", spec_author_not_collaborator: true, changelog_present: false, template_present: false}' >"$BUNDLE/meta.json"
+  HEAD_SHA="$(printf 'd%.0s' $(seq 1 40))"
+  run bash "$RECORD" open --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --pr 7 --head "$HEAD_SHA" --bundle "$BUNDLE"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(recorded '.spec')" = none ] || return 1
+  [ "$(recorded '.spec_author_not_collaborator')" = true ] || return 1
+  [ "$(recorded '.changelog_present')" = false ] || return 1
 }
 
 @test "a non-fix disposition is accepted only under its rule, accept-residual only after an interactive pr-review-accept line the grant hook records, never after a non-interactive one" {

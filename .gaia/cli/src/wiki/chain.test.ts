@@ -208,9 +208,20 @@ const gateCalls = (recorded: RecordedCall[]): RecordedCall[] =>
       entry.command === 'bash' &&
       entry.args[0] === '.gaia/scripts/pr-review-gate.sh'
   );
+// The out-of-scope stamp's first call. These cases script no PR record, so a
+// stamp that ran ahead of the review gate would refuse right here, before any
+// status post or ready flip; seeing no such read is what proves it never began.
+const stampBeganCalls = (recorded: RecordedCall[]): RecordedCall[] =>
+  ghCalls(recorded).filter(
+    (entry) =>
+      entry.args[0] === 'pr' &&
+      entry.args[1] === 'view' &&
+      entry.args.includes('files,headRefOid,baseRefName')
+  );
 const refusedBeforeMerge = (recorded: RecordedCall[]): boolean =>
   mergeCalls(recorded).length === 0 &&
   statusCalls(recorded).length === 0 &&
+  stampBeganCalls(recorded).length === 0 &&
   !ghCalls(recorded).some(
     (entry) => entry.args[0] === 'pr' && entry.args[1] === 'ready'
   );

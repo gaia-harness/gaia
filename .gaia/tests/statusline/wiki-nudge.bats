@@ -205,7 +205,7 @@ make_repo() {
   cp "$MAIN_ROOT_LIBRARY_SOURCE" "$REPOSITORY_FIXTURE/.gaia/scripts/main-root-lib.sh"
   mkdir -p "$REPOSITORY_FIXTURE/.claude/hooks/lib"
   cp "$REPO_ROOT/.claude/hooks/lib/pr-review-verdict.sh" "$REPOSITORY_FIXTURE/.claude/hooks/lib/pr-review-verdict.sh"
-  for review_gate_file in pr-review-gate.sh audit-loop-state-lib.sh branch-name-lib.sh audit-key-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh; do
+  for review_gate_file in pr-review-gate.sh audit-loop-state-lib.sh branch-name-lib.sh audit-key-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh pr-body-sections-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$review_gate_file" "$REPOSITORY_FIXTURE/.gaia/scripts/$review_gate_file"
   done
   cp "$STATUSLINE_SOURCE" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline.sh"

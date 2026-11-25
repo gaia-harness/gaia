@@ -32,7 +32,10 @@ case "$1 $2" in
       *isCrossRepository*) cat "$GH_DIR/fork-answer" ;;
       *) cat "$GH_DIR/pr.json" ;;
     esac ;;
-  "issue view") cat "$GH_DIR/issue.json" ;;
+  "issue view")
+    [ "$4 $5" = "--json body" ] || { printf 'Unknown JSON field\n' >&2; exit 1; }
+    cat "$GH_DIR/issue.json" ;;
+  api*) printf 'OWNER\n' ;;
   *) exit 1 ;;
 esac
 STUB
@@ -55,7 +58,7 @@ STUB
 
 @test "a bundle built for the PR opens the review record at its head and the record takes a finding on a listed file" {
   jq -n -c --arg body "$(printf 'Summary line\n\nCloses #3743')" '{baseRefName: "main", body: $body}' >"$GH_DIR/pr.json"
-  jq -n -c '{body: "Some request", authorAssociation: "OWNER"}' >"$GH_DIR/issue.json"
+  jq -n -c '{body: "Some request"}' >"$GH_DIR/issue.json"
 
   local bundle="$BATS_TEST_TMPDIR/bundle"
   run bash "$SCRIPTS/pr-review-bundle.sh" --root "$ALF_ROOT" --pr 50 --out "$bundle"

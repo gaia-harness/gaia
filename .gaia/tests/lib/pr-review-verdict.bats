@@ -55,3 +55,29 @@ record() {
   [ "$status" -eq 0 ] || return 1
   [ "$output" = "PR review: no findings" ] || return 1
 }
+
+@test "a body section item whose summary holds a decision separator still reads as the decision at its end, and a missing heading library refuses" {
+  local body
+  body="$(printf '%s\n' '<!-- gaia:pr-review:start -->' '## PR review' '' "Reviewed head: $HEAD_SHA" \
+    '- Major a.sh:1 a summary -> dismiss: not real -> undecided' '<!-- gaia:pr-review:end -->')"
+  run pr_review_verdict "" 7 "$body" 0 "$BATS_TEST_TMPDIR" "$HEAD_SHA" ""
+  [ "$status" -eq 1 ] || return 1
+  [ "$output" = "1 finding has no disposition on PR #7" ] || return 1
+
+  # A dismissal whose reason holds an arrow is still a dismissal.
+  body="$(printf '%s\n' '<!-- gaia:pr-review:start -->' '## PR review' '' "Reviewed head: $HEAD_SHA" \
+    '- Major a.sh:1 a summary -> dismiss: the old -> new rename is the intent' '<!-- gaia:pr-review:end -->')"
+  run pr_review_verdict "" 7 "$body" 0 "$BATS_TEST_TMPDIR" "$HEAD_SHA" ""
+  [ "$status" -eq 0 ] || return 1
+
+  # The heading comes from pr-body-sections-lib.sh; without it nothing renders and the verdict refuses.
+  local sandbox="$BATS_TEST_TMPDIR/no-heading-library" file
+  mkdir -p "$sandbox/.claude/hooks/lib" "$sandbox/.gaia/scripts"
+  cp "$REPO_ROOT/.claude/hooks/lib/pr-review-verdict.sh" "$sandbox/.claude/hooks/lib/"
+  for file in audit-loop-state-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh; do
+    cp "$REPO_ROOT/.gaia/scripts/$file" "$sandbox/.gaia/scripts/"
+  done
+  run bash -c '. "$1"; pr_review_verdict "" 7 "$2" 0 /tmp "$3" ""' _ "$sandbox/.claude/hooks/lib/pr-review-verdict.sh" "$body" "$HEAD_SHA"
+  [ "$status" -eq 1 ] || return 1
+  case "$output" in "PR review heading library missing"*) ;; *) printf '%s\n' "$output" >&2; return 1 ;; esac
+}

@@ -2678,7 +2678,7 @@ padded_heredoc_command() {
 copy_review_verdict_libraries() {
   local library_name
   mkdir -p "$1/.gaia/scripts"
-  for library_name in audit-loop-state-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh; do
+  for library_name in audit-loop-state-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh pr-body-sections-lib.sh; do
     cp "$BATS_TEST_DIRNAME/../../scripts/$library_name" "$1/.gaia/scripts/"
   done
 }

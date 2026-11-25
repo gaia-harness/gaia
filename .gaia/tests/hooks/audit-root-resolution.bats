@@ -188,7 +188,7 @@ setup() {
            audit-write-clearance.sh audit-write-clearance-args.sh audit-write-clearance-gates.sh \
            audit-write-clearance-accounting.sh audit-write-clearance-publish.sh \
            audit-write-clearance-ledger.sh main-root-lib.sh audit-key-lib.sh autonomy-lib.sh \
-           audit-loop-state-lib.sh branch-name-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh; do
+           audit-loop-state-lib.sh branch-name-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh pr-body-sections-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$MAIN/.gaia/scripts/$script_name"
     chmod +x "$MAIN/.gaia/scripts/$script_name"
   done

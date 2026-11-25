@@ -38,7 +38,13 @@ case "$1 $2" in
       *isCrossRepository*) [ -z "${GH_UNANSWERABLE:-}" ] || exit 1; cat "$GH_DIR/fork-answer" ;;
       *) cat "$GH_DIR/pr.json" ;;
     esac ;;
-  "issue view") [ -f "$GH_DIR/issue-$3.json" ] || exit 1; cat "$GH_DIR/issue-$3.json" ;;
+  "issue view")
+    # The real gh refuses a --json field it does not offer.
+    [ "$4 $5" = "--json body" ] || { printf 'Unknown JSON field\n' >&2; exit 1; }
+    [ -f "$GH_DIR/issue-$3.json" ] || exit 1; cat "$GH_DIR/issue-$3.json" ;;
+  api*)
+    number="${2##*/}"
+    [ -f "$GH_DIR/issue-$number.assoc" ] || exit 1; cat "$GH_DIR/issue-$number.assoc" ;;
   *) exit 1 ;;
 esac
 STUB
@@ -80,7 +86,8 @@ set_pr() {
 
 # set_issue <number> <association> <body>: an issue `gh issue view` reports.
 set_issue() {
-  jq -n -c --arg body "$3" --arg association "$2" '{body: $body, authorAssociation: $association}' >"$GH_DIR/issue-$1.json"
+  jq -n -c --arg body "$3" '{body: $body}' >"$GH_DIR/issue-$1.json"
+  printf '%s\n' "$2" >"$GH_DIR/issue-$1.assoc"
 }
 
 # build <out-name> [extra args...]: the bundle for PR 50 under the test's tmp dir.
