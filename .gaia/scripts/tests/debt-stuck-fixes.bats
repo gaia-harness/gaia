@@ -2,7 +2,7 @@
 #
 # Suite for .gaia/scripts/debt-stuck-fixes.sh, the stopped-debt-fix verdict.
 # Each arm of the rule is driven on its own through the script's test seams,
-# then every unreadable input is shown to print nothing and exit 3.
+# then unreadable claims and pull-request inputs are shown to print nothing and exit 3.
 #
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   bash .gaia/scripts/bats5.sh .gaia/scripts/tests/debt-stuck-fixes.bats

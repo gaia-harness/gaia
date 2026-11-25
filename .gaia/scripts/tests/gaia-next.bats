@@ -392,7 +392,7 @@ lock_worktree() {
   jq -e '.job == "debt-resume" and .issue == 3811 and .branch == "debt/3811-resume-stopped-debt-fix" and .skipped == []' <<<"$output"
 }
 
-@test "a debt branch is no job when its issue is unclaimed, an open pull request holds it, or no member of it is claimed" {
+@test "a debt branch is no job when its issue is unclaimed, or an open pull request holds it" {
   git -C "$WORK" branch debt/3811-resume-stopped-debt-fix
   git -C "$WORK" branch debt/3812-3813-batch
   pick
