@@ -47,8 +47,8 @@
 # - ORCHESTRATOR.md's last-phase entry (from the **Phase <N>, line outside every
 #   fenced block to the next **Phase or ## line outside one) holds, for each
 #   Flow test line, a line that runs it: a command of the flow's runner, as
-#   flow-runners-lib.sh resolves it, plus the test path's basename unless that
-#   runner sets names_path false.
+#   flow-runners-lib.sh resolves it (for a web flow, any built-in runner's),
+#   plus the test path's basename unless that runner sets names_path false.
 #
 # Every failure is reported on stderr, one line each, in a single run. Exit
 # codes: 0 pass; 1 one or more failures; 2 usage error. Bash 3.2 compatible; BSD and GNU tools.

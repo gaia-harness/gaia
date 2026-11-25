@@ -17,7 +17,8 @@
 #   run         the gate line the test stage writes, placeholders in <angles>
 #   names_path  optional boolean, default true: the gate line must also hold
 #               the test file's basename. Set it false only for a runner whose
-#               command selects its test itself, such as one fixed table.
+#               command selects its test itself, such as a probe that reads
+#               one fixed expectations file.
 # No string may hold a tab, newline or carriage return. A missing jq makes
 # every function return 2, and so does a malformed registry, except that
 # flow_runners_line_runs never reads the registry for a web flow; each prints
