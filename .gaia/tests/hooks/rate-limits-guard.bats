@@ -139,6 +139,10 @@ exec .gaia/scripts/rate-limits.sh write $SESSION_ID '$WRITE_JSON'
 { bash .gaia/scripts/rate-limits.sh write $SESSION_ID '$WRITE_JSON'; }
 for i in 1; do bash .gaia/scripts/rate-limits.sh write $SESSION_ID '$WRITE_JSON'; done
 if true; then bash .gaia/scripts/rate-limits.sh write $SESSION_ID '$WRITE_JSON'; fi
+time -p bash .gaia/scripts/rate-limits.sh write $SESSION_ID '$WRITE_JSON'
+if bash .gaia/scripts/rate-limits.sh write $SESSION_ID '$WRITE_JSON'; then :; fi
+while bash .gaia/scripts/rate-limits.sh write $SESSION_ID '$WRITE_JSON'; do :; done
+until bash .gaia/scripts/rate-limits.sh write $SESSION_ID '$WRITE_JSON'; do :; done
 source .gaia/scripts/rate-limits.sh write $SESSION_ID '$WRITE_JSON'
 CLAUDE_CONFIG_DIR=/tmp/x bash .gaia/scripts/rate-limits.sh read
 export CLAUDE_CONFIG_DIR=/tmp/x; bash .gaia/scripts/rate-limits.sh read

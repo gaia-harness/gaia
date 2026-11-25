@@ -255,7 +255,13 @@ words_run_guarded_script() {
   # Skip the leading words the case below lists, none of which is the command.
   while [ "$word_index" -lt "$count" ]; do
     case "${words[$word_index]}" in
-      [A-Za-z_]*=* | '!' | exec | '{' | then | do | else | elif | time) word_index=$((word_index + 1)) ;;
+      [A-Za-z_]*=* | '!' | exec | '{' | if | while | until | then | do | else | elif) word_index=$((word_index + 1)) ;;
+      time)
+        word_index=$((word_index + 1))
+        while [ "$word_index" -lt "$count" ] && [[ ${words[$word_index]} == -* ]]; do
+          word_index=$((word_index + 1))
+        done
+        ;;
       *) break ;;
     esac
   done
