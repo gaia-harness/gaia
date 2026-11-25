@@ -156,7 +156,7 @@ cmd_not_run() {
       refuse "not run needs two closed no-op attempts"
   else
     jq -e '(.attempts | last) as $latest | $latest != null and $latest.state == "closed" and $latest.dispatch_failed == true' "$RECORD_FILE" >/dev/null ||
-      refuse "not run needs a closed dispatch-failed attempt"
+      refuse "not run needs the latest attempt closed as dispatch-failed"
   fi
   jq --arg reason "$REASON" '.outcome = "not-run" | .not_run_reason = $reason | .findings = []' "$RECORD_FILE" | install_record_with_digest
 }
