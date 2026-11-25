@@ -17,7 +17,7 @@ Tokenize the first whitespace-separated word of `$ARGUMENTS`:
 
 ## Auto mode
 
-When `auto_mode = true` the agent answers the Socratic questions itself and no prompt waits for the human. Read `.claude/skills/gaia/references/spec/auto-mode.md` now, whole, before the model gate: it holds the numbered Auto-mode rules the steps below cite. An interactive run skips it.
+When `auto_mode = true`, Read `.claude/skills/gaia/references/spec/auto-mode.md` now, whole, before the model gate: it holds the numbered Auto-mode rules the steps below cite.
 
 ## Hard constraints
 
@@ -89,7 +89,7 @@ The review (step 8) routes its finding, verdict and fix bodies through a per-spe
 
 **Audit cache directory** `.gaia/local/cache/audit-<spec_id>/`. Every file the review produces lands here: `findings/<LENS>.json` (one per dispatched lens, written even when empty), `findings/fixes.json` (the fixer's output, the input of the drop check), and the critical refuter's verdicts. `spec/audit.md` and `spec/lens-dispatch.md` own the file schemas and names.
 
-**The fixer.** Main dispatches one `general-purpose` Agent (the **fixer**) with the inputs `spec/audit.md` `## The fixer` lists; the tool-choice contract from Operational primitives governs its write into the `${SPEC_DIR}` folder main resolved for it. It reads every findings and verdict file in the cache, folds every fix into the draft cache in **one Write**, and writes `AUDIT.md` at the `${SPEC_DIR}` path it was handed: the plan-time directives, a short log of fixes with their drop entries, and the critical refuter's verdicts. It resolves no path of its own, and no other subagent writes `AUDIT.md`. `spec/audit.md` owns the fixer's procedure and the drop check that reads its output.
+**The fixer.** Main dispatches one `general-purpose` Agent (the **fixer**) with the inputs `spec/audit.md` `## The fixer` lists; the tool-choice contract from Operational primitives governs its write into the `${SPEC_DIR}` folder main resolved for it. It reads every findings and verdict file in the cache, folds every fix into the draft cache in **one Write**, and writes `AUDIT.md` at the `${SPEC_DIR}` path it was handed: the plan-time directives, a short log of fixes with their drop entries, and the critical refuter's verdicts. It resolves no path of its own, and no other subagent writes `AUDIT.md`. `spec/audit.md` `## The fixer` owns the fixer's dispatch (its prompt lives in `spec/audit-fixer.md`), and `## The drop check` the check that reads its output.
 
 **Fallback.** If subagent dispatch is unavailable, take `spec/audit.md`'s Fallback: the review is skipped, never folded inline.
 
@@ -141,7 +141,7 @@ Otherwise, ask: **"What do you want to spec?"** and wait for the response before
 
 ### 2. Resume-vs-start-new prompt (pre-flight)
 
-First, read the `## Pre-flight sweep` section of `.claude/skills/gaia/references/spec/lifecycle.md`, from its heading to the next `## ` heading, and run it now; read another section of that file only when the sweep sends you to it. It first checks notebook readiness (a non-zero result ends this command, surfacing its one stderr line), then reconciles finalized rows whose PR has merged, cold-consolidates any merged folder whose layers were never consolidated, reaps merged and abandoned folders past the retention window, and offers to reap closed research. Its writes into a SPEC folder follow the tool-choice contract in Operational primitives. Run it with the caller label `/gaia-spec`.
+First, read the `## Pre-flight sweep` section of `.claude/skills/gaia/references/spec/lifecycle.md` and run it now; read another section of that file only when the sweep sends you to it. It first checks notebook readiness (a non-zero result ends this command, surfacing its one stderr line), then reconciles finalized rows whose PR has merged, cold-consolidates any merged folder whose layers were never consolidated, reaps merged and abandoned folders past the retention window, and offers to reap closed research. Its writes into a SPEC folder follow the tool-choice contract in Operational primitives. Run it with the caller label `/gaia-spec`.
 
 Then sweep any never-authored draft older than the guard age to the terminal `abandoned` status, so a ghost allocation (no SPEC.md, no draft cache, no gate-1 snapshot) stops re-surfacing on this very prompt. The pass below is best-effort and fail-open. A SPEC's audit cache needs no sweep here: the backstop reaper prunes it once the SPEC leaves draft.
 

@@ -1,6 +1,6 @@
 # /gaia-spec: lens focus text
 
-The focus text of each SPEC review lens. Each lens agent `spec/audit.md` `## The lenses` dispatches reads only its own section, named by its id prefix; every other section belongs to another lens of the same wave. The main thread never reads this file.
+The focus text of each SPEC review lens. Each lens agent `spec/audit.md` `## The lenses` dispatches reads only its own section, named by its id prefix; every other section belongs to another lens. The main thread never reads this file.
 
 ## Core lenses
 
@@ -53,20 +53,18 @@ Treat the SPEC as a set of factual claims and verify each load-bearing claim tru
 
 ## Specialist lenses
 
-Each section is what that specialist hunts for.
-
 ### MIG
 
-Existing-data handling, reversibility and rollback, dual-read or dual-write windows, version skew, what breaks for legacy or in-flight records.
+Hunts for: existing-data handling, reversibility and rollback, dual-read or dual-write windows, version skew, what breaks for legacy or in-flight records.
 
 ### A11Y
 
-Flows and criteria that pass an axe rule yet fail real assistive tech; missing keyboard, focus-order, label, contrast, or landmark criteria; aria misuse.
+Hunts for: flows and criteria that pass an axe rule yet fail real assistive tech; missing keyboard, focus-order, label, contrast, or landmark criteria; aria misuse.
 
 ### DOC
 
-Duplication of an authoritative source, rot-resistance, dead cross-references, pointer criteria satisfiable by a bare path drop.
+Hunts for: duplication of an authoritative source, rot-resistance, dead cross-references, pointer criteria satisfiable by a bare path drop.
 
 ### PERF
 
-Speculative-versus-real cost, N+1, unbounded growth, flaky warm/cold performance gates.
+Hunts for: speculative-versus-real cost, N+1, unbounded growth, flaky warm/cold performance gates.

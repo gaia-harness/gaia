@@ -1,6 +1,6 @@
 # /gaia-spec: auto mode
 
-The Auto-mode rules the steps of `spec.md` cite by number. `spec.md` routes here once, before the model gate, when `auto_mode = true`; an interactive run never reads this file.
+The Auto-mode rules `spec.md`'s steps and `spec/clarify-loop.md` cite by number.
 
 When `auto_mode = true` the agent answers the Socratic questions itself rather than asking the user. **The Socratic loop's ceiling in auto mode is 5 substantive questions** (see `## The question ceiling` in `spec/clarify-loop.md`). The clarify loop still runs in auto mode, answered by the agent; every question and its answer is written to `REQUIREMENTS.md` too (step 6). The flow is non-interactive end-to-end: no `AskUserQuestion` call or plain-prompt block waits for the human. Make best-judgment calls from the description, the draft state, and dispatched research.
 

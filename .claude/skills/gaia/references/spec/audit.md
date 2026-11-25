@@ -56,8 +56,6 @@ Specialists join the same wave only when the draft touches their area, chosen by
 
 ### Specialist lenses (only when the draft touches their area)
 
-Each specialist's prompt is built the same way as a core lens's, its focus line naming its id's section of `spec/lenses.md`.
-
 | ID | Fires when the spec touches |
 | --- | --- |
 | `MIG` | schema, format, or ledger changes; renamed, removed, or added fields; breaking API or serialization changes; config-vocabulary changes |

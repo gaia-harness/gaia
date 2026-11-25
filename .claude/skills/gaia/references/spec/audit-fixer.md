@@ -26,7 +26,7 @@ The fixer's own instructions. The fixer agent `spec/audit.md` `## The fixer` dis
 
 ## The AUDIT.md shape
 
-The fixer writes `${AUDIT_MD}` as its own write; `${SPEC_DIR}` sits inside the `.notebook/specs/**` write-surface allowlist entry, and the main-anchored path rule in `spec/audit.md` stays: the file lands in the main checkout's SPEC folder, written per the tool-choice contract. The `AUDIT.md` shape keeps its `## Plan-time directives` section, which gate 2, the planner's `AUDIT_PATH` and consolidation read. Keep it lean:
+Write `${AUDIT_MD}` at the main-checkout path the dispatch hands you, per the tool-choice contract, in this shape. Keep the `## Plan-time directives` heading exactly: gate 2, the planner and consolidation read it. Keep it lean:
 
 ```markdown
 # <spec_id> Review

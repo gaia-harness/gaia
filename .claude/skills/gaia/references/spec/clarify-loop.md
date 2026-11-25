@@ -104,7 +104,7 @@ For any question that requires prior-art lookup, repo-convention investigation, 
 
 **Announce the dispatch before dispatching**, verbatim per `clarify-prompts.md` Rule 6.
 
-Then, the first time the loop dispatches research, Read `.claude/skills/gaia/references/spec/research.md` now, whole, and dispatch, classify and fold the research as its `## Research dispatch` says; it also owns `CODE-MAP.json`, which the research builds.
+Then, the first time the loop dispatches research, Read `.claude/skills/gaia/references/spec/research.md` now, whole, and dispatch, classify and fold the research as its `## Research dispatch` says.
 
 ## When the loop stops
 
