@@ -257,5 +257,10 @@ read_as_session_a() {
   [ "$(stored '.windows | keys')" = '["seven_day"]' ] || { echo "keys: $(cat "$FILE")"; return 1; }
   grep -qF "🕔" <<<"$PLAIN_OUTPUT" && { echo "clock segment drawn: $PLAIN_OUTPUT"; return 1; }
   grep -qF "📅 10%" <<<"$PLAIN_OUTPUT" || { echo "no calendar segment: $PLAIN_OUTPUT"; return 1; }
+
+  # A reset time too far past to store replaces nothing, so nothing is dropped.
+  seed_file five_hour 75 "$FIVE_HOUR_RESETS_AT" seven_day 40 "$SEVEN_DAY_RESETS_AT"
+  render "$MAIN" "{\"seven_day\":{\"used_percentage\":10,\"resets_at\":$((NOW - 1000000))}}"
+  [ "$(stored '.windows | keys')" = '["five_hour","seven_day"]' ] || { echo "stale reset dropped: $(cat "$FILE")"; return 1; }
   true
 }
