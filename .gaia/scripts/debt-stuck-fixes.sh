@@ -124,6 +124,7 @@ else
     || die_input "the local branches could not be listed"
 fi
 
+verdict_lines=""
 while IFS= read -r branch_name; do
   [ -n "$branch_name" ] || continue
   first_claimed=""
@@ -138,6 +139,8 @@ while IFS= read -r branch_name; do
   done < <(gaia_branch_members "$branch_name")
   [ -n "$first_claimed" ] || continue
   branch_has_pull_request "$branch_name" && continue
-  printf '%s\t%s\n' "$first_claimed" "$branch_name"
+  verdict_lines+="$(printf '%s\t%s' "$first_claimed" "$branch_name")"$'\n'
 done <<<"$branches"
+# Printed once, after every read succeeded, so an exit 3 leaves stdout empty.
+printf '%s' "$verdict_lines"
 exit 0

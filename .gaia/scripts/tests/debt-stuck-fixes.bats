@@ -104,6 +104,19 @@ verdict() {
   [ -z "$output" ]
 }
 
+@test "a per-branch read that fails after an earlier branch was judged stopped prints nothing and exits 3" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'if [ "$1 $2" = "issue list" ]; then printf "[{\"number\":11},{\"number\":12}]"; exit 0; fi' \
+    'case "$*" in *"--head debt/11-some-fix"*) printf "[]"; exit 0 ;; esac' \
+    'exit 1' >"$BATS_TEST_TMPDIR/bin/gh"
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh"
+  printf 'debt/11-some-fix\ndebt/12-other-fix\n' >"$BATS_TEST_TMPDIR/branches"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --branches "$BATS_TEST_TMPDIR/branches"
+  [ "$status" -eq 3 ]
+  [ -z "$output" ]
+}
+
 @test "a usage error exits 2" {
   run --separate-stderr bash "$SCRIPT" --issue abc
   [ "$status" -eq 2 ]
