@@ -75,7 +75,7 @@ describe('AskUserQuestion site grammar', () => {
       'Ask with `AskUserQuestion` (header `Go`): `Yes (Recommended)` or `No`.'
     );
 
-    expect(site.recommendedLabels.size).toBe(site.questionCount);
+    expect(site.recommendedLabels.size).toBe(site.headers.length);
   });
 
   test('a headed question with no marked option holds none', () => {

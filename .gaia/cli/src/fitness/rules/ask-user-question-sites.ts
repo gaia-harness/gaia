@@ -3,6 +3,7 @@ import type {ProjectFile} from '../types.js';
 export const HUMAN_ONLY_HEADERS_PATH = '.gaia/autonomy-human-only-headers.json';
 
 const TOOL_NAME = 'AskUserQuestion';
+const MARKER_TEXT = '(Recommended)';
 const MARKER = /\(Recommended\)/g;
 const LABEL_LOOKBACK = 80;
 const LABEL_DELIMITERS = '`*"“”,:;()\n';
@@ -71,12 +72,10 @@ export type Site = {
   block: Block;
   /** True when the block mentions the marker at all, including a bare `(Recommended)` naming the mark to apply. */
   hasMarker: boolean;
-  /** Every header the site names, in order. */
+  /** Every header the site names, in order; its length is the number of questions the block asks. */
   headers: readonly string[];
   isHumanOnly: boolean;
   isNeutral: boolean;
-  /** Header mentions: the number of questions the block asks, at least 1. */
-  questionCount: number;
   /** The distinct option labels the site marks `(Recommended)`; one option restated in a lead-in counts once. */
   recommendedLabels: ReadonlySet<string>;
 };
@@ -103,7 +102,7 @@ export const blocksOf = (text: string): Block[] => {
   lines.forEach((line, index) => {
     if (FENCE.test(line)) inFence = !inFence;
 
-    if (!inFence && line.trim() === '' && !FENCE.test(line)) {
+    if (!inFence && line.trim() === '') {
       flush();
 
       return;
@@ -165,26 +164,27 @@ const headersOf = (text: string): string[] => {
   return values;
 };
 
-const siteOf = (block: Block): Site => {
-  const headerMentions = headersOf(block.text).length;
+const siteOf = (block: Block): Site => ({
+  block,
+  hasMarker: block.text.includes(MARKER_TEXT),
+  headers: headersOf(block.text),
+  isHumanOnly: HUMAN_ONLY.test(block.text),
+  isNeutral: NEUTRAL.test(block.text),
+  recommendedLabels: new Set(
+    [...block.text.matchAll(MARKER)]
+      .map((match) => labelBefore(block.text, match.index))
+      .filter((label) => label !== '')
+  ),
+});
 
-  return {
-    block,
-    hasMarker: block.text.includes('(Recommended)'),
-    headers: headersOf(block.text),
-    isHumanOnly: HUMAN_ONLY.test(block.text),
-    isNeutral: NEUTRAL.test(block.text),
-    questionCount: headerMentions,
-    recommendedLabels: new Set(
-      [...block.text.matchAll(MARKER)]
-        .map((match) => labelBefore(block.text, match.index))
-        .filter((label) => label !== '')
-    ),
-  };
-};
+const classified = new WeakMap<ProjectFile, Classified>();
 
-/** Classifies every block of one instruction file as a site, a mention, or a free-text question. */
+/** Classifies every block of one instruction file as a site, a mention, or a free-text question; cached per file because three rules read it. */
 export const classify = (file: ProjectFile): Classified => {
+  const cached = classified.get(file);
+
+  if (cached !== undefined) return cached;
+
   const sites: Site[] = [];
   const mentionOnly: Block[] = [];
   const unheaded: Site[] = [];
@@ -202,14 +202,15 @@ export const classify = (file: ProjectFile): Classified => {
       const site = siteOf(block);
 
       if (site.headers.length > 0) sites.push(site);
-      else if (
-        block.text.includes('(Recommended)') ||
-        OPTIONS_CLAUSE.test(block.text)
-      )
+      else if (site.hasMarker || OPTIONS_CLAUSE.test(block.text))
         unheaded.push(site);
       else mentionOnly.push(block);
     }
   }
 
-  return {freeText, mentionOnly, sites, unheaded};
+  const result = {freeText, mentionOnly, sites, unheaded};
+
+  classified.set(file, result);
+
+  return result;
 };

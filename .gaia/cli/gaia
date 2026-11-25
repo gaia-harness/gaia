@@ -28876,9 +28876,9 @@ var classifyOwnership = (input2) => {
   }
   return result;
 };
-var effectiveOwnership = (classified, kinds) => {
+var effectiveOwnership = (classified2, kinds) => {
   const isLocal2 = kinds.includes("settings-local") || kinds.includes("claudemd-local");
-  return isLocal2 && classified === "ignored" ? "adopter" : classified;
+  return isLocal2 && classified2 === "ignored" ? "adopter" : classified2;
 };
 
 // src/fitness/rules/ask-user-question.ts
@@ -28888,6 +28888,7 @@ import path14 from "node:path";
 // src/fitness/rules/ask-user-question-sites.ts
 var HUMAN_ONLY_HEADERS_PATH = ".gaia/autonomy-human-only-headers.json";
 var TOOL_NAME = "AskUserQuestion";
+var MARKER_TEXT = "(Recommended)";
 var MARKER = /\(Recommended\)/g;
 var LABEL_LOOKBACK = 80;
 var LABEL_DELIMITERS = '`*"\u201C\u201D,:;()\n';
@@ -28927,7 +28928,7 @@ var blocksOf = (text) => {
   };
   lines.forEach((line, index) => {
     if (FENCE.test(line)) inFence = !inFence;
-    if (!inFence && line.trim() === "" && !FENCE.test(line)) {
+    if (!inFence && line.trim() === "") {
       flush();
       return;
     }
@@ -28970,21 +28971,20 @@ var headersOf = (text) => {
   }
   return values;
 };
-var siteOf = (block2) => {
-  const headerMentions = headersOf(block2.text).length;
-  return {
-    block: block2,
-    hasMarker: block2.text.includes("(Recommended)"),
-    headers: headersOf(block2.text),
-    isHumanOnly: HUMAN_ONLY.test(block2.text),
-    isNeutral: NEUTRAL.test(block2.text),
-    questionCount: headerMentions,
-    recommendedLabels: new Set(
-      [...block2.text.matchAll(MARKER)].map((match) => labelBefore(block2.text, match.index)).filter((label) => label !== "")
-    )
-  };
-};
+var siteOf = (block2) => ({
+  block: block2,
+  hasMarker: block2.text.includes(MARKER_TEXT),
+  headers: headersOf(block2.text),
+  isHumanOnly: HUMAN_ONLY.test(block2.text),
+  isNeutral: NEUTRAL.test(block2.text),
+  recommendedLabels: new Set(
+    [...block2.text.matchAll(MARKER)].map((match) => labelBefore(block2.text, match.index)).filter((label) => label !== "")
+  )
+});
+var classified = /* @__PURE__ */ new WeakMap();
 var classify = (file2) => {
+  const cached2 = classified.get(file2);
+  if (cached2 !== void 0) return cached2;
   const sites = [];
   const mentionOnly = [];
   const unheaded = [];
@@ -28999,12 +28999,14 @@ var classify = (file2) => {
     if (block2.text.includes(TOOL_NAME)) {
       const site = siteOf(block2);
       if (site.headers.length > 0) sites.push(site);
-      else if (block2.text.includes("(Recommended)") || OPTIONS_CLAUSE.test(block2.text))
+      else if (site.hasMarker || OPTIONS_CLAUSE.test(block2.text))
         unheaded.push(site);
       else mentionOnly.push(block2);
     }
   }
-  return { freeText, mentionOnly, sites, unheaded };
+  const result = { freeText, mentionOnly, sites, unheaded };
+  classified.set(file2, result);
+  return result;
 };
 
 // src/fitness/rules/ask-user-question.ts
@@ -29027,14 +29029,15 @@ var humanOnlyHeaders = (context) => {
   }
 };
 var recommendationFindings = (file2, site) => {
-  const marked = site.recommendedLabels.size === 0 && site.hasMarker ? site.questionCount : site.recommendedLabels.size;
+  const questionCount = site.headers.length;
+  const marked = site.recommendedLabels.size === 0 && site.hasMarker ? questionCount : site.recommendedLabels.size;
   if (site.isNeutral) return [];
-  if (marked === site.questionCount) return [];
+  if (marked === questionCount) return [];
   return [
     {
       file: file2.path,
       line: site.block.line,
-      message: marked < site.questionCount ? `The site asks ${site.questionCount} question(s) but marks ${marked} option(s) \`(Recommended)\`.` : `The site marks ${marked} options \`(Recommended)\` for ${site.questionCount} question(s); a question has exactly one.`,
+      message: marked < questionCount ? `The site asks ${questionCount} question(s) but marks ${marked} option(s) \`(Recommended)\`.` : `The site marks ${marked} options \`(Recommended)\` for ${questionCount} question(s); a question has exactly one.`,
       remediation: "Mark exactly one option per question `(Recommended)`, the conservative one, or say in the site that it recommends nothing."
     }
   ];
@@ -32856,9 +32859,9 @@ var refuseUnlessFixableAdopter = (options, root, target) => {
   )) {
     return refused("target is not in the fixable set");
   }
-  const classified = classifyOwnership({ env, paths: [target], root });
+  const classified2 = classifyOwnership({ env, paths: [target], root });
   const ownership = effectiveOwnership(
-    classified.get(target) ?? "unknown",
+    classified2.get(target) ?? "unknown",
     kindsOfPath(target)
   );
   return ownership === "adopter" ? void 0 : refused(`target ownership is ${ownership}, not adopter`);
@@ -39244,9 +39247,9 @@ var resolveEnvironment = (deps) => {
   }
   return { packageDir, packagePath, repoRoot, storybookVersion, ts };
 };
-var formatRefusals = (classified, packagePath) => {
-  if (classified.csf2.length > 0) {
-    const paths = asRepoPaths(packagePath, classified.csf2);
+var formatRefusals = (classified2, packagePath) => {
+  if (classified2.csf2.length > 0) {
+    const paths = asRepoPaths(packagePath, classified2.csf2);
     return {
       message: `these files are CSF2; convert them to CSF3 first with ${CSF2_CODEMOD}, then re-run:
 ${listLines(paths)}`,
@@ -39254,8 +39257,8 @@ ${listLines(paths)}`,
       reason: "csf2"
     };
   }
-  if (classified.unknown.length > 0) {
-    const paths = asRepoPaths(packagePath, classified.unknown);
+  if (classified2.unknown.length > 0) {
+    const paths = asRepoPaths(packagePath, classified2.unknown);
     return {
       message: `the story format of these files could not be determined:
 ${listLines(paths)}`,
@@ -39304,16 +39307,16 @@ var runMigrateCsf4 = (options, deps) => {
   }
   const { packageDir, packagePath, repoRoot, storybookVersion, ts } = environment;
   const inventory = inventoryStoryFiles(ts, packageDir);
-  const classified = classifyStories({
+  const classified2 = classifyStories({
     packageDir,
     repairs,
     storyFiles: inventory.storyFiles,
     ts
   });
-  const formatRefusal = formatRefusals(classified, packagePath);
+  const formatRefusal = formatRefusals(classified2, packagePath);
   if (formatRefusal !== void 0) return refuse3(packagePath, formatRefusal);
   const plan = computeWritePlan({
-    csf3Stories: classified.csf3,
+    csf3Stories: classified2.csf3,
     packageDir,
     repairs,
     ts
@@ -53910,12 +53913,12 @@ var run75 = (argv, options = {}) => {
     });
     return EXIT_CODES.CONFIG_INVALID;
   }
-  const classified = details.map((detail) => ({
+  const classified2 = details.map((detail) => ({
     decision: classify2(detail, paths),
     detail
   }));
   const classification = {
-    commits: classified.map(({ decision, detail }) => ({
+    commits: classified2.map(({ decision, detail }) => ({
       body: detail.body,
       deletions: detail.deletions,
       files_changed: detail.files_changed,
@@ -53925,7 +53928,7 @@ var run75 = (argv, options = {}) => {
       suggestion: decision.suggestion,
       suggestion_reason: decision.reason
     })),
-    health: computeHealth(classified.map(({ decision }) => decision))
+    health: computeHealth(classified2.map(({ decision }) => decision))
   };
   warnIfInert(classification.health);
   if (parsed.flags.json) {

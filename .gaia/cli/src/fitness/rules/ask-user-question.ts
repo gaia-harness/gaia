@@ -41,23 +41,24 @@ const recommendationFindings = (
   site: Site
 ): RawFinding[] => {
   // A bare `(Recommended)` names the mark to apply to a runtime-built option set.
+  const questionCount = site.headers.length;
   const marked =
     site.recommendedLabels.size === 0 && site.hasMarker ?
-      site.questionCount
+      questionCount
     : site.recommendedLabels.size;
 
   if (site.isNeutral) return [];
 
-  if (marked === site.questionCount) return [];
+  if (marked === questionCount) return [];
 
   return [
     {
       file: file.path,
       line: site.block.line,
       message:
-        marked < site.questionCount ?
-          `The site asks ${site.questionCount} question(s) but marks ${marked} option(s) \`(Recommended)\`.`
-        : `The site marks ${marked} options \`(Recommended)\` for ${site.questionCount} question(s); a question has exactly one.`,
+        marked < questionCount ?
+          `The site asks ${questionCount} question(s) but marks ${marked} option(s) \`(Recommended)\`.`
+        : `The site marks ${marked} options \`(Recommended)\` for ${questionCount} question(s); a question has exactly one.`,
       remediation:
         'Mark exactly one option per question `(Recommended)`, the conservative one, or say in the site that it recommends nothing.',
     },
