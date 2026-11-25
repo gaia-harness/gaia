@@ -8,8 +8,11 @@ import {
 } from './land.js';
 import {checkPullRequestReview, findOpenPullRequest} from './pr-review-gate.js';
 
+// A review gate that could not run is an unexpected failure, not a refusal.
+const UNEXPECTED_EXIT = 2;
+
 /** A pull request `gh pr create` printed, parsed from its URL. */
-type GhArtifact = {number: number; repo: string};
+type GhArtifact = {number: number; repo?: string};
 
 // `SpawnSyncReturns.stdout` is typed as non-nullable `string`, but a spawn
 // failure can genuinely leave it `null`/`undefined` at runtime despite the
@@ -39,6 +42,11 @@ const parsePrUrl = (text: string): GhArtifact | undefined => {
 
   return {number, repo};
 };
+
+const artifactOf = (
+  record: undefined | {number: number}
+): GhArtifact | undefined =>
+  record === undefined ? undefined : {number: record.number};
 
 const DRAFT_UNSUPPORTED =
   /draft.*(?:not supported|unsupported)|(?:not supported|unsupported).*draft/i;
@@ -157,9 +165,13 @@ export const queueAutoMerge = (
       return failure(created.result, 'gh', created.args);
     }
 
-    artifact = parsePrUrl(safeOutput(created.result.stdout));
+    // The URL regex is anchored to github.com, so an enterprise host's URL
+    // parses to nothing; the branch's own open PR then names the number.
+    artifact =
+      parsePrUrl(safeOutput(created.result.stdout)) ??
+      artifactOf(findOpenPullRequest({branch, cwd: repoRoot, runner}));
   } else {
-    artifact = parsePrUrl(openPullRequestRecord.url);
+    artifact = artifactOf(openPullRequestRecord);
   }
 
   if (artifact === undefined) {
@@ -179,7 +191,10 @@ export const queueAutoMerge = (
   if ('line' in review) {
     process.stderr.write(`${review.line}\n`);
 
-    return {failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND};
+    return {
+      failureCode:
+        review.isUnavailable ? UNEXPECTED_EXIT : EXIT_CODES.UNKNOWN_SUBCOMMAND,
+    };
   }
 
   // `--auto` merges outside the Claude Code merge hook, so nothing else posts

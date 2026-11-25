@@ -11,10 +11,12 @@
 #
 # snapshot refuses a dirty tree (untracked files count), otherwise writes one
 # JSON file holding the tree listing, a path and content-hash listing of the
-# local audit state and of the run folder, and HEAD's commit statuses.
+# local audit state and of the run folder, and HEAD's GAIA-Audit commit
+# statuses (the only status the reviewer could post; another integration's
+# status landing during the review is not the reviewer's write).
 # compare captures the same state again into --after, from the root and run
 # folder the snapshot recorded, and reports the first difference in this order:
-# the tree, the audit state, the commit statuses. --output-file names the one
+# the tree, the audit state, the GAIA-Audit statuses. --output-file names the one
 # file the tree listing ignores: the reviewer's own output.
 #
 # Exit 0 clean, 1 the first difference (one line on stdout), 2 usage or an
@@ -101,7 +103,7 @@ capture_state() {
   dirty=$(dirty_paths "$root" "$output_file" | jq -R . | jq -s .)
   audit=$(folder_listing "$main_root" "$main_root/.gaia/local/audit")
   runs=$(folder_listing "$main_root" "$run_folder")
-  statuses=$( (cd "$root" && gh api "repos/{owner}/{repo}/commits/$head/statuses") 2>/dev/null | jq -S -c .) ||
+  statuses=$( (cd "$root" && gh api "repos/{owner}/{repo}/commits/$head/statuses") 2>/dev/null | jq -S -c 'map(select(.context == "GAIA-Audit"))') ||
     usage_error "gh could not read the commit statuses for $head"
   [ -n "$statuses" ] || usage_error "gh returned no commit statuses document for $head"
   jq -n --arg root "$root" --arg run "$run_folder" --arg pr "$pr" --arg head "$head" \

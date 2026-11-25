@@ -779,7 +779,7 @@ describe('wiki chain', () => {
 
         const exit = finishLanding(sandbox.root, runner);
 
-        expect(exit).not.toBe(0);
+        expect(exit).toBe(1);
         expect(stdio.errors.join('')).toContain('PR review: no review record.');
         expect(gateCalls(recorded)).toHaveLength(1);
         expect(refusedBeforeMerge(recorded)).toBe(true);
@@ -801,11 +801,60 @@ describe('wiki chain', () => {
 
         const exit = finishLanding(sandbox.root, runner);
 
-        expect(exit).not.toBe(0);
+        expect(exit).toBe(2);
         expect(stdio.errors.join('')).toContain(
           'PR review: could not be checked on PR #42 (jq missing).'
         );
         expect(refusedBeforeMerge(recorded)).toBe(true);
+      });
+
+      test('a created pull request on a host outside github.com is read back by number and reaches the gate', () => {
+        sandbox = setupSandbox();
+        const recorded: RecordedCall[] = [];
+        const inner = buildRunner(
+          [
+            ...branchScript,
+            {
+              argv: gateArgv(realpathSync(sandbox.root), '42'),
+              result: {...okResult('PR review: incomplete.\n'), status: 1},
+            },
+          ],
+          recorded
+        );
+        let viewCount = 0;
+
+        const runner: CommandRunner = (command, args, options) => {
+          if (command === 'gh' && args[0] === 'pr' && args[1] === 'view') {
+            viewCount += 1;
+            recorded.push({args: [...args], command});
+
+            return viewCount === 1 ?
+                okResult('')
+              : okResult(
+                  JSON.stringify({
+                    number: 42,
+                    state: 'OPEN',
+                    url: 'https://ghe.example.com/gaia/example/pull/42',
+                  })
+                );
+          }
+
+          if (command === 'gh' && args[0] === 'pr' && args[1] === 'create') {
+            recorded.push({args: [...args], command});
+
+            return okResult('https://ghe.example.com/gaia/example/pull/42\n');
+          }
+
+          return inner(command, args, options);
+        };
+
+        const exit = finishLanding(sandbox.root, runner);
+
+        expect(exit).toBe(1);
+        expect(gateCalls(recorded)).toHaveLength(1);
+        expect(stdio.errors.join('')).not.toContain(
+          'could not read the pull request number'
+        );
       });
 
       test('an already open pull request is reused: no gh pr create, and the gate runs with its number', () => {

@@ -13,7 +13,8 @@ const OpenPullRequestSchema = z.object({
 
 export type OpenPullRequest = {number: number; url: string};
 
-export type PullRequestReviewCheck = {isComplete: true} | {line: string};
+export type PullRequestReviewCheck =
+  {isComplete: true} | {isUnavailable: boolean; line: string};
 
 type PullRequestReviewOptions = {
   cwd: string;
@@ -76,11 +77,12 @@ export const checkPullRequestReview = (
 
   const line = safeOutput(result.stdout).trim();
 
-  if (result.status === 1 && line !== '') return {line};
+  if (result.status === 1 && line !== '') return {isUnavailable: false, line};
 
   const detail = safeOutput(result.stderr).trim() || 'the gate could not run';
 
   return {
+    isUnavailable: true,
     line: `PR review: could not be checked on PR #${prNumber} (${detail}).`,
   };
 };

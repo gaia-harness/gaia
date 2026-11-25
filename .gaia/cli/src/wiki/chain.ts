@@ -8,7 +8,7 @@
  *   begin   once, before sync         → refuse a protected branch
  *   commit  once, after lint          → commit every stage's wiki/ edits as
  *                                        `wiki: <YYYY-MM-DD> <HH:MM> UTC`
- *   finish  once, after commit        → push + PR + auto-merge
+ *   finish  once, after commit        → push + PR + complete PR review + auto-merge
  *   refresh-nudge after merge cleanup  → write the main checkout's wiki drift
  *                                        into the statusline cache
  *
@@ -115,7 +115,10 @@ const HELP_TEXT = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [a
                                nothing changed; refuses non-wiki changes and
                                main/master.
   finish                       Push the wiki branch, open one PR, and enable
-                               auto-merge, staying on the branch. The merge wait
+                               auto-merge, staying on the branch. It requires a
+                               complete PR review (pr-review-gate.sh check) and
+                               exits 1 naming the gate line until one exists;
+                               the next run reuses the open PR. The merge wait
                                and local cleanup follow the work lifecycle.
                                Removes an empty wiki branch held in place, and
                                leaves one in a linked worktree to the caller;

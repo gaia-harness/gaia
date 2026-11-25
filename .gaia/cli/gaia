@@ -52826,14 +52826,16 @@ var checkPullRequestReview = (options) => {
   );
   if (commandSucceeded(result)) return { isComplete: true };
   const line = safeOutput3(result.stdout).trim();
-  if (result.status === 1 && line !== "") return { line };
+  if (result.status === 1 && line !== "") return { isUnavailable: false, line };
   const detail = safeOutput3(result.stderr).trim() || "the gate could not run";
   return {
+    isUnavailable: true,
     line: `PR review: could not be checked on PR #${prNumber} (${detail}).`
   };
 };
 
 // src/wiki/util/pr-landing.ts
+var UNEXPECTED_EXIT11 = 2;
 var safeOutput4 = (value) => value ?? "";
 var PR_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/u;
 var parsePrUrl = (text) => {
@@ -52846,6 +52848,7 @@ var parsePrUrl = (text) => {
   if (!Number.isSafeInteger(number4) || number4 <= 0) return void 0;
   return { number: number4, repo };
 };
+var artifactOf = (record2) => record2 === void 0 ? void 0 : { number: record2.number };
 var DRAFT_UNSUPPORTED = /draft.*(?:not supported|unsupported)|(?:not supported|unsupported).*draft/i;
 var openPullRequest = (options) => {
   const { prBody, prTitle, repoRoot, runner } = options;
@@ -52896,9 +52899,9 @@ var queueAutoMerge = (options) => {
     if (!commandSucceeded(created.result)) {
       return failure2(created.result, "gh", created.args);
     }
-    artifact = parsePrUrl(safeOutput4(created.result.stdout));
+    artifact = parsePrUrl(safeOutput4(created.result.stdout)) ?? artifactOf(findOpenPullRequest({ branch, cwd: repoRoot, runner }));
   } else {
-    artifact = parsePrUrl(openPullRequestRecord.url);
+    artifact = artifactOf(openPullRequestRecord);
   }
   if (artifact === void 0) {
     process.stderr.write(
@@ -52915,7 +52918,9 @@ var queueAutoMerge = (options) => {
   if ("line" in review) {
     process.stderr.write(`${review.line}
 `);
-    return { failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND };
+    return {
+      failureCode: review.isUnavailable ? UNEXPECTED_EXIT11 : EXIT_CODES.UNKNOWN_SUBCOMMAND
+    };
   }
   const stamp = postOutOfScopeStamp({
     branch,
@@ -53343,7 +53348,10 @@ var HELP_TEXT68 = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [a
                                nothing changed; refuses non-wiki changes and
                                main/master.
   finish                       Push the wiki branch, open one PR, and enable
-                               auto-merge, staying on the branch. The merge wait
+                               auto-merge, staying on the branch. It requires a
+                               complete PR review (pr-review-gate.sh check) and
+                               exits 1 naming the gate line until one exists;
+                               the next run reuses the open PR. The merge wait
                                and local cleanup follow the work lifecycle.
                                Removes an empty wiki branch held in place, and
                                leaves one in a linked worktree to the caller;

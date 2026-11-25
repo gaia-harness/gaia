@@ -45,6 +45,14 @@ compare_after() {
   "$GUARD" compare --before "$SNAPSHOT" --after "$AFTER" --output-file "$REVIEWER_OUTPUT"
 }
 
+@test "compare ignores a commit status other than GAIA-Audit posted during the review" {
+  take_snapshot
+  printf '[]' >"$REVIEWER_OUTPUT"
+  printf '[{"context":"GAIA-Audit","state":"success"},{"context":"chromatic","state":"pending"}]' >"$SCRATCH/statuses.json"
+  run compare_after
+  [ "$status" -eq 0 ]
+}
+
 @test "snapshot and compare stop on a dirty tree, changed audit state or changed commit statuses" {
   # A dirty tree before the dispatch refuses the snapshot.
   printf 'b\n' >>"$FIXTURE/wiki/a.md"
