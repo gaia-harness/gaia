@@ -37,6 +37,27 @@
       }
     },
     {
+      "id": "rate-limits-readings",
+      "path": "cache/shared/rate-limits/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "shared",
+      "keyed_by": "session id, one file per Claude Code session (<session_id>.json)",
+      "why": "The statusline writes each session's own rate-limit reading (<session_id>.json, tmp + mv); the dispatch checkpoint reads its own session's file, and the reader and statusline choose the latest change across them. Anchored to the main root so every worktree's render lands in one place. Must precede cache-shared, whose prefix would otherwise claim these files first.",
+      "writer": "code",
+      "retention": {
+        "class": "age",
+        "days": 7,
+        "types": [
+          "file"
+        ],
+        "names": [
+          "*.json",
+          "*.json.tmp.*"
+        ]
+      }
+    },
+    {
       "id": "cache-shared-orphan-temps",
       "path": "cache/shared/.updates.??????|cache/shared/.advisories.??????|cache/shared/.cli-output.??????|cache/shared/.update-check.??????",
       "match": "glob",
@@ -44,37 +65,6 @@
       "scope": "shared",
       "keyed_by": "one mktemp name per write, never reused",
       "why": "Orphaned mktemp temps (six random characters) of the update-check, advisory and CLI-output writers, left behind when a writer dies between creation and rename. Inert: nothing reads them. Must precede cache-shared, whose prefix would otherwise claim them.",
-      "writer": "code",
-      "retention": {
-        "class": "age",
-        "days": 7,
-        "types": [
-          "file"
-        ]
-      }
-    },
-    {
-      "id": "rate-limits-reading",
-      "path": "cache/shared/rate-limits.json",
-      "match": "exact",
-      "kind": "file",
-      "scope": "shared",
-      "keyed_by": "singleton per checkout; every session's statusline render merges its rate-limit windows into the one file",
-      "why": "The shared rate-limit reading: each statusline render merges its payload's rate-limit windows into this one file (tmp + mv), and the statusline, the rate-limit reader and the dispatch checkpoint read it, so parallel sessions show the freshest figure any of them has seen. Anchored to the main root so every worktree's render lands in one place. Must precede cache-shared, whose prefix would otherwise claim it first.",
-      "writer": "code",
-      "retention": {
-        "class": "owned",
-        "owner": "gaia_rate_limits_write in .gaia/scripts/rate-limits-lib.sh overwrites it in place; never reaped"
-      }
-    },
-    {
-      "id": "rate-limits-orphan-temps",
-      "path": "cache/shared/rate-limits.json.tmp.*",
-      "match": "glob",
-      "kind": "file",
-      "scope": "shared",
-      "keyed_by": "one temporary file per write, named by the writing process id",
-      "why": "Orphaned temporary files of the shared rate-limit reading's writer (rate-limits.json.tmp.<pid>), left behind when a writer dies between creation and rename. Inert: nothing reads them. Must precede cache-shared, whose prefix would otherwise claim them.",
       "writer": "code",
       "retention": {
         "class": "age",
@@ -906,7 +896,7 @@
       "kind": "dir",
       "scope": "main-only",
       "keyed_by": null,
-      "why": "Per-session marker written by rate-limit-checkpoint-inject.sh (tmp + mv) holding, per window name, the reset time and the highest rate-limit band the checkpoint has told the session about, so each band of each window is told once per session. Anchored to the main root so a session moving between the main checkout and a worktree sees one marker.",
+      "why": "Per-session marker written by rate-limit-checkpoint-inject.sh (tmp + mv) holding, per window name, the reset time and the band last told (lowered when the figure drops to a lower band), so each band of each window is told once per climb. Anchored to the main root so a session moving between the main checkout and a worktree sees one marker.",
       "writer": "code",
       "retention": {
         "class": "age",
@@ -1140,6 +1130,22 @@
       "match": "glob",
       "why": "State of the removed spec-to-plan chain guard and the removed spec-kit version-check throttle; nothing reads or writes them.",
       "writer": "none-residue"
+    },
+    {
+      "id": "rate-limits-reading",
+      "path": "cache/shared/rate-limits.json",
+      "match": "exact",
+      "why": "The retired single shared rate-limit reading; version-2 code never reads or writes it.",
+      "writer": "none-residue",
+      "successor": "cache/shared/rate-limits/"
+    },
+    {
+      "id": "rate-limits-orphan-temps",
+      "path": "cache/shared/rate-limits.json.tmp.*",
+      "match": "glob",
+      "why": "Orphaned temporaries of the retired single shared reading's writer; version-2 code never reads or writes them.",
+      "writer": "none-residue",
+      "successor": "cache/shared/rate-limits/"
     }
   ],
   "report_only": [

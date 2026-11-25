@@ -25,7 +25,7 @@ ENFORCEMENT_PATHS=(
   '.claude/hooks/lib/audit-loop-write-scan.sh'   # that hook's path and command scan
   '.claude/hooks/lib/gate-input-paths-guard.sh'  # that hook's protected-folder and context classes
   '.claude/hooks/lib/hook-only-scripts-guard.sh' # that hook's recorder and reaper classes
-  '.claude/hooks/lib/rate-limits-guard.sh'    # that hook's shared rate-limit reading arm
+  '.claude/hooks/lib/rate-limits-guard.sh'    # that hook's per-session rate-limit reading arm
   '.claude/hooks/lib/jq-availability.sh'      # every hook's fail-closed jq check
   '.claude/hooks/lib/hook-payload.sh'         # the Bash-path hooks' one-jq payload reader
   '.gaia/scripts/audit-loop-state-lib.sh'     # state schema, locking and line parsing

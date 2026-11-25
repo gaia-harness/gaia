@@ -388,6 +388,7 @@
     ".gaia/scripts/provision-wait.sh": "owned",
     ".gaia/scripts/rate-limit-main-root-probe-lib.sh": "owned",
     ".gaia/scripts/rate-limits-lib.sh": "owned",
+    ".gaia/scripts/rate-limits-programs-lib.sh": "owned",
     ".gaia/scripts/rate-limits.sh": "owned",
     ".gaia/scripts/react-doctor-version-lib.sh": "owned",
     ".gaia/scripts/resolve-audit-members.sh": "owned",
@@ -815,6 +816,7 @@
     "wiki/concepts/Notebook.md": "wiki-owned",
     "wiki/concepts/OS Sandbox.md": "wiki-owned",
     "wiki/concepts/Package Descriptor.md": "wiki-owned",
+    "wiki/concepts/Per-session Rate-limit Reading And Dispatch Checkpoint.md": "wiki-owned",
     "wiki/concepts/Policy-Memory Loop.md": "wiki-owned",
     "wiki/concepts/PR Merge Workflow.md": "wiki-owned",
     "wiki/concepts/Pre-commit Hooks.md": "wiki-owned",
@@ -822,7 +824,6 @@
     "wiki/concepts/React Perf Diagnostic.md": "wiki-owned",
     "wiki/concepts/Registering a Code Audit Team Member.md": "wiki-owned",
     "wiki/concepts/Setup Features.md": "wiki-owned",
-    "wiki/concepts/Shared Rate-limit Reading And Dispatch Checkpoint.md": "wiki-owned",
     "wiki/concepts/Shell Testing and CI.md": "wiki-owned",
     "wiki/concepts/Single-session First-time Onboarding.md": "wiki-owned",
     "wiki/concepts/Spec Code Map Handoff.md": "wiki-owned",
@@ -921,7 +922,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-24T15:47:58.147Z",
+  "generated": "2026-11-25T01:43:20.586Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

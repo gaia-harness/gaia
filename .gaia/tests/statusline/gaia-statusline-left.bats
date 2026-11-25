@@ -21,7 +21,7 @@ setup() {
   git -C "$MAIN" config commit.gpgsign false
   mkdir -p "$MAIN/.gaia/statusline" "$MAIN/.gaia/scripts" "$MAIN/.gaia/local/protected"
   cp "$STATUSLINE_SOURCE"/*.sh "$MAIN/.gaia/statusline/"
-  cp "$SCRIPTS_SOURCE/main-root-lib.sh" "$SCRIPTS_SOURCE/context-checkpoint-lib.sh" "$SCRIPTS_SOURCE/rate-limits-lib.sh" "$MAIN/.gaia/scripts/"
+  cp "$SCRIPTS_SOURCE/main-root-lib.sh" "$SCRIPTS_SOURCE/context-checkpoint-lib.sh" "$SCRIPTS_SOURCE/rate-limits-lib.sh" "$SCRIPTS_SOURCE/rate-limits-programs-lib.sh" "$MAIN/.gaia/scripts/"
   echo x >"$MAIN/README.md"
   git -C "$MAIN" add -A
   git -C "$MAIN" commit --quiet -m init
@@ -158,13 +158,13 @@ choice_case() {
 # rate_limits value, printed with its ANSI escapes stripped into PLAIN_OUTPUT.
 render_usage() {
   local rate_limits="$1" json
-  # Each call stands for one session: start from no shared reading.
-  rm -f "$MAIN/.gaia/local/cache/shared/rate-limits.json"
-  json=$(jq -n --arg current_directory "$MAIN" \
-    '{workspace: {current_dir: $current_directory}, model: {display_name: "Claude Opus"}, effort: {level: "xhigh"},
+  # Each call stands for one session: start from no stored readings.
+  rm -rf "$MAIN/.gaia/local/cache/shared/rate-limits"
+  json=$(jq -n --arg current_directory "$MAIN" --arg session_id "$SESSION_ID" \
+    '{session_id: $session_id, workspace: {current_dir: $current_directory}, model: {display_name: "Claude Opus"}, effort: {level: "xhigh"},
       context_window: {used_percentage: 21, context_window_size: 1000000}}')
   [ "$rate_limits" = "-" ] || json=$(jq --argjson rate_limits "$rate_limits" '. + {rate_limits: $rate_limits}' <<<"$json")
-  PAYLOAD="$json" run env HOME="$TEMPORARY_HOME" COLUMNS=300 bash -c "printf '%s' \"\$PAYLOAD\" | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
+  PAYLOAD="$json" run env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CONFIG_DIR HOME="$TEMPORARY_HOME" COLUMNS=300 bash -c "printf '%s' \"\$PAYLOAD\" | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   PLAIN_OUTPUT=$(sed "s/${ESCAPE_CHARACTER}\[[0-9;]*m//g" <<<"$output")
 }
 
