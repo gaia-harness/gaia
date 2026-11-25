@@ -718,7 +718,7 @@ EOF
   true
 }
 
-@test "after a limit reset the dispatch and the reader follow the lower figure, and an idle session's statusline keeps its own" {
+@test "after a limit reset the dispatch and the reader outside a session follow the lower figure, and an idle session's statusline keeps its own" {
   local now=1795440000 reset=1795449600 five_hour
   prepare_render
 

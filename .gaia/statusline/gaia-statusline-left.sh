@@ -10,7 +10,7 @@
 # shows the main project; the branch carries a tree marker inside a linked
 # worktree. A usage window renders from the writer's display records
 # (see rate-limits-reading.sh), so no plan logic lives here;
-# a window absent from every source is not drawn.
+# a window absent from those records and from the payload is not drawn.
 #
 # The bar is colored from the shared threshold lib's bands (green below yellow,
 # yellow from yellow, red from red, fire and skull markers above), the same
