@@ -461,7 +461,7 @@ EOF
   esac
 }
 
-@test "inside a session the reader prints only the session's own reading, never filling a missing window from another session" {
+@test "inside a session with its own reading the reader prints only that reading, never filling a missing window from another session" {
   local now=$((MONDAY + 43200)) reset=$((MONDAY + 57600)) t1=$((MONDAY + 40000)) t2=$((MONDAY + 41000))
 
   rate_limits_seed_session "$MAIN" "$SESSION_A" "$t1" true five_hour 40 "$reset"
