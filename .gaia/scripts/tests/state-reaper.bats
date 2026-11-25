@@ -587,26 +587,37 @@ plant_git_failure_fixture() {
   grep -qi 'usage' <<<"$output"
 }
 
-@test "rate-limit temporary files and checkpoint markers age out after 7 days while the shared reading stays" {
+@test "a per-session reading and its temporaries age out after 7 days" {
   make_fixture
-  local temporary_days marker_days reading_name=rate-limits
+  local reading_days
+  local reading_old=cache/shared/rate-limits/0b9c2d4e-1f3a-4b5c-8d7e-9f0a1b2c3d4e.json
+  local reading_young=cache/shared/rate-limits/7a6b5c4d-3e2f-4a1b-9c8d-0e1f2a3b4c5d.json
+  reading_days="$(window rate-limits-readings)"
+  [ "$reading_days" -eq 7 ] || return 1
+  plant_file "$reading_old" $((reading_days + 1))
+  plant_file "$reading_old.tmp.4242" $((reading_days + 1))
+  plant_file "$reading_young" $((reading_days - 1))
+  plant_file "$reading_young.tmp.4243" $((reading_days - 1))
+  run_reaper
+  [ "$status" -eq 0 ] || return 1
+  absent "$reading_old"
+  absent "$reading_old.tmp.4242"
+  present "$reading_young"
+  present "$reading_young.tmp.4243"
+}
+
+@test "rate-limit checkpoint markers age out after 7 days" {
+  make_fixture
+  local marker_days
   local told_old=cache/rate-limit-checkpoint/0b9c2d4e-1f3a-4b5c-8d7e-9f0a1b2c3d4e.json
   local told_young=cache/rate-limit-checkpoint/7a6b5c4d-3e2f-4a1b-9c8d-0e1f2a3b4c5d.json
-  temporary_days="$(window rate-limits-orphan-temps)"
   marker_days="$(window rate-limit-checkpoint-markers)"
-  [ "$temporary_days" -eq 7 ] || return 1
   [ "$marker_days" -eq 7 ] || return 1
-  plant_file "cache/shared/$reading_name.json" 400
-  plant_file "cache/shared/$reading_name.json.tmp.4242" $((temporary_days + 1))
-  plant_file "cache/shared/$reading_name.json.tmp.4243" $((temporary_days - 1))
   plant_file "$told_old" $((marker_days + 1))
   plant_file "$told_young" $((marker_days - 1))
   plant_file "$told_young.tmp.99" $((marker_days + 1))
   run_reaper
   [ "$status" -eq 0 ] || return 1
-  present "cache/shared/$reading_name.json"
-  present "cache/shared/$reading_name.json.tmp.4243"
-  absent "cache/shared/$reading_name.json.tmp.4242"
   present "$told_young"
   absent "$told_old"
   absent "$told_young.tmp.99"

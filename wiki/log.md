@@ -11,6 +11,8 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-11-25 PROMOTED: wiki/decisions/Rendered Plan Orchestrator And Test-stage Lens Digest.md (PR #3821)
+- 2026-11-24 PROMOTED: wiki/concepts/Per-session Rate-limit Reading And Dispatch Checkpoint.md (PR #3805)
 - 2026-11-24 PROMOTED: wiki/concepts/Spec Code Map Handoff.md (PR #3792)
 - 2026-11-19 PROMOTED: wiki/concepts/Shared Rate-limit Reading And Dispatch Checkpoint.md (PR #3673)
 - 2026-11-18 PROMOTED: wiki/decisions/Spec And Plan Without Test Design.md (PR #3661)

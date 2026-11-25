@@ -30,14 +30,14 @@ require_command rsync "rsync required for adopter-flow scaffold copy"
 
 SECONDS=0
 stage_adopter_tree executor-lint
-PLANNER_DOC="$SCAFFOLD/.claude/skills/gaia/references/plan/planner.md"
+TEMPLATE_DOC="$SCAFFOLD/.claude/skills/gaia/references/plan/orchestrator-template.md"
 
 # --- 1. The command, sourced from the shipped planner reference -------------
 
 # shellcheck disable=SC2016 # the backticks are the doc's literal code span
-LINT_TEMPLATE="$(grep -oE '`pnpm -C <package dir> exec eslint <its own files>`' "$PLANNER_DOC" | head -n 1 | tr -d '`')" || true
+LINT_TEMPLATE="$(grep -oE '`pnpm -C <package dir> exec eslint <its own files>`' "$TEMPLATE_DOC" | head -n 1 | tr -d '`')" || true
 [ -n "$LINT_TEMPLATE" ] \
-  || { fail "planner.md names no \`pnpm -C <package dir> exec eslint <its own files>\` command for task sub-agents"; exit 1; }
+  || { fail "orchestrator-template.md names no \`pnpm -C <package dir> exec eslint <its own files>\` command for task sub-agents"; exit 1; }
 
 log "pnpm install --frozen-lockfile"
 run_logged "pnpm install --frozen-lockfile" "$WORK/install.log" pnpm -C "$SCAFFOLD" install --frozen-lockfile

@@ -25,11 +25,12 @@
 # and the end.
 #
 # Paths:
-#   subagent        payload carries agent_id, reading at the warning band
-#   no_shared_file  no shared reading file
-#   below_warning   reading below the warning band
-#   band_marked     reading at the warning band, band already marked for the session
-#   firing          reading at the warning band, no marker (emits)
+#   subagent        payload carries agent_id, own reading at the warning band
+#   no_reading      no reading file for the dispatching session
+#   below_warning   own reading below the warning band
+#   band_marked     own reading at the warning band, band already marked for the session
+#   tier_read       own 7-day reading at the warning band, tier read from a scratch profile (silent)
+#   firing          own reading at the warning band, no marker (emits)
 #   baseline        /bin/sh -c true
 #
 # Usage: bash .gaia/tests/hooks/rate-limit-checkpoint-timing.sh [--runs N] [--json]
@@ -57,13 +58,19 @@ for tool in jq perl git; do
 done
 
 repo=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "run from inside the repo" >&2; exit 2; }
-for required_file in .claude/hooks/rate-limit-checkpoint-inject.sh .gaia/scripts/rate-limits-lib.sh; do
+for required_file in .claude/hooks/rate-limit-checkpoint-inject.sh .gaia/scripts/rate-limits-lib.sh .gaia/scripts/rate-limits-programs-lib.sh .gaia/scripts/context-checkpoint-lib.sh; do
   [ -f "$repo/$required_file" ] || { echo "missing $required_file" >&2; exit 2; }
 done
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 fixture="$(cd -P "$work" && pwd)/fixture"
+
+# Scratch account folders: no run opens the real profile, and no band depends on
+# the machine's tier.
+mkdir -p "$work/home" "$work/config"
+export HOME="$work/home" CLAUDE_CONFIG_DIR="$work/config"
+unset CLAUDE_CODE_SESSION_ID
 
 mkdir -p "$fixture/.claude/hooks" "$fixture/.gaia/scripts"
 cp "$repo/.claude/hooks/rate-limit-checkpoint-inject.sh" "$fixture/.claude/hooks/"
@@ -94,12 +101,13 @@ bash_used=$(PATH="$hook_path" bash --version | sed -n 1p)
 
 # shellcheck source=/dev/null
 . "$fixture/.gaia/scripts/rate-limits-lib.sh"
+# shellcheck source=/dev/null
+. "$repo/.gaia/tests/helpers/rate-limits-fixture.sh"
 
 fixed_now=$(date +%s)
 warning_percentage=$GAIA_RATE_LIMIT_WARNING_PERCENTAGE
 below_percentage=$((warning_percentage - 1))
 resets_at=$((fixed_now + 3600))
-shared_file=$(gaia_rate_limits_file "$fixture")
 marker_directory="$fixture/.gaia/local/cache/rate-limit-checkpoint"
 
 uuid_counter=0
@@ -109,12 +117,10 @@ next_session_id() {
   printf -v session_id '%08x-%04x-4%03x-8%03x-%08x%04x' "$$" "$uuid_counter" "$((RANDOM % 4096))" "$((RANDOM % 4096))" "$((RANDOM * RANDOM))" "$RANDOM"
 }
 
-# write_reading <percentage>: a valid shared reading holding one window.
+# write_reading <session id> <percentage> [<window name>]: a valid reading file
+# for that session holding one window (five_hour by default).
 write_reading() {
-  mkdir -p "${shared_file%/*}"
-  jq -n --argjson percentage "$1" --argjson resets_at "$resets_at" --argjson observed_at "$fixed_now" \
-    '{version: 1, windows: {five_hour: {used_percentage: $percentage, resets_at: $resets_at, observed_at: $observed_at,
-      producer: "statusline", history: [{used_percentage: $percentage, observed_at: $observed_at, producer: "statusline"}]}}}' >"$shared_file"
+  rate_limits_seed_session "$fixture" "$1" "$fixed_now" true "${3:-five_hour}" "$2" "$resets_at"
 }
 
 # build_payload <session id> <extra jq object>: a PreToolUse Workflow payload.
@@ -143,21 +149,25 @@ prepare() {
   expect=silent
   rm -rf "$marker_directory"
   case "$label" in
-    subagent) write_reading "$warning_percentage"; build_payload "$sid" '{"agent_id":"agent-1"}' >"$work/in.json" ;;
-    no_shared_file) rm -f "$shared_file"; build_payload "$sid" '{}' >"$work/in.json" ;;
-    below_warning) write_reading "$below_percentage"; build_payload "$sid" '{}' >"$work/in.json" ;;
+    subagent) write_reading "$sid" "$warning_percentage"; build_payload "$sid" '{"agent_id":"agent-1"}' >"$work/in.json" ;;
+    no_reading) build_payload "$sid" '{}' >"$work/in.json" ;;
+    below_warning) write_reading "$sid" "$below_percentage"; build_payload "$sid" '{}' >"$work/in.json" ;;
     band_marked)
-      write_reading "$warning_percentage"; build_payload "$sid" '{}' >"$work/in.json"
+      write_reading "$sid" "$warning_percentage"; build_payload "$sid" '{}' >"$work/in.json"
       time_one "$registered_command" >/dev/null
       ;;
-    firing) write_reading "$warning_percentage"; build_payload "$sid" '{}' >"$work/in.json"; expect=emit ;;
+    tier_read)
+      write_reading "$sid" "$warning_percentage" seven_day; build_payload "$sid" '{}' >"$work/in.json"
+      printf '{"oauthAccount":{"organizationRateLimitTier":"default_claude_max_20x"}}\n' >"$CLAUDE_CONFIG_DIR/.claude.json"
+      ;;
+    firing) write_reading "$sid" "$warning_percentage"; build_payload "$sid" '{}' >"$work/in.json"; expect=emit ;;
     baseline) build_payload "$sid" '{}' >"$work/in.json" ;;
   esac
 }
 
 load_one_minute() { uptime | sed -e 's/.*load averages*: *//' -e 's/,/ /g' | awk '{print $1}'; }
 
-labels="subagent no_shared_file below_warning band_marked firing baseline"
+labels="subagent no_reading below_warning band_marked tier_read firing baseline"
 failures=0
 failure_notes=""
 note_failure() { failures=$((failures + 1)); failure_notes="$failure_notes$1

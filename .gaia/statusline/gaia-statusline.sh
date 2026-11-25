@@ -18,9 +18,9 @@
 #
 # Whatever the left side is, the right side always renders, and every render
 # also writes the session's context reading for the audit-loop bound hook (see
-# context-reading.sh) and merges the payload's usage windows into the shared
-# rate-limit reading, which GAIA's left side displays from (see
-# rate-limits-reading.sh).
+# context-reading.sh) and writes the payload's usage windows to its own
+# session's rate-limit reading, while GAIA's left side displays the latest
+# change across sessions (see rate-limits-reading.sh).
 #
 # The hot path stays no-network: no network calls, no `pnpm` calls. It is no
 # longer under 50ms, and that target is retired rather than quietly missed:
@@ -155,13 +155,13 @@ if command -v gaia_statusline_write_effort >/dev/null 2>&1; then
 fi
 
 # ---------- Rate-limit reading (written on every render) ----------
-# The usage windows are merged into one shared file under the main checkout so
-# every session shows the freshest reading any of them has seen. Like the
-# context reading, the write comes before left-side resolution and happens
-# whatever draws the left side, so a user-command left side still produces it.
-# The writer's merged display records come back as the four values GAIA's left
-# side draws. With the library absent nothing is set and no usage segment
-# renders. `now` is read once here and handed to the left side.
+# The usage windows are written to this session's own reading file under the
+# main checkout, and the display shows whichever session's figure changed most
+# recently. Like the context reading, the write comes before left-side
+# resolution and happens whatever draws the left side, so a user-command left
+# side still produces it. The writer's display records come back as the four
+# values GAIA's left side draws. With the library absent nothing is set and no
+# usage segment renders. `now` is read once here and handed to the left side.
 rate_limits_now=""
 _GAIA_RATE_LIMITS_FIVE_HOUR_PERCENTAGE=""
 _GAIA_RATE_LIMITS_FIVE_HOUR_RESETS_AT=""
@@ -179,7 +179,7 @@ if command -v gaia_rate_limits_now >/dev/null 2>&1; then
   rate_limits_now=$(gaia_rate_limits_now 2>/dev/null) || rate_limits_now=""
 fi
 if [ -n "$rate_limits_now" ] && command -v gaia_statusline_rate_limits >/dev/null 2>&1; then
-  gaia_statusline_rate_limits "$STATE_ROOT" "$rate_limits_now" "$five_hour_percentage" "$five_hour_resets_at" "$seven_day_percentage" "$seven_day_resets_at" >/dev/null 2>&1 || true
+  gaia_statusline_rate_limits "$STATE_ROOT" "$rate_limits_now" "$session_id" "$five_hour_percentage" "$five_hour_resets_at" "$seven_day_percentage" "$seven_day_resets_at" >/dev/null 2>&1 || true
 fi
 
 # ---------- Left side ----------

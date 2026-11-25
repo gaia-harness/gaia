@@ -63,7 +63,7 @@ setup() {
   POINTER_SOURCES=(
     '.claude/agents/worthiness-evaluator.md'
     '.claude/rules/coding-guidelines.md'
-    '.claude/skills/gaia/references/plan/planner.md'
+    '.claude/skills/gaia/references/plan/orchestrator-template.md'
     '.claude/skills/gaia/references/spec/audit.md'
     '.claude/skills/gaia/references/work-lifecycle.md'
     '.claude/skills/gaia/references/worthiness-step.md'

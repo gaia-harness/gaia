@@ -12,7 +12,7 @@ setup() {
   REPO_ROOT_REAL="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   STAGE_CHECK="$REPO_ROOT_REAL/.gaia/scripts/spec/test-stage-check.mjs"
   PLAN_VERIFY="$REPO_ROOT_REAL/.gaia/scripts/spec/plan-verify.sh"
-  PLANNER_MD="$REPO_ROOT_REAL/.claude/skills/gaia/references/plan/planner.md"
+  TEMPLATE_MD="$REPO_ROOT_REAL/.claude/skills/gaia/references/plan/orchestrator-template.md"
   PLAN="$BATS_TEST_TMPDIR/plan"
   SPEC="$BATS_TEST_TMPDIR/SPEC.md"
   mkdir -p "$PLAN"
@@ -24,7 +24,7 @@ setup() {
   PATH_TWO='.gaia/tests/lib/second-journey.bats'
 }
 
-# block_of <sentinel>: the block that sentinel opens in planner.md, with this
+# block_of <sentinel>: the block that sentinel opens in the orchestrator template, with this
 # fixture's plan directory and SPEC path substituted.
 block_of() {
   local block
@@ -40,7 +40,7 @@ block_of() {
       line = $0
       sub(/^ {6}/, "", line)
       buffer = buffer line "\n"
-    }' "$PLANNER_MD")"
+    }' "$TEMPLATE_MD")"
   [ -n "$block" ] || return 1
   block="${block//\{PLAN_DIR\}/$PLAN}"
   printf '%s\n' "${block//\{SPEC_PATH\}/$SPEC}"

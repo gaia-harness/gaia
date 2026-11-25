@@ -61,8 +61,8 @@ planner_dispatch() {
   # No brace token in the clause other than the SPEC path token the neighbors use.
   placeholders="$(grep -oE '\{[A-Za-z_]+\}' <<<"$paragraph" | sort -u)"
   [ "$placeholders" = '{SPEC_PATH}' ] || { echo "unexpected brace tokens in the clause: $placeholders" >&2; return 1; }
-  # The verifier's placeholder list stays the three it has.
-  grep -qF -- "for placeholder in '{PLAN_DIR}' '{SPEC_PATH}' '{AUDIT_PATH}'; do" "$VERIFY_LIB" || { echo "missing: placeholder list is not the three" >&2; return 1; }
+  # The verifier's placeholder list stays the four tokens the plan check flags.
+  grep -qF -- "for placeholder in '{PLAN_DIR}' '{SPEC_PATH}' '{AUDIT_PATH}' '{BRANCH_ID}'; do" "$VERIFY_LIB" || { echo "missing: placeholder list is not the four" >&2; return 1; }
   # The planner dispatch gains no line and still ends on the yield handoff.
   dispatch="$(planner_dispatch)"
   [ -n "$dispatch" ] || { echo "missing: planner dispatch block" >&2; return 1; }
