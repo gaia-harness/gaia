@@ -5,11 +5,9 @@ import {
   passthroughFailure as passthroughFailureWithPrefix,
   postOutOfScopeStamp,
   commandSucceeded as stepOk,
+  UNEXPECTED_EXIT,
 } from './land.js';
 import {checkPullRequestReview, findOpenPullRequest} from './pr-review-gate.js';
-
-// A review gate that could not run is an unexpected failure, not a refusal.
-const UNEXPECTED_EXIT = 2;
 
 /** A pull request `gh pr create` printed, parsed from its URL. */
 type GhArtifact = {number: number; repo?: string};

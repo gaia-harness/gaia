@@ -52835,7 +52835,6 @@ var checkPullRequestReview = (options) => {
 };
 
 // src/wiki/util/pr-landing.ts
-var UNEXPECTED_EXIT11 = 2;
 var safeOutput4 = (value) => value ?? "";
 var PR_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/u;
 var parsePrUrl = (text) => {
@@ -52919,7 +52918,7 @@ var queueAutoMerge = (options) => {
     process.stderr.write(`${review.line}
 `);
     return {
-      failureCode: review.isUnavailable ? UNEXPECTED_EXIT11 : EXIT_CODES.UNKNOWN_SUBCOMMAND
+      failureCode: review.isUnavailable ? UNEXPECTED_EXIT10 : EXIT_CODES.UNKNOWN_SUBCOMMAND
     };
   }
   const stamp = postOutOfScopeStamp({
