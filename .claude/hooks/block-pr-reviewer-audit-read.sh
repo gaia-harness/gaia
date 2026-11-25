@@ -33,12 +33,6 @@
 set -euo pipefail
 
 payload=$(cat)
-# Pure-bash prefilter: a payload without the literal cannot carry the reviewer's
-# agent type, so every other call leaves before any library loads.
-case "$payload" in
-  *pr-reviewer*) ;;
-  *) exit 0 ;;
-esac
 # jq-availability arm: refuse loudly rather than fail open when jq is absent.
 # The literal is the one thing whose absence proves the call is not the
 # reviewer's: only that agent type is bound here.
@@ -52,6 +46,13 @@ if ! type gaia_require_jq >/dev/null 2>&1; then
   exit 2
 fi
 gaia_require_jq 'the pr-reviewer audit-state read guard' "$payload" - 'pr-reviewer'
+
+# Prefilter: a payload without the literal cannot carry the reviewer's agent
+# type, so every other call leaves before the payload libraries load.
+case "$payload" in
+  *pr-reviewer*) ;;
+  *) exit 0 ;;
+esac
 
 set +e
 # shellcheck source=lib/payload-agent.sh
