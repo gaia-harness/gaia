@@ -48,7 +48,7 @@ fi
 gaia_require_jq 'the pr-reviewer audit-state read guard' "$payload" - 'pr-reviewer'
 
 # Prefilter: a payload without the literal cannot carry the reviewer's agent
-# type, so every other call leaves before the payload libraries load.
+# type, so a call without it leaves before the payload libraries load.
 case "$payload" in
   *pr-reviewer*) ;;
   *) exit 0 ;;
