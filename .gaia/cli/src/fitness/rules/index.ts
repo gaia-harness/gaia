@@ -1,5 +1,6 @@
 import {compareBytes} from '../markdown.js';
 import type {RuleDefinition, Severity} from '../types.js';
+import {ASK_USER_QUESTION_RULES} from './ask-user-question.js';
 import {AUTHORING_RULES} from './authoring.js';
 import {CLAUDEMD_RULES} from './claudemd.js';
 import {FITNESS_CONFIG_RULES} from './fitness-config.js';
@@ -20,6 +21,7 @@ const ALL_RULES: readonly RuleDefinition[] = [
   ...RULES_RULES,
   ...CLAUDEMD_RULES,
   ...AUTHORING_RULES,
+  ...ASK_USER_QUESTION_RULES,
   ...LINE_LIMIT_RULES,
   ...PROMPT_RULES,
   ...WIKI_RULES,

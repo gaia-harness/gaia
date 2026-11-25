@@ -405,6 +405,35 @@ spec093_enforcement_paths() {
 }
 
 # bats test_tags=protected
+@test "a declared fixer edit to the autonomy gate fails enforcement-path" {
+  local gate_path='.claude/hooks/autonomy-gate.sh' entries_json
+  enforcement_paths | grep -Fxq -- "$gate_path" || {
+    echo "$gate_path: not on the verifier's enforcement list"
+    return 1
+  }
+  mkdir -p "$REPO/$(dirname "$gate_path")"
+  printf 'orig\n' >"$REPO/$gate_path"
+  git -C "$REPO" add -A
+  git -C "$REPO" commit -q -m autonomy-gate
+  entries_json="$(jq -n --arg path "$gate_path" '[{member: "m", finding_class: "c1", path: $path, line: 1, disposition: "fix"}]')"
+  write_dispositions "$entries_json"
+  take_baseline
+  take_digests
+  edit "$gate_path"
+  jq -n --arg path "$gate_path" '{schema: 1, round: 1, attempt: 1,
+    results: [{member: "m", finding_class: "c1", path: $path, line: 1, disposition: "fixed", reason: "r", changed_paths: [$path]}],
+    changed_paths: [$path], reverted_paths: []}' >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 1 ] || {
+    echo "the gate edit did not fail: $output"
+    return 1
+  }
+  jq -e --arg path "$gate_path" \
+    '[.errors[] | select(.kind == "enforcement-path" and .detail == $path)] | length == 1' \
+    "$VERIFIER_OUTPUT_FILE" >/dev/null
+}
+
+# bats test_tags=protected
 @test "directive 2: a declared edit to every enforcement-set path fails enforcement-path" {
   local path_count=0 file_path entries_json result_json
   # One repository holds every enforcement path (force-added: the local

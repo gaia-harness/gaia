@@ -91,8 +91,8 @@ Runs only when `## Argument parsing` in `debt.md` resolved two or more issue num
 
    **No disclosure.** The rule covers the run's printed messages: the text relayed or written to the operator, its prompts, and its cost lines. Local tool output, such as the backlog read's JSON, is not a printed message. No printed message names a security-class member's title, body, or path, which is why no step before this one prints a named member's title, and the staleness probe's annotation is never printed for a named set's security-class member.
 2. **Spec pre-filter.** A named member whose emitted `footprint` is `spec` needs a SPEC and cannot be batched. Print that for each such member (`#<S> needs a SPEC and cannot be batched`), then ask one `AskUserQuestion` (header `Debt batch`, single-select) with exactly two options:
+   - `Cancel (Recommended)`
    - `Hand off #<S> [#<S2> ...] to /gaia-spec`
-   - `Cancel`
 
    `Cancel`, anything typed into the built-in Other, or a declined or dismissed prompt prints `Cancelled; nothing was claimed. Re-run /gaia-debt <numbers> to choose again.` and ends the run with nothing claimed. (Run ends here; see `## Cost record (run end)` in `debt.md`.)
 

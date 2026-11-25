@@ -1,4 +1,5 @@
 import type {FixtureMap, FixturePair} from '../types.js';
+import {ASK_USER_QUESTION_FIXTURES} from './ask-user-question.fixtures.js';
 import {AUTHORING_FIXTURES} from './authoring.fixtures.js';
 import {CLAUDEMD_FIXTURES} from './claudemd.fixtures.js';
 import {FITNESS_CONFIG_FIXTURES} from './fitness-config.fixtures.js';
@@ -35,6 +36,7 @@ export const ALL_FIXTURES: FixtureMap = merge([
   RULES_FIXTURES,
   CLAUDEMD_FIXTURES,
   AUTHORING_FIXTURES,
+  ASK_USER_QUESTION_FIXTURES,
   LINE_LIMIT_FIXTURES,
   PROMPT_FIXTURES,
   WIKI_FIXTURES,
