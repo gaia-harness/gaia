@@ -16,7 +16,7 @@ tags: [concepts, autonomy, commands]
 
 1. **A running plan**: a plan folder whose `RUNNING` sentinel stands. The plan's own `KICKOFF.md` resumes it.
 2. **An open pull request** you authored whose branch exists in this clone, unless a running plan owns the branch. Tending it means fixing failing checks and acting on review comments, then driving it through [[PR Merge Workflow]].
-3. **A stopped debt fix**: a claimed issue whose local debt branch has never had a pull request (a closed one counts), as `.gaia/scripts/debt-stuck-fixes.sh` reports it. `/gaia-debt <n>` resumes the branch (`.claude/skills/gaia/references/debt/resume.md`). Only a branch that exists locally is offered: a fix whose branch exists only on the remote is not, and its claim stays until a human releases it or checks the branch out.
+3. **A stopped debt fix**: a claimed issue whose local debt branch has never had a pull request in any state (open, closed or merged), as `.gaia/scripts/debt-stuck-fixes.sh` reports it. `/gaia-debt <n>` resumes the branch (`.claude/skills/gaia/references/debt/resume.md`). Only a branch that exists locally is offered: a fix whose branch exists only on the remote is not, and its claim stays live while the remote branch exists: check the branch out to make it offerable, or release the claim by hand.
 4. **A draft spec**: interactive runs only. Under autonomy it is skipped, because spec interview answers are requirements and the question gate would take the recommended answer for each with no human approving them.
 5. **The top tech-debt issue**, from `/gaia-debt`'s own ordering and backlog pass, run as `/gaia-debt <n>`.
 

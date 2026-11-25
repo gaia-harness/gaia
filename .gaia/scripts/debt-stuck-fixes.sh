@@ -14,8 +14,7 @@
 #   local   the branch is a local branch: a remote-tracking ref alone cannot
 #           be re-entered from this clone
 #   no PR   no pull request in any state (open, closed or merged) has the branch
-#           as its head, asked of each claimed candidate branch on its own so
-#           no list cap can hide an old one: a pull request a human closed unmerged is a rejection,
+#           as its head: a pull request a human closed unmerged is a rejection,
 #           and resuming it would reopen what they turned down
 # The issue printed is the lowest claimed member of the branch, or the one
 # --issue names.
