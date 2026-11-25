@@ -130,6 +130,35 @@ _refuse() {
   [ "$(lint_codes)" = '["flow_target_conflict"]' ]
 }
 
+# bats test_tags=protected
+@test "a command flow's test_path must be one a flow runner runs: an unrunnable path fails unrunnable_test_path, a Vitest path passes, a registered path passes, and a malformed registry fails flow_runners_unreadable" {
+  local tree="$BATS_TEST_TMPDIR/tree"
+  _refuse "a test_path no runner runs fails unrunnable_test_path" \
+    "$(printf '%s\n' "$COMMAND_FLOW" | sed 's#test_path: .*#test_path: .gaia/tests/probe/expectations.json#')"
+  [ "$(lint_codes)" = '["unrunnable_test_path"]' ]
+  [ "$(printf '%s' "$output" | jq -r '.findings[0].where')" = "frontmatter.flows.$FLOW_TWO.test_path" ]
+
+  echo "case: a Vitest test_path passes"
+  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$COMMAND_FLOW" | sed 's#test_path: .*#test_path: .gaia/cli/src/release/cut.test.ts#')"
+  run bash "$LINT" "$BATS_TEST_TMPDIR/s.md"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+
+  mkdir -p "$tree/.gaia/scripts"
+  cp -R "$REPO_ROOT/.gaia/scripts/spec" "$tree/.gaia/scripts/spec"
+  cp "$REPO_ROOT/.gaia/scripts/machine-local-ref-lib.sh" "$tree/.gaia/scripts/"
+  printf '%s\n' '[{"name": "probe", "paths": [".gaia/tests/probe/*.json"], "command": "run-probe.sh", "run": "bash run-probe.sh", "names_path": false}]' >"$tree/.gaia/flow-runners.json"
+  echo "case: a path a registered runner runs passes"
+  make_spec "$BATS_TEST_TMPDIR/s.md" "$(printf '%s\n' "$COMMAND_FLOW" | sed 's#test_path: .*#test_path: .gaia/tests/probe/expectations.json#')"
+  run bash "$tree/.gaia/scripts/spec/lint.sh" "$BATS_TEST_TMPDIR/s.md"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+
+  echo "case: a malformed registry fails flow_runners_unreadable"
+  printf '%s\n' '[{"name": "probe"}]' >"$tree/.gaia/flow-runners.json"
+  run bash "$tree/.gaia/scripts/spec/lint.sh" "$BATS_TEST_TMPDIR/s.md"
+  [ "$status" -eq 1 ]
+  [ "$(lint_codes)" = '["flow_runners_unreadable"]' ]
+}
+
 @test "a reopened SPEC needs a reopen rationale" {
   _refuse "a reopened SPEC without a reopen rationale still fails" "$WEB_FLOW" reopened
   [ "$(lint_codes)" = '["reopen_missing_rationale"]' ]

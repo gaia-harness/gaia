@@ -677,7 +677,7 @@ assert_out_of_order() {
   mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
   verify_spec
   [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -qxF 'plan-verify: ORCHESTRATOR.md: the Phase 2 entry runs no flow test for FLOW-902: no line holds refuse-uats-spec.bats with a runner (playwright test, test:shell, bats5.sh, test --run)' || { echo "$output" >&2; return 1; }
+  printf '%s\n' "$output" | grep -qxF 'plan-verify: ORCHESTRATOR.md: the Phase 2 entry runs no flow test for FLOW-902: no line holds refuse-uats-spec.bats with a runner (test:shell, bats5.sh)' || { echo "$output" >&2; return 1; }
   grep -F 'runs no flow test' <<<"$output" | grep -qF 'FLOW-901' && return 1
 
   # a basename without a runner
@@ -865,4 +865,50 @@ SECURITY_TEST_LINE='- Test (task-one:AC1, unit, access): apps/web/app/utils/guar
   [ "$status" -eq 1 ] || return 1
   refusal_line 'TEST-STAGE is malformed' "$PLAN/TEST-STAGE"
   [ "$(echo "$output" | grep -c .)" -eq 1 ] || { echo "$output" >&2; return 1; }
+}
+
+# bats test_tags=protected
+@test "plan-verify runs a command flow's test through the runner the flow runner table resolves: a registered runner passes with its own command; another runner's command, an unregistered path and a malformed registry each fail naming it" {
+  local registry
+  marker_tree "$TEMPLATE_MD"
+  registry="$MARKER_TREE/.gaia/flow-runners.json"
+
+  # a bats flow run only by another runner's command
+  COMMAND_RUN_LINE='pnpm -C apps/web test --run refuse-uats-spec.bats'
+  spec_fixture
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 1 ]
+  refusal_line 'runs no flow test for FLOW-902' 'with a runner (test:shell, bats5.sh)'
+
+  COMMAND_TEST_PATH='.gaia/tests/probe/expectations.json'
+  COMMAND_RUN_LINE="bash .gaia/tests/probe/run-probe.sh --target <clone> --only 'row-*'"
+  printf '%s\n' '[{"name": "probe", "paths": [".gaia/tests/probe/expectations.json"], "command": "probe/run-probe.sh", "run": "bash .gaia/tests/probe/run-probe.sh --only <rows>", "names_path": false}]' >"$registry"
+
+  # a registered runner whose command selects its own test
+  spec_fixture
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+
+  # the registered flow's line names its file with a built-in command instead
+  COMMAND_RUN_LINE='pnpm test:shell .gaia/tests/probe/expectations.json < /dev/null'
+  spec_fixture
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 1 ]
+  refusal_line 'runs no flow test for FLOW-902' 'no line holds its runner (probe/run-probe.sh)'
+
+  # no registry: no runner runs the path
+  rm -f "$registry"
+  spec_fixture
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -qxF 'plan-verify: FLOW-902: no flow runner runs .gaia/tests/probe/expectations.json' || { echo "$output" >&2; return 1; }
+
+  # a registry that is not an array of entries
+  printf '%s\n' '{"name": "probe"}' >"$registry"
+  spec_fixture
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 1 ]
+  refusal_line 'FLOW-902' 'is not a JSON array of runner entries'
+  grep -F 'runs no flow test' <<<"$output" | grep -qF 'FLOW-901' && return 1
+  true
 }

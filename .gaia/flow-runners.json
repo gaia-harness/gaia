@@ -1,0 +1,9 @@
+[
+  {
+    "name": "claude-probe",
+    "paths": [".gaia/tests/claude-probe/expectations.json"],
+    "command": ".gaia/tests/claude-probe/run-probe.sh",
+    "run": "bash .gaia/tests/claude-probe/run-probe.sh --target <scratch clone of the branch, dependencies installed> --evidence <evidence directory> --reps 1 --max-usd <cost cap> --only '<the flow's row-id glob>'",
+    "names_path": false
+  }
+]
