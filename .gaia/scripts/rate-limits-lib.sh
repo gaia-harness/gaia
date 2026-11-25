@@ -45,10 +45,9 @@
 # unconfirmed, newest changed_at among confirmed, oldest among unconfirmed (a
 # new session's first figure may predate its first response, so it never
 # displaces a confirmed one), then the lower session id. The statusline always shows this choice.
-# The reader shows only the session's own windows once its file is valid: the
-# file holds every window its account reports, and another session's file may
-# belong to another account sharing this cache (a second profile), so a
-# window the own file lacks is one this account does not have.
+# The reader shows only the session's own windows once its file is valid:
+# another session's file may belong to another account sharing this cache (a
+# second profile), so a window the own file lacks is never filled from it.
 #
 # Bands. The 5-hour window uses the standard set on every tier: warning late
 # costs a limit hit mid-task, warning early costs one question. The 7-day
