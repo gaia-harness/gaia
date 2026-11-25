@@ -12,8 +12,8 @@
 # from a worktree therefore does not reach main -- it forks a second specs
 # tree inside the worktree. Three sites write the SPEC folder and must each
 # resolve main first: spec.md step 3's folder creation (the mkdir fence),
-# and spec/audit.md's 7d (AUDIT.md write) and 7c (where the AUDIT.md path the
-# applier's report lands at is built). Each asks the notebook library for the
+# spec/audit-fixer.md's AUDIT.md shape (the fixer's AUDIT.md write), and
+# spec/audit.md's wave (where the AUDIT.md path the fixer writes to is built). Each asks the notebook library for the
 # folder (`notebook-lib.sh path spec <id>`), which resolves main itself.
 #
 # THE READ SIDE IS THE SAME CLASS. Once the writes land in main, a read that
@@ -78,6 +78,7 @@ setup() {
   SPEC_MD="$REPO_ROOT/.claude/skills/gaia/references/spec.md"
   LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
   AUDIT_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/audit.md"
+  AUDIT_FIXER_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/audit-fixer.md"
   RESUME_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/resume.md"
 
   MAIN="$BATS_TEST_TMPDIR/main"
@@ -457,7 +458,7 @@ check_read_sites() {
 
 # The three write-site ranges of the given files, concatenated.
 write_site_ranges() {
-  local spec_md="$1" audit_md="$2" step3_range persist_range routing_range
+  local spec_md="$1" audit_md="$2" fixer_md="$3" step3_range persist_range routing_range
   step3_range="$(range_between "$spec_md" '### 3. Allocate, anchor, stamp' '### 4. Gate 1')" || return 1
   # routing_range (the wave) is where the AUDIT.md path is actually constructed, so it is the
   # range this negative check earns its keep on; the positive assertion in S2
@@ -465,16 +466,16 @@ write_site_ranges() {
   # the persist section writes the report at the path it was handed and must never grow a path
   # construct of its own, relative or otherwise. Do not read persist_range passing as
   # evidence the write site is covered -- routing_range and S2 are what cover it.
-  # persist_range runs from its heading to the end of spec/audit.md, which closes with
-  # the return to gate 2.
-  persist_range="$(range_to_end "$audit_md" '## Persist AUDIT.md')" || return 1
+  # persist_range runs from its heading to the end of spec/audit-fixer.md, the
+  # fixer's own file, which closes with the AUDIT.md shape.
+  persist_range="$(range_to_end "$fixer_md" '## The AUDIT.md shape')" || return 1
   routing_range="$(range_between "$audit_md" '## The wave' '## The lenses')" || return 1
   printf '%s\n%s\n%s\n' "$step3_range" "$persist_range" "$routing_range"
 }
 
 check_write_sites() {
   local ranges bad
-  ranges="$(write_site_ranges "$1" "$2")" || return 1
+  ranges="$(write_site_ranges "$1" "$2" "$3")" || return 1
   [ -n "$ranges" ] || { printf 'the write-site ranges are empty\n' >&2; return 1; }
   # Scoped tightly to the write sites (not repo-wide): display prose elsewhere
   # (the step-3 confirmation line, the step-11 handoff) names the generic path
@@ -489,5 +490,5 @@ check_write_sites() {
 }
 
 @test "negative space: no bare relative .notebook/specs/ write survives at the converted sites" {
-  check_write_sites "$SPEC_MD" "$AUDIT_MD"
+  check_write_sites "$SPEC_MD" "$AUDIT_MD" "$AUDIT_FIXER_MD"
 }

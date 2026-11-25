@@ -469,19 +469,23 @@ check_adopter_form() {
 # lens, its refuter and its directive rule send a page-markup or accessibility
 # structure rule to one plan-time directive naming the page, and the SPEC
 # template keeps such a rule out of a success criterion and a flow name.
+# check_markup_rule_placement <template> <review file>...: each needle is in
+# one of the SPEC review files (lens text, refuter, fixer).
 check_markup_rule_placement() {
-  local audit="$1" template="$2" needle
+  local template="$1" needle
+  shift
   for needle in \
     'propose a plan-time directive stating that rule for the page or component it applies to, never flow or success-criterion text' \
     'A finding whose fix is a page-markup or accessibility structure rule is `plan_directive` even when it cites a flow' \
     'is one directive naming the page or component it applies to'; do
-    grep -qF -- "$needle" "$audit" || { printf 'audit.md lacks: %s\n' "$needle" >&2; return 1; }
+    grep -qF -- "$needle" "$@" || { printf 'the SPEC review files lack: %s\n' "$needle" >&2; return 1; }
   done
   grep -qF -- 'A page-markup or accessibility structure rule' "$template" ||
     { printf 'spec-template.md then: lacks the markup-rule clause\n' >&2; return 1; }
 }
 
 @test "a page-markup rule is a plan-time directive, in the SPEC audit and the SPEC template" {
-  check_markup_rule_placement "$AUDIT_MD" "$SPEC_TEMPLATE_MD"
+  local review="$REPO_ROOT/.claude/skills/gaia/references/spec"
+  check_markup_rule_placement "$SPEC_TEMPLATE_MD" "$review/lenses.md" "$review/audit-refuter.md" "$review/audit-fixer.md"
 }
 

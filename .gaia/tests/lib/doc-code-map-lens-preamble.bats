@@ -13,6 +13,8 @@ setup() {
   REFS="$REPO_ROOT/.claude/skills/gaia/references"
   LENS="$REFS/spec/lens-dispatch.md"
   AUDIT="$REFS/spec/audit.md"
+  AUDIT_FIXER="$REFS/spec/audit-fixer.md"
+  LENSES="$REFS/spec/lenses.md"
   DECOMP="$REFS/plan/decomposition-audit.md"
   PLANNER="$REFS/plan/planner.md"
   TEST_STAGE="$REFS/test-stage.md"
@@ -23,16 +25,18 @@ map_bullet() {
   grep -E '^> - The code map at `<CODE_MAP_PATH>`' "$LENS"
 }
 
-# The text of the `## The fixer` section of the spec audit.
+# The fixer's text: the `## The fixer` dispatch section of the spec audit, then
+# the fixer's own file, which holds its prompt.
 fixer_section() {
   awk '/^## The fixer/{on=1; next} /^## /{on=0} on' "$AUDIT"
+  cat "$AUDIT_FIXER"
 }
 
 @test "the shared preamble carries one code map bullet with the index wording and the caller slot row, and the spec audit, plan review 4.6a and test-stage Checks each fill the slot" {
   local bullet phrase file
   [ "$(map_bullet | wc -l | tr -d ' ')" = 1 ]
   bullet="$(map_bullet)"
-  for phrase in 'an index of where to look first' 'may be stale or incomplete' 'research time' 'only when' 'to locate code' 'only before citing it' '`lines` range' 'clarify-loop.md` `## The code map`'; do
+  for phrase in 'an index of where to look first' 'may be stale or incomplete' 'research time' 'only when' 'to locate code' 'only before citing it' '`lines` range' 'research.md` `## The code map`'; do
     grep -qF -- "$phrase" <<<"$bullet" || { printf 'bullet lacks: %s\n' "$phrase" >&2; return 1; }
   done
   grep -qE '^\| Code map \(`<CODE_MAP_PATH>`\) \|' "$LENS"
@@ -43,7 +47,7 @@ fixer_section() {
 
 @test "an absent or non-array map is not usable: the caller drops the whole bullet, the fixer gets no map paragraph, and the planner reads none and reports nothing" {
   grep -qF 'drops the whole code-map bullet' "$LENS"
-  grep -qF 'clarify-loop.md` `## The code map`' "$LENS"
+  grep -qF 'research.md` `## The code map`' "$LENS"
   fixer_section | grep -qF 'CODE-MAP.json'
   fixer_section | grep -qiE 'usable|absent|non-empty|is empty|no map'
   grep -qF 'CODE-MAP.json' "$PLANNER"
@@ -56,7 +60,7 @@ fixer_section() {
   fg_pinned=9023546fe0e013056131ebd6c2d9897fffd38430067a5d5e17623e46534f3bce
   cg_pinned=34c9acc9ab9612d97019523cf6f42815ba42c4aa0798c2f205e967f97defcbc6
   map_bullet | grep -qF 'Never cite `CODE-MAP.json` or any line of it as evidence; cite the file and line you opened.'
-  fg_now="$(awk '/^#### FG: Factual grounding/{on=1; next} on && NF{print; exit}' "$AUDIT" | shasum -a 256 | cut -d' ' -f1)"
+  fg_now="$(awk '/^### FG: Factual grounding/{on=1; next} on && NF{print; exit}' "$LENSES" | shasum -a 256 | cut -d' ' -f1)"
   cg_now="$(grep -E '^- \*\*Contract grounding \(id prefix' "$DECOMP" | shasum -a 256 | cut -d' ' -f1)"
   [ "$fg_now" = "$fg_pinned" ]
   [ "$cg_now" = "$cg_pinned" ]
@@ -65,11 +69,11 @@ fixer_section() {
 
 @test "every consumer of the map calls it read-only and none names a write to it" {
   local file bad
-  for file in "$LENS" "$AUDIT" "$PLANNER" "$TEST_STAGE"; do
+  for file in "$LENS" "$AUDIT" "$AUDIT_FIXER" "$PLANNER" "$TEST_STAGE"; do
     grep -qF 'read-only' <<<"$(grep -F 'CODE-MAP' "$file"; map_bullet)" || { printf 'not read-only: %s\n' "$file" >&2; return 1; }
   done
   fixer_section | grep -qF 'read-only'
-  for file in "$LENS" "$AUDIT" "$DECOMP" "$PLANNER" "$TEST_STAGE"; do
+  for file in "$LENS" "$AUDIT" "$AUDIT_FIXER" "$DECOMP" "$PLANNER" "$TEST_STAGE"; do
     bad="$(grep -F 'CODE-MAP' "$file" | grep -iE '\b(write|writes|edit|edits|append|appends|rewrite|overwrite|update|updates)\b' | grep -viE 'never|not |no |read-only' || true)"
     [ -z "$bad" ] || { printf 'names a write in %s: %s\n' "$file" "$bad" >&2; return 1; }
   done

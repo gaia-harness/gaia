@@ -13,7 +13,7 @@
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   LENS_DISPATCH="$ROOT/.claude/skills/gaia/references/spec/lens-dispatch.md"
-  AUDIT="$ROOT/.claude/skills/gaia/references/spec/audit.md"
+  AUDIT_FIXER="$ROOT/.claude/skills/gaia/references/spec/audit-fixer.md"
 }
 
 # section <file> <start_ERE>: the lines from the heading to the next `## `.
@@ -36,7 +36,7 @@ section() {
 
 @test "the fixer's map paragraph routes to the shared preamble and that heading resolves" {
   local fixer paragraph
-  fixer="$(section "$AUDIT" '^## The fixer')"
+  fixer="$(section "$AUDIT_FIXER" '^## Prompt')"
   [ -n "$fixer" ]
   paragraph="$(grep -F -- 'When `<CODE_MAP_PATH>` is named:' <<<"$fixer")"
   [ -n "$paragraph" ]

@@ -22,7 +22,7 @@ SITES=(
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|yes|no"
   "$REFERENCES/spec.md|^### 9\. Gate 2|^### 10\.|yes|no"
   "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|yes|yes"
-  "$REFERENCES/spec/clarify-loop.md|^- \*\*Error|^- \*\*Contradictory|yes|no"
+  "$REFERENCES/spec/research.md|^- \*\*Error|^- \*\*Contradictory|yes|no"
 )
 
 # What each gate or review list must print before it asks, so the user can
