@@ -24,6 +24,8 @@
 # History holds changes only, the newest GAIA_RATE_LIMITS_HISTORY_LIMIT.
 #
 # Writer rules per window, on the session's own file alone:
+#   - a reset time more than the window's maximum length in the past: nothing
+#     is stored, replaced or dropped;
 #   - first reading of the window: stored with confirmed false, changed_at now;
 #   - a reset time more than GAIA_RATE_LIMITS_SAME_WINDOW_SECONDS away, earlier
 #     or later (a new window or another account): the window, history
