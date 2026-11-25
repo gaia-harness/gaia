@@ -10,8 +10,8 @@
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  CLARIFY_LOOP="$ROOT/.claude/skills/gaia/references/spec/clarify-loop.md"
-  SPEC_PLAYBOOK="$ROOT/.claude/skills/gaia/references/spec.md"
+  RESEARCH="$ROOT/.claude/skills/gaia/references/spec/research.md"
+  AUTO_MODE="$ROOT/.claude/skills/gaia/references/spec/auto-mode.md"
   ROSTER_SUITE="$ROOT/.gaia/tests/lib/doc-noop-terminal-contract.bats"
 }
 
@@ -34,7 +34,7 @@ bullet_of() {
 # validation_program
 # Prints the jq program of the code map section's validation block.
 validation_program() {
-  section_of "$CLARIFY_LOOP" '## The code map' | awk '
+  section_of "$RESEARCH" '## The code map' | awk '
     /^jq -e '"'"'$/ { inside = 1; next }
     inside && /^'"'"' <research file>$/ { exit }
     inside { print }
@@ -49,7 +49,7 @@ require_text() {
 
 @test "the research prompt names a pre-cleared JSON-array output file, the one-line reply, the write-only-this-file rule, an Inconclusive object for an unanswerable sub-question, repo-relative paths with no secret in an excerpt, and the pointer to the code map section" {
   local section
-  section="$(section_of "$CLARIFY_LOOP" '## 5e. Research subagent dispatch')"
+  section="$(section_of "$RESEARCH" '## Research dispatch')"
   require_text "5e section" "$section"
   local literal
   for literal in \
@@ -75,8 +75,8 @@ require_text() {
 
 @test "5e classifies the research file at the sub-question count, folds from the file, appends with a read-back, takes the scratchpad-and-cp route from a linked worktree, and stops on detector exit 2 surfacing stderr with no re-dispatch" {
   local five code_map
-  five="$(section_of "$CLARIFY_LOOP" '## 5e. Research subagent dispatch')"
-  code_map="$(section_of "$CLARIFY_LOOP" '## The code map')"
+  five="$(section_of "$RESEARCH" '## Research dispatch')"
+  code_map="$(section_of "$RESEARCH" '## The code map')"
   require_text "5e section" "$five"
   require_text "code map section" "$code_map"
   grep -qF -- 'reads the file, never the reply' <<<"$five" || return 1
@@ -90,9 +90,9 @@ require_text() {
   true
 }
 
-@test "an unusable research file gets both notices, one re-dispatch, then inline research, and clarify-loop is on the no-op roster" {
+@test "an unusable research file gets both notices, one re-dispatch, then inline research, and research.md is on the no-op roster" {
   local five
-  five="$(section_of "$CLARIFY_LOOP" '## 5e. Research subagent dispatch')"
+  five="$(section_of "$RESEARCH" '## Research dispatch')"
   require_text "5e section" "$five"
   grep -qF -- 'Research left no usable answer; asking once more.' <<<"$five" || return 1
   grep -qF -- 'Research left no usable answer again; answering it here instead.' <<<"$five" || return 1
@@ -104,12 +104,12 @@ require_text() {
   require_text "the second no-op sentence" "$segment"
   grep -qF -- 'inline' <<<"$segment" || return 1
   grep -qF -- 'stop and surface' <<<"$segment" && return 1
-  grep -qF -- "'.claude/skills/gaia/references/spec/clarify-loop.md'" "$ROSTER_SUITE"
+  grep -qF -- "'.claude/skills/gaia/references/spec/research.md'" "$ROSTER_SUITE"
 }
 
 @test "5e derives Found, Inconclusive and Contradictory from the entries' answer words, Contradictory first" {
   local five
-  five="$(section_of "$CLARIFY_LOOP" '## 5e. Research subagent dispatch')"
+  five="$(section_of "$RESEARCH" '## Research dispatch')"
   require_text "5e section" "$five"
   grep -qF -- "from the entries' \`answer\` leading words, not from the reply" <<<"$five" || return 1
   grep -qF -- 'any `Contradictory:` takes Contradictory (it wins over Inconclusive), else any `Inconclusive:` takes Inconclusive, else Found' <<<"$five" || return 1
@@ -159,7 +159,7 @@ CASES
 
 @test "a failed append keeps the fold and the prior map, and an unreadable map is replaced, each with its notice" {
   local code_map
-  code_map="$(section_of "$CLARIFY_LOOP" '## The code map')"
+  code_map="$(section_of "$RESEARCH" '## The code map')"
   require_text "code map section" "$code_map"
   grep -qF -- 'retry the write once' <<<"$code_map" || return 1
   grep -qF -- '`research_summary` keeps the folded answer' <<<"$code_map" || return 1
@@ -172,14 +172,14 @@ CASES
 
 @test "the Error outcome covers only an Agent call error and rule 7 sends an unusable file to re-dispatch first" {
   local five error_bullet rule_seven
-  five="$(section_of "$CLARIFY_LOOP" '## 5e. Research subagent dispatch')"
+  five="$(section_of "$RESEARCH" '## Research dispatch')"
   error_bullet="$(grep -F -- '- **Error' <<<"$five")"
   require_text "Error bullet" "$error_bullet"
   grep -qF -- 'the Agent tool call itself returned an error' <<<"$error_bullet" || return 1
   grep -qF -- 'AskUserQuestion' <<<"$error_bullet" || return 1
   grep -qF -- 'An unusable research file never reaches this outcome' <<<"$error_bullet" || return 1
   grep -qF -- 'plain prompt' <<<"$error_bullet" && return 1
-  rule_seven="$(grep -F -- '7. **Research subagents still dispatch.**' "$SPEC_PLAYBOOK")"
+  rule_seven="$(grep -F -- '7. **Research subagents still dispatch.**' "$AUTO_MODE")"
   require_text "auto mode rule 7" "$rule_seven"
   grep -qF -- 'An unusable research file is not one of these outcomes: it takes 5e'"'"'s re-dispatch-then-inline path first, and the most-plausible-candidate pick never applies to it.' <<<"$rule_seven" || return 1
 }

@@ -1,12 +1,15 @@
 #!/usr/bin/env bats
 # Doc-conformance for how the spec review hands the code map to its fixer and
-# keeps it from its critical refuter. Instruction-prose pins over audit.md.
+# keeps it from its critical refuter. Instruction-prose pins over audit.md and
+# the fixer and refuter files it routes to.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   AUDIT_MD="$ROOT/.claude/skills/gaia/references/spec/audit.md"
+  AUDIT_FIXER_MD="$ROOT/.claude/skills/gaia/references/spec/audit-fixer.md"
+  AUDIT_REFUTER_MD="$ROOT/.claude/skills/gaia/references/spec/audit-refuter.md"
 }
 
 # section_of <file> <heading line>
@@ -22,7 +25,7 @@ section_of() {
 # map_paragraph
 # Prints the fixer prompt paragraph that opens with the code map condition.
 map_paragraph() {
-  section_of "$AUDIT_MD" '## The fixer' | grep -F -- '> When `<CODE_MAP_PATH>` is named:'
+  section_of "$AUDIT_FIXER_MD" '## Prompt' | grep -F -- '> When `<CODE_MAP_PATH>` is named:'
 }
 
 @test "the fixer gets the map path with the read-only, never-justifies-a-fix wording and the preamble pointer" {
@@ -41,6 +44,9 @@ map_paragraph() {
   local refuter
   refuter="$(section_of "$AUDIT_MD" '## The critical refuter')"
   [ -n "$refuter" ] || { echo "missing: refuter section" >&2; return 1; }
+  [ -s "$AUDIT_REFUTER_MD" ] || { echo "missing: refuter file" >&2; return 1; }
+  refuter="$refuter
+$(cat "$AUDIT_REFUTER_MD")"
   grep -qE -- 'CODE-MAP|CODE_MAP' <<<"$refuter" && { echo "refuter names the code map" >&2; return 1; }
   true
 }

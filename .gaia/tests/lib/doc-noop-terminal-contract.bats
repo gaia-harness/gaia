@@ -78,7 +78,7 @@ setup() {
     '.claude/skills/gaia/references/security-writer.md'
     '.claude/skills/gaia/references/simplify-pass.md'
     '.claude/skills/gaia/references/spec/audit.md'
-    '.claude/skills/gaia/references/spec/clarify-loop.md'
+    '.claude/skills/gaia/references/spec/research.md'
     '.claude/skills/gaia/references/worthiness-step.md'
     '.claude/rules/subagent-dispatch.md'
     'wiki/concepts/Code Review Audit Agent.md'

@@ -9,7 +9,7 @@ setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLANNER_MD="$ROOT/.claude/skills/gaia/references/plan/planner.md"
   PLAN_MD="$ROOT/.claude/skills/gaia/references/plan.md"
-  CLARIFY_MD="$ROOT/.claude/skills/gaia/references/spec/clarify-loop.md"
+  RESEARCH_MD="$ROOT/.claude/skills/gaia/references/spec/research.md"
   LENS_MD="$ROOT/.claude/skills/gaia/references/spec/lens-dispatch.md"
   TEST_STAGE_MD="$ROOT/.claude/skills/gaia/references/test-stage.md"
   WIKI_MD="$ROOT/wiki/concepts/Test Stage.md"
@@ -72,7 +72,7 @@ planner_dispatch() {
 
 @test "the code map section is the one owner of the entry keys, limits and duplicate-question rule, and the 5e prompt, the lens preamble bullet and the planner clause each point to it restating no key list" {
   local owner five_e bullet paragraph key
-  owner="$(section_of "$CLARIFY_MD" '## The code map')"
+  owner="$(section_of "$RESEARCH_MD" '## The code map')"
   [ -n "$owner" ] || { echo "missing: owner section" >&2; return 1; }
   for key in '`q`' '`question`' '`commit`' '`files`' '`path`' '`lines`' '`excerpt`' '`answer`' 'at most 5 objects' 'at most 3 verbatim lines' 'at most two sentences'; do
     grep -qF -- "$key" <<<"$owner" || { echo "owner missing: $key" >&2; return 1; }
@@ -80,7 +80,7 @@ planner_dispatch() {
   grep -qF -- 'Two entries with the same `question`' <<<"$owner" || { echo "owner missing: duplicate-question rule" >&2; return 1; }
   grep -qF -- 'both kept' <<<"$owner" || { echo "owner missing: both kept" >&2; return 1; }
 
-  five_e="$(grep -F -- 'Spawn one `general-purpose` Agent per clarify question.' "$CLARIFY_MD")"
+  five_e="$(grep -F -- 'Spawn one `general-purpose` Agent per clarify question.' "$RESEARCH_MD")"
   bullet="$(grep -F -- 'The code map at `<CODE_MAP_PATH>`' "$LENS_MD")"
   paragraph="$(planner_paragraph)"
   [ -n "$five_e" ] || { echo "missing: 5e prompt paragraph" >&2; return 1; }
@@ -104,7 +104,7 @@ planner_dispatch() {
   [ -n "$inputs" ] || { echo "missing: inputs section" >&2; return 1; }
   [ -n "$checks" ] || { echo "missing: checks section" >&2; return 1; }
   grep -qF -- '`CODE-MAP.json` beside the SPEC' <<<"$inputs" || { echo "inputs missing: map beside the SPEC" >&2; return 1; }
-  grep -qF -- '/spec/clarify-loop.md` `## The code map`' <<<"$inputs" || { echo "inputs missing: owner pointer" >&2; return 1; }
+  grep -qF -- '/spec/research.md` `## The code map`' <<<"$inputs" || { echo "inputs missing: owner pointer" >&2; return 1; }
   grep -qF -- 'only to locate existing test files' <<<"$inputs" || { echo "inputs missing: only to locate" >&2; return 1; }
   grep -qF -- 'never to derive an expected behavior' <<<"$inputs" || { echo "inputs missing: never derive" >&2; return 1; }
   grep -qF -- 'the SPEC'"'"'s behaviors stay the only source of expected outcomes' <<<"$inputs" || { echo "inputs missing: behaviors the only source" >&2; return 1; }
@@ -119,8 +119,8 @@ planner_dispatch() {
 
 @test "each append writes a one-line entry-count and sha256 record with the Write tool and reads it back, the usable check follows that record from any directory, and the plan step shows the mismatch notice and rewrites neither file" {
   local record usable item
-  record="$(grep -F -- '**Record.**' "$CLARIFY_MD")"
-  usable="$(section_of "$CLARIFY_MD" '## The code map' | grep -F -A8 -- '**Usable.**')"
+  record="$(grep -F -- '**Record.**' "$RESEARCH_MD")"
+  usable="$(section_of "$RESEARCH_MD" '## The code map' | grep -F -A8 -- '**Usable.**')"
   [ -n "$record" ] || { echo "missing: record paragraph" >&2; return 1; }
   [ -n "$usable" ] || { echo "missing: usable paragraph" >&2; return 1; }
   grep -qF -- 'Right after each append'"'"'s read-back' <<<"$record" || { echo "record missing: after each append" >&2; return 1; }
@@ -136,7 +136,7 @@ planner_dispatch() {
   item="$(step_1a_item)"
   [ -n "$item" ] || { echo "missing: step 1a code map item" >&2; return 1; }
   [ "$(step_1a_item | wc -l | tr -d ' ')" = 1 ] || { echo "expected exactly one step 1a code map item" >&2; return 1; }
-  grep -qF -- '`.claude/skills/gaia/references/spec/clarify-loop.md` `## The code map`' <<<"$item" || { echo "item missing: owner pointer" >&2; return 1; }
+  grep -qF -- '`.claude/skills/gaia/references/spec/research.md` `## The code map`' <<<"$item" || { echo "item missing: owner pointer" >&2; return 1; }
   grep -qF -- 'The code map no longer matches its record; the plan runs without it.' <<<"$item" || { echo "item missing: notice" >&2; return 1; }
   grep -qF -- 'and continue' <<<"$item" || { echo "item missing: continue" >&2; return 1; }
   grep -qF -- 'Nothing here rewrites the map or its record.' <<<"$item" || { echo "item missing: rewrites nothing" >&2; return 1; }
@@ -150,7 +150,7 @@ planner_dispatch() {
   printf '[]' >"$dir/CODE-MAP.json"
   hash="$( { shasum -a 256 "$dir/CODE-MAP.json" 2>/dev/null || sha256sum "$dir/CODE-MAP.json"; } | cut -d' ' -f1)"
   printf '0 %s' "$hash" >"$dir/CODE-MAP.sha256"
-  block="$(section_of "$CLARIFY_MD" '## The code map' | awk '/^MAP=<absolute/ { on = 1 } on && /^```/ { exit } on')"
+  block="$(section_of "$RESEARCH_MD" '## The code map' | awk '/^MAP=<absolute/ { on = 1 } on && /^```/ { exit } on')"
   [ -n "$block" ] || { echo "missing: usable block" >&2; return 1; }
   block="${block/MAP=<absolute path of CODE-MAP.json>/MAP=\"$dir/CODE-MAP.json\"}"
   run bash -c "$block"

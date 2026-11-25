@@ -30,7 +30,7 @@ REFERENCES='.claude/skills/gaia/references'
 COMMAND='.claude/commands/gaia-spec.md'
 
 # The sub-references the split moved out of spec.md; each needs a Read line.
-MOVED_SUB_REFERENCES=(resume.md clarify-loop.md audit.md)
+MOVED_SUB_REFERENCES=(resume.md clarify-loop.md audit.md auto-mode.md)
 
 # playbook_files <root>: spec.md first, then every spec/*.md, one per line.
 playbook_files() {
@@ -91,6 +91,11 @@ OWNED=(
   "audit.md	## The critical refuter	heading"
   "audit.md	## The fixer	heading"
   "audit.md	## The drop check	heading"
+  "audit-fixer.md	## The AUDIT.md shape	heading"
+  "audit-refuter.md	Verdict schema (the file the refuter writes):	literal"
+  "auto-mode.md	Hard rules in auto mode:	literal"
+  "lenses.md	### BRIEF-FIT:	heading"
+  "research.md	## The code map	heading"
   "clarify-loop.md	## 5d.	heading"
   "clarify-loop.md	## The question ceiling	heading"
   "resume.md	LOCK_STATUS=	literal"
@@ -202,10 +207,10 @@ REFUTER_NEEDLES=(
   'overstate severity (`partial` with a corrected severity, never refuted)'
 )
 
-# refuter_keeps_sound_gaps <root>: audit.md has exactly one refuter prompt
-# line, and that line carries every needle.
+# refuter_keeps_sound_gaps <root>: audit-refuter.md has exactly one refuter
+# prompt line, and that line carries every needle.
 refuter_keeps_sound_gaps() {
-  local audit="$1/$REFERENCES/spec/audit.md" line count needle
+  local audit="$1/$REFERENCES/spec/audit-refuter.md" line count needle
   count="$(awk -v want="$REFUTER_LINE" 'index($0, want) == 1 { n++ } END { print n + 0 }' "$audit")"
   [ "$count" -eq 1 ] || { printf 'expected one refuter prompt line, found %s\n' "$count" >&2; return 1; }
   line="$(awk -v want="$REFUTER_LINE" 'index($0, want) == 1' "$audit")"
