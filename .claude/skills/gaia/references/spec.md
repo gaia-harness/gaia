@@ -91,7 +91,7 @@ The review (step 8) routes its finding, verdict and fix bodies through a per-spe
 
 **The fixer.** Main dispatches one `general-purpose` Agent (the **fixer**) with the inputs `spec/audit.md` `## The fixer` lists; the tool-choice contract from Operational primitives governs its write into the `${SPEC_DIR}` folder main resolved for it. It reads every findings and verdict file in the cache, folds every fix into the draft cache in **one Write**, and writes `AUDIT.md` at the `${SPEC_DIR}` path it was handed: the plan-time directives, a short log of fixes with their drop entries, and the critical refuter's verdicts. It resolves no path of its own, and no other subagent writes `AUDIT.md`. `spec/audit.md` owns the fixer's procedure and the drop check that reads its output.
 
-**Fallback.** If subagent dispatch is unavailable, the main thread folds inline itself, writing `AUDIT.md` at that same resolved path.
+**Fallback.** If subagent dispatch is unavailable, take `spec/audit.md`'s Fallback: the review is skipped, never folded inline.
 
 ### Abandoned exit
 
