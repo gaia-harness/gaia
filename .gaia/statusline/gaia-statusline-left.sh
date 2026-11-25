@@ -8,9 +8,9 @@
 # Shape: project | branch | model (effort) | context bar | 5-hour usage | 7-day
 # usage. The project is the MAIN checkout's folder name, so a linked worktree
 # shows the main project; the branch carries a tree marker inside a linked
-# worktree. A usage window renders from the latest-change choice
-# the render produced (see rate-limits-reading.sh), so no plan logic lives here;
-# a window absent from every source is not drawn.
+# worktree. A usage window renders from the writer's display records
+# (see rate-limits-reading.sh), so no plan logic lives here;
+# a window absent from those records and from the payload is not drawn.
 #
 # The bar is colored from the shared threshold lib's bands (green below yellow,
 # yellow from yellow, red from red, fire and skull markers above), the same
@@ -69,7 +69,7 @@ gaia_statusline_usage_segment() {
 # gaia_statusline_left <state-root> <session-directory> <is-worktree> <model> <effort> <used_percentage> <window_size> <used_tokens> <five_hour_percentage> <five_hour_resets_at> <seven_day_percentage> <seven_day_resets_at> <now>
 # Sets _GAIA_STATUSLINE_LEFT to the rendered string (ANSI escapes included); returns 1
 # and leaves it empty when there is nothing to show. The usage percentages arrive
-# as whole numbers or `reset`, from the latest-change choice.
+# as whole numbers or `reset`, from the writer's display records.
 gaia_statusline_left() {
   local root="${1:-}" session_directory="${2:-}" is_worktree="${3:-}" model="${4:-}" effort="${5:-}"
   local used_percentage="${6:-}" window="${7:-}" tokens="${8:-}"

@@ -46,8 +46,9 @@
 #   or a command flow's test_path.
 # - ORCHESTRATOR.md's last-phase entry (from the **Phase <N>, line outside every
 #   fenced block to the next **Phase or ## line outside one) holds, for each
-#   Flow test line, a line with the test path's basename and a runner
-#   (playwright test, test:shell, bats5.sh, test --run).
+#   Flow test line, a line that runs it: a command of the flow's runner, as
+#   flow-runners-lib.sh resolves it (for a web flow, any built-in runner's),
+#   plus the test path's basename unless that runner sets names_path false.
 #
 # Every failure is reported on stderr, one line each, in a single run. Exit
 # codes: 0 pass; 1 one or more failures; 2 usage error. Bash 3.2 compatible; BSD and GNU tools.
@@ -60,6 +61,8 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "$script_directory/../../.." && pwd)"
 # shellcheck source=.gaia/scripts/spec/flows-lib.sh
 . "$script_directory/flows-lib.sh"
+# shellcheck source=.gaia/scripts/spec/flow-runners-lib.sh
+. "$script_directory/flow-runners-lib.sh"
 # shellcheck source=.gaia/scripts/spec/plan-verify-lib.sh
 . "$script_directory/plan-verify-lib.sh"
 
@@ -272,8 +275,8 @@ placeholder_check
 flow_checks() {
   local flow_output flow_status=0 web_directory='' flow_id slug kind target
   local stems_text phase last_phase=0 task_file task_name task_stem task_phase matches
-  local line_text path_text expected_path flow_lines='' entry_text entry_line base_name
-  local line_count line_files line_task line_phase line_flow_id run_found
+  local line_text path_text expected_path flow_lines='' entry_text
+  local line_count line_files line_task line_phase line_flow_id line_kind run_status run_detail
   flow_output=$(flows_lib_parse_spec "$spec_path" 2>&1) || flow_status=$?
   if [ "$flow_status" -ne 0 ]; then
     while IFS= read -r line_text; do
@@ -366,14 +369,15 @@ flow_checks() {
   fi
   while IFS=$'\t' read -r line_task line_phase line_flow_id path_text; do
     [ -n "$line_task" ] && [ "$line_phase" = "$last_phase" ] || continue
-    base_name="$(basename "$path_text")"
-    run_found=0
-    while IFS= read -r entry_line; do
-      case "$entry_line" in
-        *"$base_name"*"playwright test"* | *"playwright test"*"$base_name"* | *"$base_name"*"test:shell"* | *"test:shell"*"$base_name"* | *"$base_name"*"bats5.sh"* | *"bats5.sh"*"$base_name"* | *"$base_name"*"test --run"* | *"test --run"*"$base_name"*) run_found=1 ;;
-      esac
-    done <<<"$entry_text"
-    [ "$run_found" -eq 1 ] || fail "ORCHESTRATOR.md: the Phase $last_phase entry runs no flow test for $line_flow_id: no line holds $base_name with a runner (playwright test, test:shell, bats5.sh, test --run)"
+    line_kind=$(awk -F'\t' -v id="$line_flow_id" '$1 == id { print $5; exit }' <<<"$flow_output")
+    [ -n "$line_kind" ] || continue # a flow the SPEC lacks, reported above
+    run_status=0
+    run_detail=$(flow_runners_line_runs "$repository_root" "$line_kind" "$path_text" "$entry_text" 2>&1) || run_status=$?
+    case "$run_status" in
+      0) ;;
+      1) fail "ORCHESTRATOR.md: the Phase $last_phase entry runs no flow test for $line_flow_id: $run_detail" ;;
+      *) fail "$line_flow_id: ${run_detail#flow-runners: }" ;;
+    esac
   done <<<"$flow_lines"
 }
 

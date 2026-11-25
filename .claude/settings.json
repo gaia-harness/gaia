@@ -12,6 +12,7 @@
       "Bash(bash .gaia/scripts/plan-archive.sh:*)",
       "Bash(bash .gaia/scripts/plan-resume-point.sh:*)",
       "Bash(bash .gaia/scripts/pr-wait-merge.sh:*)",
+      "Bash(bash .gaia/scripts/spec/flow-runner.sh:*)",
       "Bash(bash .gaia/scripts/spec/handoff-clear.sh:*)",
       "Bash(bash .gaia/scripts/spec/ledger-update.sh:*)",
       "Bash(bash .gaia/scripts/spec/lint.sh:*)",

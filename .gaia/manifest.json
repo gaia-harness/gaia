@@ -426,6 +426,8 @@
     ".gaia/scripts/spec/drop-check-lib.mjs": "owned",
     ".gaia/scripts/spec/drop-check.mjs": "owned",
     ".gaia/scripts/spec/flow-coverage.sh": "owned",
+    ".gaia/scripts/spec/flow-runner.sh": "owned",
+    ".gaia/scripts/spec/flow-runners-lib.sh": "owned",
     ".gaia/scripts/spec/flows-lib.sh": "owned",
     ".gaia/scripts/spec/handoff-clear.sh": "owned",
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
@@ -947,7 +949,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-25T09:37:57.890Z",
+  "generated": "2026-11-25T09:55:13.380Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

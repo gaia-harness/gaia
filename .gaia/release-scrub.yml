@@ -304,6 +304,7 @@ transforms:
           - ".gaia/codify-declines" # /gaia-codify writes the adopter's declines.
           - ".github/FUNDING.yml" # an adopter may keep their own; `gaia init` deletes only GAIA's.
           - ".claude/gaia-fitness.json" # adopters create their own fitness suppression file.
+          - ".gaia/flow-runners.json" # adopters register their own flow runners.
         line-allowlist:
           # package.json's `gaia.wikiClassify` source/test path arrays are
           # load-bearing config globs, not prose pointers: an entry naming a

@@ -31834,6 +31834,7 @@ var SIBLING_REPO_PATTERN = /(?:^|\/)(?:studio|website)\//;
 var LOCAL_EXEMPT_PREFIX = "wiki/.state.json";
 var RUNTIME_PREFIXES = [".gaia/local/"];
 var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
+  ".gaia/flow-runners.json",
   ".gaia/project.json",
   ".gaia/update-decisions.json",
   ".gaia/value-sets.json"
