@@ -25,6 +25,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { withinLineWindow } from './lib/match-window.mjs';
 import { seededShuffle } from './lib/prng.mjs';
 import { baseShaFor, git, isAncestor, mainSha, mapLine, resolveHead } from './lib/replay-range.mjs';
 
@@ -35,9 +36,6 @@ const USAGE =
   'usage: select.mjs --source <mined findings json> --repo <maintainer checkout> --bundle-before <sha> --bundle-after <sha> --out <corpus.json> [--seed <n>] [--planted-only] [--check]';
 const DEFAULT_SEED = 122;
 const PER_MEMBER = 10;
-// The scorer's match window (score.mjs): a finding within this many lines of
-// an entry's line matches it.
-const LINE_WINDOW = 5;
 const ELIGIBLE_SEVERITIES = new Set(['minor', 'warning', 'major', 'error']);
 const RETIRED_MEMBERS = new Set(['code-audit-maintainer-prose']);
 // A title is committed as data; one naming a working-document id or a
@@ -185,7 +183,7 @@ const select = (options) => {
     // A finding re-reported in a later round, or a second finding on the same
     // lines, is scored by the same path, line window and class: one entry.
     const twin = entries.find(
-      (entry) => entry.member === record.member && entry.head_sha === head && entry.path === record.path && Math.abs(entry.line - record.line) <= LINE_WINDOW && entry.class_prefix === classPrefix(record.class),
+      (entry) => entry.member === record.member && entry.head_sha === head && entry.path === record.path && withinLineWindow(entry.line, record.line) && entry.class_prefix === classPrefix(record.class),
     );
     if (twin) {
       skipped.push({ id, member: record.member, reason: `duplicate-of ${twin.id}` });

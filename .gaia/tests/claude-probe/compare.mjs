@@ -26,8 +26,8 @@ import {
   sessionCommandNames, sessionProblem,
 } from './lib/observe.mjs';
 import {
-  FLOOR_ITEMS, LAUNCHES, TableError, expandRow, floorMap, floorProblems, globToRegExp,
-  matchKind, parseIfSubject, readSnapshotJson, readSnapshotTree, readTable, schemaProblems, subjectKey,
+  FLOOR_ITEMS, LAUNCHES, TableError, agentName, expandRow, floorMap, floorProblems, globToRegExp,
+  matchKind, parseIfSubject, readSnapshotJson, readSnapshotTree, readTable, schemaProblems, skillName, subjectKey,
 } from './lib/table.mjs';
 
 const USAGE = 'usage: compare.mjs <expectations.json> <evidence_dir> [--only <row-id-glob>] [--first-run-commit <sha>]\n'
@@ -143,12 +143,10 @@ const inventory = (snapshotDirectory) => {
   const skills = new Set();
   const agents = new Set();
   for (const path of tree) {
-    const skill = /(?:^|\/)\.claude\/skills\/([^/]+)\/SKILL\.md$/.exec(path);
-    if (skill) skills.add(skill[1]);
-    const command = /(?:^|\/)\.claude\/commands\/(.+)\.md$/.exec(path);
-    if (command) skills.add(command[1].replace(/\//g, ':'));
-    const agent = /(?:^|\/)\.claude\/agents\/(?:.*\/)?([^/]+)\.md$/.exec(path);
-    if (agent) agents.add(agent[1]);
+    const skill = skillName(path);
+    if (skill !== undefined) skills.add(skill);
+    const agent = agentName(path);
+    if (agent !== undefined) agents.add(agent);
   }
   const mcp = new Set(Object.keys(readSnapshotJson(snapshotDirectory, '.mcp.json')?.mcpServers ?? {}));
   return { skill: skills, agent: agents, mcp };

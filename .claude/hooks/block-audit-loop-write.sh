@@ -323,7 +323,8 @@ case "$tool_name" in
     exit 0
     ;;
 
-  Bash | Monitor)
+  *)
+    gaia_hook_is_command_tool "$tool_name" || exit 0
     command_line="$GAIA_HOOK_COMMAND"
     [[ -n "$command_line" ]] || exit 0
 
@@ -357,7 +358,4 @@ case "$tool_name" in
     exit 0
     ;;
 
-  *)
-    exit 0
-    ;;
 esac

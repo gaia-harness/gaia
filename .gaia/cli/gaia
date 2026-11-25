@@ -43215,6 +43215,7 @@ var writeLocaleFiles = (args) => {
 import { existsSync as existsSync39, readFileSync as readFileSync51 } from "node:fs";
 import path67 from "node:path";
 var DATA_VARIANTS = ["server", "client", "query"];
+var ROUTE_SHAPES = ["list", "detail"];
 var deriveRouteCalls = (shape, derived2) => {
   const { Plural, plural: plural2, Singular, singular } = derived2;
   return shape === "list" ? {
@@ -43351,7 +43352,6 @@ var readServiceBinding = (args) => {
 
 // src/scaffold/route.ts
 var VALID_GROUPS = /* @__PURE__ */ new Set(["_public", "_session"]);
-var ROUTE_SHAPES = ["list", "detail"];
 var RESERVED_PAGE_NAME_LIST = ["assets", "hooks", "state", "tests", "utils"];
 var RESERVED_PAGE_NAMES = new Set(RESERVED_PAGE_NAME_LIST);
 var KEBAB_PATTERN2 = /^[a-z\d]+(?:-[a-z\d]+)*$/u;
