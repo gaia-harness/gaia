@@ -17,6 +17,9 @@ setup() {
   BIN="$BATS_TEST_TMPDIR/bin"
   export GH_FIXTURES="$BATS_TEST_TMPDIR/gh"
   export GH_PRS=""
+  # GH_CLAIMS: the claimed-issue list and GH_PR_HEADS the open-PR list that
+  # debt-stuck-fixes.sh reads; both empty unless a test sets them.
+  export GH_CLAIMS="[]" GH_PR_HEADS="[]"
   mkdir -p "$BATS_TEST_TMPDIR/work/apps/web" "$BATS_TEST_TMPDIR/work/.notebook" "$BIN" "$GH_FIXTURES"
   # Physical, as the script resolves it: macOS links /var to /private/var.
   WORK="$(cd "$BATS_TEST_TMPDIR/work" && pwd -P)"
@@ -24,7 +27,9 @@ setup() {
   printf '.notebook\n.gaia/local\n' > "$WORK/.gitignore"
   printf '{"version":1,"items":[]}\n' > "$WORK/.notebook/catalog.json"
   printf '%s\n' '#!/usr/bin/env bash' \
-    'if [ "$1 $2" = "pr list" ]; then printf "%b" "$GH_PRS"; exit 0; fi' \
+    'if [ "$1 $2" = "pr list" ]; then case "$*" in *--jq*) printf "%b" "$GH_PRS" ;; *) printf "%s" "$GH_PR_HEADS" ;; esac; exit 0; fi' \
+    'if [ "$1 $2" = "issue list" ]; then printf "%s" "$GH_CLAIMS"; exit 0; fi' \
+    'if [ "$1 $2" = "issue view" ]; then cat "$GH_FIXTURES/issue-body-$3.txt" 2>/dev/null; exit 0; fi' \
     '[ "$1" = api ] || exit 9' \
     'endpoint="" filter="."' \
     'while [ "$#" -gt 0 ]; do case "$1" in --jq) filter="$2"; shift 2 ;; repos/*) endpoint="$1"; shift ;; *) shift ;; esac; done' \
@@ -373,4 +378,52 @@ lock_worktree() {
   park feat/2-pr-work question
   pick
   jq -e '.job == "backlog" and .skipped == [{item: "pr #2", reason: "parked (question)"}]' <<<"$output"
+}
+
+@test "a claimed debt fix whose local branch has no pull request is a debt-resume job, after open pull requests and before a draft spec" {
+  git -C "$WORK" branch debt/3811-resume-stopped-debt-fix
+  GH_CLAIMS='[{"number":3811}]'
+  draft_spec
+  GH_PRS='2\tfeat/2-pr-work\n'
+  pick
+  jq -e '.job == "pr" and .pr == 2' <<<"$output"
+  GH_PRS=''
+  pick
+  jq -e '.job == "debt-resume" and .issue == 3811 and .branch == "debt/3811-resume-stopped-debt-fix" and .skipped == []' <<<"$output"
+}
+
+@test "a debt branch is no job when its issue is unclaimed, an open pull request holds it, or no member of it is claimed" {
+  git -C "$WORK" branch debt/3811-resume-stopped-debt-fix
+  git -C "$WORK" branch debt/3812-3813-batch
+  pick
+  jq -e '.job == "backlog"' <<<"$output"
+  GH_CLAIMS='[{"number":3811},{"number":3812}]'
+  GH_PR_HEADS='[{"headRefName":"debt/3811-resume-stopped-debt-fix"}]'
+  pick
+  jq -e '.job == "debt-resume" and .issue == 3812 and .branch == "debt/3812-3813-batch"' <<<"$output"
+  GH_PR_HEADS='[{"headRefName":"debt/3811-resume-stopped-debt-fix"},{"headRefName":"debt/3812-3813-batch"}]'
+  pick
+  jq -e '.job == "backlog"' <<<"$output"
+}
+
+@test "under autonomy a parked or self-governing debt fix is skipped; an interactive run takes it" {
+  git -C "$WORK" branch debt/3811-resume-stopped-debt-fix
+  GH_CLAIMS='[{"number":3811}]'
+  park debt/3811-resume-stopped-debt-fix question
+  printf 'Edit .claude/settings.json.\n' > "$GH_FIXTURES/issue-body-3811.txt"
+  pick
+  jq -e '.job == "debt-resume" and .parked == "question"' <<<"$output"
+  autonomy_on
+  pick
+  jq -e '.job == "backlog" and .skipped == [{item: "debt fix #3811", reason: "parked (question)"}]' <<<"$output"
+  rm -rf "$WORK/.gaia/local/runs"
+  pick
+  jq -e '.job == "backlog" and (.skipped[0].reason | test("protected set"))' <<<"$output"
+}
+
+@test "a claims list that cannot be read fails the pick with exit 1" {
+  GH_CLAIMS='not json'
+  pick
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"cannot read the stopped debt fixes"* ]]
 }

@@ -148,6 +148,7 @@ Honor whatever the human picks or types into **Other**. If a typed value is not 
 The backlog read ends here. Route by the `## Argument parsing` result; every route returns to `## Claim the fix unit` below once the pick is made:
 
 - `top` → Read `.claude/skills/gaia/references/debt/recommend.md` now and follow its `## Recommend and present`.
+- `numbers`, one number → first run `bash .gaia/scripts/debt-stuck-fixes.sh --issue <N>`. When it prints a line, a fix of #`<N>` stopped before its pull request opened: Read `.claude/skills/gaia/references/debt/resume.md` now and follow it instead of the route below. No output, or a non-zero exit, takes the route below.
 - `numbers`, one number or several → Read `.claude/skills/gaia/references/debt/named.md` now and follow its `## Validate named numbers`, then `## Fix a specific issue (direct-number path)` for one number or `## Fix a named set (two or more numbers)` for two or more.
 
 ## Claim the fix unit
