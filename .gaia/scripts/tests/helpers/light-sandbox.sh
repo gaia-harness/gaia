@@ -395,7 +395,7 @@ lsb_run_merge_hook() {
   head="$(lsb_git rev-parse HEAD)" || return 1
   run env PATH="$stub_directory:$PATH" GH_STUB_BASE_BRANCH=main GH_STUB_BASE_TIP="$base_tip" \
     GH_STUB_REPOSITORY=gaia-react/gaia GH_STUB_STATUSES_JSON='[]' \
-    GH_STUB_PR_JSON="$(jq -n -c --arg number "$1" --arg head "$head" '{title: "", number: $number, headRefOid: $head, body: "<!-- gaia-pr-body-head: \($head) -->"}')" \
+    GH_STUB_PR_JSON="$(jq -n -c --arg number "$1" --arg head "$head" --arg branch "$LSB_BRANCH" '{title: "", number: $number, headRefOid: $head, headRefName: $branch, body: "<!-- gaia-pr-body-head: \($head) -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: \($head)\nNo findings.\n<!-- gaia:pr-review:end -->"}')" \
     bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ \
     "$LSB_ROOT" "$(lsb_merge_payload "$1")" "$LSB_ROOT/.claude/hooks/pr-merge-audit-check.sh"
 }

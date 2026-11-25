@@ -113,6 +113,8 @@ const matches = (
   );
 };
 
+const PR_URL = 'https://github.com/gaia/example/pull/42';
+
 const buildRunner =
   (
     scripted: {
@@ -126,6 +128,12 @@ const buildRunner =
     const match = scripted.find((entry) => matches(entry.argv, command, args));
 
     if (match !== undefined) return match.result;
+
+    // A land opens its pull request with `gh pr create`, which prints the URL
+    // the review check reads the number from.
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'create') {
+      return okResult(`${PR_URL}\n`);
+    }
 
     return okResult('');
   };

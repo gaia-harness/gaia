@@ -146,6 +146,9 @@ use_hook_copy() {
   cp "$real_root/.claude/hooks/post-audit-status.sh" "$HOOK_TREE/.claude/hooks/"
   cp -R "$real_root/.claude/hooks/lib" "$HOOK_TREE/.claude/hooks/lib"
   cp "$real_root/.gaia/scripts/main-root-lib.sh" "$real_root/.gaia/scripts/audit-key-lib.sh" "$HOOK_TREE/.gaia/scripts/"
+  cp "$real_root/.gaia/scripts/audit-loop-state-lib.sh" "$real_root/.gaia/scripts/branch-name-lib.sh" \
+    "$real_root/.gaia/scripts/exclusive-lock-lib.sh" "$real_root/.gaia/scripts/branch-authorship-lib.sh" \
+    "$real_root/.gaia/scripts/filing-outcomes-lib.sh" "$HOOK_TREE/.gaia/scripts/"
   copy_notebook_libraries "$real_root" "$HOOK_TREE"
   HOOK_ABSOLUTE_PATH="$HOOK_TREE/.claude/hooks/post-audit-status.sh"
   set_gate_owed_status "${1:-0}"
@@ -264,13 +267,17 @@ case "$1" in
         exit 0
         ;;
     esac
-    # The body read: the body a case plants, else one stamped for the PR head.
+    # The body read: the PR number and head branch on two lines, then the body a
+    # case plants, else one stamped for the PR head and carrying a complete PR
+    # review section.
     case " $* " in
-      *" body "*)
+      *" number,headRefName,body "*)
+        printf '7\nfeat/review-fixture\n'
         if [ -f "$stub_directory/pr-body" ]; then
           cat "$stub_directory/pr-body"
         else
           printf '<!-- gaia-pr-body-head: %s -->\n' "$(cat "$stub_directory/pr-head")"
+          printf '<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\nNo findings.\n<!-- gaia:pr-review:end -->\n' "$(cat "$stub_directory/pr-head")"
         fi
         exit 0
         ;;
@@ -278,6 +285,7 @@ case "$1" in
     pr_head="$(cat "$stub_directory/pr-head")"
     [ -n "$pr_head" ] || exit 1
     printf '%s\n' "$pr_head"
+    [ ! -f "$stub_directory/pr-title" ] || printf '%s\n' "$(cat "$stub_directory/pr-title")"
     exit 0
     ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
@@ -995,3 +1003,70 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
   assert_no_post
 }
 
+@test "success is declined while the PR review record is incomplete" {
+  next_case "success declines on a PR body with a stamp and no PR review section, naming the PR"
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  push_head_to_upstream
+  marker="$(write_marker)"
+  printf 'Summary.\n<!-- gaia-pr-body-head: %s -->\n' "$(git -C "$REPO" rev-parse HEAD)" > "$BATS_TEST_TMPDIR/pr-body"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH" "$marker"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF -- "status: declined: PR review: no complete review record for PR #7; GAIA-Audit not posted." <<<"$output" || return 1
+  assert_no_post
+
+  next_case "success declines on a section that leaves a finding undecided"
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  push_head_to_upstream
+  marker="$(write_marker)"
+  head="$(git -C "$REPO" rev-parse HEAD)"
+  printf '<!-- gaia-pr-body-head: %s -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\n- Major README.md:1 a problem -> undecided\n<!-- gaia:pr-review:end -->\n' "$head" "$head" > "$BATS_TEST_TMPDIR/pr-body"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH" "$marker"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF -- "status: declined: PR review: no complete review record for PR #7; GAIA-Audit not posted." <<<"$output" || return 1
+  assert_no_post
+
+  next_case "a release pull request over a bookkeeping change posts success with no review section"
+  . "$BATS_TEST_DIRNAME/../helpers/release-bookkeeping-fixture.sh"
+  release_bookkeeping_seed_base "$REPO"
+  BASE_TIP="$(git -C "$REPO" rev-parse HEAD)"
+  release_bookkeeping_install_predicate "$REPO"
+  release_bookkeeping_apply "$REPO"
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  printf 'chore(release): v1.1.0' > "$BATS_TEST_TMPDIR/pr-title"
+  printf 'Summary.\n<!-- gaia-pr-body-head: %s -->\n' "$(git -C "$REPO" rev-parse HEAD)" > "$BATS_TEST_TMPDIR/pr-body"
+  marker="$(write_marker)"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH" "$marker"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF -- "status: posted GAIA-Audit success" <<<"$output" || { echo "$output"; return 1; }
+
+  next_case "the same title over a change that is not only bookkeeping still declines for the missing review"
+  . "$BATS_TEST_DIRNAME/../helpers/release-bookkeeping-fixture.sh"
+  release_bookkeeping_seed_base "$REPO"
+  BASE_TIP="$(git -C "$REPO" rev-parse HEAD)"
+  release_bookkeeping_install_predicate "$REPO"
+  release_bookkeeping_apply "$REPO" extra
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  printf 'chore(release): v1.1.0' > "$BATS_TEST_TMPDIR/pr-title"
+  printf 'Summary.\n<!-- gaia-pr-body-head: %s -->\n' "$(git -C "$REPO" rev-parse HEAD)" > "$BATS_TEST_TMPDIR/pr-body"
+  marker="$(write_marker)"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH" "$marker"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF -- "status: declined: PR review: no complete review record for PR #7; GAIA-Audit not posted." <<<"$output" || { echo "$output"; return 1; }
+  assert_no_post
+
+  next_case "a refusal posts failure whatever the review record says"
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  push_head_to_upstream
+  marker="$(write_refusal)"
+  printf 'Summary.\n' > "$BATS_TEST_TMPDIR/pr-body"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH" "$marker"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF -- "status: posted GAIA-Audit failure" <<<"$output" || return 1
+}

@@ -200,9 +200,10 @@ gate_setup() {
   write_builtin_descriptor "$REPO"
 }
 
-# set_record_body <body>: replace the recorded pull request's body.
+# set_record_body <body>: replace the recorded pull request's body, keeping a
+# complete PR review section for its head so only the stamp decides the case.
 set_record_body() {
-  jq -c --arg body "$1" '.body = $body' "$MGF_STUB_DIRECTORY/record.json" > "$MGF_STUB_DIRECTORY/record.next"
+  jq -c --arg body "$1" '.body = ($body + "\n\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + .headRefOid + "\nNo findings.\n<!-- gaia:pr-review:end -->")' "$MGF_STUB_DIRECTORY/record.json" > "$MGF_STUB_DIRECTORY/record.next"
   mv "$MGF_STUB_DIRECTORY/record.next" "$MGF_STUB_DIRECTORY/record.json"
 }
 

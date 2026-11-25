@@ -357,7 +357,7 @@ case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
   pr) head="$(cat "$head_override_file" 2>/dev/null || git -C "$repo_directory" rev-parse HEAD 2>/dev/null)"
-      jq -n --arg head "$head" '{title:"", baseRefName:"main", number:"30", headRefOid:$head, body:("<!-- gaia-pr-body-head: " + $head + " -->")}'; exit 0 ;;
+      jq -n --arg head "$head" '{title:"", baseRefName:"main", number:"30", headRefOid:$head, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + $head + " -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'; exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) printf 'null\n'; exit 0 ;;
   *) exit 0 ;;
@@ -396,7 +396,7 @@ case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
   pr) jq -n --arg title "$(cat "$title_file")" --slurpfile files "$files_file" --arg head "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" \
-        '{title:$title, baseRefName:"main", number:"30", files: $files[0], headRefOid:$head, body:("<!-- gaia-pr-body-head: " + $head + " -->")}'
+        '{title:$title, baseRefName:"main", number:"30", files: $files[0], headRefOid:$head, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + $head + " -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'
       exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) printf 'null\n'; exit 0 ;;
@@ -432,7 +432,7 @@ case "$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
 case "$1" in
   auth) exit 0 ;;
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
-  pr) jq -n --arg head "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" '{title:"", baseRefName:"main", number:"30", headRefOid:$head, body:("<!-- gaia-pr-body-head: " + $head + " -->")}'; exit 0 ;;
+  pr) jq -n --arg head "$(git -C "$repo_directory" rev-parse HEAD 2>/dev/null)" '{title:"", baseRefName:"main", number:"30", headRefOid:$head, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + $head + " -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'; exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) cat "$status_file"; exit 0 ;;
   *) exit 0 ;;
@@ -1667,7 +1667,7 @@ case "$1" in
   repo) printf 'gaia-react/gaia\n'; exit 0 ;;
   pr) jq -n --arg base "$(cat "$base_file")" --arg head "$(cat "$head_file")" \
         --arg number "$(cat "$number_file")" \
-        '{title:"", baseRefName:$base, headRefOid:$head, number:$number, body:("<!-- gaia-pr-body-head: " + $head + " -->")}'; exit 0 ;;
+        '{title:"", baseRefName:$base, headRefOid:$head, number:$number, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + $head + " -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'; exit 0 ;;
   issue) cat "$issues_file"; exit 0 ;;
   api) printf 'null\n'; exit 0 ;;
   *) exit 0 ;;
@@ -1743,6 +1743,7 @@ install_recording_hook_copy() {
   # The copied gate loads the autonomy library from its own tree's .gaia/scripts
   # and denies without it, before the provenance call this copy records.
   cp "$BATS_TEST_DIRNAME/../../scripts/autonomy-lib.sh" "$BATS_TEST_DIRNAME/../../scripts/main-root-lib.sh" "$REPO/.gaia/scripts/"
+  copy_review_verdict_libraries "$REPO"
   cat > "$REPO/.claude/hooks/lib/audit-base-provenance.sh" <<EOF
 #!/usr/bin/env bash
 . "$LIBRARY_DIRECTORY/audit-base-provenance.sh"
@@ -2671,12 +2672,24 @@ padded_heredoc_command() {
 # its OWN on-disk location via BASH_SOURCE, so deleting from $REPO's sandbox
 # lib/ (used elsewhere in this file for the two resolver-script copies)
 # removes nothing this hook itself reads; only a staged copy's absence is.
+# copy_review_verdict_libraries <root>: the scripts the PR review verdict
+# library sources, which a sandbox that copies the hooks directory must carry
+# beside it or the gate denies on the missing library.
+copy_review_verdict_libraries() {
+  local library_name
+  mkdir -p "$1/.gaia/scripts"
+  for library_name in audit-loop-state-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh; do
+    cp "$BATS_TEST_DIRNAME/../../scripts/$library_name" "$1/.gaia/scripts/"
+  done
+}
+
 # stage_hooks_copy <root>: copy the hooks directory to <root>/.claude/hooks
 # beside the autonomy library the copied gate loads from <root>/.gaia/scripts.
 stage_hooks_copy() {
   mkdir -p "$1/.claude" "$1/.gaia/scripts"
   cp -R "$(dirname "$HOOK_ABSOLUTE_PATH")" "$1/.claude/hooks"
   cp "$BATS_TEST_DIRNAME/../../scripts/autonomy-lib.sh" "$BATS_TEST_DIRNAME/../../scripts/main-root-lib.sh" "$1/.gaia/scripts/"
+  copy_review_verdict_libraries "$1"
 }
 
 run_merge_hook_library_absent() {

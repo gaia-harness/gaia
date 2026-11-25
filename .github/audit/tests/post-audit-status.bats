@@ -153,6 +153,7 @@ remote="$REMOTE"
 pushed_head_file="$PUSHED_HEAD_FILE"
 pr_title_file="$BATS_TEST_TMPDIR/pr-title"
 pr_files_file="$BATS_TEST_TMPDIR/pr-files"
+pr_body_file="$BATS_TEST_TMPDIR/pr-body"
 EOF
   cat >> "$GH_BIN/gh" <<'EOF'
 case "$1" in
@@ -166,6 +167,17 @@ case "$1" in
     case " $* " in
       *" baseRefName "*)
         printf 'main\n'
+        exit 0
+        ;;
+      *" number,headRefName,body "*)
+        [ -f "$pushed_head_file" ] || exit 1
+        printf '7\nfeat/review-fixture\n'
+        if [ -f "$pr_body_file" ]; then
+          cat "$pr_body_file"
+        else
+          printf '<!-- gaia-pr-body-head: %s -->\n' "$(cat "$pushed_head_file")"
+          printf '<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\nNo findings.\n<!-- gaia:pr-review:end -->\n' "$(cat "$pushed_head_file")"
+        fi
         exit 0
         ;;
       *" body "*)
@@ -356,7 +368,7 @@ commit_mixed_diff() {
 
 # Clear the member markers and the POST log between cases of one fixture.
 reset_case() {
-  rm -rf "$SANDBOX/.gaia/local/audit" "$BATS_TEST_TMPDIR/pr-title" "$BATS_TEST_TMPDIR/pr-files"
+  rm -rf "$SANDBOX/.gaia/local/audit" "$BATS_TEST_TMPDIR/pr-title" "$BATS_TEST_TMPDIR/pr-files" "$BATS_TEST_TMPDIR/pr-body"
   rm -f "$POST_LOG"
   mkdir -p "$SANDBOX/.gaia/local/audit"
 }
@@ -476,6 +488,9 @@ a frontend refusal keeps frontend pending under a dep-bump title|chore(deps): bu
     cases=$((cases + 1))
     reset_case
     [ -z "$title" ] || printf '%s' "$title" > "$BATS_TEST_TMPDIR/pr-title"
+    # A waived PR records its review before its merge, so its body carries the
+    # head stamp and no PR review section.
+    printf '<!-- gaia-pr-body-head: %s -->\n' "$PUSHED_HEAD" > "$BATS_TEST_TMPDIR/pr-body"
     # shellcheck disable=SC2086 # the paths column is a space-separated list
     [ -z "$files" ] || install_pr_files $files
     [ "$refused" = no ] || write_refusal_body "$SANDBOX/.gaia/local/audit/${frontend_digest}.refused" code-audit-frontend
@@ -736,7 +751,7 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
 # $1 (default: the sandbox's origin/main). Call again after HEAD or the base moves.
 refresh_stub() {
   GH_STUB_BASE_TIP="${1:-$(git -C "$SANDBOX" rev-parse refs/remotes/origin/main)}"
-  GH_STUB_PR_JSON="$(jq -n --arg head "$(git -C "$SANDBOX" rev-parse HEAD)" '{headRefOid: $head, title: "", files: [], body: "<!-- gaia-pr-body-head: \($head) -->"}')"
+  GH_STUB_PR_JSON="$(jq -n --arg head "$(git -C "$SANDBOX" rev-parse HEAD)" '{headRefOid: $head, number: 7, headRefName: "feat/review-fixture", title: "", files: [], body: "<!-- gaia-pr-body-head: \($head) -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: \($head)\nNo findings.\n<!-- gaia:pr-review:end -->"}')"
   export GH_STUB_BASE_TIP GH_STUB_PR_JSON
 }
 

@@ -61,7 +61,7 @@ case "$1" in
   release) printf 'v0.0.0\n' ;;
   pr)
     case "$2" in
-      create) printf 'https://example.test/pull/1\n' ;;
+      create) printf 'https://github.com/example/repo/pull/7\n' ;;
       merge)
         [ "${MOCK_GH_MERGE:-merge}" = "defer" ] && exit 0
         branch=$(git rev-parse --abbrev-ref HEAD)
@@ -70,6 +70,13 @@ case "$1" in
         ;;
       view)
         case "$*" in
+          *headRefName,headRefOid,baseRefName,body*)
+            head=$(git rev-parse HEAD)
+            body=$(printf '<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\nNo findings.\n<!-- gaia:pr-review:end -->\n' "$head")
+            jq -n --arg branch "$(git rev-parse --abbrev-ref HEAD)" --arg head "$head" --arg body "$body" \
+              '{headRefName: $branch, headRefOid: $head, baseRefName: "main", body: $body}'
+            exit 0
+            ;;
           *files,headRefOid,baseRefName*)
             files=$(git diff --name-only main...HEAD | jq -R '{path: .}' | jq -s .)
             jq -n --argjson files "$files" --arg head "$(git rev-parse HEAD)" \
@@ -196,6 +203,11 @@ make_repo() {
   cp "$CHECK_UPDATES_SOURCE" "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
   cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/exclusive-lock-lib.sh"
   cp "$MAIN_ROOT_LIBRARY_SOURCE" "$REPOSITORY_FIXTURE/.gaia/scripts/main-root-lib.sh"
+  mkdir -p "$REPOSITORY_FIXTURE/.claude/hooks/lib"
+  cp "$REPO_ROOT/.claude/hooks/lib/pr-review-verdict.sh" "$REPOSITORY_FIXTURE/.claude/hooks/lib/pr-review-verdict.sh"
+  for review_gate_file in pr-review-gate.sh audit-loop-state-lib.sh branch-name-lib.sh audit-key-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh; do
+    cp "$REPO_ROOT/.gaia/scripts/$review_gate_file" "$REPOSITORY_FIXTURE/.gaia/scripts/$review_gate_file"
+  done
   cp "$STATUSLINE_SOURCE" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline.sh"
   cp "$STATUSLINE_RIGHT_SOURCE" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline-right.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$REPOSITORY_FIXTURE/.gaia/scripts/resolve-audit-members.sh"

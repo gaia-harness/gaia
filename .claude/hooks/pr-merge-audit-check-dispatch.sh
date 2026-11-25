@@ -86,6 +86,7 @@ if [ -z "$members" ]; then
   check_out_of_scope_pr && out_of_scope_pr=1
 
   if [ "$out_of_scope_pr" -eq 1 ]; then
+    gate_require_pr_review 1
     github_status_cleared any-digest || gate_post_bypass_stamp 'skipped: out of scope'
     exit 0
   fi
@@ -93,8 +94,10 @@ if [ -z "$members" ]; then
   if frontend_cleared; then
     gate_permit_binds_to_named_pr || exit 0
     if [ "$frontend_cleared_by" = chore-deps ]; then
+      gate_require_pr_review 1
       gate_post_bypass_stamp 'skipped: chore(deps) manifest-only'
     else
+      gate_require_pr_review 0
       gate_require_body_stamp
     fi
     exit 0
@@ -230,8 +233,10 @@ done <<< "$members"
 if [ "$all_cleared" -eq 1 ]; then
   gate_permit_binds_to_named_pr || exit 0
   if [ "$frontend_chore_deps_waived" -eq 0 ]; then
+    gate_require_pr_review 0
     gate_require_body_stamp
   else
+    gate_require_pr_review 1
     gate_post_bypass_stamp 'skipped: chore(deps) manifest-only'
   fi
   exit 0

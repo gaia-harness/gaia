@@ -187,7 +187,8 @@ setup() {
   for script_name in resolve-audit-members.sh audit-member-digest.sh \
            audit-write-clearance.sh audit-write-clearance-args.sh audit-write-clearance-gates.sh \
            audit-write-clearance-accounting.sh audit-write-clearance-publish.sh \
-           audit-write-clearance-ledger.sh main-root-lib.sh audit-key-lib.sh autonomy-lib.sh; do
+           audit-write-clearance-ledger.sh main-root-lib.sh audit-key-lib.sh autonomy-lib.sh \
+           audit-loop-state-lib.sh branch-name-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$MAIN/.gaia/scripts/$script_name"
     chmod +x "$MAIN/.gaia/scripts/$script_name"
   done
@@ -201,7 +202,7 @@ setup() {
            jq-availability.sh hook-payload.sh verb-arming.sh verb-arming-walk.sh \
            verb-arming-view.sh verb-arming-live-helpers.sh verb-arming-live-view.sh repo-scope.sh \
            repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh \
-           cross-repo-refusal.sh audit-bypass-stamp.sh pr-body-stamp.sh \
+           cross-repo-refusal.sh audit-bypass-stamp.sh pr-body-stamp.sh pr-review-verdict.sh \
            post-audit-status-gates.sh; do
     cp "$REPO_ROOT/.claude/hooks/lib/$script_name" "$MAIN/.claude/hooks/lib/$script_name"
   done
@@ -424,7 +425,7 @@ case "\$1" in
   auth) exit 0 ;;
   repo) printf 'test-owner/test-repo\n'; exit 0 ;;
   pr) head="\$(git rev-parse HEAD 2>/dev/null)"
-      jq -n --arg head "\$head" '{title:"", baseRefName:"main", number:"30", headRefOid:\$head, body:("<!-- gaia-pr-body-head: " + \$head + " -->")}'; exit 0 ;;
+      jq -n --arg head "\$head" '{title:"", baseRefName:"main", number:"30", headRefOid:\$head, headRefName:"feature", body:("<!-- gaia-pr-body-head: " + \$head + " -->\\n<!-- gaia:pr-review:start -->\\n## PR review\\n\\nReviewed head: " + \$head + "\\nNo findings.\\n<!-- gaia:pr-review:end -->")}'; exit 0 ;;
   api)
     case "\$*" in
       *repos/*/branches/*) git -C "$CATCHUP_ORIGIN" rev-parse refs/heads/main; exit \$? ;;

@@ -1034,11 +1034,11 @@ var require_parse = __commonJS({
         const body = input2.slice(token.startIndex + 2, state.index);
         const analysis = analyzeRepeatedExtglob(body, opts);
         if ((token.type === "plus" || token.type === "star") && analysis.risky) {
-          const safeOutput4 = analysis.safeOutput ? (token.output ? "" : ONE_CHAR) + (opts.capture ? `(${analysis.safeOutput})` : analysis.safeOutput) : void 0;
+          const safeOutput6 = analysis.safeOutput ? (token.output ? "" : ONE_CHAR) + (opts.capture ? `(${analysis.safeOutput})` : analysis.safeOutput) : void 0;
           const open2 = tokens[token.tokensIndex];
           open2.type = "text";
           open2.value = literal2;
-          open2.output = safeOutput4 || utils.escapeRegex(literal2);
+          open2.output = safeOutput6 || utils.escapeRegex(literal2);
           for (let i = token.tokensIndex + 1; i < tokens.length; i++) {
             tokens[i].value = "";
             tokens[i].output = "";
@@ -52783,6 +52783,158 @@ var postOutOfScopeStamp = (options) => {
   return "ready";
 };
 
+// src/wiki/util/pr-review-gate.ts
+var safeOutput3 = (value) => value ?? "";
+var OpenPullRequestSchema = external_exports.object({
+  number: external_exports.number().int().positive(),
+  state: external_exports.string(),
+  url: external_exports.string()
+});
+var findOpenPullRequest = (options) => {
+  const { branch, cwd, runner } = options;
+  const result = runner(
+    "gh",
+    ["pr", "view", branch, "--json", "number,url,state"],
+    { cwd }
+  );
+  if (!commandSucceeded(result)) return void 0;
+  let parsed;
+  try {
+    parsed = JSON.parse(safeOutput3(result.stdout));
+  } catch {
+    return void 0;
+  }
+  const record2 = OpenPullRequestSchema.safeParse(parsed);
+  if (!record2.success || record2.data.state !== "OPEN") return void 0;
+  return { number: record2.data.number, url: record2.data.url };
+};
+var checkPullRequestReview = (options) => {
+  const { cwd, prNumber, runner } = options;
+  const result = runner(
+    "bash",
+    [
+      ".gaia/scripts/pr-review-gate.sh",
+      "check",
+      "--root",
+      cwd,
+      "--pr",
+      String(prNumber),
+      "--out-of-scope"
+    ],
+    { cwd }
+  );
+  if (commandSucceeded(result)) return { isComplete: true };
+  const line = safeOutput3(result.stdout).trim();
+  if (result.status === 1 && line !== "") return { line };
+  const detail = safeOutput3(result.stderr).trim() || "the gate could not run";
+  return {
+    line: `PR review: could not be checked on PR #${prNumber} (${detail}).`
+  };
+};
+
+// src/wiki/util/pr-landing.ts
+var safeOutput4 = (value) => value ?? "";
+var PR_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/u;
+var parsePrUrl = (text) => {
+  const match = PR_URL.exec(text);
+  if (match === null) return void 0;
+  const repo = match[1];
+  const numberToken = match[2];
+  if (repo === void 0 || numberToken === void 0) return void 0;
+  const number4 = Number.parseInt(numberToken, 10);
+  if (!Number.isSafeInteger(number4) || number4 <= 0) return void 0;
+  return { number: number4, repo };
+};
+var DRAFT_UNSUPPORTED = /draft.*(?:not supported|unsupported)|(?:not supported|unsupported).*draft/i;
+var openPullRequest = (options) => {
+  const { prBody, prTitle, repoRoot, runner } = options;
+  const createArgs = (draft) => [
+    "pr",
+    "create",
+    ...draft ? ["--draft"] : [],
+    "--title",
+    prTitle,
+    "--body",
+    prBody
+  ];
+  const visibility = runner(
+    "gh",
+    ["repo", "view", "--json", "visibility", "--jq", ".visibility"],
+    { cwd: repoRoot }
+  );
+  const isPrivate = commandSucceeded(visibility) && safeOutput4(visibility.stdout).trim() === "PRIVATE";
+  const args = createArgs(!isPrivate);
+  const result = runner("gh", args, { cwd: repoRoot });
+  if (commandSucceeded(result) || isPrivate || !DRAFT_UNSUPPORTED.test(safeOutput4(result.stderr))) {
+    return { args, result };
+  }
+  const readyArgs = createArgs(false);
+  return { args: readyArgs, result: runner("gh", readyArgs, { cwd: repoRoot }) };
+};
+var queueAutoMerge = (options) => {
+  const { branch, prBody, prTitle, repoRoot, runner } = options;
+  const failure2 = (result, command, args) => ({
+    failureCode: passthroughFailure({
+      args,
+      command,
+      prefix: "chain",
+      result
+    })
+  });
+  const pushArgs = ["push", "-u", "origin", branch];
+  const push = runner("git", pushArgs, { cwd: repoRoot });
+  if (!commandSucceeded(push)) return failure2(push, "git", pushArgs);
+  const openPullRequestRecord = findOpenPullRequest({
+    branch,
+    cwd: repoRoot,
+    runner
+  });
+  let artifact;
+  if (openPullRequestRecord === void 0) {
+    const created = openPullRequest({ prBody, prTitle, repoRoot, runner });
+    if (!commandSucceeded(created.result)) {
+      return failure2(created.result, "gh", created.args);
+    }
+    artifact = parsePrUrl(safeOutput4(created.result.stdout));
+  } else {
+    artifact = parsePrUrl(openPullRequestRecord.url);
+  }
+  if (artifact === void 0) {
+    process.stderr.write(
+      `chain finish: could not read the pull request number for ${branch}; no review check, stamp or auto-merge ran
+`
+    );
+    return { failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND };
+  }
+  const review = checkPullRequestReview({
+    cwd: repoRoot,
+    prNumber: artifact.number,
+    runner
+  });
+  if ("line" in review) {
+    process.stderr.write(`${review.line}
+`);
+    return { failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND };
+  }
+  const stamp = postOutOfScopeStamp({
+    branch,
+    cwd: repoRoot,
+    prefix: "chain finish",
+    runner
+  });
+  if (stamp === "flip-failed") {
+    process.stderr.write(
+      `chain finish: ${branch} stays an open draft PR and auto-merge is not queued
+`
+    );
+    return { failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND };
+  }
+  const mergeArgs = ["pr", "merge", "--squash", "--auto", "--delete-branch"];
+  const merge2 = runner("gh", mergeArgs, { cwd: repoRoot });
+  if (!commandSucceeded(merge2)) return failure2(merge2, "gh", mergeArgs);
+  return { artifact };
+};
+
 // src/wiki/util/statusline-cache.ts
 import { existsSync as existsSync56, readFileSync as readFileSync78 } from "node:fs";
 import path106 from "node:path";
@@ -53178,7 +53330,7 @@ var branchTimestamp = (branch) => {
 var wikiLandingSubject = ({ date: date5, hours, minutes }) => `wiki: ${date5} ${hours}:${minutes} UTC`;
 var passthroughFailure2 = (result, command, args) => passthroughFailure({ args, command, prefix: "chain", result });
 var stepOk = commandSucceeded;
-var safeOutput3 = (value) => value ?? "";
+var safeOutput5 = (value) => value ?? "";
 var HELP_TOKENS67 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var HELP_TEXT68 = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [args]
 
@@ -53353,91 +53505,6 @@ var finishEmptyBranch = (options) => {
   );
   return EXIT_CODES.OK;
 };
-var PR_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/u;
-var parsePrUrl = (text) => {
-  const match = PR_URL.exec(text);
-  if (match === null) return void 0;
-  const repo = match[1];
-  const numberToken = match[2];
-  if (repo === void 0 || numberToken === void 0) return void 0;
-  const number4 = Number.parseInt(numberToken, 10);
-  if (!Number.isSafeInteger(number4) || number4 <= 0) return void 0;
-  return { number: number4, repo };
-};
-var DRAFT_UNSUPPORTED = /draft.*(?:not supported|unsupported)|(?:not supported|unsupported).*draft/i;
-var openPullRequest = (options) => {
-  const { prBody, prTitle, repoRoot, runner } = options;
-  const createArgs = (draft) => [
-    "pr",
-    "create",
-    ...draft ? ["--draft"] : [],
-    "--title",
-    prTitle,
-    "--body",
-    prBody
-  ];
-  const visibility = runner(
-    "gh",
-    ["repo", "view", "--json", "visibility", "--jq", ".visibility"],
-    { cwd: repoRoot }
-  );
-  const isPrivate = stepOk(visibility) && safeOutput3(visibility.stdout).trim() === "PRIVATE";
-  const args = createArgs(!isPrivate);
-  const result = runner("gh", args, { cwd: repoRoot });
-  if (stepOk(result) || isPrivate || !DRAFT_UNSUPPORTED.test(safeOutput3(result.stderr))) {
-    return { args, result };
-  }
-  const readyArgs = createArgs(false);
-  return { args: readyArgs, result: runner("gh", readyArgs, { cwd: repoRoot }) };
-};
-var queueAutoMerge = (options) => {
-  const { branch, prBody, prTitle, repoRoot, runner } = options;
-  const autoMergeStep = {
-    args: ["pr", "merge", "--squash", "--auto", "--delete-branch"],
-    command: "gh"
-  };
-  const createStep = { args: ["pr", "create"], command: "gh" };
-  const remoteSequence = [
-    { args: ["push", "-u", "origin", branch], command: "git" },
-    createStep,
-    autoMergeStep
-  ];
-  let artifact;
-  for (const step of remoteSequence) {
-    if (step === autoMergeStep) {
-      const stamp = postOutOfScopeStamp({
-        branch,
-        cwd: repoRoot,
-        prefix: "chain finish",
-        runner
-      });
-      if (stamp === "flip-failed") {
-        process.stderr.write(
-          `chain finish: ${branch} stays an open draft PR and auto-merge is not queued
-`
-        );
-        return { failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND };
-      }
-    }
-    const outcome = step === createStep ? openPullRequest({ prBody, prTitle, repoRoot, runner }) : {
-      args: step.args,
-      result: runner(step.command, step.args, { cwd: repoRoot })
-    };
-    if (!stepOk(outcome.result)) {
-      return {
-        failureCode: passthroughFailure2(
-          outcome.result,
-          step.command,
-          outcome.args
-        )
-      };
-    }
-    if (step === createStep) {
-      artifact = parsePrUrl(safeOutput3(outcome.result.stdout));
-    }
-  }
-  return { artifact };
-};
 var finish = (argv, options) => {
   const refusal = unknownFlag(argv);
   if (refusal !== void 0) {
@@ -53489,7 +53556,7 @@ var finish = (argv, options) => {
   const countResult = runner("git", countArgs, { cwd: repoRoot });
   if (!stepOk(countResult))
     return passthroughFailure2(countResult, "git", countArgs);
-  const ahead = Number.parseInt(safeOutput3(countResult.stdout).trim(), 10);
+  const ahead = Number.parseInt(safeOutput5(countResult.stdout).trim(), 10);
   if (!Number.isNaN(ahead) && ahead === 0) {
     return finishEmptyBranch({ base, branch, repoRoot, runner });
   }

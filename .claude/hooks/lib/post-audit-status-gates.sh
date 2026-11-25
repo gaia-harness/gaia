@@ -331,13 +331,53 @@ post_audit_status_gates() {
       emit_decline "PR body stamp check unavailable (.claude/hooks/lib/pr-body-stamp.sh)"
       return 1
     fi
-    if ! pr_body="$( cd "$repo_root" && gh pr view --json body --jq .body 2>/dev/null )"; then
+    # One read carries the number and head branch the review check below needs,
+    # on the first two lines; everything after them is the body.
+    if ! pr_body="$( cd "$repo_root" && gh pr view --json number,headRefName,body --jq '.number, .headRefName, .body' 2>/dev/null )"; then
       emit_decline "PR body unreadable; next step: gh auth status"
       return 1
     fi
+    pr_number="${pr_body%%$'\n'*}"
+    pr_body="${pr_body#"$pr_number"}"
+    pr_body="${pr_body#$'\n'}"
+    pr_head_ref="${pr_body%%$'\n'*}"
+    pr_body="${pr_body#"$pr_head_ref"}"
+    pr_body="${pr_body#$'\n'}"
     if ! stamp_reason="$(pr_body_stamp_verdict "$pr_body" "$head_sha")"; then
       emit_decline "${stamp_reason}; next step: re-check the PR summary against the branch's commits and diff, then run .gaia/scripts/pr-body-stamp.sh write"
       return 1
+    fi
+
+    # The PR review record, last: GitHub auto-merge completes on this status
+    # alone and never runs the merge hook, so success is withheld while a
+    # finding is undecided or an accepted fix is not yet made. A failure post
+    # never reaches here, so a refusal is never held back by a disposition.
+    # A waived dependency bump records its review before its merge, which the
+    # merge hook still enforces, and a release pull request needs none. A
+    # missing waiver library waives nothing.
+    review_library="$_repository_root_directory/.claude/hooks/lib/pr-review-verdict.sh"
+    review_waived="$frontend_waived"
+    waiver_library="$_repository_root_directory/.claude/hooks/lib/pr-review-waiver.sh"
+    # shellcheck source=lib/pr-review-waiver.sh
+    if [ "$review_waived" != "true" ] && [ -n "$_repository_root_directory" ] && [ -f "$waiver_library" ] \
+       && . "$waiver_library" && pr_review_release_waived "$repo_root" "$pr_title" "$merge_base" "$head_sha"; then
+      review_waived="true"
+    fi
+    if [ "$review_waived" != "true" ]; then
+      # shellcheck source=lib/pr-review-verdict.sh
+      if [ -z "$_repository_root_directory" ] || [ ! -f "$review_library" ] || ! . "$review_library"; then
+        emit_decline "PR review check unavailable (.claude/hooks/lib/pr-review-verdict.sh)"
+        return 1
+      fi
+      review_record=""
+      review_path="$(pr_review_record_path "$store_root" "$pr_head_ref" 2>/dev/null)" || review_path=""
+      if [ -n "$review_path" ] && [ -f "$review_path" ]; then
+        review_record="$(cat "$review_path" 2>/dev/null)" || review_record=""
+      fi
+      if ! pr_review_verdict "$review_record" "$pr_number" "$pr_body" 0 "$repo_root" "$head_sha" "" >/dev/null; then
+        emit_decline "PR review: no complete review record for PR #${pr_number}; GAIA-Audit not posted."
+        return 1
+      fi
     fi
   fi
   return 0
