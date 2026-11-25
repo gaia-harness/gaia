@@ -2,12 +2,12 @@
 # The non-git segments classify-git-command.sh approves beside its git ones, so
 # `R=<path>; git -C "$R" status; echo "status=$?"` or `git log | grep x | head`
 # runs without a prompt. Defines data and functions and does no work at source
-# time. Reads the caller's hook_root, GAIA_HOOK_CWD and split_git_words (from
-# main-git-guard-parse.sh) and gaia_resolve_common_directory (from
-# main-root-lib.sh).
+# time. Reads the caller's hook_root, GAIA_HOOK_CWD, the assignment patterns
+# (from git-command-segments.sh), split_git_words (from main-git-guard-parse.sh)
+# and gaia_resolve_common_directory (from main-root-lib.sh).
 #
 # A segment is approved when it is one of:
-#   - a literal assignment the walk in git-command-segments.sh recorded, to a
+#   - a literal assignment (the patterns git-command-segments.sh defines) to a
 #     name assignment_name_is_safe accepts;
 #   - `echo`, `printf`, `true`, `false` or `pwd`, or `date` printing the time;
 #   - a reader below with no option that writes, runs a program or follows a
@@ -28,7 +28,7 @@ GAIA_SHELL_SPECIAL_NAMES='BASH_ENV BASHOPTS CDPATH ENV EXECIGNORE FPATH GLOBIGNO
 
 # The readers, each as: program, the short options that take a value, the short
 # options that refuse, the long options allowed (`name` or `name=` for a joined
-# value; any other long option refuses), whether the first operand is text
+# value, `-` for none; any other long option refuses), whether the first operand is text
 # rather than a file (a pattern or a filter), and the most file operands it may
 # take (empty for any number; `uniq` writes its second operand).
 GAIA_READER_PROGRAMS=(

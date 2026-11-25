@@ -10,14 +10,14 @@
 # them is shell, and a commit subject routinely carries `;`, `(` or `&` in
 # quotes. Each pipe stage is its own segment; the caller vouches for every one.
 #
-# Inside double quotes `$` and a backtick still expand, so they are read there
-# too. A backslash falls through wherever the shell reads it, because the word
+# Inside double quotes `$` and a backtick still expand, so `$` is read there
+# too and a backtick falls through. A backslash falls through wherever the shell reads it, because the word
 # parser and the shell disagree on what it escapes inside double quotes. A
 # brace list (`{a,b}`, `{1..3}`) expands to several words the parser reads as
 # one, so an unquoted `{` whose span to the next `}` holds `,` or `..` falls
 # through; `@{u}` and `HEAD^{tree}` hold neither and do not expand.
 #
-# The one expansions read are `$?`, kept as written since it expands to a
+# The only expansions read are `$?`, kept as written since it expands to a
 # number, and a reference to a variable an earlier segment assigned a literal
 # (expand_parameter_reference below). A quoted heredoc is dropped from its
 # segment, the body unread; segment_heredocs marks each segment that read one.

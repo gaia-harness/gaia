@@ -12,8 +12,9 @@
 #   - its structure is a list of simple commands joined by `&&`, `||`, `;`, a
 #     newline or a pipe, with no background `&`, no redirect other than one that
 #     discards or duplicates a stream (`2>&1`, `2>/dev/null`), no substitution,
-#     no expansion (a backtick, a glob, a brace list, any `$` but `$?` and a
-#     variable an earlier segment assigned a literal), no subshell, no
+#     no expansion (a backtick, a glob, a brace list, any `$` but `$?` outside a
+#     git segment and a variable an earlier always-run segment assigned a
+#     literal), no subshell, no
 #     backslash and no comment outside single quotes. `git commit -F -` may read
 #     a heredoc whose delimiter is quoted, so its body never expands;
 #   - at least one segment begins with the bare word `git`, and every other
@@ -200,8 +201,8 @@ checkout_names_pathspec() {
 
 # main_branch_rule_matches: 0 when the segment must not be approved on a branch
 # question: a commit-creating subcommand from main or master (or from a branch
-# an earlier checkout, switch or symbolic-ref segment of this command may have
-# changed, since HEAD is read once before any segment runs), a push whose
+# an earlier checkout, switch, symbolic-ref or settings-rule segment of this
+# command may have changed, since HEAD is read once before any segment runs), a push whose
 # refspec names main as source or destination, a hard reset that moves HEAD, or
 # a fetch or pull refspec or --refmap, whose destination can force-move local
 # main, or, from main, a reset or a pull naming a branch, which moves it onto
@@ -366,7 +367,7 @@ for segment_index in "${!segments[@]}"; do
       [ "$segment_runs_program" -eq 0 ] || branch_may_have_changed=1
       continue ;;
   esac
-  # `$?` reads as text to the git word parser; a git segment never carries it.
+  # `$?` reads as text to the git word parser, so a git segment carrying it falls through.
   case "$segment" in *'$?'*) exit 0 ;; esac
   parse_git_globals "$segment"
   [ -n "$git_subcommand" ] || exit 0
@@ -388,7 +389,7 @@ jq -n '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "allow",
-    permissionDecisionReason: "classify-git-command.sh: every segment is a listed git command in this repository"
+    permissionDecisionReason: "classify-git-command.sh: every git segment is a listed git command in this repository and every other segment an approved program"
   }
 }'
 exit 0
