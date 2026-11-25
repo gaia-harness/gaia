@@ -100,6 +100,8 @@ const RUNTIME_PREFIXES = ['.gaia/local/'] as const;
  * checkout that has never recorded an update decision lacks it too.
  * `.gaia/value-sets.json` is the duplicate value-set check's optional
  * exclusion config, which an adopter writes and commits and GAIA never ships.
+ * `.gaia/flow-runners.json` is the optional flow runner registry, likewise the
+ * adopter's to write; GAIA's own copy is release-excluded.
  *
  * `release/runtime-deps.ts` derives its own scan set from this one, adding
  * `manifest.ts`'s git-tracked sentinels, which are present on disk here and so
@@ -107,6 +109,7 @@ const RUNTIME_PREFIXES = ['.gaia/local/'] as const;
  * here only; a git-tracked one belongs only in `manifest.ts`.
  */
 export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
+  '.gaia/flow-runners.json',
   '.gaia/project.json',
   '.gaia/update-decisions.json',
   '.gaia/value-sets.json',

@@ -33,7 +33,7 @@ flows:
     covers: [<folder relative to the frontend package root>, ...]
   # Command flow: test_path is the repo-root-relative path of a test a flow
   # runner runs (.gaia/scripts/spec/flow-runners-lib.sh: a .bats or Vitest
-  # test, or a runner registered in .gaia/flow-runners.json); covers and
+  # test, or a path a runner in .gaia/flow-runners.json registers); covers and
   # @covers apply to web flows only.
   - flow_id: FLOW-NNN
     slug: <kebab-case-slug>

@@ -254,7 +254,7 @@ if [ -z "$flow_lines" ]; then
     runner_error=$(flow_runners_for_path "$script_directory/../../.." "$flow_target" 2>&1 >/dev/null) || runner_status=$?
     case "$runner_status" in
       0) ;;
-      1) add_finding "unrunnable_test_path" "flow $flow_id has test_path $flow_target, which no flow runner runs: use a .bats or Vitest test, or a runner registered in .gaia/flow-runners.json" "frontmatter.flows.$flow_id.test_path" ;;
+      1) add_finding "unrunnable_test_path" "flow $flow_id: ${runner_error#flow-runners: }" "frontmatter.flows.$flow_id.test_path" ;;
       *) add_finding "flow_runners_unreadable" "${runner_error#flow-runners: }" "frontmatter.flows.$flow_id.test_path" ;;
     esac
   done <<<"$flow_rows"

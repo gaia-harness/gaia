@@ -901,7 +901,7 @@ SECURITY_TEST_LINE='- Test (task-one:AC1, unit, access): apps/web/app/utils/guar
   spec_fixture
   run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
   [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -qxF 'plan-verify: FLOW-902: no flow runner runs .gaia/tests/probe/expectations.json' || { echo "$output" >&2; return 1; }
+  printf '%s\n' "$output" | grep -qxF 'plan-verify: FLOW-902: no flow runner runs .gaia/tests/probe/expectations.json: use a .bats or Vitest test, or a runner registered in .gaia/flow-runners.json' || { echo "$output" >&2; return 1; }
 
   # a registry that is not an array of entries
   printf '%s\n' '{"name": "probe"}' >"$registry"

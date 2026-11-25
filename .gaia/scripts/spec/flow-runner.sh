@@ -21,10 +21,7 @@ fi
 row=$(flow_runners_for_path "$script_directory/../../.." "$1")
 case $? in
   0) ;;
-  1)
-    printf 'flow-runner: no flow runner runs %s: use a .bats or Vitest test, or register its runner in .gaia/flow-runners.json\n' "$1" >&2
-    exit 1
-    ;;
+  1) exit 1 ;;
   *) exit 2 ;;
 esac
 IFS=$'\t' read -r _ _ run _ <<<"$row"

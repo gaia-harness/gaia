@@ -18,11 +18,13 @@
 #   names_path  optional boolean, default true: the gate line must also hold
 #               the test file's basename. Set it false only for a runner whose
 #               command selects its test itself, such as one fixed table.
-# No string may hold a tab or a newline. A malformed registry, or a missing
-# jq, makes every function return 2 with one `flow-runners:` line on stderr.
+# No string may hold a tab, newline or carriage return. A missing jq makes
+# every function return 2, and so does a malformed registry, except that
+# flow_runners_line_runs never reads the registry for a web flow; each prints
+# one `flow-runners:` line on stderr.
 #
 # A web flow is always the Playwright spec; its gate line must hold the test
-# file's basename and any built-in command.
+# file's basename and one built-in runner's command.
 #
 # Bash 3.2 compatible; BSD and GNU tools.
 
@@ -42,18 +44,21 @@ _FLOW_RUNNERS_BUILTIN='[
    "run": "pnpm -C <owning package> test --run <package-relative path>"}
 ]'
 
+_flow_runners_require_jq() {
+  command -v jq >/dev/null 2>&1 && return 0
+  printf 'flow-runners: jq is required to read the flow runner table. Next step: install jq.\n' >&2
+  return 2
+}
+
 # Prints one TSV row per runner that a command flow can resolve to, registry
 # entries first: name, names_path (1 or 0), run, paths and commands (each
 # \037-joined). Playwright has no paths: it runs web flows only.
 _flow_runners_rows() {
-  local repo_root="${1:-}" registry="${1:-}/.gaia/flow-runners.json" registry_json='[]' rows
-  command -v jq >/dev/null 2>&1 || {
-    printf 'flow-runners: jq is required to read the flow runner table. Next step: install jq.\n' >&2
-    return 2
-  }
+  local registry="${1:-}/.gaia/flow-runners.json" registry_json='[]' rows
+  _flow_runners_require_jq || return 2
   if [ -f "$registry" ]; then
     registry_json=$(cat "$registry") || {
-      printf 'flow-runners: cannot read %s\n' "$registry" >&2
+      printf 'flow-runners: cannot read .gaia/flow-runners.json\n' >&2
       return 2
     }
   fi
@@ -73,7 +78,7 @@ _flow_runners_rows() {
            (.paths | join("\u001f")), ([.command] | flatten | join("\u001f"))]
         | @tsv
       end' 2>/dev/null) || {
-    printf 'flow-runners: %s is not a JSON array of runner entries (name, paths, command, run, optional names_path); see .gaia/scripts/spec/flow-runners-lib.sh\n' "$registry" >&2
+    printf 'flow-runners: .gaia/flow-runners.json is not a JSON array of runner entries (name, paths, command, run, optional names_path); see .gaia/scripts/spec/flow-runners-lib.sh\n' >&2
     return 2
   }
   printf '%s\n' "$rows"
@@ -81,7 +86,7 @@ _flow_runners_rows() {
 
 # flow_runners_for_path <repo root> <test_path>: prints the flow's runner as one
 # TSV row: name, names_path, run, commands (\037-joined). Status 1 when no
-# runner's glob matches, 2 on an unreadable table.
+# runner's glob matches (stderr says so), 2 on an unreadable table.
 flow_runners_for_path() {
   local test_path="${2:-}" rows name names_path run paths commands glob
   local -a globs
@@ -97,6 +102,7 @@ flow_runners_for_path() {
       fi
     done
   done <<<"$rows"
+  printf 'flow-runners: no flow runner runs %s: use a .bats or Vitest test, or a runner registered in .gaia/flow-runners.json\n' "$test_path" >&2
   return 1
 }
 
@@ -110,20 +116,10 @@ flow_runners_line_runs() {
   local -a command_list
   base_name=$(basename "$test_path")
   if [ "$kind" = web ]; then
-    commands=$(jq -r '[.[].command] | flatten | join("\u001f")' <<<"$_FLOW_RUNNERS_BUILTIN" 2>/dev/null) || {
-      printf 'flow-runners: jq is required to read the flow runner table. Next step: install jq.\n' >&2
-      return 2
-    }
+    _flow_runners_require_jq || return 2
+    commands=$(jq -r '[.[].command] | flatten | join("\u001f")' <<<"$_FLOW_RUNNERS_BUILTIN")
   else
-    row=$(flow_runners_for_path "$repo_root" "$test_path")
-    case $? in
-      0) ;;
-      1)
-        printf 'flow-runners: no flow runner runs %s\n' "$test_path" >&2
-        return 2
-        ;;
-      *) return 2 ;;
-    esac
+    row=$(flow_runners_for_path "$repo_root" "$test_path") || return 2
     IFS=$'\t' read -r _ names_path _ commands <<<"$row"
   fi
   IFS=$'\037' read -r -a command_list <<<"$commands"
@@ -135,7 +131,7 @@ flow_runners_line_runs() {
       case "$entry_line" in *"$command_text"*) return 0 ;; esac
     done
   done <<<"$entry_text"
-  want=$(printf '%s\n' ${command_list[@]+"${command_list[@]}"} | paste -sd, - | sed 's/,/, /g')
+  want="${commands//$'\037'/, }"
   if [ "$names_path" = 1 ]; then
     printf 'no line holds %s with a runner (%s)\n' "$base_name" "$want"
   else

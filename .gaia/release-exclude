@@ -233,7 +233,7 @@ apps/web/test/storybook-default-locale.test.tsx
 # manifest is derived by skipping what this file excludes, so the folder's
 # absence from `.gaia/manifest.json` is a consequence of this line.
 .gaia/codify-declines
-# The flow runner registry here registers only the Claude probe under .gaia/tests, excluded above. An adopter's own registry is theirs; absent, the built-in runners apply.
+# The flow runner registry here registers only the Claude probe under .gaia/tests, excluded above. Without one, an adopter gets the built-in runners.
 .gaia/flow-runners.json
 # Runs bats under bash 5. Every .bats suite it runs is release-excluded and every shipped mention sits in a maintainer-only block the bundle scrub strips, so it serves only maintainer test runs.
 .gaia/scripts/bats5.sh
