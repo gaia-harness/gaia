@@ -25237,6 +25237,7 @@ var registrySchema = external_exports.array(registryEntrySchema);
 
 // src/wiki/dead-paths.ts
 var ADOPTER_OWNED_SENTINELS2 = /* @__PURE__ */ new Set([
+  ".gaia/flow-runners.json",
   ".gaia/project.json",
   ".gaia/update-decisions.json",
   ".gaia/value-sets.json"

@@ -25,6 +25,9 @@
 #   - spec_id matches SPEC-NNN
 #   - flows validate through flows-lib.sh: a uats: key, a missing flows: key, or a
 #     malformed flow is refused, each under the finding code flows-lib reports
+#   - a command flow's test_path matches a runner's paths glob in the flow-runners-lib.sh table
+#     (finding code unrunnable_test_path, or flow_runners_unreadable when the
+#     runner table cannot be read)
 #   - a ## Behaviors section holds at least one behavior outside a code fence
 #     (finding code missing_behaviors) and
 #     parses through behaviors.mjs (finding code invalid_behavior, one per problem)
@@ -48,6 +51,8 @@ spec_file="$1"
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # shellcheck source=.gaia/scripts/spec/flows-lib.sh
 source "$script_directory/flows-lib.sh"
+# shellcheck source=.gaia/scripts/spec/flow-runners-lib.sh
+source "$script_directory/flow-runners-lib.sh"
 
 if [ ! -f "$spec_file" ]; then
   echo "lint.sh: file not found: $spec_file" >&2
@@ -239,6 +244,21 @@ while IFS=$'\t' read -r flow_code flow_message flow_location; do
   [ -n "$flow_code" ] || continue
   add_finding "$flow_code" "$flow_message" "$flow_location"
 done <<<"$flow_lines"
+
+# --- Flow runners: flow-runners-lib.sh owns which runner runs a command flow's test ---
+if [ -z "$flow_lines" ]; then
+  flow_rows=$(flows_lib_parse_spec "$spec_file" 2>/dev/null) || flow_rows=''
+  while IFS=$'\t' read -r flow_id _ _ _ flow_kind flow_target; do
+    [ "$flow_kind" = command ] || continue
+    runner_status=0
+    runner_error=$(flow_runners_for_path "$script_directory/../../.." "$flow_target" 2>&1 >/dev/null) || runner_status=$?
+    case "$runner_status" in
+      0) ;;
+      1) add_finding "unrunnable_test_path" "flow $flow_id: ${runner_error#flow-runners: }" "frontmatter.flows.$flow_id.test_path" ;;
+      *) add_finding "flow_runners_unreadable" "${runner_error#flow-runners: }" "frontmatter.flows.$flow_id.test_path" ;;
+    esac
+  done <<<"$flow_rows"
+fi
 
 # --- Behaviors check: behaviors.mjs owns the section's shape ---
 behavior_status=0
