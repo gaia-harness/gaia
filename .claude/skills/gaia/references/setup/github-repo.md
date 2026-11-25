@@ -142,7 +142,7 @@ On `CLEAR`, return to the option. On `PLACEHOLDER`, read the authenticated login
 gh api user --jq .login 2>/dev/null
 ```
 
-Then ask (AskUserQuestion) `.github/CODEOWNERS still has the placeholder owner. Who owns this repository?`, header `CODEOWNERS`. When it printed a login, offer `@<login> (Recommended)`, described as `your authenticated GitHub login`, and `Keep the placeholder`; a different handle arrives through the tool's Other. When it printed nothing, ask for the handle as a plain chat message instead, since a handle is free text, and a reply of `keep` keeps the placeholder. Never guess a handle.
+Then ask (AskUserQuestion) `.github/CODEOWNERS still has the placeholder owner. Who owns this repository?`, header `CODEOWNERS`. When it printed a login, offer `@<login> (Recommended)`, described as `your authenticated GitHub login`, and `Keep the placeholder`; a different handle arrives through the tool's Other. When it printed nothing, ask for the handle as a plain chat message instead, since a handle is free text, and a reply of `keep` keeps the placeholder; unattended, keep the placeholder. Never guess a handle.
 
 On `Keep the placeholder`, print `.github/CODEOWNERS keeps its placeholder owner; set it before teammates rely on code-owner reviews.` and return to the option. On a handle, write and commit it in three separate Bash calls, the same main-branch hook standdown `land-decisions.md` uses. First:
 

@@ -11,9 +11,11 @@
 # --root names the checkout to read, default the one holding the working
 # directory; plans and run folders are read from its main checkout.
 #
-# pick walks the first three tiers in order and prints one JSON object:
+# pick walks the first four tiers in order and prints one JSON object:
 #   {"job":"plan","plan_dir":<abs>,"branch":<b>,...}  a plan whose RUNNING sentinel stands
 #   {"job":"pr","pr":<n>,"branch":<b>,...}            an open PR you authored whose branch is local
+#   {"job":"debt-resume","issue":<n>,"branch":<b>,...} a claimed debt fix whose local branch has no PR
+#                                                      (debt-stuck-fixes.sh owns the rule)
 #   {"job":"spec","spec":<id>,...}                     the first draft spec
 #   {"job":"backlog",...}                              none: read the debt backlog, then run `debt`
 # debt takes the ordered backlog (the ordering command in
@@ -226,7 +228,7 @@ running_plans() {
 }
 
 pick() {
-  local plans plan_directory branch reason hit plan_branches="" prs number spec item holder
+  local plans plan_directory branch reason hit plan_branches="" prs number spec item holder stuck issue_body_file
   read_park_marker_name
   plans="$(running_plans)" || next_fail "cannot list the notebook's plan folders"
   while IFS=$'\t' read -r plan_directory branch; do
@@ -280,6 +282,37 @@ pick() {
     answer "$(jq -cn --argjson pr "$number" --arg branch "$branch" --arg parked "$reason" \
       '{job: "pr", pr: $pr, branch: $branch} + (if $parked == "" then {} else {parked: $parked} end)')"
   done <<<"$prs"
+
+  # A debt fix that stopped before its pull request opened is no plan and no PR,
+  # and the backlog pass excludes its claimed issue, so no other tier finds it.
+  stuck="$(cd "$tree_root" && bash "$NEXT_SCRIPT_DIRECTORY/debt-stuck-fixes.sh" --dir "$tree_root")" ||
+    next_fail "cannot read the stopped debt fixes"
+  while IFS=$'\t' read -r number branch; do
+    [ -n "$number" ] || continue
+    item="debt fix #$number"
+    if holder="$(foreign_session_pid "$branch")"; then
+      skip "$item" "its worktree is locked by a live Claude session (pid $holder)"
+      continue
+    fi
+    reason="$(parked_reason "$branch")" || reason=""
+    if [ "$autonomous" = 1 ] && [ -n "$reason" ]; then
+      skip "$item" "parked ($reason)"
+      continue
+    fi
+    if [ "$autonomous" = 1 ]; then
+      issue_body_file="$(mktemp "${TMPDIR:-/tmp}/gaia-next.XXXXXX")" || next_fail "cannot create a temporary file"
+      (cd "$tree_root" && gh issue view "$number" --json body --jq '.body // ""') > "$issue_body_file" ||
+        { rm -f "$issue_body_file"; next_fail "cannot read issue #$number"; }
+      hit="$(protected_path_named "$issue_body_file")" || hit=""
+      rm -f "$issue_body_file"
+      if [ -n "$hit" ]; then
+        skip "$item" "names $hit in the protected set"
+        continue
+      fi
+    fi
+    answer "$(jq -cn --argjson issue "$number" --arg branch "$branch" --arg parked "$reason" \
+      '{job: "debt-resume", issue: $issue, branch: $branch} + (if $parked == "" then {} else {parked: $parked} end)')"
+  done <<<"$stuck"
 
   # The allocator's stderr (its refusal reason, or the one-time notebook move
   # command) is left unsilenced so it reaches the operator. Under autonomy the

@@ -41,6 +41,7 @@ ENFORCEMENT_PATHS=(
   '.claude/settings.json'                     # hook registrations and env knobs
   '.claude/settings.local.json'               # machine-local overrides of the same
   '.claude/hooks/audit-loop-ask-grant.sh'     # records the human's AskUserQuestion answer
+  '.claude/hooks/autonomy-gate.sh'            # parks a human-only question and denies a protected edit while the switch is live
   '.gaia/scripts/context-checkpoint-lib.sh'   # shared context threshold and bands
   '.gaia/scripts/audit-dispositions-check.sh' # deterministic dispositions check
   '.gaia/scripts/audit-dispositions-grade-lib.sh'    # the dispositions grading program, lookups and outcome check
