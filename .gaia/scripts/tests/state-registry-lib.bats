@@ -165,9 +165,9 @@ expect_recognizes() {
 @test "gaia_registry_linkable_paths: prints exactly the shared local paths, each by name, never a per-tree or notebook row" {
   run_in_registry_repo gaia_registry_linkable_paths
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 20 ]
+  [ "${#lines[@]}" -eq 21 ]
   local expected_path
-  for expected_path in setup-state.json cache/shared/context cache cache/shared protected \
+  for expected_path in setup-state.json cache/shared/context cache/shared/rate-limits cache cache/shared protected \
     settings.json audit audit/light telemetry telemetry/usage-sweep.lock.d debt codify runs \
     ports ports/tombstones ports/launches ports/sessions kept-worktrees.tsv worktree-occupancy fitness; do
     grep -qxF -- "$expected_path" <<<"$output" || { echo "missing: $expected_path"; return 1; }
@@ -465,9 +465,8 @@ expected_retention_table() {
   cat <<'TABLE'
 setup-state keep - - - - -
 context-readings age 7 - - file *.json,*.json.tmp.*
+rate-limits-readings age 7 - - file *.json,*.json.tmp.*
 cache-shared-orphan-temps age 7 - - file -
-rate-limits-reading owned - - - - -
-rate-limits-orphan-temps age 7 - - file -
 cache-shared owned - - - - -
 state-reaper-state owned - - - - -
 checkpoint-override keep - - - - -

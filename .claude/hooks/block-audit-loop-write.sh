@@ -7,7 +7,9 @@
 #     protected/audit-loop/                             state: history + allowance
 #     protected/checkpoint-override.json                the per-machine override
 #   <main>/.gaia/local/cache/shared/context/            per-session context readings
-#   <main>/.gaia/local/cache/shared/rate-limits.json    the shared rate-limit reading
+#   <main>/.gaia/local/cache/shared/rate-limits/        per-session rate-limit readings
+#   <main>/.gaia/local/cache/rate-limit-checkpoint/     per-session checkpoint markers
+#   (and the legacy cache/shared/rate-limits.json)
 # The protected folder is guarded as a whole, so a file added to it later is
 # protected by its placement, with no edit to this guard.
 #
@@ -21,10 +23,12 @@
 # checkpoint is answered by the pinned AskUserQuestion or by a human typing
 # `audit-grant <n>` or `audit-accept`; both reach the state through a hook,
 # never a tool call.
-# The dispatch checkpoint trusts the shared rate-limit reading (the statusline
-# writes it through the CLI's library), so Claude writing it, or running the
-# CLI's write verb, would forge the figure every session acts on. That arm lives
-# in lib/rate-limits-guard.sh, sourced below.
+# The dispatch checkpoint trusts each session's rate-limit reading (the
+# statusline writes it through the CLI's library) and its marker, and the 7-day
+# bands trust the plan tier in the account profile, so Claude writing a reading
+# or a marker, running the CLI's write verb, or changing the tier would forge
+# the figure the checkpoint acts on. That arm lives in lib/rate-limits-guard.sh,
+# sourced below.
 # The recorders read a hook payload on stdin, so a forged payload piped to one
 # from Bash would mint an answer: this guard denies executing them. The writer
 # hooks and the statusline run as their own processes, so they are not subject
@@ -41,7 +45,9 @@
 #     checkout resolves to the real directory. Denied when the result is
 #     <main>/.gaia/local/protected or lies inside it, or lies inside
 #     <main>/.gaia/local/cache/shared/context/, or is
-#     <main>/.gaia/local/cache/shared/rate-limits.json (<main> from
+#     <main>/.gaia/local/cache/shared/rate-limits or
+#     <main>/.gaia/local/cache/rate-limit-checkpoint, or lies inside either
+#     (<main> from
 #     gaia_resolve_main_root of the payload cwd), or when the literal path
 #     contains or ends in one of those spellings (catches a worktree spelling
 #     whose symlink target cannot be resolved). A sibling inside the folder
@@ -52,9 +58,12 @@
 #     remit.
 #   Bash / Monitor: .tool_input.command. Cheap pre-filter first: allowed unless
 #     the payload contains `audit-loop`, `local/protected` or
-#     `cache/shared/context`, `cache/shared/rate-limits.json`,
-#     `rate-limits-lib.sh`, or `rate-limits.sh` with `write` after it (never a
-#     bare `rate-limits`, so a read arms nothing). For the protected folder the command must name
+#     `cache/shared/context`, `cache/shared/rate-limits` (slashless, so it also
+#     arms the legacy file and the folder spelled with no trailing slash),
+#     `cache/rate-limit-checkpoint`, `organizationRateLimitTier`,
+#     `rate-limits-lib.sh`, `CLAUDE_CONFIG_DIR` followed by `rate-limits.sh`, or
+#     `rate-limits.sh` with `write` after it (never a bare `rate-limits`, so a
+#     read arms nothing). For the protected folder the command must name
 #     `.gaia/local/protected` followed by a slash, a delimiter or the end of
 #     the command: a path segment that merely starts with `protected` (a
 #     sibling such as `.gaia/local/protected-notes.md`) does not arm it. The
@@ -97,14 +106,23 @@
 #     state-reaper-session-start.sh. Naming them stays allowed, and so does
 #     running a bats suite whose path merely contains `state-reaper`, since the
 #     suite path is not one of those four file names.
-#   Shared rate-limit reading: the same quote-aware reading and unsound-reading
-#     fallback denies a command that redirects into the file or runs a write,
-#     move or delete verb over it (`>`, `rm`, `mv`, `cp`, `tee`, `ln`, `sed -i`
-#     and the like), and a command that EXECUTES `rate-limits.sh` with `write`
+#   Rate-limit readings and markers: the same quote-aware reading and
+#     unsound-reading fallback denies a command that redirects into a reading,
+#     a marker, either folder or the legacy file, or runs a write, move or
+#     delete verb over one (`>`, `rm`, `mv`, `cp`, `tee`, `ln`, `sed -i`
+#     and the like, including `rm -rf` of either folder with or without a
+#     trailing slash), and a command that EXECUTES `rate-limits.sh` with `write`
 #     as its first argument (command word, or the script argument of bash, sh,
 #     zsh, dash, ksh, `source`, `.` or `exec`; quoted or not). `rate-limits.sh
-#     read`, `cat` and `jq .` of the file, and `git add`, `git diff`,
+#     read`, `cat` and `jq .` of a reading, and `git add`, `git diff`,
 #     `shellcheck` or `bash -n` naming either script stay allowed.
+#   Plan tier: an Edit, Write or MultiEdit of a `.claude.json` whose new text
+#     (`content`, `new_string`, any `edits[].new_string`) names
+#     `organizationRateLimitTier`, and a command that writes a `.claude.json`
+#     and names it, are denied; a command that sets CLAUDE_CONFIG_DIR (prefix,
+#     `export`, `env`) and names `rate-limits.sh` is denied, since the CLI would
+#     read another folder's profile. A read-only jq of the tier, and an edit of
+#     `.claude.json` that does not name it, stay allowed.
 #
 # WHAT IS NOT COVERED (exotic spellings, outside the guarantee): a `cd` into a
 # guarded directory followed by relative names; `eval`, `bash -c`, `env`,
@@ -136,7 +154,7 @@
 # .gaia/scripts/context-checkpoint-lib.sh and calling gaia_context_write, directly or
 # through a wrapper such as .gaia/statusline/context-reading.sh's
 # gaia_statusline_write_context (such a reading stands until the next real
-# statusline render overwrites it). The shared rate-limit reading has the same
+# statusline render overwrites it). A rate-limit reading has the same
 # residuals: a crafted payload piped into .gaia/statusline/gaia-statusline.sh,
 # sourcing .gaia/scripts/rate-limits-lib.sh and calling its writer (directly or
 # through .gaia/statusline/rate-limits-reading.sh), and a write spelled through
@@ -174,7 +192,7 @@ fi
 # a payload without any is outside the remit with no
 # jq read at all. This is the path every ordinary Bash call takes.
 case "$payload" in
-  *audit-loop* | *state-reaper* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits.json* | *rate-limits-lib.sh* | *rate-limits.sh*write*) ;;
+  *audit-loop* | *state-reaper* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits* | *cache/rate-limit-checkpoint* | *organizationRateLimitTier* | *CLAUDE_CONFIG_DIR*rate-limits.sh* | *rate-limits-lib.sh* | *rate-limits.sh*write*) ;;
   *) exit 0 ;;
 esac
 
@@ -187,7 +205,7 @@ if ! type gaia_require_jq >/dev/null 2>&1; then
   printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/jq-availability.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
-gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits.json' 'rate-limits-lib.sh' 'rate-limits.sh write'
+gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits' 'cache/rate-limit-checkpoint' 'organizationRateLimitTier' 'CLAUDE_CONFIG_DIR' 'rate-limits-lib.sh' 'rate-limits.sh write'
 
 set +e
 # shellcheck source=lib/hook-payload.sh
@@ -233,7 +251,7 @@ fi
 
 DENY_BASH_TRIGGER="Trigger: the command names that path and either redirects into it or carries a write, move or delete verb (rm, mv, cp, tee, ln, touch, sed -i, an interpreter given -c or -e, and the like) outside quotes; in a command holding a heredoc, an unclosed quote, a command substitution inside double quotes, or a redirect target built from a variable or a glob, any redirect or such verb anywhere counts. A command that names the path only as quoted text and redirects elsewhere is allowed, so stage a note that mentions it with printf and a quoted string, no heredoc, or leave the literal path out of the command."
 
-# deny <state|override|folder|context|recorder|reaper|rate-limits> [bash]
+# deny <state|override|folder|context|recorder|reaper|rate-limits|rate-limits-tier> [bash]
 deny() {
   local message
   case "$1" in
@@ -243,6 +261,7 @@ deny() {
     recorder) message="$DENY_RECORDER_MESSAGE" ;;
     reaper) message="$DENY_REAPER_MESSAGE" ;;
     rate-limits) message="$DENY_RATE_LIMITS_MESSAGE" ;;
+    rate-limits-tier) message="$DENY_RATE_LIMITS_TIER_MESSAGE" ;;
     *) message="$DENY_STATE_MESSAGE" ;;
   esac
   [ "${2-}" != bash ] || message="$message $DENY_BASH_TRIGGER"
@@ -300,6 +319,7 @@ case "$tool_name" in
     class=$(guarded_class "$resolved")
     [ -z "$class" ] || deny "$class"
     ! gaia_rate_limits_guard_path "$file_path" "$resolved" || deny rate-limits
+    ! gaia_rate_limits_guard_edits_tier "$file_path" "$resolved" "$payload" || deny rate-limits-tier
     exit 0
     ;;
 
@@ -330,6 +350,9 @@ case "$tool_name" in
     fi
     if gaia_rate_limits_guard_runs_write "$command_line" || gaia_rate_limits_guard_writes_file "$command_line"; then
       deny rate-limits bash
+    fi
+    if gaia_rate_limits_guard_sets_config_dir "$command_line" || gaia_rate_limits_guard_writes_tier "$command_line"; then
+      deny rate-limits-tier bash
     fi
     exit 0
     ;;
