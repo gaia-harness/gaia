@@ -16,11 +16,11 @@ tags: [concepts, autonomy, commands]
 
 1. **A running plan**: a plan folder whose `RUNNING` sentinel stands. The plan's own `KICKOFF.md` resumes it.
 2. **An open pull request** you authored whose branch exists in this clone, unless a running plan owns the branch. Tending it means fixing failing checks and acting on review comments, then driving it through [[PR Merge Workflow]].
-3. **A stopped debt fix**: a claimed issue whose local debt branch has no open pull request, as `.gaia/scripts/debt-stuck-fixes.sh` reports it. `/gaia-debt <n>` resumes the branch (`.claude/skills/gaia/references/debt/resume.md`).
+3. **A stopped debt fix**: a claimed issue whose local debt branch has never had a pull request (a closed one counts), as `.gaia/scripts/debt-stuck-fixes.sh` reports it. `/gaia-debt <n>` resumes the branch (`.claude/skills/gaia/references/debt/resume.md`). Only a branch that exists locally is offered: a fix whose branch exists only on the remote is not, and its claim stays until a human releases it or checks the branch out.
 4. **A draft spec**: interactive runs only. Under autonomy it is skipped, because spec interview answers are requirements and the question gate would take the recommended answer for each with no human approving them.
 5. **The top tech-debt issue**, from `/gaia-debt`'s own ordering and backlog pass, run as `/gaia-debt <n>`.
 
-Each job resumes from its own saved state (the plan's `PROGRESS.md`, the branch and its audit state, the spec's draft cache), so a stopped plan, pull request, debt fix or draft spec is picked up by the next run. The stopped debt fix has a tier of its own because the backlog pass excludes its `in-progress` issue and, while the fix branch exists, the stale-claim reconcile counts the claim live and never releases it.
+Each job resumes from its own saved state (the plan's `PROGRESS.md`, the branch and its audit state, the spec's draft cache), so a stopped plan, pull request, debt fix (with a local branch) or draft spec is picked up by the next run. The stopped debt fix has a tier of its own because the backlog pass excludes its `in-progress` issue and, while the fix branch exists, the stale-claim reconcile counts the claim live and never releases it.
 
 ## Skips under autonomy
 

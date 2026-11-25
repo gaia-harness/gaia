@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # The stopped /gaia-debt fixes: prints `<issue>\t<branch>` for every local
-# debt branch that names a claimed issue and has no open pull request, one line
+# debt branch that names a claimed issue and never had a pull request, one line
 # per branch, and nothing else. It changes nothing; a caller resumes the branch
 # (.claude/skills/gaia/references/debt/resume.md) or offers it as a job
 # (.gaia/scripts/gaia-next.sh pick).
@@ -13,13 +13,15 @@
 #           and the issue is open, labelled `tech-debt` and `in-progress`
 #   local   the branch is a local branch: a remote-tracking ref alone cannot
 #           be re-entered from this clone
-#   no PR   no open pull request has the branch as its head
+#   no PR   no pull request in any state (open, closed or merged) has the branch
+#           as its head: a pull request a human closed unmerged is a rejection,
+#           and resuming it would reopen what they turned down
 # The issue printed is the lowest claimed member of the branch, or the one
 # --issue names.
 #
 # FAIL-CLOSED: when the claims, the pull requests or the branches cannot be
 # read, this prints nothing on stdout, names what failed on stderr, and exits
-# 3, so a caller never resumes a branch an open pull request already owns.
+# 3, so a caller never resumes a branch a pull request already owns or closed.
 #
 # Usage:
 #   bash .gaia/scripts/debt-stuck-fixes.sh [--dir <repo>] [--issue <number>]
@@ -90,7 +92,7 @@ claimed="$(printf '%s' "$claims" | jq -r '.[].number')" \
 if [ -n "$prs_file" ]; then
   prs="$(cat "$prs_file")" || die_input "cannot read $prs_file"
 else
-  prs="$(gh pr list --state open --limit 1000 --json headRefName)" \
+  prs="$(gh pr list --state all --limit 1000 --json headRefName)" \
     || die_input "gh pr list failed (auth, network, or rate limit)"
 fi
 printf '%s' "$prs" | jq -e 'type == "array"' >/dev/null 2>&1 \

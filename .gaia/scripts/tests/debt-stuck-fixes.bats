@@ -77,6 +77,19 @@ verdict() {
   [ "$status" -eq 3 ]
 }
 
+@test "the live pull-request read covers every state, so a branch whose pull request was closed unmerged is not stopped" {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'if [ "$1 $2" = "issue list" ]; then printf "[{\"number\":11}]"; exit 0; fi' \
+    'if [ "$1 $2" = "pr list" ]; then case "$*" in *"--state all"*) printf "[{\"headRefName\":\"debt/11-some-fix\"}]" ;; *) printf "[]" ;; esac; exit 0; fi' \
+    'exit 1' >"$BATS_TEST_TMPDIR/bin/gh"
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh"
+  printf 'debt/11-some-fix\n' >"$BATS_TEST_TMPDIR/branches"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --branches "$BATS_TEST_TMPDIR/branches"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "a usage error exits 2" {
   run --separate-stderr bash "$SCRIPT" --issue abc
   [ "$status" -eq 2 ]
