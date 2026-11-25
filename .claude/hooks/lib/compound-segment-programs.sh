@@ -227,7 +227,7 @@ non_git_segment_is_approved() {
     printf) case "${words[1]:-}" in -v*) return 1 ;; esac; return 0 ;;
     date) date_prints_time; return ;;
   esac
-  for entry in "${GAIA_READER_PROGRAMS[@]}"; do
+  for entry in ${GAIA_READER_PROGRAMS[@]+"${GAIA_READER_PROGRAMS[@]}"}; do
     name="${entry%%|*}"
     [ "$name" = "${words[0]}" ] || continue
     reader_is_approved "$entry"
