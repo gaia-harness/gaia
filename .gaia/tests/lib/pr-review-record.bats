@@ -114,6 +114,8 @@ del(.summary)|missing key: summary
 . + {notes: "x"}|unknown key: notes
 .line = "12"|line must be a positive integer or null
 .verified = "yes"|verified must be boolean
+.summary = null|summary must be a string
+.failure_scenario = 3|failure_scenario must be a string
 .file = "../x.sh"|file not in this PR: ../x.sh
 .file = "PR Body"|file not in this PR: PR Body
 EOF
@@ -247,9 +249,11 @@ EOF
   alf_add_round '["code-audit-frontend"]'
   alf_stamp 5 50
   alf_sidecar code-audit-frontend "$(alf_entries src/b.sh 1 1)" 51
-  record fixed --root "$ALF_ROOT" --id pr-1
+  record fixed --root "$ALF_ROOT" --id pr-1 --commit "$ALF_COMMIT"
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
   [ "$(recorded '.findings[0].fix_state')" = fixed ] || return 1
+  # The veto fix commit is a review fix commit, so the out-of-scope commit check does not see it as a stray.
+  [ "$(recorded '.review_fix_commits | index("'"$ALF_COMMIT"'") != null')" = true ] || return 1
   # A routed fix the owner disputes is dropped: undecided again, evidence recorded.
   record route-fix --root "$ALF_ROOT" --id pr-5
   [ "$status" -eq 0 ] || return 1
@@ -273,6 +277,22 @@ EOF
   [ "$status" -eq 0 ] || return 1
   [ "$output" = exists ] || return 1
   diff -r "$BATS_TEST_TMPDIR/run-before" "$RUN_FOLDER" || return 1
+}
+
+@test "open on an outcome-less record at a newer head refreshes the reviewed head and the changed-file list and keeps the attempts" {
+  review_folder reopen
+  open_review || return 1
+  record attempt-open
+  [ "$status" -eq 0 ] || return 1
+  HEAD_SHA="$(printf 'c%.0s' $(seq 1 40))"
+  printf 'src/a.sh\nsrc/new.sh\n' >"$BUNDLE/changed-files.txt"
+  write_meta true
+  run bash "$RECORD" open --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --pr 7 --head "$HEAD_SHA" --bundle "$BUNDLE"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = opened ] || return 1
+  [ "$(recorded '.reviewed_head')" = "$HEAD_SHA" ] || return 1
+  [ "$(recorded '.attempts | length')" -eq 1 ] || return 1
+  grep -qx 'src/new.sh' "$RUN_FOLDER/pr-review-changed-files.txt" || return 1
 }
 
 @test "a non-fix disposition is accepted only under its rule, accept-residual only after an interactive pr-review-accept line the grant hook records, never after a non-interactive one" {

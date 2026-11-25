@@ -95,6 +95,8 @@ else .[0]
       (select((.severity | IN("Critical", "Major", "Minor")) | not) | "severity must be Critical, Major or Minor"),
       (select((.line | type == "null" or (type == "number" and . == floor and . >= 1)) | not) | "line must be a positive integer or null"),
       (select((.verified | type) != "boolean") | "verified must be boolean"),
+      (select((.summary | type) != "string") | "summary must be a string"),
+      (select((.failure_scenario | type) != "string") | "failure_scenario must be a string"),
       (.file as $file | select(($file | type == "string"
           and ($file == "PR body" or ($changelog and $file == "CHANGELOG.md") or any($changed | split("\n")[]; . == $file))) | not)
         | "file not in this PR: \($file | if type == "string" then . else tojson end)")
@@ -299,7 +301,7 @@ cmd_fixed() {
   if [ "$route" = changelog ] || [ "$route" = human ]; then
     [ -n "$COMMIT" ] || refuse "$FINDING_ID: a $route fix needs --commit <sha>"
   fi
-  if [ -n "$COMMIT" ] && [ "$route" != veto ]; then
+  if [ -n "$COMMIT" ]; then
     full_commit="$(_gaia_loop_git -C "$ROOT" rev-parse --verify --quiet "$COMMIT^{commit}")" || die_usage "--commit is not a commit: $COMMIT"
   fi
   jq --arg id "$FINDING_ID" --arg commit "$full_commit" '

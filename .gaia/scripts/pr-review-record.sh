@@ -216,7 +216,18 @@ cmd_open() {
     if [ "$RETRY" -eq 1 ]; then
       [ "$outcome" = not-run ] || refuse "retry needs a not-run record"
     else
-      if [ "$outcome" != null ]; then printf 'exists\n'; else printf 'opened\n'; fi
+      if [ "$outcome" != null ]; then
+        printf 'exists\n'
+        return 0
+      fi
+      # An outcome-less record the head has moved past is reviewed at the new head:
+      # the attempts stay, the head and the changed-file list follow the bundle.
+      if [ "$(jq -r '.reviewed_head' "$RECORD_FILE")" != "$HEAD_SHA" ]; then
+        cp "$BUNDLE/changed-files.txt" "$CHANGED_FILES_COPY.tmp.$$" || die_usage "cannot copy the bundle's changed-file list"
+        mv -f "$CHANGED_FILES_COPY.tmp.$$" "$CHANGED_FILES_COPY"
+        jq --arg head "$HEAD_SHA" '.reviewed_head = $head' "$RECORD_FILE" | install_record
+      fi
+      printf 'opened\n'
       return 0
     fi
   elif [ "$RETRY" -eq 1 ]; then
