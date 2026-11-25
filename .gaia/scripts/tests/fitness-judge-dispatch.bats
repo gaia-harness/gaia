@@ -145,6 +145,8 @@ write_judge_input() {
   printf '{"scope":"adopter","findings":[],"inventory":[%s,%s]}\n' \
     "$(entry .claude/skills/a/SKILL.md skill adopter false)" \
     "$(entry .claude/skills/b/SKILL.md skill adopter false)" >"$report"
+  git -C "$project" init -q
+  git -C "$project" add .claude
   cd "$project"
   run write_judge_input "$PLAYBOOK" "$BATS_TEST_TMPDIR"
   [ "$status" -eq 0 ]
@@ -165,14 +167,24 @@ write_judge_input() {
   printf 'asks via AskUserQuestion\n' >"$project/.claude/skills/b/SKILL.md"
   printf 'wiki page using AskUserQuestion\n' >"$project/wiki/page.md"
   printf 'unrelated\n' >"$project/wiki/other.md"
+  mkdir -p "$project/.claude/skills/vendored" "$project/.claude/worktrees/other/.claude/skills/c" "$project/apps/web/.claude/rules"
+  printf 'vendored AskUserQuestion\n' >"$project/.claude/skills/vendored/SKILL.md"
+  printf 'sibling worktree AskUserQuestion\n' >"$project/.claude/worktrees/other/.claude/skills/c/SKILL.md"
+  printf 'app rule AskUserQuestion\n' >"$project/apps/web/.claude/rules/r.md"
+  git -C "$project" init -q
+  git -C "$project" add .claude/skills/a .claude/skills/b .claude/skills/vendored apps wiki
   report="$BATS_TEST_TMPDIR/check.json"
-  printf '{"scope":"adopter","findings":[],"inventory":[%s]}\n' \
-    "$(entry .claude/skills/a/SKILL.md skill adopter false)" >"$report"
+  printf '{"scope":"adopter","findings":[],"inventory":[%s,%s]}\n' \
+    "$(entry .claude/skills/a/SKILL.md skill adopter false)" \
+    "$(entry .claude/skills/vendored/SKILL.md skill third-party false)" >"$report"
   cd "$project"
   run write_judge_input "$PLAYBOOK" "$BATS_TEST_TMPDIR"
   [ "$status" -eq 0 ]
   run grep '^<<<GAIA-FITNESS-FILE-BEGIN ' "$BATS_TEST_TMPDIR/judge-input.md"
-  [ "${#lines[@]}" -eq 3 ]
+  [ "${#lines[@]}" -eq 4 ]
+  grep -qF 'FILE-BEGIN apps/web/.claude/rules/r.md' "$BATS_TEST_TMPDIR/judge-input.md"
+  grep -qF 'vendored' "$BATS_TEST_TMPDIR/judge-input.md" && return 1
+  grep -qF 'worktrees/other' "$BATS_TEST_TMPDIR/judge-input.md" && return 1
   grep -qF 'FILE-BEGIN wiki/page.md' "$BATS_TEST_TMPDIR/judge-input.md"
   grep -qF 'FILE-BEGIN .claude/skills/b/SKILL.md' "$BATS_TEST_TMPDIR/judge-input.md"
   grep -qF 'wiki/other.md' "$BATS_TEST_TMPDIR/judge-input.md" && return 1
