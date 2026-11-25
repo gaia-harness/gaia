@@ -45,7 +45,10 @@
 # also omits any member that has a full round in `members`, since that member
 # was not cleared by a quick review alone. It also adds a `review` object from
 # audit-code-review-record.sh publish-values (a missing record reads `no record`
-# once a round exists), and leaves the key out when that prints nothing.
+# once a round exists), and leaves the key out when that prints nothing. With a
+# recorded round it adds `budget_grants`, the units the autonomy budget spent on
+# the branch or its pull request (gaia_audit_budget_count), left out at zero;
+# `grants` counts human answers only.
 # Exit 0 ok, 2 usage or no recorded round (unit-window: no unit;
 # pinned-question: no pending pinned question), 4 detached HEAD, 5 corrupt
 # state, an unreadable vetoes.json, or a branch that is not keyable, 6 jq or
@@ -240,6 +243,8 @@ _GAIA_LOOP_EVAL_DIRECTORY="${BASH_SOURCE[0]%/*}"
 . "$_GAIA_LOOP_EVAL_DIRECTORY/audit-loop-round-lib.sh" || return 6 2>/dev/null || exit 6
 # shellcheck source=/dev/null
 . "$_GAIA_LOOP_EVAL_DIRECTORY/audit-loop-report-lib.sh" || return 6 2>/dev/null || exit 6
+# shellcheck source=/dev/null
+. "$_GAIA_LOOP_EVAL_DIRECTORY/audit-budget-lib.sh" || return 6 2>/dev/null || exit 6
 
 _GAIA_LOOP_CHECKPOINT_DEFAULT=6
 _GAIA_LOOP_GRANT_DEFAULT=3
@@ -252,7 +257,8 @@ _gaia_loop_usage() {
 }
 
 _gaia_loop_cli() {
-  local subcommand="${1-}" root="" round="" branch_key main file state exit_status used subcommand_output
+  local subcommand="${1-}" root="" round="" branch_key main file state exit_status used subcommand_output budget_key_line
+  local -a budget_keys
   [ $# -gt 0 ] && shift
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -329,6 +335,10 @@ _gaia_loop_cli() {
         members: (reduce .history.rounds[] as $round_entry ({}; reduce ($round_entry.members[]) as $member (.; .[$member] += [$round_entry.tree]))
                   | map_values(unique | length) | to_entries | sort_by(.key) | from_entries),
         grants: ([.allowance.answers[] | select(.kind == "grant")] | length)}')" || return 1
+      budget_keys=()
+      while IFS= read -r budget_key_line; do budget_keys+=("$budget_key_line"); done < <(gaia_audit_budget_keys "$state" "$branch_key")
+      subcommand_output="$(printf '%s' "$subcommand_output" | jq -c --argjson budget_grants "$(gaia_audit_budget_count "$main" ${budget_keys[@]+"${budget_keys[@]}"})" \
+        'if $budget_grants > 0 then . + {budget_grants: $budget_grants} else . end')" || return 1
       subcommand_output="$(_gaia_loop_with_review_counts "$root" "$subcommand_output")"
       _gaia_loop_with_review_object "$root" "$(gaia_loop_run_directory "$main" "$branch_key")" "$used" \
         "$(printf '%s' "$state" | jq -r '(.pr // 0) | if . > 0 then . else empty end')" "$subcommand_output"

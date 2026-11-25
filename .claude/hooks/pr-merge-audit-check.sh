@@ -206,6 +206,25 @@ if [ "$GAIA_VERB_ARM_KIND" = sep ]; then
 This gate armed on a \`gh pr merge\` that follows a separator or a substitution opener inside the command, not on the command's own first word, and it cannot tell a merge the shell runs from one only cited in text the command carries (a pull-request or issue body, a commit message). If this call runs no merge, pass that text from a file instead (\`--body-file\`, \`git commit -F\`), which the gate does not read; if it does run one, the steps above apply."
 fi
 
+# Unattended merge: the autonomy switch's may_merge, in its own sibling with
+# its own header. It must load and define its trap function, or the gate denies:
+# without it an unattended run could merge with no human and no log.
+_gate_unattended_file="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/pr-merge-audit-check-unattended.sh"
+_gate_unattended_failure=''
+if [ ! -f "$_gate_unattended_file" ]; then
+  _gate_unattended_failure='it is missing'
+else
+  # shellcheck source=/dev/null
+  . "$_gate_unattended_file"
+  type _gate_log_unattended_merge >/dev/null 2>&1 || _gate_unattended_failure='it did not define _gate_log_unattended_merge'
+fi
+if [ -n "$_gate_unattended_failure" ]; then
+  jq -n --arg reason "PR merge gate: cannot load the gate sibling '$_gate_unattended_file': $_gate_unattended_failure. Without it the gate cannot tell whether an unattended run is merging, so it denies. Restore it (it ships with the framework) and retry.${gate_arm_note}" '{
+    hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $reason}
+  }'
+  exit 0
+fi
+
 # Repo-scope: this gate enforces the home repo's audit contract only. A
 # `gh pr merge` aimed at a different repo (e.g. a sibling project merged via
 # `cd ../other && gh pr merge` or `gh pr merge -R owner/other`) has no bearing
