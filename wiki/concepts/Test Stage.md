@@ -25,7 +25,7 @@ The SPEC owns the requirements. Its `## Behaviors` section states each behavior 
 
 ## Checks
 
-`.gaia/scripts/spec/test-stage-check.mjs` is the deterministic floor: well-formed lines, ids the SPEC states, a test for every security, refusal and data-loss behavior and for every flow, and no two tests of one behavior at one layer. One review lens (`TST`) checks what a script cannot, that each listed test proves a behavior the SPEC states and that the cap holds. The lens dispatches through `.claude/skills/gaia/references/spec/lens-dispatch.md`.
+`.gaia/scripts/spec/test-stage-check.mjs` is the deterministic floor: well-formed lines, ids the SPEC states, a test for every security, refusal and data-loss behavior and for every flow, and no two tests of one behavior at one layer. One review lens (`TST`) checks what a script cannot, that each listed test proves a behavior the SPEC states and that the cap holds. It reads a script-written digest of the test lists first and opens other plan files on demand; when the digest is unavailable it reads the whole plan. The lens dispatches through `.claude/skills/gaia/references/spec/lens-dispatch.md`.
 
 ## Security tests
 

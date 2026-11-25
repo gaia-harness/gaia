@@ -12,13 +12,15 @@
 # needs, each on a line of its own (leading and trailing whitespace allowed,
 # nothing else), in the order the template places them (flow-checks only with
 # --spec). Every sentinel but post-merge-close is also checked verbatim: each
-# block's non-blank lines (trimmed) must equal the fenced block planner.md
-# holds, with the plan-directory and SPEC-path placeholders replaced by this
-# plan's absolute values, so a paraphrased or shortened copy cannot ship.
+# block's non-blank lines (trimmed) must equal the fenced block the orchestrator
+# template (orchestrator-template.md, the one block source the renderer also
+# reads) holds, with the plan-directory and SPEC-path placeholders replaced by
+# this plan's absolute values, so a paraphrased or shortened copy cannot ship.
+# A missing template fails once and skips the block checks.
 # Maintainer-only marker lines inside a block are compared like any other line,
-# so a plan matches the planner.md it was generated from, marked or stripped.
+# so a plan matches the template it was generated from, marked or stripped.
 # README.md, ORCHESTRATOR.md, KICKOFF.md and every task-*.md hold no literal
-# {PLAN_DIR}, {SPEC_PATH} or {AUDIT_PATH}; one failure line per hit.
+# {PLAN_DIR}, {SPEC_PATH}, {AUDIT_PATH} or {BRANCH_ID}; one failure line per hit.
 #
 # The test stage's record, <plan dir>/TEST-STAGE, decides what the test lines
 # owe (its first line reads status: running, ran or skipped; the test stage
@@ -50,6 +52,9 @@
 # Every failure is reported on stderr, one line each, in a single run. Exit
 # codes: 0 pass; 1 one or more failures; 2 usage error. Bash 3.2 compatible; BSD and GNU tools.
 set -uo pipefail
+# Literal substitution: an unquoted replacement under bash 5.2 would treat '&' as
+# the matched text. /bin/bash 3.2 has no such option.
+shopt -u patsub_replacement 2>/dev/null || true
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "$script_directory/../../.." && pwd)"
@@ -140,7 +145,7 @@ verbatim_sentinels=(
   '<!-- gaia:orchestrator-step code-audit -->'
   '<!-- gaia:orchestrator-step post-clearance -->'
 )
-planner_template="$script_directory/../../../.claude/skills/gaia/references/plan/planner.md"
+block_template="$script_directory/../../../.claude/skills/gaia/references/plan/orchestrator-template.md"
 
 if [ -f "$orchestrator" ]; then
   # first_lines[i] is the line number of the first line matching sentinels[i], or 0.
@@ -182,7 +187,7 @@ if [ -f "$orchestrator" ]; then
     index=$((index + 1))
   done
 
-  # Verbatim check of each listed block against planner.md's copy.
+  # Verbatim check of each listed block against the template's copy.
   case "$plan_directory" in
     /*) absolute_plan_directory="${plan_directory%/}" ;;
     *) absolute_plan_directory="$(cd "$plan_directory" && pwd)" ;;
@@ -191,7 +196,12 @@ if [ -f "$orchestrator" ]; then
   if [ -n "$spec_path" ]; then
     absolute_spec_path="$(cd "$(dirname "$spec_path")" && pwd)/$(basename "$spec_path")"
   fi
-  for verbatim_sentinel in ${verbatim_sentinels[@]+"${verbatim_sentinels[@]}"}; do
+  verbatim_list=(${verbatim_sentinels[@]+"${verbatim_sentinels[@]}"})
+  if [ ! -f "$block_template" ]; then
+    fail "the orchestrator template is missing: $block_template"
+    verbatim_list=()
+  fi
+  for verbatim_sentinel in ${verbatim_list[@]+"${verbatim_list[@]}"}; do
     block_found=0
     index=0
     while [ "$index" -lt "${#sentinels[@]}" ]; do
@@ -204,11 +214,11 @@ if [ -f "$orchestrator" ]; then
     block_name="${verbatim_sentinel#<!-- gaia:orchestrator-step }"
     block_name="${block_name% -->}"
     expected_lines=()
-    if [ -f "$planner_template" ]; then
+    if [ -f "$block_template" ]; then
       while IFS= read -r line; do
-        line="${line//\{PLAN_DIR\}/$absolute_plan_directory}"
+        line="${line//"{PLAN_DIR}"/$absolute_plan_directory}"
         if [ -n "$absolute_spec_path" ]; then
-          line="${line//\{SPEC_PATH\}/$absolute_spec_path}"
+          line="${line//"{SPEC_PATH}"/$absolute_spec_path}"
         fi
         expected_lines+=("$line")
       done < <(awk -v want="$verbatim_sentinel" '
@@ -218,10 +228,10 @@ if [ -f "$orchestrator" ]; then
           else { in_fence = 1; buffer = ""; hit = 0 }
           next
         }
-        in_fence { if (t == want) hit = 1; if (t != "") buffer = buffer t "\n" }' "$planner_template")
+        in_fence { if (t == want) hit = 1; if (t != "") buffer = buffer t "\n" }' "$block_template")
     fi
     if [ "${#expected_lines[@]}" -eq 0 ]; then
-      fail "planner.md holds no fenced $block_name block to check ORCHESTRATOR.md against: $planner_template"
+      fail "the orchestrator template holds no fenced $block_name block to check ORCHESTRATOR.md against: $block_template"
       continue
     fi
     actual_numbers=()
@@ -250,7 +260,7 @@ if [ -f "$orchestrator" ]; then
       index=$((index + 1))
     done
     if [ "$mismatch_line" -ne 0 ]; then
-      fail "ORCHESTRATOR.md:$mismatch_line: the $block_name block does not match planner.md's copy"
+      fail "ORCHESTRATOR.md:$mismatch_line: the $block_name block does not match the template's copy"
     fi
   done
 fi

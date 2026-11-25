@@ -16,8 +16,9 @@ There is no tier below Minor: what is worth reporting is Minor, what is not is n
 
 | Slot | Spec audit | Plan audit | Test stage |
 | --- | --- | --- | --- |
-| Artifact under audit (`<ARTIFACT>`) | the working draft at `<DRAFT_PATH>` (spec `<spec_id>`) | the plan in `<PLAN_DIR>`: `<PLAN_DIR>/README.md` plus every `<PLAN_DIR>/task-*.md` | the plan's task docs with their Test lines: every `<PLAN_DIR>/task-*.md` |
-| First Read | `<DRAFT_PATH>` | `<PLAN_DIR>/README.md` (the task graph and frozen interface contracts), then every `<PLAN_DIR>/task-*.md` | the SPEC's `## Behaviors`, then every `<PLAN_DIR>/task-*.md` |
+| Artifact under audit (`<ARTIFACT>`) | the working draft at `<DRAFT_PATH>` (spec `<spec_id>`) | the plan in `<PLAN_DIR>`: `<PLAN_DIR>/README.md` plus every `<PLAN_DIR>/task-*.md` | the digest of the plan's test lists at `<PLAN_DIR>/test-stage-findings/digest.md` |
+| First Read | `<DRAFT_PATH>` | `<PLAN_DIR>/README.md` (the task graph and frozen interface contracts), then every `<PLAN_DIR>/task-*.md` | `<PLAN_DIR>/test-stage-findings/digest.md`; it opens a task doc's other sections, by the path the digest gives, only when judging whether a test proves a case, and never writes the digest |
+| Fallback artifact and First Read (digest unavailable) | n/a | n/a | the plan's task docs with their Test lines (every `<PLAN_DIR>/task-*.md`), first read the SPEC's `## Behaviors`, then every `<PLAN_DIR>/task-*.md` |
 | Defect target | a flawed plan or implementation downstream | a broken or conflicting orchestrator result | a test list that misses a stated behavior or tests one the SPEC does not state |
 | Evidence form | SPEC section or flow id, plus `file:line` | task doc plus `file:line` | behavior id or task doc plus `file:line` |
 | `location` meaning | SPEC section or flow id | task doc or README section | behavior id or task doc |
@@ -99,4 +100,4 @@ The steps for a lens:
    ```
 
    Exit 0 is real (an empty `findings` array is real), 1 is a no-op, 2 is a usage error: a caller bug, so stop and surface it.
-4. On a no-op, re-clear that lens's file before the re-dispatch. On the inline fallback, say in one line which lens ran inline.
+4. On a no-op, re-clear that lens's file before the re-dispatch; for the test stage the re-clear is only `rm -rf <PLAN_DIR>/test-stage-findings/TST.json` (`<PLAN_DIR>` repo-relative, the form the `.notebook` allow entries match), never the folder, so the digest stays. On the inline fallback, say in one line which lens ran inline.

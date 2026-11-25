@@ -19,7 +19,7 @@
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  PLANNER_REL=".claude/skills/gaia/references/plan/planner.md"
+  TEMPLATE_REL=".claude/skills/gaia/references/plan/orchestrator-template.md"
   ROUND_REL="wiki/concepts/Audit Round Procedure.md"
   MERGE_REL="wiki/concepts/PR Merge Workflow.md"
   LENS_PREAMBLE_REL=".claude/skills/gaia/references/spec/lens-dispatch.md"
@@ -71,28 +71,28 @@ green() {
 # decide which side is wrong.
 check_plan_fixers_keep_requirements() {
   local flow_arm named_fixer in_phase_arm outside_arm
-  in_phase_arm="$(joined "$(range_of "$1/$PLANNER_REL" '- **In-phase arm.**' '- **Outside arm.**')")"
+  in_phase_arm="$(joined "$(range_of "$1/$TEMPLATE_REL" '- **In-phase arm.**' '- **Outside arm.**')")"
   need_text 'in-phase arm' "$in_phase_arm" || return 1
   in_order "$in_phase_arm" 'update the test when this phase changed the asserted behavior on purpose,' "$FIXER_RULE" 'The failing tests:' || return 1
-  outside_arm="$(joined "$(range_of "$1/$PLANNER_REL" '- **Outside arm.**' '- **Re-run the gate.**')")"
+  outside_arm="$(joined "$(range_of "$1/$TEMPLATE_REL" '- **Outside arm.**' '- **Re-run the gate.**')")"
   need_text 'outside arm' "$outside_arm" || return 1
   in_order "$outside_arm" 'update the test when this phase changed the asserted behavior on purpose,' "$FIXER_RULE" 'The failing tests:' || return 1
-  flow_arm="$(joined "$(range_of "$1/$PLANNER_REL" '- **Flow-test arm.**' '- **In-phase arm.**')")"
+  flow_arm="$(joined "$(range_of "$1/$TEMPLATE_REL" '- **Flow-test arm.**' '- **In-phase arm.**')")"
   need_text 'flow-test arm' "$flow_arm" || return 1
   in_order "$flow_arm" 'Fix the cause in the code or in the test, whichever is wrong,' "$FIXER_RULE" 'The failing tests:' || return 1
-  named_fixer="$(joined "$(range_of "$1/$PLANNER_REL" '- **Exit 1, the named fixer.**' '- **Halt.**')")"
+  named_fixer="$(joined "$(range_of "$1/$TEMPLATE_REL" '- **Exit 1, the named fixer.**' '- **Halt.**')")"
   need_text 'named pre-audit fixer' "$named_fixer" || return 1
   in_order "$named_fixer" 'Fix the cause in the code or in the test, whichever is wrong,' "$FIXER_RULE" 'The failures:' || return 1
 }
 
 check_merge_hold_on_requirement_conflict() {
   local question summary
-  question="$(joined "$(range_of "$1/$PLANNER_REL" '**The merge question.**' '- **Post-clearance')")"
+  question="$(joined "$(range_of "$1/$TEMPLATE_REL" '**The merge question.**' '## Post-clearance')")"
   need_text 'merge question' "$question" || return 1
   in_order "$question" \
     '- a deviation the summary surfaced needs a decision the human has not given;' \
     'a finding or deviation saying the shipped app differs from the SPEC or its Required reading needs that decision unless the human already accepted it at the audit checkpoint;' || return 1
-  summary="$(joined "$(range_of "$1/$PLANNER_REL" '- **Final summary.**' '**The merge question.**')")"
+  summary="$(joined "$(range_of "$1/$TEMPLATE_REL" '## Final summary' '**The merge question.**')")"
   need_text 'final summary' "$summary" || return 1
   in_order "$summary" \
     'a finding or deviation saying the shipped app differs from the SPEC or its Required reading is listed as a decision to make, never as a follow-up,' \

@@ -29,7 +29,7 @@ setup() {
     "$REFERENCE"
     "$REFERENCES/isolation.md"
     "$REFERENCES/debt.md"
-    "$REFERENCES/plan/planner.md"
+    "$REFERENCES/plan/orchestrator-template.md"
     "$REFERENCES/spec/lifecycle.md"
     "$REFERENCES/fitness.md"
     "$REFERENCES/cleanse.md"

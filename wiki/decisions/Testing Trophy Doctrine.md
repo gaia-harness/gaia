@@ -25,4 +25,4 @@ Four reasons carry the decision:
 
 ## Divergence
 
-- The planner's gate-retry block (`.claude/skills/gaia/references/plan/planner.md`) has no arm for a shell-lint failure, so one halts the run even when it is mechanical and attributable to one task.
+- The orchestrator template's gate-retry block (`.claude/skills/gaia/references/plan/orchestrator-template.md`) has no arm for a shell-lint failure, so one halts the run even when it is mechanical and attributable to one task.

@@ -4,9 +4,15 @@
 // below; the test stage reference points here instead of restating it.
 //
 // Usage: node test-stage-check.mjs --plan-dir <dir> [--spec <SPEC.md>]
+//        [--digest <output path>]
 // Output: one stdout line per refusal, `test-stage-check: <reason>`. Nothing on
 // stdout when every list is accepted.
 // Exit: 0 accepted, 1 refused, 2 usage error or an unreadable file.
+//
+// With --digest the script runs no check: it writes the digest the test-stage
+// lens reads first, prints its sha256 hex on one stdout line, and exits 0 (1 on
+// a refused source, one `test-stage-check:` stderr line, 2 on an unreadable
+// source or an unwritable output). The format lives in the header of test-stage-digest.mjs.
 //
 // Reads every `task-*.md` of the plan directory. Test lines are read under each
 // doc's `## Tests` heading; a Flow test line is read anywhere in the doc, as the plan
@@ -45,16 +51,21 @@ import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {parseBehaviors, SECURITY_KINDS} from './behaviors.mjs';
 import {LIST_ITEM_MARKER} from './drop-check-lib.mjs';
+import {
+  CRITERIA_HEADING,
+  DigestRefusal,
+  FLOW_TEST_LINE,
+  sectionLines,
+  TESTS_HEADING,
+  writeDigest,
+} from './test-stage-digest.mjs';
 
 const LAYERS = ['unit', 'story', 'route', 'real-server', 'browser', 'shell'];
 const MUST_BE_TESTED_KINDS = [...SECURITY_KINDS, 'refusal', 'data-loss'];
-const USAGE = 'usage: test-stage-check.mjs --plan-dir <dir> [--spec <SPEC.md>]';
+const USAGE =
+  'usage: test-stage-check.mjs --plan-dir <dir> [--spec <SPEC.md>] [--digest <output path>]';
 
-const TESTS_HEADING = /^## Tests\s*$/;
-const CRITERIA_HEADING = /^## Acceptance criteria\s*$/;
-const ANY_HEADING = /^## /;
 const TEST_LINE = /^- Test \(([^)]*)\): (.*)$/;
-const FLOW_TEST_LINE = /^\s*- Flow test \(([^)]*)\): (.*)$/;
 const FILE_TITLE = /^(\S+) › (\S.*)$/;
 const CRITERION_ID = /^(.+):AC([1-9][0-9]*)$/;
 
@@ -69,15 +80,16 @@ function fail(message) {
 }
 
 function parseArguments(argv) {
-  const options = {planDir: null, spec: null};
+  const options = {planDir: null, spec: null, digest: null};
   for (let index = 0; index < argv.length; index += 2) {
     const flag = argv[index];
     const value = argv[index + 1];
-    if (value === undefined || !['--plan-dir', '--spec'].includes(flag)) {
+    if (value === undefined || !['--plan-dir', '--spec', '--digest'].includes(flag)) {
       usageExit();
     }
     if (flag === '--plan-dir') options.planDir = value;
-    else options.spec = value;
+    else if (flag === '--spec') options.spec = value;
+    else options.digest = value;
   }
   if (!options.planDir) usageExit();
   return options;
@@ -109,22 +121,6 @@ function readFlowIds(specText) {
     if (match) ids.push(match[1]);
   }
   return ids;
-}
-
-// The lines of one `##` section, between its heading and the next.
-function sectionLines(text, headingPattern) {
-  const collected = [];
-  let inSection = false;
-  for (const line of text.split('\n')) {
-    const clean = line.replace(/\r$/, '');
-    if (headingPattern.test(clean)) {
-      inSection = true;
-      continue;
-    }
-    if (inSection && ANY_HEADING.test(clean)) break;
-    if (inSection) collected.push(clean);
-  }
-  return collected;
 }
 
 function countCriteria(taskText) {
@@ -181,6 +177,23 @@ function checkTestLine(line, context) {
 function main() {
   const options = parseArguments(process.argv.slice(2));
   if (!existsSync(options.planDir)) fail(`no such directory ${options.planDir}`);
+  if (options.digest) {
+    try {
+      const hash = writeDigest({
+        planDir: options.planDir,
+        spec: options.spec,
+        output: path.resolve(options.digest),
+      });
+      process.stdout.write(`${hash}\n`);
+      process.exit(0);
+    } catch (error) {
+      if (error instanceof DigestRefusal) {
+        process.stderr.write(`test-stage-check: ${error.message}\n`);
+        process.exit(1);
+      }
+      fail(error.message);
+    }
+  }
   const taskFiles = readdirSync(options.planDir)
     .filter((name) => /^task-.*\.md$/.test(name))
     .sort();
