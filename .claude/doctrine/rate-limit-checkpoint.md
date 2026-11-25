@@ -1,8 +1,8 @@
 # Rate-limit checkpoint
 
-The header above names a usage window that reached a band, then prints the reading: one line per window from `bash .gaia/scripts/rate-limits.sh read`. The reading is shared across the checkout and the account, so every session and worktree sees the same figures. The hook cannot see whether a human is present, so you judge that yourself. The dispatch that triggered the hook already ran; this policy governs your next dispatches.
+The header above names a usage window that reached a band, then prints the reading: one line per window from `bash .gaia/scripts/rate-limits.sh read`. The checkpoint acts on this session's own reading, and the reader prints each window's band word (`warning` or `critical`) on its line when the window is in a band. The hook cannot see whether a human is present, so you judge that yourself. The dispatch that triggered the hook already ran; this policy governs your next dispatches.
 
-Bands are `warning` and `critical`. Their values live in `.gaia/scripts/rate-limits-lib.sh` (`GAIA_RATE_LIMIT_WARNING_PERCENTAGE`, `GAIA_RATE_LIMIT_CRITICAL_PERCENTAGE`); this file spells none.
+Bands are `warning` and `critical`. The 5-hour window uses one set of bands; the 7-day bands follow the account's plan tier. Every value and the tier sets live in `.gaia/scripts/rate-limits-lib.sh`; this file spells none.
 
 ## Human present, 5-hour window at or above the warning band
 
@@ -35,4 +35,4 @@ It never gates a single dispatch. At or above the warning band it names optional
 
 ## Before a fan-out
 
-Each large fan-out step runs `bash .gaia/scripts/rate-limits.sh read` before it dispatches, whatever the hook's once-per-band marker says. It opens this file only when a window prints at or above the warning band.
+Each large fan-out step runs `bash .gaia/scripts/rate-limits.sh read` before it dispatches, whatever the hook's once-per-band marker says. It opens this file only when a reader line prints `warning` or `critical`.

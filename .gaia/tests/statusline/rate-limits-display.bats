@@ -1,9 +1,10 @@
 #!/usr/bin/env bats
 #
-# Suite for how the statusline produces and displays the shared rate-limit
-# reading: every render merges its payload into the main checkout's shared file
-# and GAIA's left side draws from the merged result. Renders run the real
-# gaia-statusline.sh against a scratch git checkout with the clock pinned.
+# Suite for how the statusline produces and displays the rate-limit reading:
+# every render writes its payload's windows to its own session's file under the
+# main checkout, and GAIA's left side draws the latest change across sessions.
+# Renders run the real gaia-statusline.sh against a scratch git checkout with
+# the clock pinned.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/statusline/rate-limits-display.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -11,6 +12,8 @@
 bats_require_minimum_version 1.5.0
 
 NOW=1795440000
+SESSION_A="0a1b2c3d-1111-4222-8333-444455556666"
+SESSION_B="1b2c3d4e-2222-4333-8444-555566667777"
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -22,9 +25,10 @@ setup() {
   FIVE_HOUR_RESETS_AT=$((NOW + 3690))
   SEVEN_DAY_RESETS_AT=$((NOW + 187230))
   MAIN="$BATS_TEST_TMPDIR/main"
-  WORKTREE="$BATS_TEST_TMPDIR/worktree"
   TEMPORARY_HOME="$BATS_TEST_TMPDIR/home"
-  FILE="$MAIN/.gaia/local/cache/shared/rate-limits.json"
+  FOLDER="$MAIN/.gaia/local/cache/shared/rate-limits"
+  FILE="$FOLDER/$SESSION_A.json"
+  OTHER_FILE="$FOLDER/$SESSION_B.json"
   mkdir -p "$MAIN/.gaia/local" "$TEMPORARY_HOME"
   git -C "$MAIN" init -q --initial-branch=main
   git -C "$MAIN" config user.email "test@example.com"
@@ -42,25 +46,27 @@ teardown() {
   return 0
 }
 
-# render <cwd> <rate_limits JSON, or - for no key> [<now>]: one session's
-# render; PLAIN_OUTPUT is the output with its ANSI escapes stripped.
+# render <cwd> <rate_limits JSON, or - for no key> [<now>] [<session id>]: one
+# session's render (session A unless named); PLAIN_OUTPUT is the output with
+# its ANSI escapes stripped.
 render() {
-  local cwd="$1" rate_limits="$2" now="${3:-$NOW}" json
-  json=$(jq -n --arg current_directory "$cwd" \
-    '{workspace: {current_dir: $current_directory}, model: {display_name: "Claude Opus"}, effort: {level: "xhigh"},
+  local cwd="$1" rate_limits="$2" now="${3:-$NOW}" session_id="${4:-$SESSION_A}" json
+  json=$(jq -n --arg current_directory "$cwd" --arg session_id "$session_id" \
+    '{session_id: $session_id, workspace: {current_dir: $current_directory}, model: {display_name: "Claude Opus"}, effort: {level: "xhigh"},
       context_window: {used_percentage: 21, context_window_size: 1000000}}')
   [ "$rate_limits" = "-" ] || json=$(jq --argjson rate_limits "$rate_limits" '. + {rate_limits: $rate_limits}' <<<"$json")
-  PAYLOAD="$json" run env HOME="$TEMPORARY_HOME" COLUMNS=300 GAIA_RATE_LIMITS_NOW="$now" \
+  PAYLOAD="$json" run env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CONFIG_DIR HOME="$TEMPORARY_HOME" COLUMNS=300 GAIA_RATE_LIMITS_NOW="$now" \
     bash -c "printf '%s' \"\$PAYLOAD\" | bash '$STATUSLINE'"
   PLAIN_OUTPUT=$(sed "s/${ESCAPE_CHARACTER}\[[0-9;]*m//g" <<<"$output")
 }
 
 # seed_file <name> <percentage> <resets_at> [<name> <percentage> <resets_at> ...]:
-# a valid stored file, observed at NOW.
+# session A's valid stored file, changed and confirmed at NOW.
 seed_file() {
-  rate_limits_seed_file "$FILE" "$NOW" "$@"
+  rate_limits_seed_session "$MAIN" "$SESSION_A" "$NOW" true "$@"
 }
 
+# stored <jq filter>: the filter applied to session A's stored file.
 stored() {
   jq -c "$1" "$FILE"
 }
@@ -71,6 +77,29 @@ expect_color() {
   local icon="$1" percentage="$2" digit="$3" want
   want="$icon ${ESCAPE_CHARACTER}[01;3${digit}m${percentage}%"
   grep -qF "$want" <<<"$output" || { echo "$icon $percentage: no color $digit in: $output"; return 1; }
+}
+
+@test "a render writes only its own session's file and a new figure replaces the stored one either way" {
+  local other_before
+  rate_limits_seed_session "$MAIN" "$SESSION_B" "$NOW" true five_hour 55 "$FIVE_HOUR_RESETS_AT"
+  other_before=$(cat "$OTHER_FILE")
+
+  seed_file five_hour 99 "$FIVE_HOUR_RESETS_AT"
+  render "$MAIN" "{\"five_hour\":{\"used_percentage\":3,\"resets_at\":$FIVE_HOUR_RESETS_AT}}" "$((NOW + 60))"
+  [ "$(stored '.windows.five_hour | [.used_percentage, .resets_at, .changed_at, .confirmed]')" = "[3,$FIVE_HOUR_RESETS_AT,$((NOW + 60)),true]" ] || { echo "lower figure: $(cat "$FILE")"; return 1; }
+  [ "$(stored '.windows.five_hour.history[-1].used_percentage')" = "3" ] || { echo "history: $(cat "$FILE")"; return 1; }
+
+  seed_file five_hour 80 "$FIVE_HOUR_RESETS_AT"
+  render "$MAIN" "{\"five_hour\":{\"used_percentage\":45,\"resets_at\":$((FIVE_HOUR_RESETS_AT + 30))}}" "$((NOW + 60))"
+  [ "$(stored '.windows.five_hour | [.used_percentage, .resets_at]')" = "[45,$((FIVE_HOUR_RESETS_AT + 30))]" ] || { echo "new reset time: $(cat "$FILE")"; return 1; }
+
+  seed_file seven_day 60 "$SEVEN_DAY_RESETS_AT"
+  render "$MAIN" "{\"seven_day\":{\"used_percentage\":70}}" "$((NOW + 60))"
+  [ "$(stored '.windows.seven_day | [.used_percentage, .resets_at, .confirmed]')" = "[70,$SEVEN_DAY_RESETS_AT,true]" ] || { echo "no reset time: $(cat "$FILE")"; return 1; }
+
+  [ "$(cat "$OTHER_FILE")" = "$other_before" ] || { echo "other session's file changed: $(cat "$OTHER_FILE")"; return 1; }
+  [ "$(find "$FOLDER" -type f | wc -l | tr -d ' ')" = "2" ] || { echo "files: $(find "$FOLDER" -type f)"; return 1; }
+  true
 }
 
 @test "a window missing from the payload stays missing and keeps the stored reading" {
@@ -93,63 +122,21 @@ expect_color() {
   render "$MAIN" - "$((reset_time + 1))"
   grep -qF "🕔 ${ESCAPE_CHARACTER}[01;32mreset${ESCAPE_CHARACTER}[00m" <<<"$output" || { echo "no green reset: $output"; return 1; }
   grep -qE "🕔 reset *(\(|[0-9])" <<<"$PLAIN_OUTPUT" && { echo "percentage or countdown: $PLAIN_OUTPUT"; return 1; }
-  run env GAIA_RATE_LIMITS_NOW="$((reset_time + 1))" bash -c "cd '$MAIN' && bash '$CLI' read"
+  run env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CONFIG_DIR HOME="$TEMPORARY_HOME" GAIA_RATE_LIMITS_NOW="$((reset_time + 1))" bash -c "cd '$MAIN' && bash '$CLI' read"
   [ "$status" -eq 0 ] || return 1
   [ "$output" = "five_hour reset" ] || { echo "reader: $output"; return 1; }
 }
 
-@test "the left side displays from the merged file and repairs an unparseable one" {
-  seed_file seven_day 90 "$SEVEN_DAY_RESETS_AT"
-  render "$MAIN" "{\"seven_day\":{\"used_percentage\":80,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
-  expect_color "📅" 90 1
-  [ "$(stored '.windows.seven_day.used_percentage')" = "90" ] || return 1
+@test "an idle session's left side follows the session whose figure changed most recently" {
+  rate_limits_seed_session "$MAIN" "$SESSION_A" "$((NOW - 1000))" true seven_day 60 "$SEVEN_DAY_RESETS_AT"
+  rate_limits_seed_session "$MAIN" "$SESSION_B" "$((NOW - 10))" true seven_day 22 "$SEVEN_DAY_RESETS_AT"
+  render "$MAIN" "{\"seven_day\":{\"used_percentage\":60,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
+  grep -qF "📅 22%" <<<"$PLAIN_OUTPUT" || { echo "idle session did not follow: $PLAIN_OUTPUT"; return 1; }
+  [ "$(stored '.windows.seven_day.used_percentage')" = "60" ] || { echo "own file changed: $(cat "$FILE")"; return 1; }
 
-  printf '{not json' >"$FILE"
-  render "$MAIN" "{\"seven_day\":{\"used_percentage\":80,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
-  expect_color "📅" 80 3
-  [ "$(stored '.windows.seven_day.used_percentage')" = "80" ] || { echo "not repaired: $(cat "$FILE")"; return 1; }
-  true
-}
-
-@test "two renders in the same second leave valid JSON and the next render restores the higher value" {
-  local payload_high="{\"seven_day\":{\"used_percentage\":80,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
-  local payload_low="{\"seven_day\":{\"used_percentage\":70,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
-  render "$MAIN" "$payload_high" &
-  render "$MAIN" "$payload_low" &
-  wait
-  jq -e . "$FILE" >/dev/null || { echo "not JSON: $(cat "$FILE")"; return 1; }
-  case "$(stored '.windows.seven_day.used_percentage')" in
-    80 | 70) ;;
-    *) echo "value: $(stored '.windows.seven_day.used_percentage')"; return 1 ;;
-  esac
-  render "$MAIN" "$payload_high"
-  [ "$(stored '.windows.seven_day.used_percentage')" = "80" ] || { echo "not restored: $(cat "$FILE")"; return 1; }
-  true
-}
-
-@test "a render in a linked worktree writes the main checkout reading" {
-  git -C "$MAIN" worktree add -q "$WORKTREE" -b linked
-  render "$WORKTREE" "{\"seven_day\":{\"used_percentage\":70,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
-  [ "$(stored '.windows.seven_day.used_percentage')" = "70" ] || { echo "main file: $(cat "$FILE" 2>&1)"; return 1; }
-  local stray
-  stray=$(find "$WORKTREE" -name 'rate-limits.json*' -not -path '*/.git/*')
-  [ -z "$stray" ] || { echo "created in worktree: $stray"; return 1; }
-  true
-}
-
-@test "any window name and producer is stored and read, only the 5-hour and 7-day windows are drawn, and producer never wins a merge" {
-  run env GAIA_RATE_LIMITS_NOW="$NOW" bash -c "cd '$MAIN' && bash '$CLI' write '{\"producer\":\"mod\",\"windows\":{\"spend_limit\":{\"used_percentage\":30,\"resets_at\":$SEVEN_DAY_RESETS_AT}}}'"
-  [ "$status" -eq 0 ] || { echo "write: $output"; return 1; }
-  [ "$(stored '.windows.spend_limit.history[0].producer')" = '"mod"' ] || { echo "history: $(cat "$FILE")"; return 1; }
-  run env GAIA_RATE_LIMITS_NOW="$NOW" bash -c "cd '$MAIN' && bash '$CLI' read"
-  grep -q "^spend_limit 30%" <<<"$output" || { echo "reader: $output"; return 1; }
-  render "$MAIN" -
-  grep -qE "🕔|📅|spend" <<<"$PLAIN_OUTPUT" && { echo "drew a window: $PLAIN_OUTPUT"; return 1; }
-
-  rm -f "$FILE"
-  render "$MAIN" "{\"seven_day\":{\"used_percentage\":80,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
-  run env GAIA_RATE_LIMITS_NOW="$NOW" bash -c "cd '$MAIN' && bash '$CLI' write '{\"producer\":\"mod\",\"windows\":{\"seven_day\":{\"used_percentage\":70,\"resets_at\":$SEVEN_DAY_RESETS_AT}}}'"
-  [ "$(stored '.windows.seven_day.used_percentage')" = "80" ] || { echo "producer won: $(cat "$FILE")"; return 1; }
+  printf '{' >"$OTHER_FILE"
+  render "$MAIN" "{\"seven_day\":{\"used_percentage\":60,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
+  grep -qF "📅 60%" <<<"$PLAIN_OUTPUT" || { echo "unparseable file not skipped: $PLAIN_OUTPUT"; return 1; }
   true
 }
 
@@ -158,7 +145,7 @@ expect_color() {
   for percentage in 74:2 75:3 89:3 90:1; do
     digit="${percentage#*:}"
     percentage="${percentage%%:*}"
-    rm -f "$FILE"
+    rm -rf "$FOLDER"
     render "$MAIN" "{\"five_hour\":{\"used_percentage\":$percentage,\"resets_at\":$FIVE_HOUR_RESETS_AT},\"seven_day\":{\"used_percentage\":$percentage,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
     expect_color "🕔" "$percentage" "$digit"
     expect_color "📅" "$percentage" "$digit"
@@ -177,7 +164,7 @@ expect_color() {
   true
 }
 
-@test "a payload window with no reset time is shown and never written" {
+@test "a payload window with no reset time is shown, and shown from another session's confirmed entry when one exists" {
   render "$MAIN" '{"five_hour":{"used_percentage":40}}'
   grep -qF "🕔 40%" <<<"$PLAIN_OUTPUT" || { echo "not shown: $PLAIN_OUTPUT"; return 1; }
   grep -qF "🕔 40% (" <<<"$PLAIN_OUTPUT" && { echo "countdown: $PLAIN_OUTPUT"; return 1; }
@@ -185,9 +172,9 @@ expect_color() {
     [ "$(stored '.windows | has("five_hour")')" = "false" ] || { echo "written: $(cat "$FILE")"; return 1; }
   fi
 
-  seed_file five_hour 50 "$FIVE_HOUR_RESETS_AT"
+  rate_limits_seed_session "$MAIN" "$SESSION_B" "$NOW" true five_hour 50 "$FIVE_HOUR_RESETS_AT"
   render "$MAIN" '{"five_hour":{"used_percentage":40}}'
-  grep -qF "🕔 50%" <<<"$PLAIN_OUTPUT" || { echo "file figure lost: $PLAIN_OUTPUT"; return 1; }
+  grep -qF "🕔 50%" <<<"$PLAIN_OUTPUT" || { echo "other session's figure lost: $PLAIN_OUTPUT"; return 1; }
   true
 }
 
@@ -201,18 +188,18 @@ expect_color() {
   true
 }
 
-@test "a failed write shows no figure below the payload and leaves no temporary file" {
+@test "a failed write shows the payload figure and leaves no temporary file" {
   [ "$(id -u)" -ne 0 ] || skip "a read-only directory does not stop root"
   seed_file seven_day 80 "$SEVEN_DAY_RESETS_AT"
   local before
   before=$(cat "$FILE")
-  chmod 555 "${FILE%/*}"
+  chmod 555 "$FOLDER"
   render "$MAIN" "{\"seven_day\":{\"used_percentage\":90,\"resets_at\":$SEVEN_DAY_RESETS_AT}}"
-  chmod 755 "${FILE%/*}"
+  chmod 755 "$FOLDER"
   expect_color "📅" 90 1
   [ "$(cat "$FILE")" = "$before" ] || { echo "file changed: $(cat "$FILE")"; return 1; }
   local leftover
-  leftover=$(find "${FILE%/*}" -name 'rate-limits.json.tmp.*')
+  leftover=$(find "$FOLDER" -name '*.tmp.*')
   [ -z "$leftover" ] || { echo "temporary file: $leftover"; return 1; }
   grep -qi "rate-limits" <<<"$PLAIN_OUTPUT" && { echo "noise: $PLAIN_OUTPUT"; return 1; }
   true

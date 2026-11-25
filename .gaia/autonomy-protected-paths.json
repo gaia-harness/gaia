@@ -7,11 +7,13 @@
     ".claude/agents/**",
     ".claude/skills/**",
     ".claude/commands/**",
+    ".claude/loop.md",
     ".gaia/local/protected/**",
     ".gaia/autonomy-*.json",
     ".gaia/scripts/autonomy-*.sh",
     ".gaia/scripts/main-root-lib.sh",
     ".gaia/scripts/audit-loop-state-lib.sh",
+    ".gaia/scripts/gaia-next.sh",
     ".gaia/scripts/audit-budget-lib.sh",
     "CLAUDE.md",
     "CLAUDE.local.md"

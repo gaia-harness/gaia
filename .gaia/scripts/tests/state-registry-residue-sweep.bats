@@ -282,3 +282,48 @@ shipped_classify() {
   [ "$(shipped_classify "audit/c1")" = residue ]
   [ "$(shipped_classify "audit/c1$digest_key.ok")" = shared ]
 }
+
+@test "version-2 code ignores the legacy shared file and the residue sweep removes it once the per-session folder exists" {
+  local now=1795440000 session_id="0a1b2c3d-1111-4222-8333-444455556666"
+  local legacy=cache/shared/rate-limits.json legacy_before json
+  make_sweep_repo
+  cp "$REGISTRY" "$SWEEP_REPO/.gaia/state-registry.json"
+  git -C "$SWEEP_REPO" -c user.email=test@example.com -c user.name=Test -c commit.gpgsign=false commit -q --allow-empty -m init
+  printf '{"version":1,"statusline":{"left":"gaia"}}' >"$LOCAL_ROOT/settings.json"
+  mkdir -p "$LOCAL_ROOT/cache/shared"
+  printf '{"windows":{"seven_day":{"used_percentage":60}}}\n' >"$LOCAL_ROOT/$legacy"
+  printf 'x\n' >"$LOCAL_ROOT/$legacy.tmp.123"
+  legacy_before="$(cat "$LOCAL_ROOT/$legacy")"
+
+  # Only the legacy file exists: the reader finds no reading, and the sweep waits for the folder.
+  run --separate-stderr env -u CLAUDE_CODE_SESSION_ID GAIA_RATE_LIMITS_NOW="$now" \
+    "$BASH" -c 'cd "$1" && "$BASH" "$2/.gaia/scripts/rate-limits.sh" read' _ "$SWEEP_REPO" "$REPO_ROOT"
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "no reading" ] || { echo "reader: $output"; return 1; }
+  sweep --apply
+  [ "$status" -eq 0 ] || return 1
+  [ -f "$LOCAL_ROOT/$legacy" ] || { echo "legacy file deleted before the folder existed"; return 1; }
+  [ -f "$LOCAL_ROOT/$legacy.tmp.123" ] || { echo "legacy temporary deleted before the folder existed"; return 1; }
+
+  # A render writes the session's own file and leaves the legacy file alone.
+  json=$(jq -n --arg current_directory "$SWEEP_REPO" --arg session_id "$session_id" --argjson resets_at $((now + 187230)) \
+    '{session_id: $session_id, workspace: {current_dir: $current_directory}, model: {display_name: "Claude Opus"}, effort: {level: "xhigh"},
+      context_window: {used_percentage: 21, context_window_size: 1000000},
+      rate_limits: {seven_day: {used_percentage: 22, resets_at: $resets_at}}}')
+  PAYLOAD="$json" run env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CONFIG_DIR HOME="$BATS_TEST_TMPDIR" TZ=UTC COLUMNS=300 GAIA_RATE_LIMITS_NOW="$now" \
+    "$BASH" -c "printf '%s' \"\$PAYLOAD\" | bash '$REPO_ROOT/.gaia/statusline/gaia-statusline.sh'"
+  [ "$status" -eq 0 ] || { echo "render: $output"; return 1; }
+  [ "$(jq -r '.windows.seven_day.used_percentage' "$LOCAL_ROOT/cache/shared/rate-limits/$session_id.json")" = 22 ] || return 1
+  [ "$(cat "$LOCAL_ROOT/$legacy")" = "$legacy_before" ] || { echo "legacy file changed by a render"; return 1; }
+  run --separate-stderr env -u CLAUDE_CODE_SESSION_ID GAIA_RATE_LIMITS_NOW="$now" TZ=UTC \
+    "$BASH" -c 'cd "$1" && "$BASH" "$2/.gaia/scripts/rate-limits.sh" read' _ "$SWEEP_REPO" "$REPO_ROOT"
+  [ "$status" -eq 0 ] || return 1
+  printf '%s\n' "$output" | grep -q '^seven_day 22%' || { echo "reader: $output"; return 1; }
+
+  # With the folder present, the sweep removes the legacy file and its temporary and keeps the folder's files.
+  sweep --apply
+  [ "$status" -eq 0 ] || return 1
+  [ ! -e "$LOCAL_ROOT/$legacy" ] || { echo "legacy file survived the sweep"; return 1; }
+  [ ! -e "$LOCAL_ROOT/$legacy.tmp.123" ] || { echo "legacy temporary survived the sweep"; return 1; }
+  [ -f "$LOCAL_ROOT/cache/shared/rate-limits/$session_id.json" ]
+}

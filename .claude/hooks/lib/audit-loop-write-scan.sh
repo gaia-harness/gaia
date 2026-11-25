@@ -252,10 +252,16 @@ writes_named() {
 words_run_guarded_script() {
   local matcher="${1:-guarded_script_kind}" count=${#words[@]} word_index=0 word base syntax_check
 
-  # Skip leading NAME=value words, `!`, and `exec`.
+  # Skip the leading words the case below lists, none of which is the command.
   while [ "$word_index" -lt "$count" ]; do
     case "${words[$word_index]}" in
-      [A-Za-z_]*=* | '!' | exec) word_index=$((word_index + 1)) ;;
+      [A-Za-z_]*=* | '!' | exec | '{' | if | while | until | then | do | else | elif) word_index=$((word_index + 1)) ;;
+      time)
+        word_index=$((word_index + 1))
+        while [ "$word_index" -lt "$count" ] && [[ ${words[$word_index]} == -* ]]; do
+          word_index=$((word_index + 1))
+        done
+        ;;
       *) break ;;
     esac
   done
