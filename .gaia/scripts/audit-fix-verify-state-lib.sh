@@ -49,7 +49,7 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/branch-authorship-lib.sh'    # the authorship predicate the audit and filer share
   '.gaia/scripts/audit-pr-sections-lib.sh'    # renders the PR-body records and the recorded residuals
   '.gaia/scripts/pr-body-sections-lib.sh'     # the PR-body headings the audit writers and the review bundle share
-  '.gaia/scripts/pr-review-record.sh'         # writes the PR review section of the PR body
+  '.gaia/scripts/pr-review-record.sh'         # writes the PR review record
   '.gaia/scripts/pr-review-record-lib.sh'     # the PR review record writer's helpers and audit veto state
   '.gaia/scripts/audit-recorded-decision-lib.sh' # writes a recorded fix decision's veto
   '.gaia/scripts/audit-decided-unattended-lib.sh' # renders the decision log's PR-body section

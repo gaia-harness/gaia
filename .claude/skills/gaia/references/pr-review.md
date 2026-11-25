@@ -34,7 +34,7 @@ Build the bundle into a new, empty directory from `mktemp -d`, never under `.gai
 bash .gaia/scripts/pr-review-bundle.sh --root <RESOLVED_ROOT> --pr <N> --out <bundle dir> [--spec <path>]
 ```
 
-Only a plan build passes `--spec`, with the SPEC path its plan README's `## Source SPEC` names. Exit 1 is the fork refusal: stop, run nothing else, and follow the page's `## First step: refuse a fork PR`. Exit 2 stops `needs-human` with the printed line.
+Only a plan build passes `--spec`, with the SPEC path its plan README's `## Source SPEC` names. Exit 1 is the fork refusal: stop, run nothing else, and follow `wiki/concepts/PR Merge Workflow.md` `## First step: refuse a fork PR`. Exit 2 stops `needs-human` with the printed line.
 
 Then open the record, with `<head>` the full sha of `git -C <RESOLVED_ROOT> rev-parse HEAD`:
 
@@ -131,7 +131,7 @@ It prints the route:
 <!-- gaia:maintainer-only:end -->
 - Exit 4, printing `PR review: fix needs a human on an unowned path: <path>`: no member owns the path, so no veto can be satisfied. Stop `needs-human` with that line. A human repairs it and the main thread records `fixed --commit <sha>` with the repair commit; a further repair commit with no finding of its own is recorded with `fix-commit --run-folder <RUN_FOLDER> --sha <sha>`. Either keeps the commit out of the out-of-scope commit check.
 
-A fix that moves HEAD on a code PR runs the page's `clean` row again from the late worthiness pass, so the status is posted on the new head.
+A fix that moves HEAD on a code PR runs the `clean` row of `wiki/concepts/PR Merge Workflow.md` again from the late worthiness pass, so the status is posted on the new head.
 
 ## 7. Publish and confirm
 
@@ -147,7 +147,7 @@ Then confirm, with `--out-of-scope` on a PR the merge hook's out-of-scope bypass
 bash .gaia/scripts/pr-review-gate.sh check --root <RESOLVED_ROOT> --pr <N> [--out-of-scope]
 ```
 
-Exit 0 ends the step. Exit 1 prints the one thing still owed; resolve it from the step that owns it. The merge hook, the status poster and `gaia wiki chain finish` read the same verdict and refuse until it passes.
+Exit 0 ends the step. Exit 1 prints the one thing still owed; resolve it from the step that owns it. Exit 2 (root, `gh` or the PR unreadable) stops `needs-human` with the printed line. The merge hook, the status poster and `gaia wiki chain finish` read the same verdict and refuse until it passes.
 
 ## Unattended runs
 

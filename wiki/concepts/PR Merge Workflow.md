@@ -258,7 +258,7 @@ It runs once per pull request and never again on its own fixes:
 
 The merge hook, the `GAIA-Audit` success poster (`.claude/hooks/post-audit-status.sh`) and `gaia wiki chain finish` each refuse until the review record is complete; `.claude/hooks/lib/pr-review-verdict.sh` owns what complete means, and each refusal names what is still owed.
 
-It costs about one audit member dispatch per pull request, plus one audit unit when a finding on a path a member owns is disposed `fix`. Small and docs-only PRs do not skip it. An unattended run follows the same procedure, never waits on a human for it, and parks at every stop the reference names.
+Small and docs-only PRs do not skip it.
 
 #### Posting the status last
 

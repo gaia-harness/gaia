@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # PreToolUse Read + Grep + Glob + Bash + Monitor hook: keeps the `pr-reviewer`
 # agent away from audit state, so its review of a pull request stays unanchored
-# by what the audit loop already found. The reviewer is read-only by tool
-# grant; this makes "unanchored" structural rather than a promise in its prompt.
+# by what the audit loop already found. Its tool grant (Bash, Write) does not
+# keep it from audit state; this makes "unanchored" structural rather than a
+# promise in its prompt.
 #
 # WHO IT BINDS. Only a call whose payload carries `agent_type` exactly
 # `pr-reviewer`. The harness sets `agent_type` on a sub-agent's tool calls and

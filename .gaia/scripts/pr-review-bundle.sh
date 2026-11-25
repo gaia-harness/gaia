@@ -113,7 +113,7 @@ git -C "$root" diff --no-renames "$merge_base" HEAD >"$out_directory/diff.patch"
 
 printf '%s\n' "$pull_request_body" | prb_strip_body >"$out_directory/pr-body.md"
 
-# --- Spec, by precedence -----------------------------------------------------
+# --- Spec: the --spec sections, then each closed issue's Done-when ----------
 
 spec_present="none"
 author_not_collaborator="false"

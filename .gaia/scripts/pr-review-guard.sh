@@ -2,7 +2,8 @@
 # shellcheck shell=bash
 #
 # pr-review-guard.sh: the before/after check around the read-only pull request
-# reviewer. The reviewer is read-only by tool grant and by the read guard hook;
+# reviewer. The reviewer holds Bash and Write, so it is read-only by its prompt
+# and kept out of audit state by the read guard hook;
 # this script is the backstop that proves it changed nothing.
 #
 #   pr-review-guard.sh snapshot --root <R> --run-folder <D> --pr <N> --out <file>
