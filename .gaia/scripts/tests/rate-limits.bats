@@ -461,7 +461,7 @@ EOF
   esac
 }
 
-@test "inside a session the reader prints the session's own reading, filling missing windows by latest change" {
+@test "inside a session the reader prints only the session's own reading, never filling a missing window from another session" {
   local now=$((MONDAY + 43200)) reset=$((MONDAY + 57600)) t1=$((MONDAY + 40000)) t2=$((MONDAY + 41000))
 
   rate_limits_seed_session "$MAIN" "$SESSION_A" "$t1" true five_hour 40 "$reset"
@@ -473,9 +473,10 @@ EOF
   rate_limits_seed_session "$MAIN" "$SESSION_B" "$t2" true seven_day 22 $((MONDAY + 300000))
   CLAUDE_CODE_SESSION_ID="$SESSION_A" run rate_limits "$now" read
   [ "$status" -eq 0 ] || return 1
-  case ${lines[0]:-}/${lines[1]:-} in
-    "five_hour 40% "*/"seven_day 22% "*) ;;
-    *) echo "filled window: $output"; return 1 ;;
+  [ "${#lines[@]}" -eq 1 ] || { echo "filled window: $output"; return 1; }
+  case ${lines[0]:-} in
+    "five_hour 40% "*) ;;
+    *) echo "own window: $output"; return 1 ;;
   esac
 
   # The projection reads only the chosen entry's history.
