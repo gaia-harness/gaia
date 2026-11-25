@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+#
+# The stopped /gaia-debt fixes: prints `<issue>\t<branch>` for every local
+# debt branch that names a claimed issue and never had a pull request, one line
+# per branch, and nothing else. It changes nothing; a caller resumes the branch
+# (.claude/skills/gaia/references/debt/resume.md) or offers it as a job
+# (.gaia/scripts/gaia-next.sh pick).
+#
+# A fix is STOPPED when all of these hold:
+#   claim   the branch names the issue as a debt member, read through
+#           .gaia/scripts/branch-name-lib.sh (every member of a batch branch
+#           counts, and the worktree spelling counts as `debt/<n>-<slug>`),
+#           and the issue is open, labelled `tech-debt` and `in-progress`
+#   local   the branch is a local branch: a remote-tracking ref alone cannot
+#           be re-entered from this clone
+#   no PR   no pull request in any state (open, closed or merged) has the branch
+#           as its head: a pull request a human closed unmerged is a rejection,
+#           and resuming it would reopen what they turned down
+# The issue printed is the lowest claimed member of the branch, or the one
+# --issue names.
+#
+# FAIL-CLOSED: when the claims, the pull requests or the branches cannot be
+# read, this prints nothing on stdout, names what failed on stderr, and exits
+# 3, so a caller never resumes a branch a pull request already owns or closed.
+#
+# Usage:
+#   bash .gaia/scripts/debt-stuck-fixes.sh [--dir <repo>] [--issue <number>]
+#
+# Test seams (each replaces one live read): --claims-json <file> (the
+# `gh issue list` array of {number}), --prs-json <file> (an array of
+# {headRefName}, standing in for the per-branch `gh pr list --head` reads) and --branches <file> (local branch names, one per line).
+#
+# Exit: 0 verdict printed (possibly empty), 2 usage error, 3 an input could not
+# be read.
+
+set -uo pipefail
+
+directory="."
+issue=""
+claims_file=""
+prs_file=""
+branches_file=""
+
+die_usage() {
+  printf 'debt-stuck-fixes: %s\n' "$1" >&2
+  exit 2
+}
+die_input() {
+  printf 'debt-stuck-fixes: %s; no fix is reported stopped\n' "$1" >&2
+  exit 3
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dir | --issue | --claims-json | --prs-json | --branches)
+      [ "$#" -ge 2 ] || die_usage "$1 needs a value"
+      case "$1" in
+        --dir) directory="$2" ;;
+        --issue) issue="$2" ;;
+        --claims-json) claims_file="$2" ;;
+        --prs-json) prs_file="$2" ;;
+        --branches) branches_file="$2" ;;
+      esac
+      shift 2
+      ;;
+    *) die_usage "unknown argument $1" ;;
+  esac
+done
+
+case "$issue" in *[!0-9]*) die_usage "--issue must be an issue number" ;; esac
+
+command -v jq >/dev/null 2>&1 || die_input "jq is not installed"
+
+branch_library="$(dirname "${BASH_SOURCE[0]}")/branch-name-lib.sh"
+[ -r "$branch_library" ] || die_input "branch library $branch_library is missing or unreadable"
+# shellcheck source=/dev/null
+. "$branch_library" || die_input "branch library $branch_library failed to load"
+
+if [ -n "$claims_file" ]; then
+  claims="$(cat "$claims_file")" || die_input "cannot read $claims_file"
+else
+  claims="$(gh issue list --label tech-debt --label in-progress --state open \
+    --limit 1000 --json number)" \
+    || die_input "gh issue list failed (auth, network, or rate limit)"
+fi
+printf '%s' "$claims" | jq -e 'type == "array"' >/dev/null 2>&1 \
+  || die_input "the claims list is not a JSON array"
+claimed="$(printf '%s' "$claims" | jq -r '.[].number')" \
+  || die_input "the claims list could not be read"
+[ -n "$claimed" ] || exit 0
+
+pr_heads=""
+if [ -n "$prs_file" ]; then
+  prs="$(cat "$prs_file")" || die_input "cannot read $prs_file"
+  printf '%s' "$prs" | jq -e 'type == "array"' >/dev/null 2>&1 \
+    || die_input "the pull-request list is not a JSON array"
+  pr_heads="$(printf '%s' "$prs" | jq -r '.[].headRefName // empty')" \
+    || die_input "the pull-request head branches could not be read"
+fi
+
+# Whether any pull request, in any state, has the branch as its head. A
+# per-branch read, because a bulk list caps at the newest N and would miss an
+# older closed or merged pull request.
+branch_has_pull_request() {
+  local branch_head="$1" found
+  if [ -n "$prs_file" ]; then
+    grep -qxF -- "$branch_head" <<<"$pr_heads"
+    return
+  fi
+  found="$(gh pr list --head "$branch_head" --state all --limit 1 --json number)" \
+    || die_input "gh pr list failed for $branch_head (auth, network, or rate limit)"
+  printf '%s' "$found" | jq -e 'type == "array"' >/dev/null 2>&1 \
+    || die_input "the pull-request read for $branch_head is not a JSON array"
+  [ "$(printf '%s' "$found" | jq 'length')" -gt 0 ]
+}
+
+if [ -n "$branches_file" ]; then
+  branches="$(cat "$branches_file")" || die_input "cannot read $branches_file"
+else
+  git -C "$directory" rev-parse --git-dir >/dev/null 2>&1 \
+    || die_input "$directory is not a git repository, so no branch can be read"
+  branches="$(git -C "$directory" for-each-ref --format='%(refname:lstrip=2)' refs/heads)" \
+    || die_input "the local branches could not be listed"
+fi
+
+verdict_lines=""
+while IFS= read -r branch_name; do
+  [ -n "$branch_name" ] || continue
+  first_claimed=""
+  while IFS= read -r member; do
+    [ -n "$member" ] || continue
+    grep -qxF -- "$member" <<<"$claimed" || continue
+    if [ -n "$issue" ]; then
+      [ "$member" = "$issue" ] && first_claimed="$member"
+    else
+      [ -n "$first_claimed" ] || first_claimed="$member"
+    fi
+  done < <(gaia_branch_members "$branch_name")
+  [ -n "$first_claimed" ] || continue
+  branch_has_pull_request "$branch_name" && continue
+  verdict_lines+="$(printf '%s\t%s' "$first_claimed" "$branch_name")"$'\n'
+done <<<"$branches"
+# Printed once, after every read succeeded, so an exit 3 leaves stdout empty.
+printf '%s' "$verdict_lines"
+exit 0

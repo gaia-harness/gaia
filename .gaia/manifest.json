@@ -166,6 +166,7 @@
     ".claude/skills/gaia/references/debt.md": "owned",
     ".claude/skills/gaia/references/debt/named.md": "owned",
     ".claude/skills/gaia/references/debt/recommend.md": "owned",
+    ".claude/skills/gaia/references/debt/resume.md": "owned",
     ".claude/skills/gaia/references/debt/spec-handoff.md": "owned",
     ".claude/skills/gaia/references/fitness.md": "owned",
     ".claude/skills/gaia/references/forensics.md": "owned",
@@ -349,6 +350,7 @@
     ".gaia/scripts/debt-parse-args.sh": "owned",
     ".gaia/scripts/debt-path-probe.sh": "owned",
     ".gaia/scripts/debt-stale-claims.sh": "owned",
+    ".gaia/scripts/debt-stuck-fixes.sh": "owned",
     ".gaia/scripts/dev-smoke.sh": "owned",
     ".gaia/scripts/exclusive-lock-lib.sh": "owned",
     ".gaia/scripts/file-tech-debt.sh": "owned",
@@ -927,7 +929,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-25T02:32:31.677Z",
+  "generated": "2026-11-25T03:26:10.009Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
