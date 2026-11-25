@@ -161,13 +161,15 @@ bash .gaia/scripts/pr-body-stamp.sh write --pr <N>
 
 Resolve the members first (`bash .gaia/scripts/resolve-audit-members.sh`). Empty output on a bookkeeping-only release is the fast path: the audit scope reads the same predicate as CI, every changed path is out of audit scope, and the merge gate's out-of-scope bypass clears Step 11's merge and posts the stamp itself, so no unit is dispatched and no marker is owed. Go to Step 11.
 
-Otherwise the release PR is **not** exempt from the merge gate, `.claude/hooks/pr-merge-audit-check.sh` denies `gh pr merge` until every dispatched Code Audit Team member holds a marker for its current branch-own digest. Resolve the members (`bash .gaia/scripts/resolve-audit-members.sh`), then dispatch the `audit-loop-unit` agent per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`: the unit runs the members, fixes every Critical and Major finding, pushes (the tree changes), and repeats on the new HEAD until every member writes its marker (see `wiki/concepts/Audit Round Procedure.md` `#### Marker key` for the marker filename, keyed to the member's branch-own digest, not the tree sha). Post the status per `#### Posting the status last` before the merge. Knip / react-doctor advisories never block the marker.
+Otherwise the release PR is **not** exempt from the merge gate, `.claude/hooks/pr-merge-audit-check.sh` denies `gh pr merge` until every dispatched Code Audit Team member holds a marker for its current branch-own digest and the PR review has recorded its outcome. Resolve the members (`bash .gaia/scripts/resolve-audit-members.sh`), then dispatch the `audit-loop-unit` agent per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`: the unit runs the members, fixes every Critical and Major finding, pushes (the tree changes), and repeats on the new HEAD until every member writes its marker (see `wiki/concepts/Audit Round Procedure.md` `#### Marker key` for the marker filename, keyed to the member's branch-own digest, not the tree sha). Post the status per `#### Posting the status last` before the merge. Knip / react-doctor advisories never block the marker.
 
 Members re-audit from the re-run carry-forward ledger, whose keying, accounting and absent-or-stale fallback `.claude/hooks/lib/audit-member-protocol.md` `## Re-run carry-forward ledger` owns; the fixer is briefed from the round's dispositions file, not the ledger.
 
 Members write their markers only; they do not post the `GAIA-Audit` success status. Once `wiki/concepts/PR Merge Workflow.md` `#### Posting the status last` conditions hold, post it yourself, `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`, before Step 11's merge; otherwise `--auto` queues against a required check nothing ever posts.
 
 ### 11. Merge the PR
+
+A bookkeeping-only release (the fast path Step 10 names) needs no PR review: the merge gate waives it. Any other release PR runs the PR review per `wiki/concepts/PR Merge Workflow.md` `#### PR review` before the merge.
 
 Main must be green at the release pull request's base first; on non-zero, STOP and relay the refusal as in Step 1:
 

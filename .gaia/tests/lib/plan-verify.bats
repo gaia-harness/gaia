@@ -541,6 +541,25 @@ assert_out_of_order() {
   echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF "resume-detection block does not match the template's copy" || { echo "$output" >&2; return 1; }
 }
 
+@test "the code-audit block orders check-all, the PR review, then the late pass, and the post-clearance block is unchanged" {
+  spec_fixture
+  local audit clear check review late
+  audit="$(block_of "$S_AUDIT")"
+  check="$(grep -bo 'audit-dispositions-check.sh check-all' <<<"$audit" | head -n1 | cut -d: -f1)"
+  review="$(grep -bo '#### PR review' <<<"$audit" | head -n1 | cut -d: -f1)"
+  late="$(grep -bo 'the late pass from' <<<"$audit" | head -n1 | cut -d: -f1)"
+  [ -n "$check" ] && [ -n "$review" ] && [ -n "$late" ]
+  [ "$check" -lt "$review" ]
+  [ "$review" -lt "$late" ]
+  grep -qF 'wiki/concepts/PR Merge Workflow.md' <<<"$audit"
+  grep -qF '## Source SPEC' <<<"$audit"
+  grep -qF '{SPEC_PATH}' <<<"$audit" && return 1
+  clear="$(block_of "$S_CLEAR")"
+  grep -qF 'PR review' <<<"$clear" && return 1
+  verify_spec
+  [ "$status" -eq 0 ]
+}
+
 @test "plan-verify matches an indented sentinel, a block copied as the planner indents it and a trailing tab, and does not match a sentinel line carrying trailing prose" {
   spec_fixture
   build_indented_orchestrator spec 6

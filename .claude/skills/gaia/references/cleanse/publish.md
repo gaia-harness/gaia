@@ -33,6 +33,8 @@ Every command below runs from `RESOLVED_ROOT`, on `<CLEANSE_BRANCH>`, whichever 
 
 2. **Open the PR and drive it to merge** through `wiki/concepts/PR Merge Workflow.md` (read it, don't merge from memory):
 
+   Run the PR review per `wiki/concepts/PR Merge Workflow.md` `#### PR review` before the merge.
+
    ```bash
    git push -u origin <CLEANSE_BRANCH>
    gh pr create --draft --title "<commit subject>" --body-file <report-summary-file>

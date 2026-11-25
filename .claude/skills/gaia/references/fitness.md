@@ -236,6 +236,8 @@ It commits everything, pushes, opens the PR as a draft and prints the PR number 
 bash .claude/hooks/post-audit-status.sh <current-member-marker>
 ```
 
+**PR review.** Run the PR review per `wiki/concepts/PR Merge Workflow.md` `#### PR review` before the merge.
+
 **Merge.** As its own Bash call, never through a script, so the local merge gate and every merge-keyed hook fire:
 
 ```bash

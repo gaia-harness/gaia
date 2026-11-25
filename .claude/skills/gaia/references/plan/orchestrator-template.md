@@ -335,7 +335,7 @@ The pre-merge audit is roster-first and non-skippable. It opens with the worthin
 <!-- gaia:orchestrator-step code-audit -->
 **Code Audit Team audit.** First read `.claude/skills/gaia/references/worthiness-step.md` and run it from `RESOLVED_ROOT`. It records a `## Worthiness step` block in `{PLAN_DIR}/PROGRESS.md`, and on a resume that block makes it skip-safe, so it settles only what is still open. Then resolve the dispatched members with `bash .gaia/scripts/resolve-audit-members.sh`, then dispatch the audit loop unit per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`, only after the wiki promotion commit is pushed and the pre-dispatch verification has passed.
 
-On a `clean` unit, run `bash .gaia/scripts/audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>`, then the late pass from `.claude/skills/gaia/references/worthiness-step.md` `## The late pass`, before the final summary, so a residual it decides is surfaced before the merge confirmation. The `GAIA-Audit` status posts later, in the post-clearance block.
+On a `clean` unit, run `bash .gaia/scripts/audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>`, then the PR review per `wiki/concepts/PR Merge Workflow.md` `#### PR review` (once per PR, passing `--spec` the SPEC path this plan's `README.md` names under `## Source SPEC` when it names one), then the late pass from `.claude/skills/gaia/references/worthiness-step.md` `## The late pass`, before the final summary, so a residual it decides is surfaced before the merge confirmation. The `GAIA-Audit` status posts later, in the post-clearance block.
 ```
 
 Before any `gh pr merge` call, resolve which Code Audit Team members this branch's diff dispatches:
