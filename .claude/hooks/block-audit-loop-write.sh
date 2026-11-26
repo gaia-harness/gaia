@@ -170,11 +170,10 @@
 # reintroduced, waiver-drift, an Accept, Stop or State-the-rule recommendation
 # and the cap still ask whatever the reading. Such a reading stands until the
 # next real statusline render overwrites it. A rate-limit reading has the same
-# residuals: a crafted payload piped into .gaia/statusline/gaia-statusline.sh,
-# sourcing .gaia/scripts/rate-limits-lib.sh and calling its writer (directly or
-# through .gaia/statusline/rate-limits-reading.sh), and a write spelled through
-# the wrappers above, a path in a variable or a `cd` followed by a relative
-# name; such a reading stands until a higher real reading or the window's reset.
+# residuals: sourcing .gaia/scripts/rate-limits-lib.sh and calling its writer
+# (directly or through .gaia/statusline/rate-limits-reading.sh), and a write
+# spelled through the wrappers above, a path in a variable or a `cd` followed
+# by a relative name; such a reading stands until a higher real reading or the window's reset.
 # With jq absent, a quoted `'write'` or a doubled space before it passes the
 # jq-absent refusal, which matches the unquoted single-space literal only.
 #

@@ -181,8 +181,8 @@ EOF3
     allow_text "$tool" "$PROFILE" '{"mcpServers":{"example":{"command":"x"}}}' || return 1
   done
 
-  # Stated residual: a payload piped into the statusline is outside the guard.
-  allow_command "echo '$WRITE_JSON' | .gaia/statusline/gaia-statusline.sh" || return 1
+  # A payload piped into the statusline is denied by the context writer arm.
+  refuse_command Bash "echo '$WRITE_JSON' | .gaia/statusline/gaia-statusline.sh" || return 1
 
   # With jq absent the guard still allows the read and refuses every payload
   # carrying one of the guarded literals (exit 2).
