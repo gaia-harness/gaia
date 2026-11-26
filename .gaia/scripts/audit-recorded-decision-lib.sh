@@ -2,10 +2,15 @@
 #
 # The veto write behind a human's recorded fix decision, the owner lookups that
 # gate a cross-remit one and its repair paths, the commit lookup behind a fixed one, and the gate
-# and veto removal behind a discard one. Sourced by audit-pr-sections-lib.sh.
-# Relies on the caller's _error, _evaluator, _round_lookup, _SECURITY_CLASS_JQ,
-# gaia_exclusive_lock_take, _roster_owners, _GAIA_DISPOSITIONS_DIRECTORY, ROOT,
-# RUN_FOLDER and FINDING_FILE. Runs nothing at source time. Never `cd`s.
+# and veto removal behind a discard one. Sourced by audit-pr-sections-lib.sh
+# and pr-review-record-lib.sh. Relies on audit-triage-lib.sh's _roster_owners
+# and _GAIA_REPAIR_PATHS_SHAPED_JQ and the caller's _error, _evaluator,
+# _round_lookup, _SECURITY_CLASS_JQ, gaia_exclusive_lock_take,
+# _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER and FINDING_FILE;
+# pr-review-record-lib.sh calls only _veto_recorded_fix and _veto_withdraw,
+# which need no _round_lookup, _SECURITY_CLASS_JQ or
+# _GAIA_DISPOSITIONS_DIRECTORY. Runs
+# nothing at source time. Never `cd`s.
 
 # _finding_path_owned: true when the roster at ROOT gives FINDING_FILE's path
 # to a member (_roster_owners), whose review is what satisfies a cross-remit
@@ -24,7 +29,7 @@ _finding_path_owned() {
 # unreadable roster included.
 _repair_paths_owned() {
   local repair_paths owners enforcement_path repair_path
-  repair_paths="$(jq -c '.repair_paths // [] | if type == "array" and all(.[]; type == "string" and . != "") then . else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
+  repair_paths="$(jq -c "$_GAIA_REPAIR_PATHS_SHAPED_JQ"'.repair_paths // [] | if repair_paths_shaped then . else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
     { _error "repair_paths in $FINDING_FILE must be an array of non-empty paths"; return 3; }
   [ "$repair_paths" != "[]" ] || return 0
   # Sourced in a child shell: in this one its helpers would overwrite the caller's same-named functions.
@@ -71,7 +76,7 @@ _veto_recorded_fix() {
   local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file="$RUN_FOLDER/vetoes.json.$$" direction repair_paths
   direction="$(jq -r 'if (.reason | type) == "string" and (.reason | test("\\S")) then .reason else "" end' "$FINDING_FILE" 2>/dev/null)" ||
     { _error "unreadable finding $FINDING_FILE, so the fix decision was not recorded"; return 3; }
-  repair_paths="$(jq -c '.repair_paths // [] | if type == "array" and all(.[]; type == "string" and . != "") then unique else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
+  repair_paths="$(jq -c "$_GAIA_REPAIR_PATHS_SHAPED_JQ"'.repair_paths // [] | if repair_paths_shaped then unique else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
     { _error "repair_paths in $FINDING_FILE must be an array of non-empty paths, so the fix decision was not recorded"; return 3; }
   next_unit="$(_evaluator next-unit)" && [[ "$next_unit" =~ ^([0-9]+)\ ([0-9]+)$ ]] ||
     { _error "the evaluator could not print the next unit, so the fix decision was not recorded"; return 3; }

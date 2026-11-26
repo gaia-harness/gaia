@@ -204,10 +204,10 @@ gaia_veto_keys_state() {
   [ -n "$rereport_spans" ] || rereport_spans="{}"
   answer="$(jq -c -s --argjson state "$3" --argjson round "$4" --argjson round_keys "$5" --argjson records "$records" \
     --argjson changed_paths "$changed_paths" --argjson rereport_spans "$rereport_spans" --argjson owners "$owners" \
-    --argjson tolerance "$_GAIA_VETO_REREPORT_TOLERANCE_LINES" '
+    --argjson tolerance "$_GAIA_VETO_REREPORT_TOLERANCE_LINES" "$_GAIA_REPAIR_PATHS_SHAPED_JQ"'
     if length == 1 and (.[0] | type == "object" and .version == 1 and (.keys | type) == "array"
         and all(.keys[]; type == "object" and (.effective_from_round | type == "number" and . == floor)
-          and (.repair_paths | . == null or (type == "array" and all(.[]; type == "string" and . != "")))))
+          and (.repair_paths | repair_paths_shaped)))
     then .[0] else error("malformed vetoes.json") end
     | $state.history.rounds as $rounds
     | def keys_of($j): if $j == $round then $round_keys else ($rounds[$j - 1].snapshot | if type == "object" then .keys else null end) end;
