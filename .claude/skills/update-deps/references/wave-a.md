@@ -11,7 +11,7 @@ any, are handled by the orchestrator).
 ### Wave A (batch minor/patch)
 
 1. Build install args. For each entry: if `is_pinned` use the exact target, else use `^<latest>`. Example: `pnpm -C apps/web add foo@1.2.3 bar@^4.5.0 ...` (an entry declared in the root `package.json` goes through `pnpm add -w` instead).
-2. Run the single `pnpm -C apps/web add` command (plus one `pnpm add -w` for any root-declared entries). If `msw` is in the batch, then run `pnpm -C apps/web msw:init` (`pnpm -C apps/web exec msw init` when the project has no such script) to regenerate `apps/web/public/mockServiceWorker.js`.
+2. Run the single `pnpm -C apps/web add` command (plus one `pnpm add -w` for any root-declared entries). If `msw` is in the batch, then regenerate `apps/web/public/mockServiceWorker.js`. See `.claude/skills/update-deps/SKILL.md` (Companion groups).
 <!-- gaia:maintainer-only:start -->
    An entry carrying `"workspace": ".gaia/cli"` is installed with `pnpm -C .gaia/cli add <name>@<spec>`, never `pnpm -C apps/web add`.
 <!-- gaia:maintainer-only:end -->

@@ -39,6 +39,7 @@ const COPIED_FILES = [
   'vitest.config.ts',
 ];
 
+// subset of .gaia/cli/src/init/configure-data-layer.test.ts#COPIED_FILES
 const UNTOUCHED_WITHOUT_QUERY = [
   'app/root.tsx',
   'app/state/index.tsx',

@@ -20,7 +20,7 @@ See the `tailwind` skill (`apps/web/.claude/skills/tailwind/`, which owns class 
 
 - **No `px` units** in Tailwind classes: use the spacing scale or `rem` for custom values
 - **No template-literal class strings**: they defeat Tailwind's static analysis
-- **Role tokens only for color**: `bg-background`, `text-foreground`, `border-input` and the rest of the set in `theme.css`, never a raw palette class. Each token holds its light and dark values, so components write one utility, not a `dark:` pair. The contract is `apps/web/.claude/rules/tailwind.md`; the token values are a replaceable placeholder ([[Design System]], [[shadcn Component Layer]])
+- **Role tokens only for color**, never a raw palette class: each token holds its light and dark values, so components write one utility, not a `dark:` pair. The contract is `apps/web/.claude/rules/tailwind.md`; the token values are a replaceable placeholder ([[Design System]], [[shadcn Component Layer]])
 
 ## Dark mode pipeline (no React state)
 

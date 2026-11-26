@@ -416,6 +416,7 @@ NO_CALL_SITE_FILES=(
 # reference instead of reading the rest of the file. This is the frozen
 # set; the placement test below derives its own split at runtime
 # rather than trusting this list, and fails when the two disagree.
+# subset of .gaia/scripts/tests/main-only-lib.bats#CALL_SITE_FILES
 EXPECTED_DISPATCHER_FILES=(
   ".claude/commands/gaia-cleanse.md"
   ".claude/commands/gaia-debt.md"

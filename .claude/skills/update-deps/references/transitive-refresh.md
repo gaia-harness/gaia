@@ -56,12 +56,6 @@ Operate on the root workspace and its `web` package (`apps/web`) only: run every
    pnpm build
    ```
    On any failure, revert (step 6) with reason `quality gate failed: <step>`. No remediation pass: one gate run cannot say which of the moved packages broke it.
-6. **Revert** restores the whole refresh, never part of it, from the baseline, leaving the index as it was. Run each line as its own call:
-   ```bash
-   git restore --source=<baseline> --worktree -- package.json pnpm-lock.yaml pnpm-workspace.yaml apps/web/package.json
-   pnpm install --frozen-lockfile
-   git diff --quiet <baseline> -- package.json pnpm-lock.yaml pnpm-workspace.yaml apps/web/package.json
-   ```
-   The last line exits 0 when all four files match the baseline again.
+6. **Revert** restores the whole refresh, never part of it, from the baseline. See `.claude/skills/update-deps/references/security.md` (3. Snapshots), its Revert paragraph only: `<baseline>` is this refresh's own baseline from step 1, and there are no snapshot directories to remove.
 
 Report back: the outcome (`landed`, `Nothing moved`, `Reverted (<reason>)`, or `Not run (snapshot failed: <reason>)`), the step 4 rows (for a revert, the rows that would have moved, when step 4 ran), and the quality gate results.

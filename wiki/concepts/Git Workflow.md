@@ -73,7 +73,7 @@ Beyond rules 1 to 3 and its deny of a hard reset that moves HEAD, the guard deni
 | `git reflog expire`, `delete` or `drop`, `git gc --prune…`, `git prune` | Erase the record or the objects that recover a dropped commit | `git reflog`, `git gc` |
 | `git filter-branch`, `git filter-repo` | Rewrite history across branches | Ask the user to run it |
 
-`block-no-verify.sh` reads the inline `core.hooksPath` override from the parsed globals, so a quoted `-c 'core.hooksPath=x'` and `--config-env=core.hooksPath=X` are denied as the plain spelling is. `block-git-internals-write.sh` denies an Edit, Write or MultiEdit anywhere in `.git/` and on a linked worktree's `.git` file: its config and hooks run commands, and its pointer files (`.git`, `commondir`, `gitdir`) decide which repository git reads.
+`block-no-verify.sh` reads the inline `core.hooksPath` override from the parsed globals, so a quoted `-c 'core.hooksPath=x'` and `--config-env=core.hooksPath=X` are denied as the plain spelling is. See [[Claude Hooks#Bundled hooks]].
 
 Allowed on purpose: a force-push of a feature branch (the rebase repair), deleting a tag, `git worktree remove --force`, and the commands that discard uncommitted work on the session's own branch (`git checkout -- .`, `git restore .`, `git stash drop`/`clear`), which stay ordinary editing.
 

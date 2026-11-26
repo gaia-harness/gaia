@@ -8,7 +8,7 @@ Contents: Connect the repository; CODEOWNERS placeholder; Push protection; First
 
 ## Connect the repository
 
-Ask (AskUserQuestion) with these three options:
+Ask (AskUserQuestion, header `GitHub repo`) with these three options:
 
 > How do you want to connect this project to GitHub?
 >
@@ -73,7 +73,7 @@ gh api graphql -f query='
 
 Order the org set by this ranking; orgs the ranker omits fall to the end in membership order. If the GraphQL call fails or returns nothing (older gh, missing scope, no recent activity), fall back to plain `/user/orgs` order.
 
-Then AskUserQuestion with these options **in this exact order**:
+Then AskUserQuestion (header `Repo owner`) with these options **in this exact order**:
 
 > Where should this repository live?
 >
@@ -276,7 +276,7 @@ else
 fi
 ```
 
-If `false` and this run created the repo (`REPO_CHOICE` is `create`) with `RECONFIGURE` not set, run the Enable block below with no question: a brand-new repo has no merge convention to preserve, so the shipped default applies, the way the isolation policy's does. Otherwise run the declined check for `delete-branch-on-merge` first: when it passes, the question was declined before, so skip it silently. Otherwise AskUserQuestion:
+If `false` and this run created the repo (`REPO_CHOICE` is `create`) with `RECONFIGURE` not set, run the Enable block below with no question: a brand-new repo has no merge convention to preserve, so the shipped default applies, the way the isolation policy's does. Otherwise run the declined check for `delete-branch-on-merge` first: when it passes, the question was declined before, so skip it silently. Otherwise AskUserQuestion (header `Auto-delete`):
 
 > GitHub is set to NOT delete branches when PRs merge, so a merged branch can stay on the remote until someone deletes it by hand. GAIA's own merges usually delete their branch, but not every time, and a pull request merged on github.com leaves its branch behind. Enabling `delete_branch_on_merge` has GitHub delete each pull request's branch as it merges, however it was merged.
 >

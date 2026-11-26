@@ -37,6 +37,7 @@ type FindingClassPrefix = (typeof FINDING_CLASS_PREFIXES)[number];
 
 // Open oracle buckets: the deterministic tool owns the id space after the
 // prefix, so any slug of the safe id shape below is valid.
+// subset of .gaia/cli/src/schemas/finding-class.ts#FINDING_CLASS_PREFIXES
 const ORACLE_PREFIXES: readonly FindingClassPrefix[] = [
   'react-doctor',
   'axe',

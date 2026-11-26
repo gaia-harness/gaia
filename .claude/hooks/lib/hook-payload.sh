@@ -3,7 +3,7 @@
 # shellcheck disable=SC2034 # the GAIA_HOOK_* globals are this library's output, read by the sourcing hook
 #
 # hook-payload.sh: one-jq reader for the fixed set of payload fields most
-# Bash-path hooks need. Sourced, never executed; defines one function and does no
+# Bash-path hooks need. Sourced, never executed; defines functions only and does no
 # work at source time. Bash 3.2 compatible.
 #
 #   gaia_hook_payload_read <raw-payload>
@@ -70,6 +70,14 @@ GAIA_HOOK_GLOB=""
 GAIA_HOOK_COMMAND=""
 # The tools that write a file through `tool_input.file_path`.
 GAIA_HOOK_EDIT_TOOLS=(Edit Write MultiEdit)
+
+# Defined above gaia_hook_payload_read, so a hook's load test for that covers this.
+gaia_hook_is_command_tool() {
+  case "$1" in
+    Bash | Monitor) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 gaia_hook_payload_read() {
   local payload="$1"

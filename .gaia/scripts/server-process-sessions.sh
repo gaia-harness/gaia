@@ -112,6 +112,13 @@ _gaia_server_read_session_host() {
   printf '%s\t%s\n' "$host_pid" "$host_start"
 }
 
+_gaia_server_kind_valid() {
+  case "$1" in
+    dev | storybook) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # gaia_server_record_launch <state-directory> <pid> <port> <kind> <tree-root>:
 # records a server launched by a live Claude session, attributed by process
 # ancestry, falling back to sessions/$CLAUDE_CODE_SESSION_ID.tsv when the
@@ -123,13 +130,10 @@ gaia_server_record_launch() {
     _gaia_server_diagnostic "record launch: invalid state directory, pid, or port"
     return 1
   fi
-  case "$kind" in
-    dev | storybook) ;;
-    *)
-      _gaia_server_diagnostic "record launch: kind must be dev or storybook"
-      return 1
-      ;;
-  esac
+  if ! _gaia_server_kind_valid "$kind"; then
+    _gaia_server_diagnostic "record launch: kind must be dev or storybook"
+    return 1
+  fi
   case "$tree_root" in
     /*) ;;
     *)

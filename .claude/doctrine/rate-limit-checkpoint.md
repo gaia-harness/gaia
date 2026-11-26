@@ -6,7 +6,7 @@ Bands are `warning` and `critical`. The 5-hour window uses one set of bands; the
 
 ## Human present, 5-hour window at or above the warning band
 
-Ask one `AskUserQuestion`, recommendation first and its label ending `(Recommended)`. Options:
+Ask one `AskUserQuestion` (header `Rate limit`), recommendation first and its label ending `(Recommended)`. Options:
 
 - `Chunk it`: offered when the work splits at a phase boundary.
 - `Wait until HH:MM` (the reset time): offered when the reader's projection reaches 100% before the reset. A projection of `unknown` counts as not reaching it.
