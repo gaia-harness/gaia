@@ -123,6 +123,59 @@ _gaia_loop_stop_inputs() {
     '{honored_keys: $honored_keys, marker_gaps: $marker_gaps, unsatisfied_vetoes: $unsatisfied_vetoes}'
 }
 
+# gaia_loop_accept_blockers <main-root> <audited-root> <state-json>
+# <head-tree> <snapshot-json>: the latest round's snapshot with
+# `accept_blockers` added, {"unsatisfied_vetoes","unreviewed_members"}, what
+# an Accept closing round could not finish at <head-tree>. That round runs no
+# fixer, so a veto open after the latest round (unsatisfied at it, or
+# effective only after it) stays open and the clean stop refuses it. A member
+# owed a review of the branch (the set resolve-audit-members.sh resolves at
+# <audited-root>, plus the latest round's members) with neither an earned
+# marker nor a refusal for its digest at <head-tree> has not reviewed the
+# head, so an accept would take hunks no member read; a refusal counts as
+# reviewed, since it is how a member reports the open Major an accept
+# acknowledges. The resolver half names a member no round listed: one whose
+# domain a fixer commit touched, or every owner when a reopened round
+# recorded no members. Derived in memory and never stored, like the stop
+# override. Anything unreadable, the member set included, is a blocker: it
+# can only turn an accept recommendation into a grant. A null snapshot prints
+# null unchanged. Run it in a command substitution: the clearance library it
+# sources stays there.
+gaia_loop_accept_blockers() {
+  local main="$1" root="$2" state="$3" tree="$4" snapshot="${5:-null}" scripts="$_GAIA_LOOP_EVAL_DIRECTORY"
+  local branch_key round vetoes_file later_vetoes='[]' veto_state unsatisfied='["unreadable vetoes"]' member digest unreviewed='[]' owed resolved
+  [ "$snapshot" = null ] && { printf 'null\n'; return 0; }
+  branch_key="$(printf '%s' "$state" | jq -r '.branch')" || return 5
+  round="$(printf '%s' "$state" | jq -r '.history.rounds | length')" || return 5
+  vetoes_file="$(gaia_loop_run_directory "$main" "$branch_key")/vetoes.json"
+  if [ ! -e "$vetoes_file" ] || later_vetoes="$(jq -c --argjson round "$round" \
+    '[.keys[] | select(.effective_from_round > $round) | [.member, .finding_class, .path, .line]]' <"$vetoes_file" 2>/dev/null)"; then
+    veto_state="$(gaia_veto_keys_state "$main" "$branch_key" "$state" "$round" \
+      "$(printf '%s' "$snapshot" | jq -c '.keys // []')" "$root")" &&
+      unsatisfied="$(printf '%s' "$veto_state" | jq -c --argjson later "${later_vetoes:-[]}" '.unsatisfied + $later | unique')" ||
+      unsatisfied='["unreadable vetoes"]'
+  fi
+  if resolved="$(bash "$scripts/resolve-audit-members.sh" --root "$root" 2>/dev/null)"; then
+    owed="$(printf '%s\n' "$resolved" | jq -R -s -c --argjson state "$state" \
+      '[split("\n")[] | select(length > 0)] + [($state.history.rounds | last | .members // [])[] | strings] | unique')" || owed='["unresolvable members"]'
+  else
+    owed='["unresolvable members"]'
+  fi
+  # shellcheck source=/dev/null
+  . "$scripts/../../.claude/hooks/lib/audit-clearance.sh" 2>/dev/null
+  while IFS= read -r member; do
+    if gaia_loop_is_oid "$tree" && [[ "$member" =~ ^[A-Za-z0-9_-]+$ ]] && type clearance_member_cleared >/dev/null 2>&1 &&
+      digest="$(bash "$scripts/audit-member-digest.sh" --root "$root" --member "$member" --ref "$tree" 2>/dev/null)" &&
+      { clearance_member_cleared "$main" "$digest" "$member" || clearance_member_refused "$main" "$digest" "$member"; }; then
+      continue
+    fi
+    unreviewed="$(jq -n -c --argjson unreviewed "$unreviewed" --arg member "$member" '$unreviewed + [$member]')"
+  done < <(printf '%s' "$owed" | jq -r '.[]')
+  printf '%s' "$snapshot" | jq -c --argjson unsatisfied "${unsatisfied:-[\"unreadable vetoes\"]}" --argjson unreviewed "$unreviewed" \
+    'if type != "object" then error("not a snapshot") else . end
+    | . + {accept_blockers: {unsatisfied_vetoes: $unsatisfied, unreviewed_members: $unreviewed}}' 2>/dev/null || return 5
+}
+
 # gaia_loop_accepted_keys <main-root> <state-json> <head-tree>:
 # audit-loop-eval.sh accepted-keys's output, sorted unique
 # {key: [member, finding_class, path, line], lines: [low, high]} for each key a
