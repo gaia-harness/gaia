@@ -138,3 +138,23 @@ reviewer_command() {
   invoke_hook "$(jq -n -c --arg cwd "$checkout" '{tool_name: "Bash", tool_input: {command: "grep -r stop_reason .gaia"}, cwd: $cwd}')" "$HOOK_ABSOLUTE_PATH"
   assert_allowed_by_json
 }
+
+# bats test_tags=protected
+@test "the reviewer is denied a Write or Edit under the audit or run folders, its own output file and the main thread stay allowed" {
+  local tool
+  for tool in Write Edit; do
+    invoke_hook "$(payload "$tool" '{"file_path":"/repo/.gaia/local/audit/abc.ok","content":"x"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+    assert_denied_by_json || { echo "$tool allowed under audit" >&2; return 1; }
+    grep -qF 'BLOCKED: pr-reviewer may not write audit state: /repo/.gaia/local/audit/abc.ok' <<<"$output" || return 1
+    invoke_hook "$(payload "$tool" '{"file_path":".gaia//local/./runs/feat+x/unit-1.json","content":"x"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+    assert_denied_by_json || { echo "$tool allowed under runs" >&2; return 1; }
+  done
+
+  # The reviewer's own output file, in the scratchpad, stays writable.
+  invoke_hook "$(payload Write '{"file_path":"/tmp/scratch/pr-review-7.json","content":"[]"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+  assert_allowed_by_json || return 1
+
+  # The main thread writes under the audit folder untouched.
+  invoke_hook "$(payload Write '{"file_path":"/repo/.gaia/local/audit/abc.ok","content":"x"}')" "$HOOK_ABSOLUTE_PATH"
+  assert_allowed_by_json
+}

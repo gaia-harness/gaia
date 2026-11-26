@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# PreToolUse Read + Grep + Glob + Bash + Monitor hook: keeps the `pr-reviewer`
-# agent away from audit state, so its review of a pull request stays unanchored
-# by what the audit loop already found. Its tool grant (Bash, Read, Write) can
-# still reach audit state; this makes "unanchored" structural rather than a
+# PreToolUse Read + Write + Edit + Grep + Glob + Bash + Monitor hook: keeps the
+# `pr-reviewer` agent away from audit state, so its review of a pull request
+# stays unanchored by what the audit loop already found and cannot change what
+# gates the merge. Its tool grant (Bash, Read, Write) can still reach audit
+# state; this makes "unanchored" and "read-only" structural rather than a
 # promise in its prompt.
 #
 # WHO IT BINDS. Only a call whose payload carries `agent_type` exactly
@@ -13,7 +14,7 @@
 # real JSON parse, because that reader warns that a key nested inside tool_input
 # can lookalike a top-level one.
 #
-# WHAT IT DENIES. A call whose Read `file_path`, Grep `path` or `glob`, Glob
+# WHAT IT DENIES. A call whose Read, Write or Edit `file_path`, Grep `path` or `glob`, Glob
 # `path` or `pattern`, or Bash or Monitor command text names the audit state
 # folder or the run folders under the local state root, in relative or absolute
 # form (the escaped regex below). Each word of the text is also read with its
@@ -40,7 +41,8 @@
 # building the whole path is not), an indirection through another tool, or a
 # subprocess that opens the file itself. The before/after check
 # (.gaia/scripts/pr-review-guard.sh) is the backstop for writes: it compares
-# the tree, the audit state and the commit statuses around the dispatch.
+# the tree, this branch's own audit state and the commit statuses around the
+# dispatch, and leaves out records another lane keys to another branch or head.
 set -euo pipefail
 
 payload=$(cat)
@@ -87,7 +89,14 @@ confirmed_type=$(jq -r '.agent_type // "" | if type == "string" then . else "" e
 gaia_hook_payload_read "$payload" || exit 0
 
 deny() {
-  jq -n --arg reason "BLOCKED: pr-reviewer may not read audit state: $1. Naming those folders in any call is denied, a search pattern included; search the bundle's diff.patch or the changed files instead." '{
+  local action='read' advice="Naming those folders in any call is denied, a search pattern included; search the bundle's diff.patch or the changed files instead."
+  case "$GAIA_HOOK_TOOL_NAME" in
+    Write | Edit)
+      action='write'
+      advice="Write only the output file the dispatch names."
+      ;;
+  esac
+  jq -n --arg reason "BLOCKED: pr-reviewer may not $action audit state: $1. $advice" '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
@@ -305,7 +314,7 @@ check_state_access() {
 }
 
 case "$GAIA_HOOK_TOOL_NAME" in
-  Read)
+  Read | Write | Edit)
     check_text "$GAIA_HOOK_FILE_PATH"
     ;;
   Grep)

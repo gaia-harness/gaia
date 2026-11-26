@@ -163,6 +163,27 @@ marker_body() {
   [ "$status" -eq 1 ]
 }
 
+@test "compare stops on a file whose name puts the own slug behind a decoy segment" {
+  arm_branch_digests
+  take_snapshot
+  printf '[]' >"$REVIEWER_OUTPUT"
+  printf '{}\n' >"$AUDIT_DIRECTORY/$FOREIGN_SHA.decoy.feat%2Fx.code-audit-frontend.findings.json"
+  run compare_after
+  [ "$status" -eq 1 ]
+}
+
+@test "compare reads the own digests the snapshot recorded, not the live refs" {
+  arm_branch_digests
+  marker_body "$HEAD_TREE" "$HEAD_SHA" "$OWN_DIGEST" >"$AUDIT_DIRECTORY/$OWN_DIGEST.ok"
+  take_snapshot
+  printf '[]' >"$REVIEWER_OUTPUT"
+  # Moving the base reference changes the digests a live derivation would find.
+  git -C "$FIXTURE" update-ref refs/remotes/origin/main HEAD
+  marker_body "$FOREIGN_TREE" "$FOREIGN_SHA" "$OWN_DIGEST" >"$AUDIT_DIRECTORY/$OWN_DIGEST.ok"
+  run compare_after
+  [ "$status" -eq 1 ]
+}
+
 @test "compare stops when this branch's own rerun ledger changes" {
   arm_branch_digests
   ledger="$AUDIT_DIRECTORY/$HEAD_SHA.feat%2Fx.rerun.json"

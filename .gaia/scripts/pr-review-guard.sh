@@ -112,8 +112,9 @@ listing_of_files() {
 #     (light/<digest>.<member>.route.json) whose digest is none of this
 #     branch's own member digests and whose recorded tree and commit are both
 #     absent from HEAD's recent history.
-# Everything else stays, including any file that cannot be attributed. When the
-# own digests or HEAD's history cannot be read, no marker or route record is
+# Everything else stays, including any file that cannot be attributed. The slug
+# and own digests are the snapshot's (own_scope), never re-derived at compare.
+# When the own digests or HEAD's history cannot be read, no marker or route record is
 # dropped (another branch's branch-keyed files still are). Dropping a marker
 # or route record is safe because the merge gate matches a marker by digest and
 # the audit base resolvers anchor on a recorded tree in this branch's history,
@@ -123,9 +124,9 @@ listing_of_files() {
 # .github/audit/resolve-audit-base.sh), so a record older than the window
 # cannot anchor this branch.
 audit_listing() {
-  local root="$1" main_root="$2" audit_directory="$2/.gaia/local/audit"
-  local library="$_script_directory/../../.claude/hooks/lib/audit-digest.sh"
-  local scratch listing branch_slug own_digests recent file relative digest
+  local root="$1" main_root="$2" branch_slug="$3" own_digests="$4"
+  local audit_directory="$main_root/.gaia/local/audit"
+  local scratch listing recent file relative digest
   [ -d "$audit_directory" ] || {
     printf '{}'
     return 0
@@ -135,17 +136,17 @@ audit_listing() {
   : >"$scratch/dropped"
   : >"$scratch/candidates"
 
-  branch_slug=$(bash -c '. "$1"; gaia_branch_slug "$2"' _ "$_script_directory/audit-key-lib.sh" "$root" 2>/dev/null) || branch_slug=''
-  own_digests=''
-  if [ -f "$library" ]; then
-    own_digests=$(bash -c '. "$1"; audit_branch_digests_local "$2"' _ "$library" "$root" 2>/dev/null | cut -f2 | grep -E '^[0-9a-f]{64}$' || true)
-  fi
   recent=$(git -C "$root" rev-list -n 500 --format='%H %T' HEAD 2>/dev/null | grep -Ev '^commit ' || true)
 
   while IFS= read -r file; do
     relative="${file#"$audit_directory"/}"
-    if [ -n "$branch_slug" ] && [[ "$relative" =~ ^[0-9a-f]{40}\.([^./]+)\. ]]; then
-      [ "${BASH_REMATCH[1]}" = "$branch_slug" ] || printf '%s\n' "$file" >>"$scratch/dropped"
+    if [ -n "$branch_slug" ] && [[ "$relative" =~ ^[0-9a-f]{40}\.[^./]+\. ]]; then
+      # A file naming the own slug in any later segment is kept: the readers
+      # glob on `.<slug>.`, so a decoy segment ahead of it still reaches them.
+      case ".$relative." in
+        *".$branch_slug."*) ;;
+        *) printf '%s\n' "$file" >>"$scratch/dropped" ;;
+      esac
       continue
     fi
     [ -n "$own_digests" ] && [ -n "$recent" ] || continue
@@ -180,21 +181,50 @@ audit_listing() {
   printf '%s' "$listing"
 }
 
-# capture_state <root> <run-folder> <pr> <output-file>: print the state JSON.
+# own_scope <root> <pr>: print the JSON {slug, digests} that decides which audit
+# records are this branch's own: the branch slug and every member digest
+# measured against the local base reference and against the base tip GitHub
+# reports for the pull request, the one the merge gate measures from. A part
+# that cannot be read is left empty, which drops fewer records, never more.
+own_scope() {
+  local root="$1" pr="$2" library="$_script_directory/../../.claude/hooks/lib/audit-digest.sh"
+  local slug='' digests='' host_base host_digests
+  slug=$(bash -c '. "$1"; gaia_branch_slug "$2"' _ "$_script_directory/audit-key-lib.sh" "$root" 2>/dev/null) || slug=''
+  if [ -f "$library" ]; then
+    digests=$(bash -c '. "$1"; audit_branch_digests_local "$2"' _ "$library" "$root" 2>/dev/null | cut -f2 || true)
+    host_base=$( (cd "$root" && gh pr view "$pr" --json baseRefName --jq .baseRefName) 2>/dev/null || true)
+    if [[ "$host_base" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+      host_digests=$(bash -c '
+        . "$1"
+        repository=$(audit_github_repository "$2") || exit 1
+        tip=$(audit_github_base_tip "$2" "$repository" "$3") || exit 1
+        merge_base=$(audit_branch_patch_merge_base "$2" "$tip") || exit 1
+        audit_branch_digests_all "$2" "$merge_base"' _ "$library" "$root" "$host_base" 2>/dev/null | cut -f2 || true)
+      digests="$digests"$'\n'"$host_digests"
+    fi
+  fi
+  printf '%s\n' "$digests" | grep -E '^[0-9a-f]{64}$' | LC_ALL=C sort -u | jq -R . | jq -s --arg slug "$slug" '{slug: $slug, digests: .}' || true
+}
+
+# capture_state <root> <run-folder> <pr> <output-file> [<scope-json>]: print the
+# state JSON. The scope is the snapshot's own_scope, handed back at compare so
+# nothing the reviewer changes in refs or config moves which records are own.
 capture_state() {
-  local root="$1" run_folder="$2" pr="$3" output_file="$4"
+  local root="$1" run_folder="$2" pr="$3" output_file="$4" scope="${5:-}"
   local main_root head dirty audit runs statuses
   main_root=$(gaia_resolve_main_root "$root") || usage_error "cannot resolve the main checkout root from $root"
   head=$(git -C "$root" rev-parse HEAD) || usage_error "cannot read HEAD in $root"
   dirty=$(dirty_paths "$root" "$output_file" | jq -R . | jq -s .)
-  audit=$(audit_listing "$root" "$main_root")
+  [ -n "$scope" ] || scope=$(own_scope "$root" "$pr")
+  [ -n "$scope" ] || scope='{"slug":"","digests":[]}'
+  audit=$(audit_listing "$root" "$main_root" "$(jq -r '.slug' <<<"$scope")" "$(jq -r '.digests[]' <<<"$scope")")
   runs=$(folder_listing "$main_root" "$run_folder")
   statuses=$( (cd "$root" && gh api "repos/{owner}/{repo}/commits/$head/statuses") 2>/dev/null | jq -S -c 'map(select(.context == "GAIA-Audit"))') ||
     usage_error "gh could not read the commit statuses for $head"
   [ -n "$statuses" ] || usage_error "gh returned no commit statuses document for $head"
   jq -n --arg root "$root" --arg run "$run_folder" --arg pr "$pr" --arg head "$head" \
-    --argjson dirty "$dirty" --argjson audit "$audit" --argjson runs "$runs" --argjson statuses "$statuses" \
-    '{root: $root, run_folder: $run, pr: $pr, head: $head, dirty: $dirty, state: ($audit + $runs), statuses: $statuses}'
+    --argjson dirty "$dirty" --argjson audit "$audit" --argjson runs "$runs" --argjson statuses "$statuses" --argjson scope "$scope" \
+    '{root: $root, run_folder: $run, pr: $pr, head: $head, dirty: $dirty, state: ($audit + $runs), statuses: $statuses, scope: $scope}'
 }
 
 # first_state_difference <before-file> <after-file>: the first added, removed
@@ -247,7 +277,7 @@ run_compare() {
   root=$(jq -r '.root' "$before")
   run_folder=$(jq -r '.run_folder' "$before")
   pr=$(jq -r '.pr' "$before")
-  capture_state "$root" "$run_folder" "$pr" "$output_file" >"$after"
+  capture_state "$root" "$run_folder" "$pr" "$output_file" "$(jq -c '.scope // empty' "$before")" >"$after"
 
   local dirty difference before_head after_head
   dirty=$(jq -r '.dirty | join(",")' "$after")
