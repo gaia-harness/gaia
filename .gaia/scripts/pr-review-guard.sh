@@ -112,9 +112,7 @@ listing_of_files() {
 #     (light/<digest>.<member>.route.json) whose digest is none of this
 #     branch's own member digests and whose recorded tree and commit are both
 #     absent from HEAD's recent history.
-# Everything else stays, including any file that cannot be attributed. The slug
-# and own digests are the snapshot's (own_scope), never re-derived at compare.
-# When the own digests or HEAD's history cannot be read, no marker or route record is
+# Everything else stays, including any file that cannot be attributed. When the own digests or HEAD's history cannot be read, no marker or route record is
 # dropped (another branch's branch-keyed files still are). Dropping a marker
 # or route record is safe because the merge gate matches a marker by digest and
 # the audit base resolvers anchor on a recorded tree in this branch's history,
