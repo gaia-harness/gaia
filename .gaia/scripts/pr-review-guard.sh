@@ -106,8 +106,9 @@ listing_of_files() {
 }
 
 # audit_listing <root> <main-root> <branch-slug> <own-digests>: folder_listing's
-# JSON for the local audit directory, minus the records provably keyed to another branch or head, so a
-# concurrent lane's attributable writes do not read as the reviewer's. A record
+# JSON for the local audit directory, minus the records provably keyed to
+# another branch or head and the light folder's in-flight temp files, so a
+# concurrent lane's attributable writes do not read as the reviewer's. A file
 # is dropped only when it is one of:
 #   - a branch-keyed file (<40-hex base>.<branch slug>.*) of another branch;
 #   - a marker (<64-hex digest>[.<member>].{ok,refused}) or a light route record
@@ -118,8 +119,9 @@ listing_of_files() {
 #     whose digest is none of this branch's own member digests;
 #   - a light folder temp file (light/.<name>.XXXXXX).
 # Everything else stays, including any file that cannot be attributed. When
-# <own-digests> is empty or HEAD's history cannot be read, no marker or route
-# record is dropped (another branch's branch-keyed files still are). Dropping
+# <own-digests> is empty or HEAD's history cannot be read, no marker, route
+# record, or light input or verdict file is dropped (another branch's
+# branch-keyed files and light folder temp files still are). Dropping
 # a marker or route record is safe because the merge gate matches a marker by
 # digest and the audit base resolvers anchor on a recorded tree in this
 # branch's history, so a record at another digest whose tree and commit are both outside HEAD's
@@ -153,8 +155,8 @@ audit_listing() {
       esac
       continue
     fi
-    # A light folder temp file (light/.route.XXXXXX, light/.input.XXXXXX) is a
-    # concurrent route's in-flight write that no reader opens.
+    # A light folder temp file (light/.<name>.XXXXXX, written by the light
+    # route and mark scripts) is a concurrent in-flight write no reader opens.
     if [[ "$relative" =~ ^light/\.[^/]+$ ]]; then
       printf '%s\n' "$file" >>"$scratch/dropped"
       continue

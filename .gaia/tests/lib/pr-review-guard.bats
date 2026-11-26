@@ -27,7 +27,6 @@ setup() {
   printf 'one\n' >"$FIXTURE/.gaia/local/audit/abc.findings.json"
   git -C "$FIXTURE" add -A
   git -C "$FIXTURE" commit -q -m init
-  # The fake gh prints whatever the test last put in the statuses file.
   # A `pr view` answers the base branch; every other call prints the statuses file.
   printf '#!/usr/bin/env bash\n[ "${1:-}" = pr ] && [ "${2:-}" = view ] && { echo main; exit 0; }\ncat "%s"\n' "$SCRATCH/statuses.json" >"$BATS_TEST_TMPDIR/bin/gh"
   chmod +x "$BATS_TEST_TMPDIR/bin/gh"
