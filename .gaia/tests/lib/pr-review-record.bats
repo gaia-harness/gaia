@@ -287,6 +287,12 @@ EOF
 wiki/Foo.md|repair path to no member
 $enforcement_path|enforcement path the fixer can never edit
 |must be an array of non-empty paths
+./src/b.sh|is not a repo-relative path
+/src/b.sh|is not a repo-relative path
+src/../b.sh|is not a repo-relative path
+src//b.sh|is not a repo-relative path
+src/./b.sh|is not a repo-relative path
+src/|is not a repo-relative path
 EOF
   record route-fix --root "$ALF_ROOT" --id pr-2 --repair-path src/b.sh
   [ "$status" -eq 1 ] || return 1

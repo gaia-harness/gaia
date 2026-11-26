@@ -122,7 +122,7 @@ For each finding disposed `fix`:
 bash .gaia/scripts/pr-review-record.sh route-fix --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --id pr-<n> [--repair-path <path>]...
 ```
 
-When the repair belongs in a file other than the finding's, pass `--repair-path <path>` once per such file. The key keeps the finding's file and line, so the finding's owner must still stop re-reporting it, and the veto also needs a change to each repair path reviewed clean by that path's owner. A path no member owns, or one on `ENFORCEMENT_PATHS`, is refused, and so is any repair path on a finding whose route is not `veto`. Passed on a finding already routed, `--repair-path` rewrites the key, so only a change from the next round on counts.
+When the repair belongs in a file other than the finding's, pass `--repair-path <path>` once per such file. The key keeps the finding's file and line, so the finding's owner must still stop re-reporting it, and the veto also needs a change to each repair path reviewed clean by that path's owner. A path that is not plain repo-relative (a leading `./` or `/`, or a `.`, `..` or empty segment), a path no member owns, or one on `ENFORCEMENT_PATHS`, is refused, and so is any repair path on a finding whose route is not `veto`. Passed on a finding already routed, `--repair-path` rewrites the key, so only a change from the next round on counts.
 
 It prints the route:
 
