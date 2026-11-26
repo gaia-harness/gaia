@@ -55,7 +55,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Changed
 
-- **Pull request bodies Claude writes put their `Closes #<n>` lines in one place:** the end of `## Summary`, so a reader sees at a glance which issues a pull request closes.
+- **Pull request bodies Claude writes put their `Closes #<n>` lines in one place:** the end of `## Summary`, so a reader sees at a glance which issues a pull request closes (#3855).
 - **GAIA's `AskUserQuestion` questions name their headers, and restated instructions point at one owner:** a header marks where one question ends, so the `/gaia-fitness` recommendation check now covers GAIA's own questions; the `new-route` skill's questions stay unheaded until the check can read them (#3853). Procedures, lists and thresholds that two instruction files both stated now live in one, with a pointer from the other, so one edit reaches every reader; a copy stays where pointing would drop a fact or wording its file needs (#3829, #3787)
 - **`/gaia-spec` reads a quarter less reference text per run:** auto-mode rules, research dispatch, the critical refuter, the fixer's prompt and each review lens's focus now live in files read only at the step that needs them, or by the sub-agent that uses them, so a run pays only for the branches it takes; every instruction is kept. When sub-agents are unavailable, the spec review is now consistently skipped rather than folded inline by the main thread (#3813, #3832)
 - **An unattended plan run no longer stalls at the test stage:** `.claude/settings.json` now allows the test stage's `node .gaia/scripts/spec/test-stage-check.mjs` call, which matched no allow entry and stopped the run on a permission prompt (#3822)
