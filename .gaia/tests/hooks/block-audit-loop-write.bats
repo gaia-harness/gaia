@@ -10,7 +10,7 @@
 # alongside a write, move or delete verb, while allowing reads, quoted notes
 # that mention it redirected elsewhere, and the audit loop scripts, which never
 # name the folder. A path segment that merely ends in `audit-loop` (a worktree
-# named like `spec-091-audit-loop`) or merely starts with `protected` does not
+# named like `feature-audit-loop`) or merely starts with `protected` does not
 # arm it.
 #
 # Most tests are case tables: one fixture, one row per spelling. A row is
@@ -162,7 +162,7 @@ assert_row_allowed() {
     "Bash~# don't do this lightly${nl}echo '{}' > $STATE${nl}# it's fine now~~"
     "Bash~D=$MAIN/.gaia/local/protected/audit-loop/feat; echo x > \"\$D/x.json\"~~"
     "Bash~for f in $MAIN/.gaia/local/protected/audit-loop/feat/*.json; do echo '{}' > \"\$f\"; done~~"
-    "Bash~rm -f $FIX/spec-091-audit-loop/.gaia/local/protected/audit-loop/feat/x.json~~"
+    "Bash~rm -f $FIX/feature-audit-loop/.gaia/local/protected/audit-loop/feat/x.json~~"
     "Bash~rm -rf $MAIN/.gaia/local/protected/audit-loop/feat~~state"
   )
   for row in "${rows[@]}"; do
@@ -190,12 +190,12 @@ assert_row_allowed() {
     "Bash~cat $STATE > /dev/null~~"
     "Bash~bash .gaia/scripts/audit-loop-eval.sh brief --root /x~~"
     "Bash~bash .gaia/scripts/audit-loop-record.sh --pr 1 --values-json -~~"
-    "Bash~rm -f $FIX/spec-091-audit-loop/notes.txt~~"
-    "Bash~echo x > $FIX/spec-091-audit-loop/app/file.ts~~"
+    "Bash~rm -f $FIX/feature-audit-loop/notes.txt~~"
+    "Bash~echo x > $FIX/feature-audit-loop/app/file.ts~~"
     "Bash~rm /tmp/z~~"
     "Bash~echo x > /tmp/z~~"
     "Read~$STATE~~"
-    "Bash~git -C $FIX/spec-093-audit-loop-unit status --short~~"
+    "Bash~git -C $FIX/feature-audit-loop-unit status --short~~"
     "Bash~printf '%s\n' \"never rm or mv $STATE by hand\" >> $BATS_TEST_TMPDIR/note.txt~~"
   )
   for guarded_path in "$STATE" "$CONTEXT_FILE" "$OVERRIDE" "$NEW_STATE"; do
