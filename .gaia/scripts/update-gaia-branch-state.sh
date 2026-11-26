@@ -45,28 +45,13 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$script_directory/main-root-lib.sh"
 # shellcheck source=/dev/null
 . "$script_directory/update-gaia-local-lib.sh"
+# shellcheck source=/dev/null
+. "$script_directory/branch-worktree-lib.sh"
 
 usage() {
   echo "usage: update-gaia-branch-state.sh classify --tag <tag> --latest <version> [--branch <name>] [--build <dev.sha>]" >&2
   echo "       update-gaia-branch-state.sh add-worktree --branch <name>" >&2
   exit 2
-}
-
-# The path of the worktree whose checked-out branch is $1, or nothing. Reads
-# the porcelain list, so a path containing spaces survives.
-holder_of_branch() {
-  local wanted_ref="refs/heads/$1" line current_path=''
-  while IFS= read -r line; do
-    case "$line" in
-      'worktree '*) current_path="${line#worktree }" ;;
-      "branch $wanted_ref")
-        printf '%s\n' "$current_path"
-        return 0
-        ;;
-      '') current_path='' ;;
-    esac
-  done < <(git worktree list --porcelain 2>/dev/null)
-  return 0
 }
 
 # A version file's content with all whitespace removed; empty when unreadable.
@@ -138,7 +123,7 @@ classify() {
   fi
 
   local holder committed_version committed_build working_version working_build
-  holder="$(holder_of_branch "$branch")"
+  holder="$(gaia_branch_worktree_holder "$branch")"
   committed_version="$(git show "$branch:.gaia/VERSION" 2>/dev/null | tr -d '[:space:]')"
   committed_build="$(git show "$branch:.gaia/VERSION-dev" 2>/dev/null | tr -d '[:space:]')"
 
@@ -170,33 +155,13 @@ add_worktree() {
   done
   [ -n "$branch" ] || usage
 
-  if ! branch_exists "$branch"; then
-    echo "add-worktree: no local branch $branch" >&2
-    return 1
+  local target
+  if target="$(gaia_add_branch_worktree "$branch" 2>&1)"; then
+    echo "ADDED $target"
+    return 0
   fi
-  local holder
-  holder="$(holder_of_branch "$branch")"
-  if [ -n "$holder" ]; then
-    echo "add-worktree: $branch is already held by the worktree at $holder"
-    return 1
-  fi
-
-  local main_root
-  main_root="$(gaia_resolve_main_root)" || {
-    echo "add-worktree: cannot resolve the main checkout root" >&2
-    return 1
-  }
-  local target="$main_root/.claude/worktrees/${branch//\//+}"
-  if [ -e "$target" ]; then
-    echo "add-worktree: $target already exists"
-    return 1
-  fi
-  if ! git worktree add "$target" "$branch" >/dev/null 2>&1; then
-    echo "add-worktree: git worktree add failed for $target"
-    return 1
-  fi
-  echo "ADDED $target"
-  return 0
+  echo "add-worktree: $target"
+  return 1
 }
 
 [ "$#" -ge 1 ] || usage
