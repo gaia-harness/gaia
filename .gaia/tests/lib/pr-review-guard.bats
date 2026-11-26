@@ -226,6 +226,16 @@ marker_body() {
   [ "$status" -eq 0 ]
 }
 
+@test "compare ignores a light route record another digest's lane writes for a foreign head" {
+  arm_branch_digests
+  mkdir -p "$AUDIT_DIRECTORY/light"
+  take_snapshot
+  printf '[]' >"$REVIEWER_OUTPUT"
+  marker_body "$FOREIGN_TREE" "$FOREIGN_SHA" >"$AUDIT_DIRECTORY/light/$FOREIGN_DIGEST.code-audit-frontend.route.json"
+  run compare_after
+  [ "$status" -eq 0 ]
+}
+
 @test "compare ignores a light folder temp file a concurrent route writes" {
   arm_branch_digests
   mkdir -p "$AUDIT_DIRECTORY/light"
