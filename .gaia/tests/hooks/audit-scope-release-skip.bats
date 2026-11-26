@@ -362,6 +362,7 @@ DIGEST_ONLY_CALLERS='.claude/hooks/lib/post-audit-status-gates.sh
 .gaia/scripts/audit-member-digest.sh
 .gaia/scripts/audit-scope-digest.sh
 .gaia/scripts/audit-write-clearance-gates.sh
+.gaia/scripts/pr-review-guard.sh
 .github/audit/resolve-audit-base-context.sh'
 # By design: verify-audit-roster-coverage.sh classifies the whole tree with no diff, and
 # audit-triage-lib.sh asks ownership only for triage marks, which only the

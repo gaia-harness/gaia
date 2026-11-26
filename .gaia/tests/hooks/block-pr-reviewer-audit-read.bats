@@ -27,12 +27,12 @@ payload() {
   # The reviewer reads an audit findings file.
   invoke_hook "$(payload Read '{"file_path":".gaia/local/audit/abc.findings.json"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
   assert_denied_by_json || return 1
-  grep -qF 'BLOCKED: pr-reviewer may not read audit state: .gaia/local/audit/abc.findings.json' <<<"$output" || return 1
+  grep -qF 'BLOCKED: pr-reviewer may not access audit state: .gaia/local/audit/abc.findings.json' <<<"$output" || return 1
 
   # The reviewer cats a run-folder file through Bash.
   invoke_hook "$(payload Bash '{"command":"cat .gaia/local/runs/feat+x/unit-1.json"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
   assert_denied_by_json || return 1
-  grep -qF 'BLOCKED: pr-reviewer may not read audit state: .gaia/local/runs/feat+x/unit-1.json' <<<"$output" || return 1
+  grep -qF 'BLOCKED: pr-reviewer may not access audit state: .gaia/local/runs/feat+x/unit-1.json' <<<"$output" || return 1
 
   # The reviewer reads an ordinary source file.
   invoke_hook "$(payload Read '{"file_path":".gaia/scripts/a.sh"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
@@ -129,12 +129,32 @@ reviewer_command() {
     "find .gaia -name '*.json'"; do
     invoke_hook "$(reviewer_command "$command" "$checkout")" "$HOOK_ABSOLUTE_PATH"
     assert_denied_by_json || { echo "Bash allowed: $command" >&2; return 1; }
-    grep -qF 'BLOCKED: pr-reviewer may not read audit state:' <<<"$output" || { echo "No BLOCKED line: $command" >&2; return 1; }
+    grep -qF 'BLOCKED: pr-reviewer may not access audit state:' <<<"$output" || { echo "No BLOCKED line: $command" >&2; return 1; }
   done
   after="$(git -C "$checkout" status --porcelain --untracked-files=all 2>/dev/null | sort | md5sum)"
   [ "$before" = "$after" ] || return 1
 
   # The same recursive search without the reviewer agent type is allowed.
   invoke_hook "$(jq -n -c --arg cwd "$checkout" '{tool_name: "Bash", tool_input: {command: "grep -r stop_reason .gaia"}, cwd: $cwd}')" "$HOOK_ABSOLUTE_PATH"
+  assert_allowed_by_json
+}
+
+# bats test_tags=protected
+@test "the reviewer is denied a Write or Edit under the audit or run folders, its own output file and the main thread stay allowed" {
+  local tool
+  for tool in Write Edit; do
+    invoke_hook "$(payload "$tool" '{"file_path":"/repo/.gaia/local/audit/abc.ok","content":"x"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+    assert_denied_by_json || { echo "$tool allowed under audit" >&2; return 1; }
+    grep -qF 'BLOCKED: pr-reviewer may not write audit state: /repo/.gaia/local/audit/abc.ok' <<<"$output" || return 1
+    invoke_hook "$(payload "$tool" '{"file_path":".gaia//local/./runs/feat+x/unit-1.json","content":"x"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+    assert_denied_by_json || { echo "$tool allowed under runs" >&2; return 1; }
+  done
+
+  # The reviewer's own output file, in the scratchpad, stays writable.
+  invoke_hook "$(payload Write '{"file_path":"/tmp/scratch/pr-review-7.json","content":"[]"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
+  assert_allowed_by_json || return 1
+
+  # The main thread may still Write under the audit folder.
+  invoke_hook "$(payload Write '{"file_path":"/repo/.gaia/local/audit/abc.ok","content":"x"}')" "$HOOK_ABSOLUTE_PATH"
   assert_allowed_by_json
 }
