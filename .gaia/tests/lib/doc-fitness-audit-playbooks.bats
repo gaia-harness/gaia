@@ -5,10 +5,20 @@
 # sub-reference is linked from its entry.
 # Assertion style: .claude/rules/bats-assertions.md.
 
+# doc_fitness_descendants <pid>: every descendant pid of <pid>, one per line.
+doc_fitness_descendants() {
+  local child
+  for child in $(pgrep -P "$1" || true); do
+    printf '%s\n' "$child"
+    doc_fitness_descendants "$child"
+  done
+}
+
 # The CLI call is bounded: under the parallel whole-tree run it can sit idle
 # with no output, so the whole run never finishes until someone kills it. A
 # poll rather than timeout(1), which stock macOS lacks. The child process list
-# printed before the kill is the clue to which call hung.
+# printed before the kill is the clue to which call hung. The CLI runs without
+# bats' fd 3 so no survivor can hold the run open.
 setup_file() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   CLI_REPORT="$BATS_FILE_TMPDIR/check-report.json"
@@ -16,7 +26,7 @@ setup_file() {
   local suite="${BATS_TEST_FILENAME#"$REPO_ROOT"/}"
   "$REPO_ROOT/.gaia/cli/gaia" fitness check --json --scope all \
     --config "$BATS_FILE_TMPDIR/no-such-config.json" \
-    >"$CLI_REPORT" 2>"$BATS_FILE_TMPDIR/check-stderr.txt" </dev/null &
+    >"$CLI_REPORT" 2>"$BATS_FILE_TMPDIR/check-stderr.txt" </dev/null 3>&- &
   cli_pid=$!
   while kill -0 "$cli_pid" 2>/dev/null; do
     if [ $((SECONDS - started)) -ge "$limit" ]; then
@@ -28,8 +38,13 @@ setup_file() {
         ps -o pid=,stat=,etime=,command= -p "$child_pid" >&2
       done
       printf 'Next: re-run this suite alone with bash .gaia/scripts/bats5.sh %s; a pass alone means the hang needs parallel load, so file it as tech debt with the process list above.\n' "$suite" >&2
-      pkill -KILL -P "$cli_pid" 2>/dev/null
-      kill -KILL "$cli_pid" 2>/dev/null
+      # Kill every descendant, then the CLI; a no-match or a vanished pid must
+      # not abort setup_file under errexit before the CLI is killed.
+      local victims pid
+      victims="$(doc_fitness_descendants "$cli_pid")"
+      for pid in $victims "$cli_pid"; do
+        kill -KILL "$pid" 2>/dev/null || true
+      done
       wait "$cli_pid" 2>/dev/null || true
       return 1
     fi
