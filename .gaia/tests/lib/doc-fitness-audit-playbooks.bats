@@ -38,8 +38,7 @@ setup_file() {
         ps -o pid=,stat=,etime=,command= -p "$child_pid" >&2
       done
       printf 'Next: re-run this suite alone with bash .gaia/scripts/bats5.sh %s; a pass alone means the hang needs parallel load, so file it as tech debt with the process list above.\n' "$suite" >&2
-      # Kill every descendant, then the CLI; a no-match or a vanished pid must
-      # not abort setup_file under errexit before the CLI is killed.
+      # A pid that has already exited must not abort setup_file under errexit.
       local victims pid
       victims="$(doc_fitness_descendants "$cli_pid")"
       for pid in $victims "$cli_pid"; do
