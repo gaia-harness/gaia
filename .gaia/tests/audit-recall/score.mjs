@@ -27,9 +27,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classifyChild, finalReplyText, listAgents } from '../audit-cost/lib/transcripts.mjs';
+import { withinLineWindow } from './lib/match-window.mjs';
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
-const LINE_WINDOW = 5;
 const USAGE = 'usage: score.mjs --before <run1> <run2> --after <run1> <run2> [--corpus <corpus.json>]';
 const VERDICT_TOKEN = /\b(REFUTED|DOWNGRADE|STANDS)\b/;
 
@@ -66,7 +66,7 @@ const readJson = (path) => {
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const nearLine = (line, entry) => Number.isInteger(line) && Math.abs(line - entry.line) <= LINE_WINDOW;
+const nearLine = (line, entry) => Number.isInteger(line) && withinLineWindow(line, entry.line);
 
 const namesLocation = (text, entry) => {
   for (const match of String(text).matchAll(new RegExp(`${escapeRegExp(entry.path)}:(\\d+)`, 'g'))) {

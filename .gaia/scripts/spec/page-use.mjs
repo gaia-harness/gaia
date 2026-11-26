@@ -55,6 +55,7 @@ import {
   isExtendCall,
   isFunctionNode,
   pageBackedFixturesOf,
+  TEST_FUNCTION_NAMES,
 } from './page-use-fixtures.mjs';
 
 const HOOK_NAMES = new Set(['beforeEach', 'beforeAll', 'afterEach', 'afterAll']);
@@ -75,16 +76,14 @@ export function pageUsesOf(ts, sourceFile, filePath = sourceFile.fileName) {
   const isTestCallee = (callee) => {
     if (ts.isIdentifier(callee)) {
       return (
-        callee.text === 'test' ||
-        callee.text === 'it' ||
-        HOOK_NAMES.has(callee.text)
+        TEST_FUNCTION_NAMES.has(callee.text) || HOOK_NAMES.has(callee.text)
       );
     }
     if (ts.isPropertyAccessExpression(callee)) {
       if (HOOK_NAMES.has(callee.name.text)) return true;
       let root = callee.expression;
       while (ts.isPropertyAccessExpression(root)) root = root.expression;
-      return ts.isIdentifier(root) && (root.text === 'test' || root.text === 'it');
+      return ts.isIdentifier(root) && TEST_FUNCTION_NAMES.has(root.text);
     }
     return false;
   };

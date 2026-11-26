@@ -28,7 +28,7 @@ On `true`, record `applied` and stop. On anything else, continue to `## Apply`.
 
 ## Apply
 
-When this run created the repository (`REPO_CHOICE` is `create`) and `RECONFIGURE` is not set, enable with no question: a brand-new repository has no merge convention to preserve. Otherwise ask once with `AskUserQuestion`:
+When this run created the repository (`REPO_CHOICE` is `create`) and `RECONFIGURE` is not set, enable with no question: a brand-new repository has no merge convention to preserve. Otherwise ask once with `AskUserQuestion` (header `Auto-merge`):
 
 > GitHub is set to NOT allow auto-merge, so GAIA cannot queue a merge behind required checks. Enabling `allow_auto_merge` lets GAIA queue it and GitHub completes it when the checks pass. Without it GAIA waits for the required checks itself, then merges.
 >

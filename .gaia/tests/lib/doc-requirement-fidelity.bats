@@ -141,7 +141,7 @@ check_disputes_stay_with_the_fixer() {
   in_order "$hands_off" 'Nor does the unit, and neither dispatches any agent to edit one but the round'"'"'s fixer and the worthiness step'"'"'s fixer, which edits only the tests that step routes to it' || return 1
   in_order "$(joined "$(cat "$1/$ROUND_REL")")" \
     'or states the rule where the fixer can cite it: in the SPEC on a plan build, in a `wiki/decisions/` page, or in the code or docs,' \
-    'No question that names a guard or rule a disputed entry would add recommends adding it unless it quotes the line that requires it, from the SPEC or a document its Required reading names, a `wiki/decisions/` page, or the code or docs' || return 1
+    'What a question about such an entry may recommend: [[PR Merge Workflow#Dispatch the audit loop unit]].' || return 1
 }
 
 # Unless the entry's direction asks for it, the fixer never reverts a choice

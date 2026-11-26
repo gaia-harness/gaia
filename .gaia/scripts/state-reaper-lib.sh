@@ -125,6 +125,12 @@ gaia_reaper_known_key() {
   return 1
 }
 
+# The retention keys resolved through the branch slug rather than the normalized name.
+gaia_reaper_key_is_slug() {
+  case "${1-}" in slug-dot-field | slug-glob) return 0 ;; esac
+  return 1
+}
+
 # shellcheck disable=SC2016
 _GAIA_REAPER_ROW_CHECK_JQ='
 def positive: type == "number" and . == floor and . > 0;

@@ -13,6 +13,7 @@ export {
 } from '../test/contrast';
 
 /** Every theme a scan covers, in the order the specs run them. */
+// subset of apps/web/app/utils/theme.ts#THEME_PREFERENCES
 export const THEMES = ['light', 'dark'] as const;
 
 export type Theme = (typeof THEMES)[number];

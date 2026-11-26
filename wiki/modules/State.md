@@ -32,14 +32,7 @@ Context holds `Maybe<T>`; hook asserts non-null and returns `T`. Optional `useMa
 **Editable** (client-side mutation needed):
 Context holds `[value, setter]` tuple (same shape as `useState`); an empty function is the default setter.
 
-```tsx
-const XContext = createContext<XContextValue>([undefined, () => {}]);
-export const XProvider = ({children, initialState}: XProviderProps) => {
-  const value = useState(initialState);
-  return <XContext.Provider value={value}>{children}</XContext.Provider>;
-};
-XProvider.displayName = 'XProvider';
-```
+See `apps/web/.claude/rules/state-pattern.md` (Two Variants).
 
 ## Naming conventions
 

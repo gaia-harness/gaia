@@ -58,7 +58,7 @@ Return to route and evaluate what it now names, so the changed tests are judged 
 
 ### 5. Delete
 
-With a human, ask one `AskUserQuestion` per test: `Confirm the delete` (Recommended) or `Keep the test`, rendering the cited evidence inline. An approved delete goes to the same fixer, then the Quality Gate, a commit and a push. A refused delete runs `settle --as refused` and records no residual. With no human, run `settle --as residual` and keep the test.
+With a human, ask one `AskUserQuestion` (header `Test delete`) per test: `Confirm the delete` (Recommended) or `Keep the test`, rendering the cited evidence inline. An approved delete goes to the same fixer, then the Quality Gate, a commit and a push. A refused delete runs `settle --as refused` and records no residual. With no human, run `settle --as residual` and keep the test.
 
 ### 6. File
 

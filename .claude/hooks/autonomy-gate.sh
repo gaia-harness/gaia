@@ -387,11 +387,12 @@ case "$GAIA_HOOK_TOOL_NAME" in
         target=$(jq -r '.tool_input["notebook_path"] // "" | strings' <<<"$payload" 2>/dev/null) || target=''
         [ -z "$target" ] || ! is_protected "$target" || deny_protected
         ;;
-      Bash | Monitor)
-        [ -z "$GAIA_HOOK_COMMAND" ] || bash_gate "$GAIA_HOOK_COMMAND"
-        ;;
       *)
-        [ -z "$GAIA_HOOK_FILE_PATH" ] || ! is_protected "$GAIA_HOOK_FILE_PATH" || deny_protected
+        if gaia_hook_is_command_tool "$GAIA_HOOK_TOOL_NAME"; then
+          [ -z "$GAIA_HOOK_COMMAND" ] || bash_gate "$GAIA_HOOK_COMMAND"
+        else
+          [ -z "$GAIA_HOOK_FILE_PATH" ] || ! is_protected "$GAIA_HOOK_FILE_PATH" || deny_protected
+        fi
         ;;
     esac
     ;;

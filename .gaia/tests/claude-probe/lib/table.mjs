@@ -299,18 +299,28 @@ export const expandRow = (row, snapshotDirectory) => {
     .map((path) => ({ subject: path, display: path }));
 };
 
+// The name a skill file or a command file is listed under, or undefined for
+// any other path.
+export const skillName = (path) => {
+  const skill = /(?:^|\/)\.claude\/skills\/([^/]+)\/SKILL\.md$/.exec(path);
+  if (skill) return skill[1];
+  const command = /(?:^|\/)\.claude\/commands\/(.+)\.md$/.exec(path);
+  return command ? command[1].replace(/\//g, ':') : undefined;
+};
+
+// The name an agent file is listed under, or undefined for any other path.
+export const agentName = (path) => /(?:^|\/)\.claude\/agents\/(?:.*\/)?([^/]+)\.md$/.exec(path)?.[1];
+
 // The key an observation of this kind is matched on: rules and CLAUDE.md by
 // repo-relative path, skills and agents by name, everything else verbatim.
 export const subjectKey = (kind, subject) => {
   if (matchKind(kind) === 'skill') {
-    const skill = /(?:^|\/)\.claude\/skills\/([^/]+)\/SKILL\.md$/.exec(subject);
-    if (skill) return skill[1];
-    const command = /(?:^|\/)\.claude\/commands\/(.+)\.md$/.exec(subject);
-    if (command) return command[1].replace(/\//g, ':');
+    const skill = skillName(subject);
+    if (skill !== undefined) return skill;
   }
   if (kind === 'agent') {
-    const agent = /(?:^|\/)\.claude\/agents\/(?:.*\/)?([^/]+)\.md$/.exec(subject);
-    if (agent) return agent[1];
+    const agent = agentName(subject);
+    if (agent !== undefined) return agent;
   }
   return subject;
 };

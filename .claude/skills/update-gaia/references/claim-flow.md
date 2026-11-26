@@ -31,7 +31,7 @@ bash .gaia/scripts/update-claim.sh login --tree <starting checkout>
     ```
 
     On a local run this call also carries `--build <LOCAL_BUILD>` (`local-bundle.md` `## Claim on a local run`). Follow Step 3's default-branch routes for that result and persist what they persist. A `COMMITTED` own claim reports the PR's state and exits instead of resuming. Step 4's claim is then idempotent.
-- **The user's own claim for another tag**: report its PR number and age, then ask with `AskUserQuestion` "Close it and start fresh (Recommended)" or "Stop". On Stop, exit. On close, run the call below, then continue as a fresh run. A second update PR is never opened while an own claim is open.
+- **The user's own claim for another tag**: report its PR number and age, then ask with `AskUserQuestion` (header `Own claim`) "Close it and start fresh (Recommended)" or "Stop". On Stop, exit. On close, run the call below, then continue as a fresh run. A second update PR is never opened while an own claim is open.
 
   ```bash
   bash .gaia/scripts/update-claim.sh close-own --tree <starting checkout> --number <number> --branch <headRefName>

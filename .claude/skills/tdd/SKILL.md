@@ -51,7 +51,7 @@ Before writing any code:
 - [ ] Confirm which layer owns this test (`.claude/doctrine/testing.md`; the stack reference says how to write it)
 - [ ] Confirm which behaviors to test (prioritize)
 - [ ] Name the user-observable behaviors and the one acceptance test that owns each; one test may own several (not implementation steps, not one test per function)
-- [ ] Get user approval on the plan with `AskUserQuestion`: `Approve the plan` (Recommended) or `Revise`
+- [ ] Get user approval on the plan with `AskUserQuestion` (header `TDD plan`): `Approve the plan` (Recommended) or `Revise`
 
 Ask: "What should the public interface look like? Which behaviors are most important to test?"
 

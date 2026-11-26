@@ -80,6 +80,7 @@ export const IMPORTER_DEPENDENCY_FIELDS = [
   'devDependencies',
   'optionalDependencies',
 ] as const;
+// subset of .gaia/cli/src/release/pnpm-member-strip.ts#IMPORTER_DEPENDENCY_FIELDS
 const SNAPSHOT_DEPENDENCY_FIELDS = [
   'dependencies',
   'optionalDependencies',

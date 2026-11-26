@@ -15,7 +15,7 @@ No design system is established. The current visual styling is a neutral baselin
 
 The token values in `apps/web/app/styles/theme.css` are shadcn's neutral set, a placeholder the adopter replaces. They carry no brand hue and no opinion the adopter must keep. Nothing in the current styling implies a chosen visual language.
 
-Three values differ from the stock neutral set: `--muted-foreground` and `--destructive` in the light theme, and `--ring` in both themes. These are accessibility fixes (text contrast and focus visibility), not brand choices; keep them when replacing the placeholder or re-measure. The measurements are in [[shadcn Component Layer]].
+The accessibility overrides to keep when replacing the placeholder: `apps/web/.claude/rules/design-baseline.md`; their measurements: [[shadcn Component Layer]].
 
 The contract for using tokens (role tokens only, and when a new one needs approval) lives in `apps/web/.claude/rules/tailwind.md`. It permits adding a role token whose value equals an existing token or a value the code already repeats; a new color value asks first.
 
