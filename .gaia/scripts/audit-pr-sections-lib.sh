@@ -38,8 +38,9 @@ def line_of: if type == "number" and . >= 1 then . else 1 end;
 # not critical); divert rows carry no reason, since only their count is rendered.
 # An accept, waiver or triage row drops a key any veto names, whatever its
 # round: the veto repairs it, so it is no longer a residual or a waiver. A
-# divert row drops a key only for the rounds its veto binds. An accept row for a key the round history lists in
-# that round's human_accepted_keys (audit-accept-finding) leads with "Human decision: ".
+# divert row drops a key only for the rounds its veto binds. An accept row for
+# a key the round history lists in that round's human_accepted_keys
+# (audit-accept-finding) leads with "Human decision: ".
 # shellcheck disable=SC2016
 _ROWS_JQ="$_ROW_TEXT_JQ$_RESIDUAL_REASON_JQ"'
 def key_array: [.member, .finding_class, .path, .line];

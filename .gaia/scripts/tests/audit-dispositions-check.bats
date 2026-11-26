@@ -520,7 +520,7 @@ tree_state() {
   grep -qF -- 'Out-of-scope machinery findings' <<<"$output"
 }
 
-@test "pr-sections: a veto effective from a later round drops an earlier round's triage waiver, disposed or only marked" {
+@test "pr-sections: a veto effective from a later round drops an earlier round's triage waiver, disposed or lookup-flagged only" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug waive-out-of-scope "below threshold" triage-threshold)]")"
   run_sections
   green || return 1
@@ -543,7 +543,7 @@ tree_state() {
   true
 }
 
-@test "pr-sections: a veto effective from a later round drops an earlier round's accepted residual and its cross-remit waiver" {
+@test "pr-sections: a veto effective from a later round drops an earlier round's accepted residual and cross-remit waiver" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp accept-residual "closing round left it"),$(disposition_entry f.txt 4 c/xr waive-out-of-scope "other remit" cross-remit)]")"
   run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
   green || return 1
