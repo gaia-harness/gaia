@@ -134,14 +134,13 @@ _gaia_loop_stop_inputs() {
 # marker nor a refusal for its digest at <head-tree> has not reviewed the
 # head, so an accept would take hunks no member read; a refusal counts as
 # reviewed, since it is how a member reports the open Major an accept
-# acknowledges. Owed members come from the branch, not from the latest
-# round's list, so a fixer commit into another member's domain and a reopened
-# round recorded with no members both surface. Derived in memory
-# and never stored, like the stop override. Anything unreadable, the member
-# set included, is a blocker: it can only turn an accept recommendation into
-# a grant. A null
-# snapshot prints null unchanged. Run it in a command substitution: the
-# clearance library it sources stays there.
+# acknowledges. The resolver half names a member no round listed: one whose
+# domain a fixer commit touched, or every owner when a reopened round
+# recorded no members. Derived in memory and never stored, like the stop
+# override. Anything unreadable, the member set included, is a blocker: it
+# can only turn an accept recommendation into a grant. A null snapshot prints
+# null unchanged. Run it in a command substitution: the clearance library it
+# sources stays there.
 gaia_loop_accept_blockers() {
   local main="$1" root="$2" state="$3" tree="$4" snapshot="${5:-null}" scripts="$_GAIA_LOOP_EVAL_DIRECTORY"
   local branch_key round vetoes_file later_vetoes='[]' veto_state unsatisfied='["unreadable vetoes"]' member digest unreviewed='[]' owed resolved

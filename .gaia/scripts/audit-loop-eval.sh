@@ -221,9 +221,9 @@
 # unless the snapshot is accept_eligible and an Accept closing round could end
 # clean at HEAD: no veto open after the latest round, and every member owed
 # a review of the branch (the resolve-audit-members.sh set plus the latest
-# round's members) holds an earned marker or a refusal for its digest at HEAD's tree
-# (gaia_loop_accept_blockers in audit-loop-stop-lib.sh; the brief prints its
-# accept_blockers).
+# round's members) holds an earned marker or a refusal for its digest at
+# HEAD's tree (gaia_loop_accept_blockers in audit-loop-stop-lib.sh; the brief
+# prints its accept_blockers).
 # Spend is shown as information only and never changes any other field.
 
 _GAIA_LOOP_EVAL_DIRECTORY="${BASH_SOURCE[0]%/*}"
