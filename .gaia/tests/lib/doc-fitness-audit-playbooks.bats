@@ -6,14 +6,14 @@
 # Assertion style: .claude/rules/bats-assertions.md.
 
 # The CLI call is bounded: under the parallel whole-tree run it can sit idle
-# with no output, holding every other suite until someone kills it. A poll
-# rather than timeout(1), which stock macOS lacks. On the limit, list the
-# CLI's child processes (the clue to which call hung), kill them and the CLI,
-# and fail. DOC_FITNESS_CHECK_TIMEOUT_SECONDS overrides the limit.
+# with no output, so the whole run never finishes until someone kills it. A
+# poll rather than timeout(1), which stock macOS lacks. The child process list
+# printed before the kill is the clue to which call hung.
 setup_file() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   CLI_REPORT="$BATS_FILE_TMPDIR/check-report.json"
   local limit="${DOC_FITNESS_CHECK_TIMEOUT_SECONDS:-300}" cli_pid started="$SECONDS"
+  local suite="${BATS_TEST_FILENAME#"$REPO_ROOT"/}"
   "$REPO_ROOT/.gaia/cli/gaia" fitness check --json --scope all \
     --config "$BATS_FILE_TMPDIR/no-such-config.json" \
     >"$CLI_REPORT" 2>"$BATS_FILE_TMPDIR/check-stderr.txt" </dev/null &
@@ -21,13 +21,13 @@ setup_file() {
   while kill -0 "$cli_pid" 2>/dev/null; do
     if [ $((SECONDS - started)) -ge "$limit" ]; then
       printf "%s: setup_file's gaia fitness check --json --scope all did not exit within %ss; killed it.\n" \
-        "${BATS_TEST_FILENAME#"$REPO_ROOT"/}" "$limit" >&2
+        "$suite" "$limit" >&2
       printf 'The CLI and its child processes when killed:\n' >&2
       ps -o pid,stat,etime,command -p "$cli_pid" >&2
       pgrep -P "$cli_pid" | while IFS= read -r child_pid; do
         ps -o pid=,stat=,etime=,command= -p "$child_pid" >&2
       done
-      printf 'Next: re-run this suite alone with bash .gaia/scripts/bats5.sh; a pass alone means the hang needs parallel load, so file it as tech debt with the process list above.\n' >&2
+      printf 'Next: re-run this suite alone with bash .gaia/scripts/bats5.sh %s; a pass alone means the hang needs parallel load, so file it as tech debt with the process list above.\n' "$suite" >&2
       pkill -KILL -P "$cli_pid" 2>/dev/null
       kill -KILL "$cli_pid" 2>/dev/null
       wait "$cli_pid" 2>/dev/null || true
