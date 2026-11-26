@@ -20,6 +20,12 @@ const QUOTES_CLOSE = '`"”';
 const labelBefore = (text: string, markerIndex: number): string => {
   if (markerIndex > 0 && !/\s/.test(text.charAt(markerIndex - 1))) return '';
 
+  // A marker quoted as `` ` (Recommended)` `` names the mark itself, not an option.
+  const quoted = markerIndex > 1 && text.charAt(markerIndex - 2) === '`';
+
+  if (quoted && text.charAt(markerIndex + MARKER_TEXT.length) === '`')
+    return '';
+
   let end = markerIndex;
 
   while (end > 0 && LABEL_PADDING.includes(text.charAt(end - 1))) end -= 1;

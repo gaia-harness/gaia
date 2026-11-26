@@ -8,7 +8,7 @@ model: haiku
 
 ## Workflow
 
-1. Confirm with the user: the name (kebab-case) as free text, then the group (`_public` or `_session`), whether the page loads service data (and which variant), and whether it needs `--action`, as one `AskUserQuestion` call of three questions, each with its recommended answer first and marked ` (Recommended)`. Pass `--i18n` whenever the project has i18n (`app/i18n.ts` exists): without it the page carries literal text, which lint (`i18next/no-literal-string`) rejects.
+1. Confirm with the user: the name (kebab-case) as free text, then the group (`_public` or `_session`, header `Group`), whether the page loads service data and which variant (header `Data`), and whether it needs `--action` (header `Action`), as one `AskUserQuestion` call of three questions, each with its recommended answer first and marked ` (Recommended)`. Pass `--i18n` whenever the project has i18n (`app/i18n.ts` exists): without it the page carries literal text, which lint (`i18next/no-literal-string`) rejects.
 2. Run from the repo root: `./.gaia/cli/gaia scaffold route <name> --group <group> [flags]` (the package comes from the registry, not the working directory). Flags: `./.gaia/cli/gaia scaffold route --help`.
 3. Verify: `pnpm typecheck` clean; `pnpm dev` reaches the new route.
 4. Before filling in the page, loader, or action by hand, read one or two existing routes with a similar shape and follow their pattern.

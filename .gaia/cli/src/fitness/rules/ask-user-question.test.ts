@@ -110,6 +110,15 @@ describe('AskUserQuestion site grammar', () => {
     expect(site.recommendedLabels.size).toBe(0);
   });
 
+  test('a marker quoted with its leading space names no option', () => {
+    const site = only(
+      'Ask with one `AskUserQuestion` call of two questions (header `Group`, header `Data`), each recommended answer first and marked ` (Recommended)`.'
+    );
+
+    expect(site.recommendedLabels.size).toBe(0);
+    expect(site.hasMarker).toBe(true);
+  });
+
   test('a block that only names the tool is mention-only, not a site', () => {
     const classified = classify(
       fileOf(
