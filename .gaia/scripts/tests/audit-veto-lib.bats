@@ -350,13 +350,14 @@ fixer_result_on() {
 # code-audit-shell, which reviews rounds 2 and 3. Round 2's owner reported
 # NEIGHBOUR, two lines from the vetoed line; round 3 reports nothing.
 pr_review_base() {
+  local round_three_tree="${1:-TREE_FIXED}"
   VETOED_IDENTITY='["pr-reviewer","pr-review/pr-1","f.txt",2]'
   NEIGHBOUR='["code-audit-shell","holistic/unclassified","f.txt",4]'
   roster_owning_vetoed_path code-audit-shell
   inline_base TREE_FIXED || return 1
   STATE="$(jq -c --argjson neighbour "$NEIGHBOUR" '.history.rounds[1].members = ["code-audit-shell"]
     | .history.rounds[1].snapshot = {keys: [$neighbour]}
-    | .history.rounds += [.history.rounds[1] | .round = 3 | .snapshot = null]' <<<"$STATE")"
+    | .history.rounds += [.history.rounds[1] | .round = 3 | .snapshot = null | .tree = $round_three_tree]' --arg round_three_tree "${!round_three_tree}" <<<"$STATE")"
   ROUND_KEYS='[]'
 }
 
@@ -366,10 +367,15 @@ pr_review_veto_state() {
 
 @test "veto-state pr-reviewer: an owner finding near the repair stops counting as the vetoed one only when an earlier round fixed it under its own key; a waived one, or one in round r, still does" {
   # fixed neighbour clears
-  pr_review_base || return 1
+  pr_review_base TREE_MOVED || return 1
   fix_entry 2 fix "$NEIGHBOUR"
   fixer_result_on 2 fixed "$NEIGHBOUR"
   [ "$(pr_review_veto_state)" = 1 ] || { echo "a neighbour fixed under its own key"; return 1; }
+  reset_run # a fixed claim with no change to the neighbour's path since the round does not excuse it
+  pr_review_base TREE_FIXED || return 1
+  fix_entry 2 fix "$NEIGHBOUR"
+  fixer_result_on 2 fixed "$NEIGHBOUR"
+  [ "$(pr_review_veto_state)" = 0 ] || { echo "a fixed claim with no tree change"; return 1; }
   reset_run # waived, filed or diverted neighbour still blocks
   local disposition
   for disposition in waive-out-of-scope file divert; do
@@ -443,6 +449,16 @@ repair_base() {
   repair_base TREE_UNRELATED || return 1
   ROUND_KEYS="[$VETOED_IDENTITY]"
   [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "the key re-reported on its own path"; return 1; }
+  # The repair landed only in g.txt, so f.txt has no hunk: a same-class finding far from the vetoed line is another finding.
+  repair_base TREE_UNRELATED || return 1
+  ROUND_KEYS='[["code-audit-frontend","rule/x","f.txt",30]]'
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ] || { echo "a far finding on a key path with no hunk"; return 1; }
+  ROUND_KEYS='[["code-audit-frontend","rule/x","f.txt",3]]'
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "a near finding on a key path with no hunk"; return 1; }
+  # The owner's finding on the repair path far from the hunk the repair wrote is another finding.
+  repair_base TREE_UNRELATED || return 1
+  ROUND_KEYS='[["code-audit-shell","rule/y","g.txt",30]]'
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ] || { echo "a far owner finding on the repair path"; return 1; }
   # TREE_FIXED is built on TREE_UNRELATED, so from that waiver tree only f.txt changed.
   repair_base TREE_FIXED || return 1
   STATE="$(jq -c --arg tree "$TREE_UNRELATED" '.history.rounds[0].tree = $tree' <<<"$STATE")"

@@ -112,22 +112,27 @@ END {
 # one of its base trees and a later round tree through r, the line spans of its
 # path where a re-report reads as the vetoed finding, from the diff of the base
 # tree to that round tree, as {"<base-tree>..<round-tree>": {"<path>\n<line>":
-# [[low, high], ...]}}. A pair whose diff cannot be read or holds no hunk is
-# left out, and the caller falls back to ignoring the line, which can only
-# leave a veto unsatisfied.
+# [[low, high], ...]}}. A pair whose diff cannot be read is left out, and the
+# caller falls back to ignoring the line, which can only leave a veto
+# unsatisfied. A pair whose diff is readable but holds no hunk gets the
+# identity span [[line, line]]: the path did not change, so the line maps to
+# itself. Each repair path of a veto also gets an entry under line 0, whose
+# first span is a placeholder and whose other spans are the hunks written there.
 _gaia_veto_rereport_spans() {
-  local main="$1" rows base_tree round_tree line path spans answer="{}"
+  local main="$1" rows base_tree round_tree line path spans diff_text answer="{}"
   rows="$(jq -r -s --argjson state "$2" --argjson round "$3" --argjson records "$5" "$_GAIA_VETO_BASE_PAIRS_JQ"'
     .[0].keys[]? | select((.effective_from_round | type == "number" and . <= $round)
         and (.line | type == "number" and . == floor) and (.path | type == "string"))
-    | . as $veto | base_pairs | . + [($veto.line | tostring), $veto.path]
+    | . as $veto | base_pairs | . as $pair
+    | ([($veto.line | tostring), $veto.path], (($veto.repair_paths | arrays | .[] | strings) | ["0", .])) as $tail
+    | $pair + $tail
     | select((.[0] | type == "string") and (.[1] | type == "string")) | @tsv' <"$4" 2>/dev/null)" || return 0
   while IFS=$'\t' read -r base_tree round_tree line path; do
     [ -n "$path" ] || continue
     if ! gaia_loop_is_oid "$base_tree" || ! gaia_loop_is_oid "$round_tree"; then continue; fi
     # A path is data, never a pathspec pattern.
-    spans="$(GIT_LITERAL_PATHSPECS=1 _gaia_loop_git -C "$main" diff -U0 --no-color --no-ext-diff --no-renames "$base_tree" "$round_tree" -- "$path" 2>/dev/null |
-      awk -v vetoed_line="$line" "$_GAIA_VETO_SPANS_AWK")" || continue
+    diff_text="$(GIT_LITERAL_PATHSPECS=1 _gaia_loop_git -C "$main" diff -U0 --no-color --no-ext-diff --no-renames "$base_tree" "$round_tree" -- "$path" 2>/dev/null)" || continue
+    spans="$(printf '%s\n' "$diff_text" | awk -v vetoed_line="$line" "$_GAIA_VETO_SPANS_AWK")" || spans="$line $line"
     [ -n "$spans" ] || continue
     answer="$(printf '%s' "$spans" | jq -R -c --argjson answer "$answer" --arg pair "$base_tree..$round_tree" --arg identity "$path"$'\n'"$line" '
       (split(" ") | map(tonumber)) as $bounds
@@ -166,8 +171,9 @@ _gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c 
 # A key whose entry names repair_paths (its repair lands in other files) also
 # counts round j's change to one of those paths as touching it, and further
 # needs, for every repair path, a later round whose diff touches it, from which
-# on the path's roster owner was dispatched and reported no finding on it but
-# ones an earlier round disposed `fix` under their own keys and fixed. An
+# on the path's roster owner was dispatched and reported no finding within the
+# tolerance of the hunks the repair wrote there, but ones an earlier round
+# disposed `fix` under their own keys and fixed. An
 # unowned repair path never satisfies. Without repair_paths, a fix that lands
 # only in another file leaves the key unsatisfied on both routes.
 # Reviewed: at least one round in the span dispatched the key's reviewer,
@@ -180,7 +186,8 @@ _gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c 
 # on the path re-reports the key within the tolerance of the spans the
 # base-round diff maps the vetoed line to, else of the vetoed line itself,
 # except, for a pr-reviewer key, a finding that an earlier round disposed `fix`
-# under its own key and whose fixer reported it `fixed`. That exception, like the
+# under its own key, whose fixer reported it `fixed` and whose path the next
+# round's tree changed. That exception, like the
 # one for a repair path's owner, never reaches round r's findings.
 # rc 1 on an unreadable or malformed vetoes.json.
 gaia_veto_keys_state() {
@@ -210,11 +217,15 @@ gaia_veto_keys_state() {
     # base round maps the vetoed line to there, or null with no such diff.
     def spans_at($base; $key):
       $rereport_spans["\($rounds[$base - 1].tree)..\($rounds[. - 1].tree)"]["\($key[2])\n\($key[3])"] // null;
-    # resolved_in($k; $reported): round k disposed the reported key `fix` and its
-    # fixer reported it `fixed`. Records exist only for rounds before r, so the
-    # findings of the latest round never resolve.
+    def touched($from; $to; $paths):
+      any(($changed_paths["\($rounds[$from - 1].tree)..\($rounds[$to - 1].tree)"] // [])[]; IN($paths[]));
+    # resolved_in($k; $reported): round k disposed the reported key `fix`, its
+    # fixer reported it `fixed`, and the next round tree changed its path, so
+    # a fixer claim alone never resolves it. Records exist only for rounds
+    # before r, so the findings of the latest round never resolve.
     def resolved_in($k; $reported):
-      any($records.fixes[]; .round == $k and .key == $reported) and any($records.fixed[]; .round == $k and .key == $reported);
+      any($records.fixes[]; .round == $k and .key == $reported) and any($records.fixed[]; .round == $k and .key == $reported)
+      and touched($k; $k + 1; [$reported[2]]);
     # owner_rereports($base; $key) reads [round, reported key]: the path
     # owner reporting any class near the vetoed line on the path of the key.
     # For a pr-reviewer key, a finding the loop fixed under its own key in that
@@ -241,18 +252,23 @@ gaia_veto_keys_state() {
             | $spans == null or ($reported[3] | type) != "number"
               or any($spans[]; $reported[3] >= .[0] - $tolerance and $reported[3] <= .[1] + $tolerance)))
         or owner_rereports($base; $key);
-    def touched($from; $to; $paths):
-      any(($changed_paths["\($rounds[$from - 1].tree)..\($rounds[$to - 1].tree)"] // [])[]; IN($paths[]));
     def changed_at($base; $j; $paths): touched($base; $j; $paths) and ($j == $base + 1 or touched($j - 1; $j; $paths));
     # repair_reviewed($base; $path): the repair path changed after the base and
-    # its owner, dispatched from that change on, reported nothing on it but
-    # findings an earlier round fixed under their own keys.
+    # its owner, dispatched from that change on, reported nothing within the
+    # tolerance of the hunks the repair wrote there but findings an earlier
+    # round fixed under their own keys. A finding with no line, or a path whose
+    # hunks cannot be read, counts.
+    def repair_written_near($base; $reviewed_round; $path; $line):
+      ($rereport_spans["\($rounds[$base - 1].tree)..\($rounds[$reviewed_round - 1].tree)"]["\($path)\n0"] // null) as $spans
+      | ($line | type) != "number" or $spans == null
+        or any($spans[1:][]; $line >= .[0] - $tolerance and $line <= .[1] + $tolerance);
     def repair_reviewed($base; $path):
       ($owners[$path] // null) as $owner
       | $owner != null
         and any(range($base + 1; $round + 1); . as $j | changed_at($base; $j; [$path])
           and reviewed_by($j; [$owner]; .[0] as $reviewed_round | .[1] as $reported
-            | $reported[0] == $owner and $reported[2] == $path and (resolved_in($reviewed_round; $reported) | not)));
+            | $reported[0] == $owner and $reported[2] == $path and (resolved_in($reviewed_round; $reported) | not)
+              and repair_written_near($base; $reviewed_round; $path; $reported[3])));
     def committed_after($base; $key; $repairs):
       all($repairs[]; repair_reviewed($base; .))
       and any(range($base + 1; $round + 1); . as $j

@@ -83,6 +83,8 @@
 #       "unit","effective_from_round","direction","repair_paths":["<path>"]}]}
 #     direction (optional) is the human's repair: the unit copies it into the
 #     key's fix entry, and the fixer follows it over suggested_fix. No check reads it.
+#     The unit likewise copies repair_paths into each such fix entry beside it,
+#     so the fixer lands the repair in those files; no check reads that copy.
 #     repair_paths (optional) names the other files the human's repair lands in;
 #     audit-veto-lib.sh reads a change there, reviewed clean by that path's
 #     owner, as the key's fix. record-residual writes one entry per key.
