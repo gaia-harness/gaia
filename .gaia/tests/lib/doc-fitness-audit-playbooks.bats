@@ -33,9 +33,11 @@ setup_file() {
       printf "%s: setup_file's gaia fitness check --json --scope all did not exit within %ss; killed it.\n" \
         "$suite" "$limit" >&2
       printf 'The CLI and its child processes when killed:\n' >&2
-      ps -o pid,stat,etime,command -p "$cli_pid" >&2
-      pgrep -P "$cli_pid" | while IFS= read -r child_pid; do
-        ps -o pid=,stat=,etime=,command= -p "$child_pid" >&2
+      # A process that exits mid-listing makes ps exit 1; under errexit that
+      # would end setup_file before the kill loop below.
+      ps -o pid,stat,etime,command -p "$cli_pid" >&2 || true
+      { pgrep -P "$cli_pid" || true; } | while IFS= read -r child_pid; do
+        ps -o pid=,stat=,etime=,command= -p "$child_pid" >&2 || true
       done
       printf 'Next: re-run this suite alone with bash .gaia/scripts/bats5.sh %s; a pass alone means the hang needs parallel load, so file it as tech debt with the process list above.\n' "$suite" >&2
       # A pid that has already exited must not abort setup_file under errexit.
