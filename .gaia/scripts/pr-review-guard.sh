@@ -10,7 +10,7 @@
 #   pr-review-guard.sh compare  --before <file> --after <file> [--output-file <path>]
 #
 # snapshot refuses a dirty tree (untracked files count), otherwise writes one
-# JSON file holding the tree listing, a path and content-hash listing of the
+# JSON file holding the tree listing, HEAD, a path and content-hash listing of the
 # local audit state and of the run folder, HEAD's GAIA-Audit commit
 # statuses (another integration's status landing during the review is not
 # the reviewer's write), and the own scope that decides which audit records are
