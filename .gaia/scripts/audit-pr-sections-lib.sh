@@ -338,7 +338,8 @@ _command_undecided() {
 # the caller's file, so once the round is closed only fix is left. A fix also
 # vetoes the key from the next unit's start round (_veto_recorded_fix), and is
 # refused on a cross_remit finding whose path the roster gives to no member,
-# since no review could satisfy that veto. A fixed records a cross_remit finding
+# since no review could satisfy that veto, and on one whose repair_paths names
+# a path the roster gives to no member, for the same reason. A fixed records a cross_remit finding
 # of the open round that the main thread fixed, with no veto, since its member
 # never reviews that file; a security-class one only on such an unowned path,
 # where fixed is its one exit. It is refused unless the finding's path differs
@@ -361,6 +362,7 @@ _command_record_residual() {
   [ "$DECISION" != fixed ] || fixing_commit="$(_fixed_commit "$history")"
   [ "$DECISION" != discard ] || _discard_allowed "$history" || return 3
   case "$DECISION" in fix | fixed) path_owned="$(_finding_path_owned)" ;; esac
+  if [ "$DECISION" = fix ]; then _repair_paths_owned || return 3; fi
   row="$(jq -c --arg decision "$DECISION" --argjson open "$open_entries" --argjson round "$latest" --arg commit "$fixing_commit" \
     --argjson path_owned "$path_owned" "$_SECURITY_CLASS_JQ"'
     def text($value): if ($value | type) == "string" and ($value | test("\\S")) then $value else "" end;

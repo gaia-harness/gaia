@@ -136,8 +136,8 @@ _gaia_veto_rereport_spans() {
   printf '%s\n' "$answer"
 }
 
-# _gaia_veto_owners <audited-root> <vetoes-file>: _roster_owners over the vetoed paths.
-_gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c '[.keys[]? | .path]' <"$2" 2>/dev/null)"; }
+# _gaia_veto_owners <audited-root> <vetoes-file>: _roster_owners over the vetoed paths and their repair paths.
+_gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c '[.keys[]? | .path, (.repair_paths | arrays | .[])]' <"$2" 2>/dev/null)"; }
 
 # gaia_veto_keys_state <main-root> <B> <state-json> <r> <round-r-keys-json> [<audited-root>]:
 # prints {"satisfied":[keys],"unsatisfied":[keys]} over the vetoes effective
@@ -162,8 +162,13 @@ _gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c 
 # fix can move or rewrite the code a finding is about, so an exact-line match
 # would read the same finding re-reported as fixed; any other finding of that
 # class on the path is a different one. A diff that cannot be read ignores the
-# line, and a pair whose paths cannot be read touches nothing. A fix that
-# lands only in another file leaves the key unsatisfied on both routes.
+# line, and a pair whose paths cannot be read touches nothing.
+# A key whose entry names repair_paths (its repair lands in other files) also
+# counts round j's change to one of those paths as touching it, and further
+# needs, for every repair path, a later round whose diff touches it, from which
+# on the path's roster owner was dispatched and reported no finding on it. An
+# unowned repair path never satisfies. Without repair_paths, a fix that lands
+# only in another file leaves the key unsatisfied on both routes.
 # Reviewed: at least one round in the span dispatched the key's reviewer,
 # with the key not re-reported in any such round's keys (round r's from the
 # argument, earlier ones from the stored snapshot, where null keys prove
@@ -172,7 +177,10 @@ _gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c 
 # member, so its own member is never re-dispatched on that file), the path's
 # owner alone. The owner reports under its own class, so any finding of the owner's
 # on the path re-reports the key within the tolerance of the spans the
-# base-round diff maps the vetoed line to, else of the vetoed line itself.
+# base-round diff maps the vetoed line to, else of the vetoed line itself,
+# except, for a pr-reviewer key, a finding that an earlier round disposed `fix`
+# under its own key and whose fixer reported it `fixed`. That exception, like the
+# one for a repair path's owner, never reaches round r's findings.
 # rc 1 on an unreadable or malformed vetoes.json.
 gaia_veto_keys_state() {
   local run vetoes_file records changed_paths rereport_spans owners answer
@@ -190,7 +198,8 @@ gaia_veto_keys_state() {
     --argjson changed_paths "$changed_paths" --argjson rereport_spans "$rereport_spans" --argjson owners "$owners" \
     --argjson tolerance "$_GAIA_VETO_REREPORT_TOLERANCE_LINES" '
     if length == 1 and (.[0] | type == "object" and .version == 1 and (.keys | type) == "array"
-        and all(.keys[]; type == "object" and (.effective_from_round | type == "number" and . == floor)))
+        and all(.keys[]; type == "object" and (.effective_from_round | type == "number" and . == floor)
+          and (.repair_paths | . == null or (type == "array" and all(.[]; type == "string" and . != "")))))
     then .[0] else error("malformed vetoes.json") end
     | $state.history.rounds as $rounds
     | def keys_of($j): if $j == $round then $round_keys else ($rounds[$j - 1].snapshot | if type == "object" then .keys else null end) end;
@@ -200,22 +209,30 @@ gaia_veto_keys_state() {
     # base round maps the vetoed line to there, or null with no such diff.
     def spans_at($base; $key):
       $rereport_spans["\($rounds[$base - 1].tree)..\($rounds[. - 1].tree)"]["\($key[2])\n\($key[3])"] // null;
+    # resolved_in($k; $reported): round k disposed the reported key `fix` and its
+    # fixer reported it `fixed`. Records exist only for rounds before r, so the
+    # findings of the latest round never resolve.
+    def resolved_in($k; $reported):
+      any($records.fixes[]; .round == $k and .key == $reported) and any($records.fixed[]; .round == $k and .key == $reported);
     # owner_rereports($base; $key) reads [round, reported key]: the path
     # owner reporting any class near the vetoed line on the path of the key.
+    # For a pr-reviewer key, a finding the loop fixed under its own key in that
+    # round is a different defect.
     def owner_rereports($base; $key):
       .[0] as $reviewed_round | .[1] as $reported | owner_of($key) as $owner
       | ($reviewed_round | spans_at($base; $key)) as $spans
       | $owner != null and $reported[0] == $owner and $reported[2] == $key[2]
+        and (($key[0] == "pr-reviewer" and resolved_in($reviewed_round; $reported)) | not)
         and (($reported[3] | type) != "number"
           or (if $spans != null then any($spans[]; $reported[3] >= .[0] - $tolerance and $reported[3] <= .[1] + $tolerance)
               else ($key[3] | type) != "number" or ($reported[3] - $key[3] | if . < 0 then -. else . end) <= $tolerance end));
     # rereports reads [round, reported key] and is true when that key is the vetoed finding.
-    def reviewed_from($first; $key; rereports):
-      reviewers($key) as $reviewers
-      | [range($first; $round + 1) | select(any(($rounds[. - 1].members // [])[]; IN($reviewers[])))] as $dispatched
+    def reviewed_by($first; $reviewers; rereports):
+      [range($first; $round + 1) | select(any(($rounds[. - 1].members // [])[]; IN($reviewers[])))] as $dispatched
       | ($dispatched | length) > 0
         and all($dispatched[]; . as $reviewed_round | keys_of($reviewed_round) as $keys
           | ($keys | type) == "array" and (any($keys[]; [$reviewed_round, .] | rereports) | not));
+    def reviewed_from($first; $key; rereports): reviewed_by($first; reviewers($key); rereports);
     def rereported($base; $key):
       .[0] as $reviewed_round | .[1] as $reported
       | ($reported[0:3] == $key[0:3]
@@ -223,18 +240,29 @@ gaia_veto_keys_state() {
             | $spans == null or ($reported[3] | type) != "number"
               or any($spans[]; $reported[3] >= .[0] - $tolerance and $reported[3] <= .[1] + $tolerance)))
         or owner_rereports($base; $key);
-    def touched($from; $to; $key):
-      any(($changed_paths["\($rounds[$from - 1].tree)..\($rounds[$to - 1].tree)"] // [])[]; . == $key[2]);
-    def committed_after($base; $key):
-      any(range($base + 1; $round + 1); . as $j
-        | touched($base; $j; $key) and ($j == $base + 1 or touched($j - 1; $j; $key))
-          and reviewed_from($j; $key; rereported($base; $key)));
-    def fixed_in($k; $key):
+    def touched($from; $to; $paths):
+      any(($changed_paths["\($rounds[$from - 1].tree)..\($rounds[$to - 1].tree)"] // [])[]; IN($paths[]));
+    def changed_at($base; $j; $paths): touched($base; $j; $paths) and ($j == $base + 1 or touched($j - 1; $j; $paths));
+    # repair_reviewed($base; $path): the repair path changed after the base and
+    # its owner, dispatched from that change on, reported nothing on it but
+    # findings an earlier round fixed under their own keys.
+    def repair_reviewed($base; $path):
+      ($owners[$path] // null) as $owner
+      | $owner != null
+        and any(range($base + 1; $round + 1); . as $j | changed_at($base; $j; [$path])
+          and reviewed_by($j; [$owner]; .[0] as $reviewed_round | .[1] as $reported
+            | $reported[0] == $owner and $reported[2] == $path and (resolved_in($reviewed_round; $reported) | not)));
+    def committed_after($base; $key; $repairs):
+      all($repairs[]; repair_reviewed($base; .))
+      and any(range($base + 1; $round + 1); . as $j
+        | changed_at($base; $j; [$key[2]] + $repairs) and reviewed_from($j; $key; rereported($base; $key)));
+    def fixed_in($k; $key; $repairs):
       any($records.fixes[]; .round == $k and .key == $key) and any($records.fixed[]; .round == $k and .key == $key)
-      and committed_after($k; $key);
+      and committed_after($k; $key; $repairs);
     [.keys[] | select(.effective_from_round <= $round) | .effective_from_round as $from | [.member, .finding_class, .path, .line] as $key
-      | {key: $key, satisfied: (any(range([$from, 1] | max; $round); fixed_in(.; $key))
-          or ($from >= 2 and committed_after($from - 1; $key)))}]
+      | (.repair_paths // []) as $repairs
+      | {key: $key, satisfied: (any(range([$from, 1] | max; $round); fixed_in(.; $key; $repairs))
+          or ($from >= 2 and committed_after($from - 1; $key; $repairs)))}]
     | {satisfied: map(select(.satisfied) | .key), unsatisfied: map(select(.satisfied | not) | .key)}' <"$vetoes_file" 2>/dev/null)" || return 1
   [ -n "$answer" ] || return 1
   printf '%s\n' "$answer"
@@ -242,15 +270,21 @@ gaia_veto_keys_state() {
 
 # gaia_veto_reviewers <main-root> <B> <audited-root> <veto-state-json>: the
 # veto state with `reviewers` added, the sorted members the unit dispatches full
-# (a light clear reviews nothing) for an unsatisfied key: each key's member and
-# its path's owner, the superset of who can satisfy it (the path owner alone for
-# a cross-remit key). rc 1 when the veto state is not an object.
+# (a light clear reviews nothing) for an unsatisfied key: each key's member, its
+# path's owner and each of its repair paths' owners, the superset of who can
+# satisfy it (the path owner alone for a cross-remit key). rc 1 when the veto
+# state is not an object.
 gaia_veto_reviewers() {
-  local vetoes_file owners='{}'
+  local vetoes_file owners='{}' repairs='[]'
   vetoes_file="$(gaia_loop_run_directory "$1" "$2")/vetoes.json"
-  [ -e "$vetoes_file" ] && owners="$(_gaia_veto_owners "$3" "$vetoes_file")"
+  if [ -e "$vetoes_file" ]; then
+    owners="$(_gaia_veto_owners "$3" "$vetoes_file")"
+    repairs="$(jq -c '[.keys[]? | {key: [.member, .finding_class, .path, .line], paths: (.repair_paths | arrays)}]' <"$vetoes_file" 2>/dev/null)" || repairs='[]'
+  fi
   [ -n "$owners" ] || owners="{}"
-  printf '%s' "$4" | jq -c --argjson owners "$owners" 'if type != "object" then error("not a veto state") else . end
-    | . + {reviewers: ([(.unsatisfied // [])[] | ., ($owners[.[2]] // null)] | map(if type == "array" then .[0] else . end)
-        | map(select(type == "string")) | unique)}' 2>/dev/null || return 1
+  [ -n "$repairs" ] || repairs='[]'
+  printf '%s' "$4" | jq -c --argjson owners "$owners" --argjson repairs "$repairs" 'if type != "object" then error("not a veto state") else . end
+    | . + {reviewers: ([(.unsatisfied // [])[] | . as $key | ., ($owners[.[2]] // null),
+          ($repairs[] | select(.key == $key) | .paths[] | $owners[.] // null)]
+        | map(if type == "array" then .[0] else . end) | map(select(type == "string")) | unique)}' 2>/dev/null || return 1
 }

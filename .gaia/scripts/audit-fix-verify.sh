@@ -80,9 +80,12 @@
 #
 #   vetoes.json (Bash at the main-checkout path, or record-residual --decision fix):
 #     {"version":1,"keys":[{"member","finding_class","path","line","vetoed_at",
-#       "unit","effective_from_round","direction"}]}
+#       "unit","effective_from_round","direction","repair_paths":["<path>"]}]}
 #     direction (optional) is the human's repair: the unit copies it into the
 #     key's fix entry, and the fixer follows it over suggested_fix. No check reads it.
+#     repair_paths (optional) names the other files the human's repair lands in;
+#     audit-veto-lib.sh reads a change there, reviewed clean by that path's
+#     owner, as the key's fix. record-residual writes one entry per key.
 #     effective_from_round is the <s> that audit-loop-eval.sh next-unit prints
 #     when the veto is written (the first round the next unit opens), so a
 #     veto never re-fails the dispositions file that held the original waiver.

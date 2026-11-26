@@ -1693,6 +1693,36 @@ decide() {
   red undisposed "{\"member\":\"$MEMBER\",\"finding_class\":\"rule/x\",\"path\":\"f.txt\",\"line\":1}"
 }
 
+@test "needs-human: a repeat fix decision from a later unit updates the key's one entry in place, moving effective_from_round forward and collapsing older copies" {
+  local key next_unit
+  stop_rounds "$(minor_rows f.txt 1 1)"
+  key="$(jq -n -c --arg member "$MEMBER" '{member: $member, finding_class: "rule/x", path: "f.txt", line: 1}')"
+  # Two copies an earlier unit left, both binding from before the next unit's start round.
+  jq -n -c --argjson key "$key" '{version: 1, keys: [$key + {unit: 0, effective_from_round: 0, direction: "old"}, $key + {unit: 0, effective_from_round: 1}]}' >"$RUN_FOLDER/vetoes.json"
+  decide 1 fix '{"reason":"redo it in the lib","repair_paths":["lib/s.sh"]}'
+  [ "$status" -eq 0 ] || { echo "the repeat fix was refused: $output"; return 1; }
+  next_unit="$(bash "$SCRIPTS/audit-loop-eval.sh" next-unit --root "$ALF_ROOT" | tr ' ' ',')"
+  [ "$(jq -c '[.keys[] | [.unit, .effective_from_round, .direction, .repair_paths]]' "$RUN_FOLDER/vetoes.json")" = "[[$next_unit,\"redo it in the lib\",[\"lib/s.sh\"]]]" ] ||
+    { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  decide 1 fix '{"reason":"in place after all"}'
+  [ "$(jq -c '[.keys[] | [.direction, has("repair_paths")]]' "$RUN_FOLDER/vetoes.json")" = '[["in place after all",false]]' ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+}
+
+@test "needs-human: a fix decision's repair_paths is refused when the roster gives one to no member, is unreadable, or is not a list of paths" {
+  stop_rounds "$(minor_rows f.txt 1 1)"
+  with_f_txt_ownerless decide 1 fix '{"repair_paths":["lib/s.sh","g.txt"]}'
+  [ "$status" -eq 3 ] || { echo "an unowned repair path recorded: $status $output"; return 1; }
+  grep -qF -- 'repair path to no member' <<<"$output" || { echo "the refusal names no cause: $output"; return 1; }
+  with_roster_unreadable decide 1 fix '{"repair_paths":["lib/s.sh"]}'
+  [ "$status" -eq 3 ] || { echo "a repair path under an unreadable roster recorded: $status $output"; return 1; }
+  decide 1 fix '{"repair_paths":"lib/s.sh"}'
+  [ "$status" -eq 3 ] || { echo "a repair_paths string recorded: $status $output"; return 1; }
+  [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  with_f_txt_ownerless decide 1 fix '{"repair_paths":["lib/s.sh"]}'
+  [ "$status" -eq 0 ] || { echo "an owned repair path was refused: $output"; return 1; }
+  [ "$(jq -c '.keys[0].repair_paths' "$RUN_FOLDER/vetoes.json")" = '["lib/s.sh"]' ]
+}
+
 # race_shims <directory>: a forced interleave of two fix decisions. Its mkdir
 # exits 0 even when the directory exists, as uutils mkdir does for two racing
 # creators, and counts attempts on the veto lock. Its date holds the first

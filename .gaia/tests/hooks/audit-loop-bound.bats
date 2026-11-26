@@ -1514,8 +1514,8 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   assert_allowed
 }
 
-@test "a repeat fix decision after a unit advanced leaves no vetoes.json entry for the key carrying the first direction" {
-  local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH" decision_script="$REPO_ROOT/.gaia/scripts/audit-dispositions-check.sh"
+@test "a repeat fix decision after a unit advanced leaves one vetoes.json entry for the key, carrying the second direction from the later start round" {
+  local run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH" decision_script="$REPO_ROOT/.gaia/scripts/audit-dispositions-check.sh" first_from
   alf_fill f.txt 12 feature
   alf_commit "round 1"
   dispatch
@@ -1525,14 +1525,15 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   mkdir -p "$run_folder"
   printf '{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"reason":"first direction"}\n' >"$BATS_TEST_TMPDIR/first.json"
   bash "$decision_script" record-residual --root "$ALF_ROOT" --run-folder "$run_folder" --finding "$BATS_TEST_TMPDIR/first.json" --decision fix || return 1
+  first_from="$(jq '.keys[0].effective_from_round' "$run_folder/vetoes.json")"
   new_tree
   dispatch
   assert_allowed || return 1
   alf_stamp 2 20
   printf '{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"reason":"second direction"}\n' >"$BATS_TEST_TMPDIR/second.json"
   bash "$decision_script" record-residual --root "$ALF_ROOT" --run-folder "$run_folder" --finding "$BATS_TEST_TMPDIR/second.json" --decision fix || return 1
-  [ "$(jq '[.keys[].effective_from_round] | unique | length' "$run_folder/vetoes.json")" -eq 2 ] || return 1
-  jq -e '.keys | length > 0 and all(.[]; .direction == "second direction")' "$run_folder/vetoes.json" >/dev/null
+  jq -e --argjson first_from "$first_from" '.keys | length == 1 and .[0].direction == "second direction" and .[0].effective_from_round > $first_from' \
+    "$run_folder/vetoes.json" >/dev/null || { cat "$run_folder/vetoes.json"; return 1; }
 }
 
 @test "a key an earlier round disposed file is not undecided when the open round re-reports it after a needs-human stop" {
