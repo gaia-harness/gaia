@@ -359,7 +359,7 @@
         ]
       },
       {
-        "matcher": "Read|Grep|Glob|Bash|Monitor",
+        "matcher": "Read|Write|Edit|Grep|Glob|Bash|Monitor",
         "hooks": [
           {
             "type": "command",
