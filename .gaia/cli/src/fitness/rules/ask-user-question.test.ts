@@ -24,6 +24,14 @@ const findingsFor = (text: string): number =>
     .length;
 
 describe('recommendation rule', () => {
+  test('a quoted bare mark beside one named option covers both questions', () => {
+    expect(
+      findingsFor(
+        'Ask with `AskUserQuestion` (header `Ruling`), the suggested reading first, its label ending ` (Recommended)`; then ask (header `Notes`) `Accept the notes (Recommended)` or `Adjust`.'
+      )
+    ).toBe(0);
+  });
+
   test('a headed site with no marked option fails', () => {
     expect(
       findingsFor('Ask with `AskUserQuestion` (header `Go`): `Yes` or `No`.')

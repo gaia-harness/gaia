@@ -28974,16 +28974,20 @@ var headersOf = (text) => {
   }
   return values;
 };
-var siteOf = (block2) => ({
-  block: block2,
-  hasMarker: block2.text.includes(MARKER_TEXT),
-  headers: headersOf(block2.text),
-  isHumanOnly: HUMAN_ONLY.test(block2.text),
-  isNeutral: NEUTRAL.test(block2.text),
-  recommendedLabels: new Set(
-    [...block2.text.matchAll(MARKER)].map((match) => labelBefore(block2.text, match.index)).filter((label) => label !== "")
-  )
-});
+var siteOf = (block2) => {
+  const labels = [...block2.text.matchAll(MARKER)].map(
+    (match) => labelBefore(block2.text, match.index)
+  );
+  return {
+    block: block2,
+    hasBareMark: labels.includes(""),
+    hasMarker: block2.text.includes(MARKER_TEXT),
+    headers: headersOf(block2.text),
+    isHumanOnly: HUMAN_ONLY.test(block2.text),
+    isNeutral: NEUTRAL.test(block2.text),
+    recommendedLabels: new Set(labels.filter((label) => label !== ""))
+  };
+};
 var classified = /* @__PURE__ */ new WeakMap();
 var classify = (file2) => {
   const cached2 = classified.get(file2);
@@ -29033,7 +29037,8 @@ var humanOnlyHeaders = (context) => {
 };
 var recommendationFindings = (file2, site) => {
   const questionCount = site.headers.length;
-  const marked = site.recommendedLabels.size === 0 && site.hasMarker ? questionCount : site.recommendedLabels.size;
+  const named = site.recommendedLabels.size;
+  const marked = site.hasBareMark ? Math.max(named, questionCount) : named;
   if (site.isNeutral) return [];
   if (marked === questionCount) return [];
   return [

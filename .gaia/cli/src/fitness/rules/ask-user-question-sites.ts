@@ -70,6 +70,8 @@ export type Classified = {
 
 export type Site = {
   block: Block;
+  /** True when some `(Recommended)` in the block names no option: a bare mention of the mark to apply to a runtime-built option set. */
+  hasBareMark: boolean;
   /** True when the block mentions the marker at all, including a bare `(Recommended)` naming the mark to apply. */
   hasMarker: boolean;
   /** Every header the site names, in order; its length is the number of questions the block asks. */
@@ -170,18 +172,21 @@ const headersOf = (text: string): string[] => {
   return values;
 };
 
-const siteOf = (block: Block): Site => ({
-  block,
-  hasMarker: block.text.includes(MARKER_TEXT),
-  headers: headersOf(block.text),
-  isHumanOnly: HUMAN_ONLY.test(block.text),
-  isNeutral: NEUTRAL.test(block.text),
-  recommendedLabels: new Set(
-    [...block.text.matchAll(MARKER)]
-      .map((match) => labelBefore(block.text, match.index))
-      .filter((label) => label !== '')
-  ),
-});
+const siteOf = (block: Block): Site => {
+  const labels = [...block.text.matchAll(MARKER)].map((match) =>
+    labelBefore(block.text, match.index)
+  );
+
+  return {
+    block,
+    hasBareMark: labels.includes(''),
+    hasMarker: block.text.includes(MARKER_TEXT),
+    headers: headersOf(block.text),
+    isHumanOnly: HUMAN_ONLY.test(block.text),
+    isNeutral: NEUTRAL.test(block.text),
+    recommendedLabels: new Set(labels.filter((label) => label !== '')),
+  };
+};
 
 const classified = new WeakMap<ProjectFile, Classified>();
 
