@@ -520,17 +520,42 @@ tree_state() {
   grep -qF -- 'Out-of-scope machinery findings' <<<"$output"
 }
 
-@test "pr-sections: a veto effective from a later round drops an earlier round's accepted residual and leaves its waiver" {
+@test "pr-sections: a veto effective from a later round drops an earlier round's triage waiver, whether disposed or only lookup-flagged" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug waive-out-of-scope "below threshold" triage-threshold)]")"
+  run_sections
+  green || return 1
+  grep -qxF -- '## Waived below triage threshold (not filed)' <<<"$output" || { echo "$output"; return 1; }
+  vetoes 2 c/sug f.txt 6
+  run_sections
+  green || return 1
+  grep -qF -- 'Waived below triage threshold' <<<"$output" && { echo "$output"; return 1; }
+  grep -qF -- 'f.txt:6' <<<"$output" && { echo "$output"; return 1; }
+  rm -f "$RUN_FOLDER/vetoes.json"
+  with_maintainer "[$TRIAGE_ENTRY]"
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
+  run_sections
+  green || return 1
+  grep -qxF -- '- .claude/hooks/h.sh:1 c/tri: below threshold' <<<"$output" || { echo "$output"; return 1; }
+  jq -n -c --arg member "$SHELL_MEMBER" '{version: 1, keys: [{member: $member, finding_class: "c/tri", path: ".claude/hooks/h.sh", line: 1, effective_from_round: 2}]}' >"$RUN_FOLDER/vetoes.json"
+  run_sections
+  green || return 1
+  grep -qF -- 'c/tri' <<<"$output" && { echo "$output"; return 1; }
+  true
+}
+
+@test "pr-sections: a veto effective from a later round drops an earlier round's accepted residual and cross-remit waiver" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp accept-residual "closing round left it"),$(disposition_entry f.txt 4 c/xr waive-out-of-scope "other remit" cross-remit)]")"
   run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
   green || return 1
   grep -qxF -- '## Accepted residuals (recorded, not fixed)' <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- 'f.txt:4' <<<"$output" || { echo "$output"; return 1; }
   jq -n -c '{version: 1, keys: [{member: "code-audit-frontend", finding_class: "c/imp", path: "f.txt", line: 3, effective_from_round: 2},
     {member: "code-audit-frontend", finding_class: "c/xr", path: "f.txt", line: 4, effective_from_round: 2}]}' >"$RUN_FOLDER/vetoes.json"
   run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
   green || return 1
   grep -qF -- 'Accepted residuals' <<<"$output" && { echo "$output"; return 1; }
-  grep -qF -- '`f.txt:4`' <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- 'f.txt:4' <<<"$output" && { echo "$output"; return 1; }
+  true
 }
 
 @test "pr-sections: nothing to record prints nothing" {
