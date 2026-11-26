@@ -12,7 +12,7 @@ tags: [concepts, autonomy, commands]
 
 ## The queue
 
-`.gaia/scripts/gaia-next.sh` picks the job, reading state and changing none; its header owns the output shapes. The order:
+`.gaia/scripts/gaia-next.sh pick` picks the job, reading state and changing none; its header owns the output shapes. The order:
 
 1. **A running plan**: a plan folder whose `RUNNING` sentinel stands. The plan's own `KICKOFF.md` resumes it.
 2. **An open pull request** you authored whose branch exists in this clone, unless a running plan owns the branch. Tending it means fixing failing checks and acting on review comments, then driving it through [[PR Merge Workflow]]. The job runs in the linked worktree holding the branch, or one `gaia-next.sh worktree` adds, never in the main checkout: the main-checkout hop guard would deny checking the default branch back out.
