@@ -267,6 +267,52 @@ EOF
   [ "$status" -eq 0 ] || return 1
 }
 
+# bats test_tags=protected
+@test "route-fix refuses an unowned, enforcement or empty repair path, and any repair path off a veto route, writing no veto; on a routed finding a repair path rewrites its key" {
+  local enforcement_path repair_path expected
+  review_folder feat/review
+  alf_round 1 code-audit-frontend '[]' || return 1
+  ran_review "$(entry src/a.sh 3 Major false)" "$(entry "PR body" null Minor false)" || return 1
+  record dispose --id pr-1 --disposition fix
+  [ "$status" -eq 0 ] || return 1
+  record dispose --id pr-2 --disposition fix
+  [ "$status" -eq 0 ] || return 1
+  enforcement_path="$(bash -c '. "$1" && printf "%s" "${ENFORCEMENT_PATHS[0]}"' _ "$SCRIPTS/audit-fix-verify-state-lib.sh")"
+  [ -n "$enforcement_path" ] || return 1
+  while IFS='|' read -r repair_path expected; do
+    record route-fix --root "$ALF_ROOT" --id pr-1 --repair-path src/b.sh --repair-path "$repair_path"
+    [ "$status" -eq 1 ] || { printf 'repair path "%s" routed: %s %s\n' "$repair_path" "$status" "$output" >&2; return 1; }
+    grep -qF -- "$expected" <<<"$output" || { printf 'repair path "%s" refused for another cause: %s\n' "$repair_path" "$output" >&2; return 1; }
+  done <<EOF
+wiki/Foo.md|repair path to no member
+$enforcement_path|enforcement path the fixer can never edit
+|must be an array of non-empty paths
+./src/b.sh|is not a repo-relative path
+/src/b.sh|is not a repo-relative path
+src/../b.sh|is not a repo-relative path
+src//b.sh|is not a repo-relative path
+src/./b.sh|is not a repo-relative path
+src/|is not a repo-relative path
+EOF
+  record route-fix --root "$ALF_ROOT" --id pr-2 --repair-path src/b.sh
+  [ "$status" -eq 1 ] || return 1
+  [ "$output" = "--repair-path needs a veto route; pr-2 routes to body" ] || return 1
+  [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json" >&2; return 1; }
+  [ "$(recorded '[.findings[] | .fix_state // "none"] | join(",")')" = "none,none" ] || return 1
+  record route-fix --root "$ALF_ROOT" --id pr-1
+  [ "$status" -eq 0 ] || return 1
+  [ "$(jq -c '.keys | map(has("repair_paths"))' "$RUN_FOLDER/vetoes.json")" = '[false]' ] || return 1
+  record route-fix --root "$ALF_ROOT" --id pr-1 --repair-path src/b.sh
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  [ "$(jq -c '.keys | map([.path, .line, .repair_paths])' "$RUN_FOLDER/vetoes.json")" = '[["src/a.sh",3,["src/b.sh"]]]' ] || return 1
+  # An identical re-run is a no-op: the key's start round stays put, so a repair already landed still counts.
+  jq -c '.keys[0].effective_from_round = -1' "$RUN_FOLDER/vetoes.json" >"$BATS_TEST_TMPDIR/vetoes.json"
+  cp "$BATS_TEST_TMPDIR/vetoes.json" "$RUN_FOLDER/vetoes.json"
+  record route-fix --root "$ALF_ROOT" --id pr-1 --repair-path src/b.sh
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  [ "$(jq -c '.keys | map(.effective_from_round)' "$RUN_FOLDER/vetoes.json")" = '[-1]' ]
+}
+
 @test "dropped refuses a finding with no routed fix and evidence-less input, and a dropped Critical or security-class finding closes only with dismiss" {
   review_folder feat/review
   ran_review "$(entry src/a.sh 3 Critical false)" "$(entry PR\ body null Major true)" "$(entry src/a.sh 5 Major false)" || return 1
