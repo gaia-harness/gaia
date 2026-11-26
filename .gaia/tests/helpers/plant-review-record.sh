@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-# Sourced by gh stubs and merge-gate fixtures whose PR body carries a complete
-# `## PR review` section. The merge gates never read that section as the
-# record, so the caller plants the matching local record too.
+# Sourced by gh stubs, merge-gate fixtures and bats cases to plant the local PR
+# review record the merge gates read. The gates never read the PR body's
+# `## PR review` section as the record.
 #
 #   plant_review_record <branch> <pr-number> <head-sha> [<dir> [<findings-json-array>]]
 #
