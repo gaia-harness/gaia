@@ -136,11 +136,11 @@ review_round() {
 }
 
 # bats test_tags=protected
-@test "drafted repair in an enforcement repair path: the key sits on a file another member's repair path does not share, the veto stays unsatisfied until the repair path's owner reviews it clean, and the human's commit of the draft lands it" {
+@test "drafted repair in an enforcement repair path another member owns: the human's commit of the draft lands it, and the veto stays unsatisfied until the repair path's owner, not only the key's member, reviews it clean" {
   local settings=.claude/settings.json key_path=lib/notes.sh repair_owner=code-audit-shell
-  # The Evidence shape: the veto is keyed on a file outside ENFORCEMENT_PATHS
-  # that MEMBER owns, and its repair lands in an enforcement path another
-  # member owns, so the key's reviewer alone must not satisfy it.
+  # The veto is keyed on a file outside ENFORCEMENT_PATHS that MEMBER owns,
+  # and its repair lands in an enforcement path repair_owner owns, so MEMBER's
+  # clean review alone must not satisfy it.
   printf 'auditors:\n  - name: %s\n    globs:\n      - "%s"\n    audience: adopter\n  - name: %s\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n' \
     "$repair_owner" "$settings" "$MEMBER" >"$ALF_ROOT/.gaia/audit-ci.yml"
   alf_fill "$key_path" 160 branch
