@@ -2,7 +2,8 @@
 # shellcheck shell=bash
 #
 # gaia-next.sh: the job picker behind /gaia-next (.claude/commands/gaia-next.md).
-# It reads state and changes none. The queue's rules: wiki/concepts/GAIA Next.md.
+# pick, debt and comments read state and change none; worktree may add a
+# linked worktree. The queue's rules: wiki/concepts/GAIA Next.md.
 #
 #   gaia-next.sh pick [--root <path>]
 #   gaia-next.sh debt --backlog <file> --report <file> [--root <path>]
@@ -404,6 +405,9 @@ comments() {
 worktree() {
   local holder added=false
   holder="$(gaia_branch_worktree_holder "$branch_argument" "$tree_root")"
+  if [ -n "$holder" ] && [ ! -d "$holder" ]; then
+    next_fail "the worktree entry for $branch_argument at $holder is stale; run git worktree prune"
+  fi
   [ -z "$holder" ] || gaia_is_linked_worktree "$holder" ||
     next_fail "the main checkout holds $branch_argument, so no worktree can be added for it"
   if [ -z "$holder" ]; then

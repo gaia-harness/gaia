@@ -458,3 +458,13 @@ worktree_for() {
   run bash "$NEXT" worktree --root "$WORK"
   [ "$status" -eq 2 ]
 }
+
+@test "the worktree verb reports a hand-deleted worktree folder as a stale entry to prune, not as the main checkout holding the branch" {
+  worktree_for feat/2-pr-work
+  [ "$status" -eq 0 ]
+  rm -rf "$WORK/.claude/worktrees/feat+2-pr-work"
+  worktree_for feat/2-pr-work
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"is stale; run git worktree prune"* ]]
+  [[ "$stderr" != *"main checkout holds"* ]]
+}

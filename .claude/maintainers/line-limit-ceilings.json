@@ -50,7 +50,7 @@
     ".gaia/scripts/check-updates.sh": 950,
     ".gaia/scripts/classifier/classify-determinism.mjs": 591,
     ".gaia/scripts/file-tech-debt.sh": 806,
-    ".gaia/scripts/gaia-next.sh": 423,
+    ".gaia/scripts/gaia-next.sh": 427,
     ".gaia/scripts/guard-awk-lib.sh": 788,
     ".gaia/scripts/kept-worktrees.sh": 432,
     ".gaia/scripts/lint-errexit-status-read.sh": 464,
