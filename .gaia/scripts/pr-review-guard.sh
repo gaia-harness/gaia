@@ -103,8 +103,8 @@ listing_of_files() {
   done | jq -s 'add // {}'
 }
 
-# audit_listing <root> <main-root> <branch-slug> <own-digests>: folder_listing's JSON for the local audit
-# directory, minus the records provably keyed to another branch or head, so a
+# audit_listing <root> <main-root> <branch-slug> <own-digests>: folder_listing's
+# JSON for the local audit directory, minus the records provably keyed to another branch or head, so a
 # concurrent lane's attributable writes do not read as the reviewer's. A record
 # is dropped only when it is one of:
 #   - a branch-keyed file (<40-hex base>.<branch slug>.*) of another branch;
@@ -112,11 +112,12 @@ listing_of_files() {
 #     (light/<digest>.<member>.route.json) whose digest is none of this
 #     branch's own member digests and whose recorded tree and commit are both
 #     absent from HEAD's recent history.
-# Everything else stays, including any file that cannot be attributed. When the own digests or HEAD's history cannot be read, no marker or route record is
-# dropped (another branch's branch-keyed files still are). Dropping a marker
-# or route record is safe because the merge gate matches a marker by digest and
-# the audit base resolvers anchor on a recorded tree in this branch's history,
-# so a record at another digest whose tree and commit are both outside HEAD's
+# Everything else stays, including any file that cannot be attributed. When
+# <own-digests> is empty or HEAD's history cannot be read, no marker or route
+# record is dropped (another branch's branch-keyed files still are). Dropping
+# a marker or route record is safe because the merge gate matches a marker by
+# digest and the audit base resolvers anchor on a recorded tree in this
+# branch's history, so a record at another digest whose tree and commit are both outside HEAD's
 # history can affect neither. The 500-commit window is well past the
 # resolvers' anchor walk (MAXIMUM_WALK_COMMIT_COUNT in
 # .github/audit/resolve-audit-base.sh), so a record older than the window
