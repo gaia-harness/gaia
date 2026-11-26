@@ -79,13 +79,12 @@ for row_json in "${GAIA_REAPER_ROW_JSONS[@]}"; do
   IFS=$'\t' read -r row_class row_path row_key <<<"$row_fields"
   [ "$row_class" = branch-spent ] || continue
   case "$row_path" in protected/*) continue ;; esac
-  case "$row_key" in
-    slug-dot-field | slug-glob)
-      [ -n "$slug_key" ] || slug_key="$(gaia_key_slug "$branch_name")" || continue
-      entry_key="$slug_key"
-      ;;
-    *) entry_key="$normalized_name" ;;
-  esac
+  if gaia_reaper_key_is_slug "$row_key"; then
+    [ -n "$slug_key" ] || slug_key="$(gaia_key_slug "$branch_name")" || continue
+    entry_key="$slug_key"
+  else
+    entry_key="$normalized_name"
+  fi
   [ -n "$entry_key" ] || continue
   gaia_reaper_reap_key "$main_root" "$row_json" "$entry_key"
 done

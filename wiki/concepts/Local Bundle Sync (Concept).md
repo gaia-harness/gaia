@@ -53,7 +53,7 @@ The local path ships to adopters behind the explicit opt-in rather than living i
 
 ## Divergence
 
-The stated contract said a `-dev` tag sorts below its plain release "under sort -V and semver". GNU and BSD `sort -V` rank `v2.2.0-dev.<sha>` above `v2.2.0`, so the shipped code ranks cached tags by semver only and uses `sort -V` on no tag. The stated contract also left open which tag a deferral records on a local sync; it records the run's baseline tag, never the target build's.
+See [[Local Bundle Sync (Decision)#Divergence]].
 
 ## Related
 

@@ -346,7 +346,7 @@ _gaia_reaper_reap_branch_spent() {
   row_directory="${row_directory%/}"
   candidates="$(gaia_reaper_candidates "$local_root" "$row_json")"
   function_name=normalize
-  case "$_gaia_reaper_row_key" in slug-dot-field | slug-glob) function_name=slug ;; esac
+  if gaia_reaper_key_is_slug "$_gaia_reaper_row_key"; then function_name=slug; fi
   live_keys="$(gaia_reaper_live_keys "$function_name")" || return 0
   if [ "$_gaia_reaper_row_key" = audit-loop ]; then
     _gaia_reaper_recheck_branches "$main_root" "$_gaia_reaper_row_id" || return 0
@@ -598,22 +598,20 @@ gaia_reaper_reap_key() {
   fi
   row_directory="${_gaia_reaper_row_path%%|*}"
   row_directory="${row_directory%/}"
-  case "$_gaia_reaper_row_key" in
-    slug-dot-field | slug-glob)
-      live_keys="$(gaia_reaper_live_keys slug)" || return 0
-      if [ -z "$key" ] || _gaia_reaper_line_in "$key" "$live_keys"; then
-        printf 'skipped %s: %s is live\n' "$row_id" "$key"
-        return 0
-      fi
-      candidates="$(gaia_reaper_candidates "$local_root" "$row_json")"
-      while IFS= read -r relative; do
-        [ -n "$relative" ] || continue
-        [ "$(gaia_reaper_entry_key "$row_json" "$relative")" = "$key" ] && matched+=("$relative")
-      done <<<"$candidates"
-      [ "${#matched[@]}" -gt 0 ] && gaia_reaper_safe_remove "$local_root" "$row_json" "${matched[@]}"
+  if gaia_reaper_key_is_slug "$_gaia_reaper_row_key"; then
+    live_keys="$(gaia_reaper_live_keys slug)" || return 0
+    if [ -z "$key" ] || _gaia_reaper_line_in "$key" "$live_keys"; then
+      printf 'skipped %s: %s is live\n' "$row_id" "$key"
       return 0
-      ;;
-  esac
+    fi
+    candidates="$(gaia_reaper_candidates "$local_root" "$row_json")"
+    while IFS= read -r relative; do
+      [ -n "$relative" ] || continue
+      [ "$(gaia_reaper_entry_key "$row_json" "$relative")" = "$key" ] && matched+=("$relative")
+    done <<<"$candidates"
+    [ "${#matched[@]}" -gt 0 ] && gaia_reaper_safe_remove "$local_root" "$row_json" "${matched[@]}"
+    return 0
+  fi
   live_keys="$(gaia_reaper_live_keys normalize)" || return 0
   if gaia_reaper_path_live "$key" "$live_keys"; then
     printf 'skipped %s: %s is live or holds a live key\n' "$row_id" "$key"
