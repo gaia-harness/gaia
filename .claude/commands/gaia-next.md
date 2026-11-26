@@ -22,7 +22,7 @@ Then read the main checkout's branch with `git branch --show-current`. When it i
 bash .gaia/scripts/gaia-next.sh pick
 ```
 
-Show every `gaia-next: skipped` line it prints, the audit hand-off line included. On a non-zero exit, report its stderr line and end this run. Otherwise act on `job`:
+Show every `gaia-next: skipped` line it prints. On a non-zero exit, report its stderr line and end this run. Otherwise act on `job`:
 
 - **`plan`**: read `<plan_dir>/KICKOFF.md` and execute it. Its resume detection reconnects to the branch and picks the phase.
 - **`pr`**: run `bash .gaia/scripts/gaia-next.sh worktree --branch <branch>` and enter the `worktree` path from the JSON it prints with `EnterWorktree({path: "<worktree>"})`: the linked worktree that holds the branch, else one it adds, so the main checkout never leaves the default branch. On a non-zero exit, report its stderr line and end this run. Read the comments with `bash .gaia/scripts/gaia-next.sh comments --pr <pr>`, never with `gh` directly: under autonomy it withholds comments from authors without write access. Then fix what failing required checks and the comments show, and drive the PR through `wiki/concepts/PR Merge Workflow.md`.

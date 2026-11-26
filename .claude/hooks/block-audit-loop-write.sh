@@ -165,8 +165,8 @@
 # and quoting tricks listed above for the recorders, a copy of the statusline
 # or the library under another name, a script Claude writes that never names
 # them). A name match is bypassable, so the residual stays, bounded: a minted
-# low reading yields automatic units on the enriching, stalled, nitpicky and
-# small-tail signals, up to the effective round cap (10 when none is set);
+# low reading yields automatic units on the fallback and the enriching, stalled,
+# nitpicky and small-tail signals, up to the effective round cap (10 when none is set);
 # reintroduced, waiver-drift, an Accept, Stop or State-the-rule recommendation
 # and the cap still ask whatever the reading. Such a reading stands until the
 # next real statusline render overwrites it. A rate-limit reading has the same
