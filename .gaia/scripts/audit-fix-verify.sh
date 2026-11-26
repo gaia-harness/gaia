@@ -68,7 +68,7 @@
 #     {"schema":1,"round":r,"tree":"<hex>","root":"<abs resolved root>",
 #      "enforcement_paths_allowed":["<path>"],
 #      "entries":[{"member","finding_class","path","line","severity","title",
-#        "failure_mode","suggested_fix","direction",
+#        "failure_mode","suggested_fix","direction","repair_paths":["<path>"],
 #        "disposition":"fix|accept-residual|waive-out-of-scope|file|divert","reason",
 #        "basis":"triage-threshold|cross-remit","enforcement_draft":true}]}
 #     enforcement_paths_allowed lists an enforcement path only when an entry
@@ -83,11 +83,12 @@
 #       "unit","effective_from_round","direction","repair_paths":["<path>"]}]}
 #     direction (optional) is the human's repair: the unit copies it into the
 #     key's fix entry, and the fixer follows it over suggested_fix. No check reads it.
-#     The unit likewise copies repair_paths into each such fix entry beside it,
-#     so the fixer lands the repair in those files; no check reads that copy.
 #     repair_paths (optional) names the other files the human's repair lands in;
-#     audit-veto-lib.sh reads a change there, reviewed clean by that path's
-#     owner, as the key's fix. record-residual writes one entry per key.
+#     audit-veto-lib.sh reads a change there, with no finding by that path's
+#     owner near the hunks the repair wrote, as the key's fix. The unit copies
+#     repair_paths into the key's fix entry beside direction, so the fixer
+#     lands the repair in those files; no check reads that copy.
+#     record-residual writes one entry per key.
 #     effective_from_round is the <s> that audit-loop-eval.sh next-unit prints
 #     when the veto is written (the first round the next unit opens), so a
 #     veto never re-fails the dispositions file that held the original waiver.
