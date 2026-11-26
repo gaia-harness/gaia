@@ -255,10 +255,23 @@ veto_row() {
     '{member: "pr-reviewer", finding_class: $class, path: $path, line: $line}'
 }
 
+# _repair_paths_recorded <json-array>: rc 0 when the finding's veto key already
+# records exactly those repair_paths (order and repeats aside), so an identical
+# re-run rewrites nothing and cannot move the key's start round past a repair
+# that already landed.
+_repair_paths_recorded() {
+  jq -e --argjson row "$(veto_row)" --argjson wanted "$1" '
+    ($row | [.member, .finding_class, .path, .line]) as $key
+    | [.keys[]? | select([.member, .finding_class, .path, .line] == $key)] as $held
+    | ($held | length) > 0 and all($held[]; ((.repair_paths // []) | unique) == ($wanted | unique))' \
+    "$RUN_FOLDER/vetoes.json" >/dev/null 2>&1
+}
+
 # cmd_route_fix: each --repair-path names a file the repair lands in other than
 # the finding's own, written as the veto key's repair_paths; the key keeps the
-# finding's path and line. Given on a finding already routed, they rewrite its
-# key in place, so the fix counts from the next round.
+# finding's path and line. Given on a finding already routed with a different
+# list, they rewrite its key in place, so the fix counts from the next round and
+# a repair already made no longer counts; the same list again changes nothing.
 cmd_route_fix() {
   require_main_root_match
   require_record
@@ -283,7 +296,7 @@ cmd_route_fix() {
   fi
   case "$route" in
     veto*)
-      if [ "$first_time" -eq 1 ] || [ "$repair_path_list" != '[]' ]; then
+      if [ "$first_time" -eq 1 ] || { [ "$repair_path_list" != '[]' ] && ! _repair_paths_recorded "$repair_path_list"; }; then
         summary="$(finding_field '.summary | gsub("[\\r\\n]+"; " ")')"
         finding_file="$(mktemp)"
         row="$(veto_row)"

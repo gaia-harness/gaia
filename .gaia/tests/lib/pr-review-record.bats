@@ -304,7 +304,13 @@ EOF
   [ "$(jq -c '.keys | map(has("repair_paths"))' "$RUN_FOLDER/vetoes.json")" = '[false]' ] || return 1
   record route-fix --root "$ALF_ROOT" --id pr-1 --repair-path src/b.sh
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-  [ "$(jq -c '.keys | map([.path, .line, .repair_paths])' "$RUN_FOLDER/vetoes.json")" = '[["src/a.sh",3,["src/b.sh"]]]' ]
+  [ "$(jq -c '.keys | map([.path, .line, .repair_paths])' "$RUN_FOLDER/vetoes.json")" = '[["src/a.sh",3,["src/b.sh"]]]' ] || return 1
+  # An identical re-run is a no-op: the key's start round stays put, so a repair already landed still counts.
+  jq -c '.keys[0].effective_from_round = -1' "$RUN_FOLDER/vetoes.json" >"$BATS_TEST_TMPDIR/vetoes.json"
+  cp "$BATS_TEST_TMPDIR/vetoes.json" "$RUN_FOLDER/vetoes.json"
+  record route-fix --root "$ALF_ROOT" --id pr-1 --repair-path src/b.sh
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  [ "$(jq -c '.keys | map(.effective_from_round)' "$RUN_FOLDER/vetoes.json")" = '[-1]' ]
 }
 
 @test "dropped refuses a finding with no routed fix and evidence-less input, and a dropped Critical or security-class finding closes only with dismiss" {
