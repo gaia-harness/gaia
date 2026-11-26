@@ -340,6 +340,68 @@ SPEC
   done
 }
 
+@test "feature-dropped resolves a security case only from a fragment inside a decision record of the SPEC" {
+  cat >"$PRE" <<'SPEC'
+---
+spec_id: X
+---
+## Behaviors
+
+- **B1** (access): Only the owner opens settings.
+  - Case: B1 first case: the owner opens settings -> the page shows Settings.
+  - Case: B1 second case: a visitor repeats the request -> the answer is 403 Forbidden.
+- **B2** (other): The list greets a guest.
+  - Case: B2 first case: a guest opens the list -> the page shows the greeting.
+
+## Notes
+
+The settings page was removed from the product entirely.
+
+## Build amendment
+
+### Settings page
+
+The maintainer decided the settings page and its owner check are dropped from this build.
+
+## Open questions
+
+Nothing is open about the export format.
+SPEC
+  grep -v 'B1 second case' "$PRE" >"$POST"
+  write_findings TST-001 SEC-001
+  local edits
+  edits="$(quote_json "B1 second case: a visitor repeats the")"
+  local record="the settings page and its owner check are dropped from this build"
+  local outside="The settings page was removed from the product entirely"
+  local short="owner check are dropped"
+  local after="Nothing is open about the export format"
+
+  write_fixes "$edits" "$(drop_json B1 feature-dropped SPEC.md "$record")"
+  check_spec
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+
+  write_fixes "$edits" "$(drop_json B1 feature-dropped SPEC.md "$outside")"
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "not in a decision record" || return 1
+
+  write_fixes "$edits" "$(drop_json B1 feature-dropped SPEC.md "$after")"
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "not in a decision record" || return 1
+
+  write_fixes "$edits" "$(drop_json B1 feature-dropped SPEC.md "$short")"
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "fragment is under 6 words" || return 1
+
+  # The other destinations stay closed to a security case.
+  write_fixes "$edits" "$(drop_json B1 out-of-scope SPEC.md "$record")"
+  check_spec
+  [ "$status" -eq 1 ]
+  has_output "cannot resolve to out-of-scope" || return 1
+}
+
 make_plan_dirs() {
   PLAN_PRE="$WORK/plan-pre"
   PLAN_POST="$WORK/plan-post"

@@ -18,7 +18,7 @@
 //     {"finding": "TST-003", "route": "spec|directive|plan|rejected",
 //      "edits": [{"change": "edited|narrowed|dropped", "quote": "<six or more words of the pre-fix line>"}],
 //      "drops": [{"behavior": "B4", "case": "<old case text>",
-//                 "destination": "still-stated|restored|refusal|out-of-scope|corrected-value|deferred",
+//                 "destination": "still-stated|restored|refusal|out-of-scope|corrected-value|deferred|feature-dropped",
 //                 "file": "SPEC.md", "fragment": "<six or more words, verbatim from the destination file>"}]}
 //   ]}
 //
@@ -48,8 +48,11 @@
 //     post-fix SPEC points to with `REQUIREMENTS.md § <heading text>` (for a
 //     `Q<n>. ...` heading the text up to the first period);
 //   - a drop from an access, forgery, secret or refusal behavior whose
-//     destination is not still-stated, restored, refusal or deferred (deferred:
-//     the fragment sits in the post-fix SPEC's clarifications.deferred[] text);
+//     destination is not still-stated, restored, refusal, deferred or
+//     feature-dropped (deferred: the fragment sits in the post-fix SPEC's
+//     clarifications.deferred[] text; feature-dropped: a maintainer decision
+//     dropped the whole feature, and the fragment sits under a heading of the
+//     post-fix SPEC that names a decision or an amendment);
 //   - a compared line removed or changed between pre and post that no
 //     edits[].quote matches (six or more words found in the pre-fix line);
 //   - a case removed beyond any it replaced with fewer `drops` entries than
@@ -71,6 +74,7 @@ import {normalizeWhitespace, SECURITY_KINDS} from './behaviors.mjs';
 import {
   behaviorKinds,
   comparedLines,
+  decisionRecordText,
   deferredText,
   destinationFiles,
   findingIdsIn,
@@ -102,8 +106,15 @@ const DESTINATIONS = [
   'out-of-scope',
   'corrected-value',
   'deferred',
+  'feature-dropped',
 ];
-const STRICT_DESTINATIONS = ['still-stated', 'restored', 'refusal', 'deferred'];
+const STRICT_DESTINATIONS = [
+  'still-stated',
+  'restored',
+  'refusal',
+  'deferred',
+  'feature-dropped',
+];
 const STRICT_KINDS = [...SECURITY_KINDS, 'refusal'];
 const MINIMUM_WORDS = 6;
 const USAGE =
@@ -159,7 +170,7 @@ function dropRefusals(fix, context) {
       !STRICT_DESTINATIONS.includes(drop.destination)
     ) {
       refuse(
-        `is ${kind} and cannot resolve to ${drop.destination}; use still-stated, restored, refusal or deferred`,
+        `is ${kind} and cannot resolve to ${drop.destination}; use still-stated, restored, refusal, deferred or feature-dropped`,
       );
       continue;
     }
@@ -177,6 +188,14 @@ function dropRefusals(fix, context) {
       if (!deferredText(context.specText).includes(fragment)) {
         refuse(
           `fragment is not in the SPEC's clarifications.deferred text: "${fragment}"`,
+        );
+      }
+      continue;
+    }
+    if (drop.destination === 'feature-dropped') {
+      if (!decisionRecordText(context.specText).includes(fragment)) {
+        refuse(
+          `fragment is not in a decision record (a heading naming a decision or an amendment) of the SPEC: "${fragment}"`,
         );
       }
       continue;

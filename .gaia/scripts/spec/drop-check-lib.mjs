@@ -239,6 +239,28 @@ export function deferredText(specText) {
   return normalizeWhitespace(collected);
 }
 
+// The normalized text of every decision-record section of a SPEC: a heading
+// whose text names a decision or an amendment (`## Build amendment`,
+// `## Decisions taken here`), up to the next heading of the same or a higher
+// level. Matching the heading keeps the check from reading a behavior or a
+// note as a decision.
+export function decisionRecordText(specText) {
+  const collected = [];
+  let level = 0;
+  for (const line of specText.split('\n')) {
+    const heading = /^(#{1,6}) (.+?)\s*$/.exec(line);
+    if (heading) {
+      const depth = heading[1].length;
+      if (level && depth > level) continue;
+      level =
+        depth > 1 && /decision|amendment/i.test(heading[2]) ? depth : 0;
+    } else if (level) {
+      collected.push(line);
+    }
+  }
+  return normalizeWhitespace(collected.join(' '));
+}
+
 export function behaviorKinds(texts) {
   const kinds = new Map();
   for (const text of texts) {
