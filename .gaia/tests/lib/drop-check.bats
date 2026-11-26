@@ -340,6 +340,7 @@ SPEC
   done
 }
 
+# bats test_tags=protected
 @test "feature-dropped resolves a security case only when its behavior is gone and a decision record that predates the fix holds the fragment" {
   cat >"$PRE" <<'SPEC'
 ---
@@ -408,6 +409,7 @@ two_drops() { # fragment
   printf '[{"behavior":"B1","case":"first","destination":"feature-dropped","file":"SPEC.md","fragment":"%s"},{"behavior":"B1","case":"second","destination":"feature-dropped","file":"SPEC.md","fragment":"%s"}]' "$1" "$1"
 }
 
+# bats test_tags=protected
 @test "feature-dropped refuses a security case whose behavior is still in the post-fix SPEC" {
   cat >"$PRE" <<'SPEC'
 ---
@@ -432,6 +434,7 @@ SPEC
   has_output "still a behavior of the post-fix SPEC" || return 1
 }
 
+# bats test_tags=protected
 @test "feature-dropped refuses a decision record the fixer wrote in the same pass" {
   cat >"$PRE" <<'SPEC'
 ---
@@ -460,6 +463,32 @@ SPEC
   has_output "not in a decision record that predates the fix" || return 1
 }
 
+@test "feature-dropped accepts the fragment under each decision-record heading spelling" {
+  local heading
+  for heading in "Decision" "Decisions" "Decisions taken" "Decisions taken here" \
+    "Amendment" "Amendments" "Build amendment" "Spec amendment"; do
+    cat >"$PRE" <<SPEC
+---
+spec_id: X
+---
+## Behaviors
+
+- **B1** (access): Only the owner opens settings.
+  - Case: B1 first case: the owner opens settings -> the page shows Settings.
+
+## $heading
+
+The maintainer decided the settings page and its owner check are dropped from this build.
+SPEC
+    grep -v 'B1' "$PRE" >"$POST"
+    write_findings TST-001 SEC-001
+    write_fixes '[{"change":"dropped","quote":"B1 first case: the owner opens settings"},{"change":"dropped","quote":"(access): Only the owner opens settings."}]' \
+      "$(drop_json B1 feature-dropped SPEC.md "the settings page and its owner check are dropped from this build")"
+    check_spec
+    [ "$status" -eq 0 ] || { echo "$heading: $output"; return 1; }
+  done
+}
+
 make_plan_dirs() {
   PLAN_PRE="$WORK/plan-pre"
   PLAN_POST="$WORK/plan-post"
@@ -484,6 +513,56 @@ TASK
 
 check_plan() {
   run node "$CLI" --mode plan --fixes "$FIXES" --findings "$FINDINGS" --pre "$PLAN_PRE" --post "$PLAN_POST"
+}
+
+write_plan_spec() { # heading-line the record sits under
+  PLAN_SPEC="$WORK/plan-spec/SPEC.md"
+  mkdir -p "$WORK/plan-spec"
+  cat >"$PLAN_SPEC" <<SPEC
+---
+spec_id: X
+---
+## Behaviors
+
+- **B1** (access): Only the owner opens settings.
+  - Case: B1 first case: the owner opens settings -> the page shows Settings.
+
+$1
+
+The maintainer decided the settings page and its owner check are dropped from this build.
+SPEC
+}
+
+plan_drop_fixes() { # fragment
+  printf '{"fixes":[{"finding":"DP-001","route":"plan","edits":%s,"drops":%s}]}\n' \
+    "$(quote_json "The server answers 403 with the text Forbidden")" \
+    "$(drop_json B1 feature-dropped SPEC.md "$1")" >"$FIXES"
+}
+
+# bats test_tags=protected
+@test "plan mode feature-dropped passes for a strict-kind behavior the SPEC still states when a decision record holds the fragment, and refuses one that does not" {
+  make_plan_dirs
+  grep -vF "answers 403" "$PLAN_PRE/task-a.md" >"$PLAN_POST/task-a.md"
+  write_findings DP-001
+  write_plan_spec "## Build amendment"
+  local record="the settings page and its owner check are dropped from this build"
+
+  plan_drop_fixes "$record"
+  run node "$CLI" --mode plan --fixes "$FIXES" --findings "$FINDINGS" --pre "$PLAN_PRE" --post "$PLAN_POST" --dest "$PLAN_SPEC"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+
+  # A fragment outside every decision record is refused.
+  plan_drop_fixes "The server answers 403 with the text Forbidden"
+  run node "$CLI" --mode plan --fixes "$FIXES" --findings "$FINDINGS" --pre "$PLAN_PRE" --post "$PLAN_POST" --dest "$PLAN_SPEC"
+  [ "$status" -eq 1 ]
+  has_output "not in a decision record that predates the fix" || return 1
+
+  # The record under a heading that is no decision heading is refused.
+  write_plan_spec "## Notes"
+  plan_drop_fixes "$record"
+  run node "$CLI" --mode plan --fixes "$FIXES" --findings "$FINDINGS" --pre "$PLAN_PRE" --post "$PLAN_POST" --dest "$PLAN_SPEC"
+  [ "$status" -eq 1 ]
+  has_output "not in a decision record that predates the fix" || return 1
 }
 
 @test "plan mode refuses an untraced change to or removal of a numbered acceptance criterion" {

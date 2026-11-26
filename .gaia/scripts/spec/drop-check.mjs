@@ -51,8 +51,9 @@
 //     destination is not still-stated, restored, refusal, deferred or
 //     feature-dropped (deferred: the fragment sits in the post-fix SPEC's
 //     clarifications.deferred[] text; feature-dropped: a maintainer decision
-//     dropped the whole feature: the drop's behavior is gone from the post-fix
-//     SPEC, and the fragment sits under a decision-record heading (see
+//     dropped the whole feature: in spec mode the drop's behavior is gone from
+//     the post-fix SPEC (plan mode never edits the SPEC, so it checks only the
+//     record), and the fragment sits under a decision-record heading (see
 //     DECISION_HEADING in drop-check-lib.mjs) of the pre-fix SPEC in spec mode
 //     or of the SPEC in plan mode, so the record predates the fixer's edit);
 //   - a compared line removed or changed between pre and post that no
@@ -290,8 +291,12 @@ export function checkFixes(settings) {
       settings.mode === 'spec' ? readText(settings.pre) : specText,
     destinations,
     kinds: behaviorKinds(kindSources),
+    // Plan mode never edits the SPEC, so a dropped behavior is always still in
+    // it; only spec mode can show a behavior gone.
     liveBehaviorIds: new Set(
-      parseBehaviors(specText).behaviors.map((behavior) => behavior.id),
+      settings.mode === 'spec'
+        ? parseBehaviors(specText).behaviors.map((behavior) => behavior.id)
+        : [],
     ),
     requirementsText: settings.requirements
       ? readText(settings.requirements)
