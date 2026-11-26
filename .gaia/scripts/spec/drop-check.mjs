@@ -18,7 +18,7 @@
 //     {"finding": "TST-003", "route": "spec|directive|plan|rejected",
 //      "edits": [{"change": "edited|narrowed|dropped", "quote": "<six or more words of the pre-fix line>"}],
 //      "drops": [{"behavior": "B4", "case": "<old case text>",
-//                 "destination": "still-stated|restored|refusal|out-of-scope|corrected-value|deferred",
+//                 "destination": "still-stated|restored|refusal|out-of-scope|corrected-value|deferred|feature-dropped",
 //                 "file": "SPEC.md", "fragment": "<six or more words, verbatim from the destination file>"}]}
 //   ]}
 //
@@ -48,8 +48,14 @@
 //     post-fix SPEC points to with `REQUIREMENTS.md § <heading text>` (for a
 //     `Q<n>. ...` heading the text up to the first period);
 //   - a drop from an access, forgery, secret or refusal behavior whose
-//     destination is not still-stated, restored, refusal or deferred (deferred:
-//     the fragment sits in the post-fix SPEC's clarifications.deferred[] text);
+//     destination is not still-stated, restored, refusal, deferred or
+//     feature-dropped (deferred: the fragment sits in the post-fix SPEC's
+//     clarifications.deferred[] text; feature-dropped: a maintainer decision
+//     dropped the whole feature: in spec mode the drop's behavior is gone from
+//     the post-fix SPEC (plan mode never edits the SPEC, so it checks only the
+//     record), and the fragment sits under a decision-record heading (see
+//     DECISION_HEADING in drop-check-lib.mjs) of the pre-fix SPEC in spec mode
+//     or of the SPEC in plan mode, so the record predates the fixer's edit);
 //   - a compared line removed or changed between pre and post that no
 //     edits[].quote matches (six or more words found in the pre-fix line);
 //   - a case removed beyond any it replaced with fewer `drops` entries than
@@ -67,10 +73,15 @@
 import {existsSync, realpathSync, statSync} from 'node:fs';
 import {basename} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {normalizeWhitespace, SECURITY_KINDS} from './behaviors.mjs';
+import {
+  normalizeWhitespace,
+  parseBehaviors,
+  SECURITY_KINDS,
+} from './behaviors.mjs';
 import {
   behaviorKinds,
   comparedLines,
+  decisionRecordText,
   deferredText,
   destinationFiles,
   findingIdsIn,
@@ -102,8 +113,15 @@ const DESTINATIONS = [
   'out-of-scope',
   'corrected-value',
   'deferred',
+  'feature-dropped',
 ];
-const STRICT_DESTINATIONS = ['still-stated', 'restored', 'refusal', 'deferred'];
+const STRICT_DESTINATIONS = [
+  'still-stated',
+  'restored',
+  'refusal',
+  'deferred',
+  'feature-dropped',
+];
 const STRICT_KINDS = [...SECURITY_KINDS, 'refusal'];
 const MINIMUM_WORDS = 6;
 const USAGE =
@@ -159,7 +177,7 @@ function dropRefusals(fix, context) {
       !STRICT_DESTINATIONS.includes(drop.destination)
     ) {
       refuse(
-        `is ${kind} and cannot resolve to ${drop.destination}; use still-stated, restored, refusal or deferred`,
+        `is ${kind} and cannot resolve to ${drop.destination}; use still-stated, restored, refusal, deferred or feature-dropped`,
       );
       continue;
     }
@@ -177,6 +195,18 @@ function dropRefusals(fix, context) {
       if (!deferredText(context.specText).includes(fragment)) {
         refuse(
           `fragment is not in the SPEC's clarifications.deferred text: "${fragment}"`,
+        );
+      }
+      continue;
+    }
+    if (drop.destination === 'feature-dropped') {
+      if (context.liveBehaviorIds.has(drop.behavior)) {
+        refuse(
+          `is feature-dropped but ${drop.behavior} is still a behavior of the post-fix SPEC; feature-dropped means the whole behavior is gone`,
+        );
+      } else if (!decisionRecordText(context.decisionSourceText).includes(fragment)) {
+        refuse(
+          `fragment is not in a decision record that predates the fix (the text under a Decision or Amendment heading): "${fragment}"`,
         );
       }
       continue;
@@ -257,8 +287,17 @@ export function checkFixes(settings) {
   const kindSources = [specText];
   if (settings.mode === 'spec') kindSources.unshift(readText(settings.pre));
   const context = {
+    decisionSourceText:
+      settings.mode === 'spec' ? readText(settings.pre) : specText,
     destinations,
     kinds: behaviorKinds(kindSources),
+    // Plan mode never edits the SPEC, so a dropped behavior is always still in
+    // it; only spec mode can show a behavior gone.
+    liveBehaviorIds: new Set(
+      settings.mode === 'spec'
+        ? parseBehaviors(specText).behaviors.map((behavior) => behavior.id)
+        : [],
+    ),
     requirementsText: settings.requirements
       ? readText(settings.requirements)
       : '',
