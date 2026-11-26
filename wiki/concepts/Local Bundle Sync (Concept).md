@@ -4,7 +4,7 @@ status: active
 created: 2026-10-27
 updated: 2026-10-27
 promoted_at: 2026-10-26T20:41:00Z
-promoted_hash: sha256:98998035aadad2b612b8bea91c8dbb9b70ab5a1c29eb092cd47b380a95db458d
+promoted_hash: sha256:43f862fcb719275609ad6c26d8598ae2f899f0c162dcce97055cc74d54233187
 pr_number: 3110
 tags: [update-gaia, distribution, promoted]
 ---

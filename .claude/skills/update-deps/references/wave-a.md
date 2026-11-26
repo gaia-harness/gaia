@@ -13,7 +13,7 @@ any, are handled by the orchestrator).
 1. Build install args. For each entry: if `is_pinned` use the exact target, else use `^<latest>`. Example: `pnpm -C apps/web add foo@1.2.3 bar@^4.5.0 ...` (an entry declared in the root `package.json` goes through `pnpm add -w` instead).
 2. Run the single `pnpm -C apps/web add` command (plus one `pnpm add -w` for any root-declared entries). If `msw` is in the batch, then regenerate `apps/web/public/mockServiceWorker.js`. See `.claude/skills/update-deps/SKILL.md` (Companion groups).
 <!-- gaia:maintainer-only:start -->
-   See `.claude/skills/update-deps/SKILL.md` (Phase 6: Post-update override audit).
+   An entry carrying `"workspace": ".gaia/cli"` is installed with `pnpm -C .gaia/cli add <name>@<spec>`, never `pnpm -C apps/web add`.
 <!-- gaia:maintainer-only:end -->
 3. Run `pnpm ls 2>&1`. Scan for peer-dep errors.
 4. On error: try one targeted fix in the `overrides:` map in `pnpm-workspace.yaml` (e.g. add a `parent>child` pin), then `pnpm dedupe` to apply it, a bare `pnpm install` won't re-resolve an overrides-only change.

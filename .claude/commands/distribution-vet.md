@@ -83,7 +83,7 @@ When a maintainer answers "keep internal" for a file that matched **no** categor
 
 ### 3c. How every question is written
 
-**Option order is fixed here, once, rather than chosen per question.** `AskUserQuestion`'s own contract assigns meaning to the first position: a recommended option goes first and carries `(Recommended)`. A prohibition on recommending that says nothing about order leaks through order, and a consistently-first "ship" reads as advice to any reasonable person. So, in every question (header `Ship or keep`):
+**Option order is fixed here, once, rather than chosen per question.** `AskUserQuestion`'s own contract assigns meaning to the first position: a recommended option goes first and carries `(Recommended)`. A prohibition on recommending that says nothing about order leaks through order, and a consistently-first "ship" reads as advice to any reasonable person. So, in every ship-or-keep question (header `Ship or keep`):
 
 - `Keep internal` is always the first option.
 - `Ship to adopters` is always the second.
