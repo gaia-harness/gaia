@@ -195,7 +195,7 @@ function dropRefusals(fix, context) {
     if (drop.destination === 'feature-dropped') {
       if (!decisionRecordText(context.specText).includes(fragment)) {
         refuse(
-          `fragment is not in a decision record (a heading naming a decision or an amendment) of the SPEC: "${fragment}"`,
+          `fragment is not in a decision record of the SPEC (the text under a heading naming a decision or an amendment): "${fragment}"`,
         );
       }
       continue;
