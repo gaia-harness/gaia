@@ -115,10 +115,11 @@ listing_of_files() {
 # Everything else stays, including any file that cannot be attributed. When the
 # own digests or HEAD's history cannot be read, no marker or route record is
 # dropped (another branch's branch-keyed files still are). Dropping a marker
-# is safe because the merge gate accepts a marker by digest alone, so only one
-# at this branch's own digest can affect this branch, and those are never
-# dropped. A marker older than the history window reads as another head's,
-# which is the safe direction to fail in.
+# is safe because the merge gate matches a marker by digest and the audit base
+# resolvers anchor on a recorded tree in this branch's history, so a marker at
+# another digest whose tree and commit are both outside HEAD's history can
+# affect neither. The 500-commit window is well past the resolvers' 50-commit
+# anchor walk, so a marker older than the window cannot anchor this branch.
 audit_listing() {
   local root="$1" main_root="$2" audit_directory="$2/.gaia/local/audit"
   local library="$_script_directory/../../.claude/hooks/lib/audit-digest.sh"

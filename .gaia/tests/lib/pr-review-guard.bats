@@ -118,7 +118,8 @@ arm_branch_digests() {
   HEAD_TREE=$(git -C "$FIXTURE" rev-parse 'HEAD^{tree}')
 }
 
-# marker_body <tree> <sha> [<digest>]: a writer-shaped earned marker body.
+# marker_body <tree> <sha> [<digest>]: an earned marker body; with no <digest>
+# its digest is a placeholder that matches no filename.
 marker_body() {
   printf '{"member":"code-audit-frontend","provenance":"earned","digest":"%s","tree":"%s","sha":"%s"}\n' "${3:-x}" "$1" "$2"
 }
