@@ -11,6 +11,7 @@
 #   bin/gh       gh-stub.sh, put first on PATH by run-dry-run.sh
 #   gh/          the stub's state: pr.json, calls.log, comments/
 #   fixture.env  the values run-dry-run.sh asserts against, one KEY=value a line
+#   build-staging.log  build-staging.sh's output
 #
 # What it forces, so one iteration must reach both checks:
 #   - the autonomy switch, written as the human would (the command in
@@ -26,7 +27,7 @@
 #
 # --mutate builds the two negative proofs: `gate` drops the autonomy-gate.sh
 # registration from .claude/settings.json, `park` replaces autonomy-park.sh
-# with a script that prints the park script's success line and does nothing
+# with a script that prints a park success line and does nothing
 # else. Both are committed on main, so the tree the session sees is clean.
 #
 # Exit 0 built (prints --out), 2 usage or a refused --out, 1 a build step failed.
@@ -95,7 +96,7 @@ case "$mutation" in
   park)
     cat >"$repo/.gaia/scripts/autonomy-park.sh" <<'EOF'
 #!/usr/bin/env bash
-# Dry-run mutation: the park step is skipped. Prints the real script's success line only.
+# Dry-run mutation: the park step is skipped. Prints a park success line only.
 printf 'Parked. Next: end this iteration and schedule no work on this item.\n'
 EOF
     ;;

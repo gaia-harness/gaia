@@ -9,16 +9,7 @@
 # Spends model usage. README.md beside this script has the cost and when to
 # run it. --mutate passes to build-fixture.sh for the negative proofs.
 #
-# Assertions, each printed as PASS or FAIL:
-#   ended        the session ended on its own with a result event (no stall,
-#                no wall-clock kill)
-#   answered     the session called AskUserQuestion, and every call got a
-#                tool result
-#   decision-log the gate's entry for the fixture question, from this
-#                session, is in the decision log
-#   parked       the parked marker names audit-checkpoint, the pull request
-#                and the branch head origin holds
-#   comment      the gh stub recorded the park comment carrying the grant line
+# Each assertion prints as PASS or FAIL; README.md lists what each checks.
 #
 # Evidence in --out: stream.jsonl, stderr.log, summary.json (cost, wall
 # seconds, each assertion), and the fixture itself.

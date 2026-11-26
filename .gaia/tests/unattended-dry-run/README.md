@@ -2,8 +2,7 @@
 
 Maintainer-only (all of `.gaia/tests` is release-excluded). One `/gaia-next` iteration runs with the [autonomy switch](../../../wiki/concepts/Autonomy%20Switch.md) on, as a headless `claude -p` session in an adopter fixture. The check proves that the iteration ends without stalling, that the question gate wrote its decision-log entry, and that a forced audit checkpoint parked the run.
 
-It spends model usage and needs Claude auth, so it is a manual check: run it by hand after a change to the gate, the park procedure, the audit budget, the merge policy, `/gaia-next` or `.claude/loop.md`. Nothing runs it in CI.
-
+It spends model usage and needs Claude auth, so it is a manual check: run it by hand after a change to the gate, the park procedure, the audit budget, the merge policy, `/gaia-next` or `.claude/loop.md`.
 ## Files
 
 - `run-dry-run.sh`: builds the fixture, runs the session, asserts, and writes the evidence.
@@ -28,7 +27,7 @@ The default permission mode is not the `auto` mode [GAIA Next](../../../wiki/con
 
 ## What it asserts
 
-The fixture asks one question of its own. The iteration reaches no question before it parks, so `--append-system-prompt` tells the session to ask one with a single `(Recommended)` option before its first step. The gate must deny that call, log the option and tell Claude to take it.
+The iteration reaches no question before it parks, so `--append-system-prompt` tells the session to ask one with a single `(Recommended)` option before its first step. The gate must deny that call, log the option and tell Claude to take it.
 
 - `ended`: the session ended with a `result` event, not at the wall-clock kill.
 - `answered`: the session called `AskUserQuestion`, and every call got a tool result.
@@ -49,4 +48,4 @@ Evidence lands in `--out`: `stream.jsonl` (with hook events), `stderr.log`, `sum
 
 On Claude Code 2.1.332 with Sonnet, a passing run cost $0.32 and took 48 seconds, and the `--mutate park` run cost $0.35. The `--mutate gate` run ends at the unanswered question, for $0.12 in 8 seconds. A `--max-usd 3` cap leaves room for a session that wanders. `summary.json` records each run's real figure.
 
-The issue behind this check allowed a CI job behind its own opt-in. There is none: the run needs Claude auth on the runner and spends usage on every trigger, and the check guards changes that land a few times a release.
+No CI job runs it: the run needs Claude auth on the runner and spends usage on every trigger, and the check guards changes that land a few times a release.
