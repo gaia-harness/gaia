@@ -136,3 +136,47 @@ veto() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
   [ "$(jq -r '.findings[0].fix_state' "$RUN_FOLDER/pr-review.json")" = fixed ]
 }
+
+@test "a fix finding routed with a repair path in another owned file is satisfied by a fixer commit touching only that file and the owner's clean review" {
+  local repair=src/b.sh
+  alf_round 1 "$MEMBER" '[]' || return 1
+  alf_dispositions 1 '[]'
+  record open --root "$ALF_ROOT" --pr 7 --head "$HEAD_SHA" --bundle "$BUNDLE"
+  [ "$status" -eq 0 ] || return 1
+  record attempt-open
+  [ "$status" -eq 0 ] || return 1
+  jq -n -c --arg file "$OWNED" '[{file: $file, line: 1, severity: "Major", summary: "the new library is not protected",
+    failure_scenario: "the failing input", verified: true, security: false}]' >"$FINDINGS"
+  record outcome --findings "$FINDINGS"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  record dispose --id pr-1 --disposition fix
+  [ "$status" -eq 0 ] || return 1
+  # The key keeps the finding's path and line and names the repair path.
+  record route-fix --root "$ALF_ROOT" --id pr-1 --repair-path "$repair"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  [ "$output" = "veto $MEMBER" ] || return 1
+  [ "$(jq -c '.keys | map([.path, .line, .effective_from_round, .repair_paths])' "$RUN_FOLDER/vetoes.json")" = \
+    "[[\"$OWNED\",1,2,[\"$repair\"]]]" ] || return 1
+  dispatch audit-loop-unit
+  allowed || return 1
+  [ "$(rounds)" -eq 2 ] || return 1
+  # The fixer's repair lands only in the repair path.
+  alf_dispositions 2 "[{\"member\":\"pr-reviewer\",\"finding_class\":\"pr-review/pr-1\",\"path\":\"$OWNED\",\"line\":1,\"disposition\":\"fix\",\"reason\":\"vetoed\"}]"
+  jq -n -c --arg path "$OWNED" --arg repair "$repair" '{schema: 1, round: 2, attempt: 1,
+    results: [{member: "pr-reviewer", finding_class: "pr-review/pr-1", path: $path, line: 1, disposition: "fixed", reason: "done", changed_paths: [$repair]}],
+    changed_paths: [$repair], reverted_paths: []}' >"$RUN_FOLDER/fixer-2-audit.json"
+  alf_fill "$repair" 3 protected
+  alf_commit "protect the library"
+  veto unsatisfied 2 || return 1
+  dispatch "$MEMBER" "$IN_UNIT"
+  allowed || return 1
+  [ "$(rounds)" -eq 3 ] || return 1
+  alf_stamp 3 30
+  alf_sidecar "$MEMBER" '[]' 31
+  alf_dispositions 3 '[]'
+  veto satisfied 3 || return 1
+  record fixed --root "$ALF_ROOT" --id pr-1
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  run bash "$SCRIPTS/audit-dispositions-check.sh" check-all --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+}

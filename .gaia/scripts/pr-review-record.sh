@@ -11,7 +11,7 @@
 #   outcome       --run-folder --findings <reviewer-output-file>
 #   not-run       --run-folder --reason <reason>
 #   dispose       --run-folder --id --disposition [--reason] [--issue] [--basis] [--severity] [--security]
-#   route-fix     --root --run-folder --id
+#   route-fix     --root --run-folder --id [--repair-path <path>]...
 #   fixed         --root --run-folder --id [--commit]
 #   dropped       --run-folder --id --by --evidence
 #   fix-commit    --run-folder --sha
@@ -66,7 +66,7 @@ SUBCOMMAND="${1-}"
 [ $# -gt 0 ] && shift
 ROOT="" RUN_FOLDER="" PR="" HEAD_SHA="" BUNDLE="" RETRY=0 ATTEMPT="" CLASSIFIER_EXIT="" DISPATCH_FAILED=0
 FINDINGS_FILE="" REASON="" FINDING_ID="" DISPOSITION="" ISSUE="" BASIS="" SEVERITY="" SECURITY="" MEMBER=""
-EVIDENCE="" COMMIT="" SHA=""
+EVIDENCE="" COMMIT="" SHA="" REPAIR_PATHS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --retry) RETRY=1; shift; continue ;;
@@ -93,6 +93,7 @@ while [ $# -gt 0 ]; do
     --evidence) EVIDENCE="$2" ;;
     --commit) COMMIT="$2" ;;
     --sha) SHA="$2" ;;
+    --repair-path) REPAIR_PATHS="$REPAIR_PATHS$2"$'\n' ;;
     *) die_usage "unknown argument: $1" ;;
   esac
   shift 2

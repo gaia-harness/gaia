@@ -7,9 +7,8 @@
 # and _GAIA_REPAIR_PATHS_SHAPED_JQ and the caller's _error, _evaluator,
 # _round_lookup, _SECURITY_CLASS_JQ, gaia_exclusive_lock_take,
 # _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER and FINDING_FILE;
-# pr-review-record-lib.sh calls only _veto_recorded_fix and _veto_withdraw,
-# which need no _round_lookup, _SECURITY_CLASS_JQ or
-# _GAIA_DISPOSITIONS_DIRECTORY. Runs
+# pr-review-record-lib.sh calls only _veto_recorded_fix, _veto_withdraw and
+# _repair_paths_owned, which need no _round_lookup or _SECURITY_CLASS_JQ. Runs
 # nothing at source time. Never `cd`s.
 
 # _finding_path_owned: true when the roster at ROOT gives FINDING_FILE's path

@@ -10,8 +10,9 @@
 #
 # The fix routing writes the audit loop's veto through _veto_recorded_fix, the
 # one writer of vetoes.json, so the key, its lock and its round arithmetic stay
-# the audit's own. ROOT is the audited checkout; what _veto_recorded_fix and
-# _veto_withdraw need is in audit-recorded-decision-lib.sh's header.
+# the audit's own, and refuses a bad --repair-path through _repair_paths_owned,
+# the check record-residual's fix decision runs. ROOT is the audited checkout;
+# what those helpers need is in audit-recorded-decision-lib.sh's header.
 
 # shellcheck source=/dev/null
 . "$SCRIPT_DIRECTORY/audit-triage-lib.sh"
@@ -21,6 +22,8 @@
 . "$SCRIPT_DIRECTORY/../../.claude/hooks/lib/audit-scope.sh"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIRECTORY/../../.claude/hooks/lib/audit-base-provenance.sh"
+# _repair_paths_owned reads the roster and ENFORCEMENT_PATHS from here.
+_GAIA_DISPOSITIONS_DIRECTORY="$SCRIPT_DIRECTORY"
 
 _error() { printf 'pr-review-record: %s\n' "$*" >&2; }
 
@@ -252,25 +255,35 @@ veto_row() {
     '{member: "pr-reviewer", finding_class: $class, path: $path, line: $line}'
 }
 
+# cmd_route_fix: each --repair-path names a file the repair lands in other than
+# the finding's own, written as the veto key's repair_paths; the key keeps the
+# finding's path and line. Given on a finding already routed, they rewrite its
+# key in place, so the fix counts from the next round.
 cmd_route_fix() {
   require_main_root_match
   require_record
   require_finding
   [ "$(finding_field '.disposition')" = fix ] || refuse "$FINDING_ID is not disposed fix"
   [ "$(finding_field '.fix_state')" != fixed ] || refuse "$FINDING_ID is already fixed"
-  local file summary route first_time=1 finding_file row
+  local file summary route first_time=1 finding_file row repair_path_list refusal
   file="$(finding_field '.file')"
   [ "$(finding_field '.fix_state')" != routed ] || first_time=0
+  repair_path_list="$(printf '%s' "$REPAIR_PATHS" | jq -R -s -c 'split("\n") | .[:-1]')"
   ROOT="$(audited_root)"
   route="$(decide_route "$ROOT" "$file")"
+  if [ "$repair_path_list" != '[]' ] && [ "${route%% *}" != veto ]; then
+    refuse "--repair-path needs a veto route; $FINDING_ID routes to $route"
+  fi
   case "$route" in
     veto*)
-      if [ "$first_time" -eq 1 ]; then
+      if [ "$first_time" -eq 1 ] || [ "$repair_path_list" != '[]' ]; then
         summary="$(finding_field '.summary | gsub("[\\r\\n]+"; " ")')"
         finding_file="$(mktemp)"
         row="$(veto_row)"
-        jq -n --arg reason "$summary" '{reason: $reason}' >"$finding_file"
+        jq -n --arg reason "$summary" --argjson repair_paths "$repair_path_list" \
+          '{reason: $reason} + (if $repair_paths == [] then {} else {repair_paths: $repair_paths} end)' >"$finding_file"
         FINDING_FILE="$finding_file"
+        refusal="$(_repair_paths_owned 2>&1 >/dev/null)" || { rm -f "$finding_file"; refuse "${refusal#pr-review-record: }"; }
         _veto_recorded_fix "$row" || { rm -f "$finding_file"; exit 2; }
         rm -f "$finding_file"
       fi
