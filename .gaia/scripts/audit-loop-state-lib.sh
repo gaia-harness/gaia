@@ -341,8 +341,9 @@ gaia_loop_session_is_interactive() {
 # the rule has one copy: a context checkpoint with no denying signal is a grant
 # (the session is merely full), otherwise the verdict decides, except that a
 # stalled small tail the snapshot calls accept-eligible is an accept; an accept
-# is a grant when the snapshot is not accept-eligible or has `accept_blockers`,
-# which both callers add first (RECOMMENDATION, audit-loop-eval.sh).
+# is a grant when the snapshot is not accept-eligible or any `accept_blockers`
+# list, which both callers add first, is non-empty (RECOMMENDATION,
+# audit-loop-eval.sh).
 gaia_loop_recommended() {
   local trigger="${1-}" snapshot="${2:-null}"
   printf '%s' "$snapshot" | jq -r --arg trigger "$trigger" '
