@@ -48,8 +48,8 @@
 # the one it adds under .claude/worktrees/ (added true). It fails when the main
 # checkout itself holds the branch, or the add fails.
 #
-# Exit: 0 an answer; 1 a read failed (git, gh, the notebook, an input file),
-# with one stderr line; 2 usage, a library that will not load, or a --root
+# Exit: 0 an answer; 1 a read failed (git, gh, the notebook, an input file) or
+# the worktree verb refused, with one stderr line; 2 usage, a library that will not load, or a --root
 # outside a git working tree.
 
 set -u

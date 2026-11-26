@@ -446,7 +446,7 @@ worktree_for() {
   [ "$(git -C "$WORK" worktree list --porcelain | grep -c '^worktree ')" -eq 2 ]
 }
 
-@test "the worktree verb refuses a branch the main checkout holds, or one that does not exist, and adds nothing" {
+@test "the worktree verb refuses a branch the main checkout holds, one that does not exist, or a missing --branch, and adds nothing" {
   git -C "$WORK" checkout -q feat/2-pr-work
   worktree_for feat/2-pr-work
   [ "$status" -eq 1 ]

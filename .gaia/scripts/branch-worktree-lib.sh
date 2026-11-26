@@ -14,8 +14,8 @@
 #   no branch) at <main checkout>/.claude/worktrees/<branch with each / as +>,
 #   the spelling the harness's EnterWorktree gives its own trees. SUCCESS:
 #   prints that path as one line; returns 0. FAILURE (no such branch, a tree
-#   already holds it, the path exists, or the add fails): ONE reason line on
-#   stderr; returns 1.
+#   already holds it, the main checkout root cannot be resolved, the path
+#   exists, or the add fails): ONE reason line on stderr; returns 1.
 #
 # `directory` (default: the process working directory) names the repository.
 
