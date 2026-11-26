@@ -9,7 +9,9 @@ The hand-off procedure for a confirmed spec-class member. `debt.md` routes here 
    /gaia-spec Design-first tech debt from issue #<N>: <one-line problem>. First run
    `gh issue edit <N> --remove-label debt:spec-pending --add-label debt:spec-active`
    (best-effort; do not block authoring on it). Author a SPEC for this fix; the
-   implementation PR the resulting plan produces should carry `Closes #<N>` so the
+   implementation PR the resulting plan produces should carry `Closes #<N>`
+   (placed per `.claude/skills/gaia/references/work-lifecycle.md`
+   `## 5. Commit and open the draft PR`) so the
    tech-debt issue closes on merge. If the SPEC resolves without an implementation
    PR that closes #<N>, settle the label yourself: when nothing remains to
    implement, run `gh issue edit <N> --remove-label debt:spec-active` and close #<N>;

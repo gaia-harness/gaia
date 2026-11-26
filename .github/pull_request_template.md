@@ -1,6 +1,6 @@
 ## Summary
 
-<!-- What does this change, and why? One or two sentences. -->
+<!-- What does this change, and why? One or two sentences. Then, at the end of this section, one `Closes #<n>` line per issue the PR closes. -->
 
 ## Type of change
 

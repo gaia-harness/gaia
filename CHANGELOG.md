@@ -55,6 +55,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Changed
 
+- **Pull request bodies Claude writes put their `Closes #<n>` lines in one place:** the end of `## Summary`, so a reader sees at a glance which issues a pull request closes. The pull request template says so too.
 - **`/gaia-spec` reads a quarter less reference text per run:** auto-mode rules, research dispatch, the critical refuter, the fixer's prompt and each review lens's focus now live in files read only at the step that needs them, or by the sub-agent that uses them, so a run pays only for the branches it takes; every instruction is kept. When sub-agents are unavailable, the spec review is now consistently skipped rather than folded inline by the main thread (#3813, #3832)
 - **An unattended plan run no longer stalls at the test stage:** `.claude/settings.json` now allows the test stage's `node .gaia/scripts/spec/test-stage-check.mjs` call, which matched no allow entry and stopped the run on a permission prompt (#3822)
 - **`/gaia-spec` hands its code map forward as an index:** the research agent's map of the files it found now stays beside the SPEC and goes to every later spec review, plan review, test-stage review and the planner as an index of where to look first, so they stop re-discovering the same files from scratch. Every review check is kept, and grounding lenses still verify each claim against the file itself; the intended effect is lower spec and plan cost.

@@ -19,7 +19,7 @@ Conventional Commits 1.0.0: `type(scope)!: summary`, a lowercase imperative summ
 - **Types.** The permitted types live in `.gaia/conventional-commits.json`. `commitlint.config.mjs` reads that file, and so does the CI check.
 - **Scope.** Optional, lowercase kebab, open vocabulary.
 - **Breaking change.** `!` after the type or scope, plus a `BREAKING CHANGE:` footer.
-- **Issue links.** `Closes #N` belongs in the PR body only. A squash merge concatenates commit bodies into the merge message, and GitHub closes issues from that message.
+- **Issue links.** `Closes #N` belongs in the PR body only, placed per `.claude/skills/gaia/references/work-lifecycle.md` `## 5. Commit and open the draft PR`. A squash merge concatenates commit bodies into the merge message, and GitHub closes issues from that message.
 - **PR title.** The title becomes the squash subject on `main` with ` (#N)` appended, which is why the CI check lints that exact string. The suffix counts toward the 100: with a four-digit PR number a title has 92 characters, so a commit subject reused as the title can pass the commit-msg hook and still fail CI. Dependabot's titles are exempt from the title lint.
 
 ## Type versus branch prefix
