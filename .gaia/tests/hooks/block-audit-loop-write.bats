@@ -655,19 +655,26 @@ assert_reaper_denied() {
 @test "a human-set round cap stands after Claude's write to it and its run of the context writer are denied" {
   local repo_root="$BATS_TEST_DIRNAME/../../.."
   local reading_dir="$MAIN/.gaia/local/cache/shared/context"
-  local payload="$BATS_TEST_TMPDIR/payload.json"
+  local session_id=0a1b2c3d-1111-4222-8333-444455556666
   printf '%s' '{"audit_loop":{"round_cap":4},"version":1}' >"$OVERRIDE"
   rm -f "$CONTEXT_FILE"
-  printf '%s' '{"session_id":"0a1b2c3d-1111-4222-8333-444455556666","context_window":{"used_percentage":10,"context_window_size":200000}}' >"$payload"
 
+  # Each attempt runs only when the guard allows it, so the checks below fail
+  # if the guard stops denying.
   run_edit Write "$OVERRIDE"
+  if ! grep -qF -- '"permissionDecision": "deny"' <<<"$output"; then
+    printf '%s' '{"audit_loop":{"round_cap":9},"version":1}' >"$OVERRIDE"
+  fi
   assert_denied_by_json
 
-  run_bash "bash .gaia/statusline/gaia-statusline.sh < $payload"
+  run_bash ". .gaia/statusline/context-reading.sh && gaia_statusline_write_context $MAIN $session_id 10 200000 20000"
+  if ! grep -qF -- '"permissionDecision": "deny"' <<<"$output"; then
+    bash -c '. "$1/.gaia/scripts/context-checkpoint-lib.sh"; . "$1/.gaia/statusline/context-reading.sh"; gaia_statusline_write_context "$2" "$3" 10 200000 20000' _ "$repo_root" "$MAIN" "$session_id"
+  fi
   assert_pins_only_class context-writer
   [ -z "$(find "$reading_dir" -type f)" ]
 
-  run bash -c '_GAIA_LOOP_HARD_CAP=10; . "$1/.gaia/scripts/audit-loop-automatic-lib.sh"; gaia_loop_round_cap_state "$2"' _ "$repo_root" "$MAIN"
+  run bash -c '. "$1/.gaia/scripts/audit-loop-signals-lib.sh"; . "$1/.gaia/scripts/audit-loop-automatic-lib.sh"; gaia_loop_round_cap_state "$2"' _ "$repo_root" "$MAIN"
   [ "$status" -eq 0 ]
   [ "$output" = "ok 4 4" ]
 }
