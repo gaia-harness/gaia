@@ -36,14 +36,14 @@ setup() {
 @test "delete_branch_on_merge applies silently on a created repo and asks otherwise" {
   grep -qF -- "$CREATE_ARM" <<<"$DELETE_BRANCH"
   grep -qF -- '`RECONFIGURE` not set, run the Enable block below with no question' <<<"$DELETE_BRANCH"
-  grep -qF -- 'Otherwise AskUserQuestion:' <<<"$DELETE_BRANCH"
+  grep -qF -- 'Otherwise AskUserQuestion (header `Auto-delete`):' <<<"$DELETE_BRANCH"
   grep -qF -- '**Enable delete_branch_on_merge** (Recommended)' <<<"$DELETE_BRANCH"
 }
 
 @test "squash-only applies silently on a created repo and asks otherwise" {
   grep -qF -- "$CREATE_ARM" "$SQUASH_ONLY"
   grep -qF -- '`RECONFIGURE` is not set, run the PATCH below with no question' "$SQUASH_ONLY"
-  grep -qF -- 'Otherwise AskUserQuestion:' "$SQUASH_ONLY"
+  grep -qF -- 'Otherwise AskUserQuestion (header `Squash-only`):' "$SQUASH_ONLY"
   grep -qF -- '**Make merges squash-only** (Recommended)' "$SQUASH_ONLY"
 }
 
