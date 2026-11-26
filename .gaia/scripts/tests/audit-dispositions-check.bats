@@ -520,7 +520,7 @@ tree_state() {
   grep -qF -- 'Out-of-scope machinery findings' <<<"$output"
 }
 
-@test "pr-sections: a veto effective from a later round drops an earlier round's triage waiver, disposed or lookup-flagged only" {
+@test "pr-sections: a veto effective from a later round drops an earlier round's triage waiver, whether disposed or only lookup-flagged" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug waive-out-of-scope "below threshold" triage-threshold)]")"
   run_sections
   green || return 1
