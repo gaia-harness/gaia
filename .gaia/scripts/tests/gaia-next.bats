@@ -477,3 +477,66 @@ worktree_for() {
   [[ "$step" == *'prints more than 0, report the branch and its pull request and end this run'* ]]
   [[ "$step" == *'detached checkout (empty branch name, which skips the pull request query)'* ]]
 }
+
+# handoff_state <branch> <checkpoints-json> [answers-json]: a valid state file whose checkpoints are given.
+handoff_state() {
+  local file="$WORK/.gaia/local/protected/audit-loop/$1.json"
+  mkdir -p "${file%/*}"
+  jq -n --arg branch "$1" --argjson checkpoints "$2" --argjson answers "${3:-[]}" \
+    '{schema: 1, key: $branch, branch: $branch, pr: null,
+      history: {rounds: [], checkpoints: $checkpoints}, allowance: {answers: $answers}}' > "$file"
+}
+
+@test "pick: a hand-off checkpoint from this session skips its pull request without parking it, and another session takes it" {
+  local reason='a hand-off checkpoint from this session; it continues in a fresh session'
+  local state_file="$WORK/.gaia/local/protected/audit-loop/feat/2-pr-work.json"
+  GH_PRS='12\tfeat/2-pr-work\n'
+  handoff_state feat/2-pr-work '[{"index":1,"at_round":2,"handoff":true,"session_id":"session-a"}]'
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  [ "$status" -eq 0 ]
+  jq -e --arg reason "$reason" '.job == "backlog" and .skipped == [{item: "pr #12", reason: $reason}]' <<<"$output"
+  [[ "$stderr" == *"gaia-next: skipped pr #12: $reason"* ]]
+  autonomy_on
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  jq -e --arg reason "$reason" '.job == "backlog" and .skipped == [{item: "pr #12", reason: $reason}]' <<<"$output"
+  CLAUDE_CODE_SESSION_ID=session-b pick
+  jq -e '.job == "pr" and .pr == 12 and .branch == "feat/2-pr-work" and (.skipped | length) == 0 and (has("parked") | not)' <<<"$output"
+  rm -f "$WORK/.gaia/local/protected/autonomy.json"
+
+  # No skip: no session id, a checkpoint without a session id or without the hand-off flag, an answered one.
+  CLAUDE_CODE_SESSION_ID="" pick
+  jq -e '.job == "pr"' <<<"$output"
+  handoff_state feat/2-pr-work '[{"index":1,"at_round":2,"handoff":true}]'
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  jq -e '.job == "pr"' <<<"$output"
+  handoff_state feat/2-pr-work '[{"index":1,"at_round":2,"session_id":"session-a"}]'
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  jq -e '.job == "pr"' <<<"$output"
+  handoff_state feat/2-pr-work '[{"index":1,"at_round":2,"handoff":true,"session_id":"session-a"}]' \
+    '[{"checkpoint":1,"kind":"accept"}]'
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  jq -e '.job == "pr"' <<<"$output"
+  # An older hand-off behind a newer ordinary checkpoint is stale.
+  handoff_state feat/2-pr-work '[{"index":1,"at_round":2,"handoff":true,"session_id":"session-a"},{"index":2,"at_round":4}]'
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  jq -e '.job == "pr"' <<<"$output"
+  # A corrupt state and an absent state hide nothing.
+  printf 'not json\n' > "$state_file"
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  jq -e '.job == "pr"' <<<"$output"
+  rm "$state_file"
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  jq -e '.job == "pr"' <<<"$output"
+
+  # The plan tier: a running plan's hand-off skips it for this session only; an unkeyable branch is never skipped.
+  running_plan PLAN-001 feat/1-plan-work
+  handoff_state feat/1-plan-work '[{"index":1,"at_round":2,"handoff":true,"session_id":"session-a"}]'
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  [[ "$stderr" == *"gaia-next: skipped plan .notebook/plans/PLAN-001: $reason"* ]]
+  jq -e --arg reason "$reason" '.skipped[0] == {item: "plan .notebook/plans/PLAN-001", reason: $reason}' <<<"$output"
+  CLAUDE_CODE_SESSION_ID=session-b pick
+  jq -e '.job == "plan" and .branch == "feat/1-plan-work"' <<<"$output"
+  running_plan PLAN-001 'feat/../x'
+  CLAUDE_CODE_SESSION_ID=session-a pick
+  jq -e '.job == "plan" and .branch == "feat/../x"' <<<"$output"
+}

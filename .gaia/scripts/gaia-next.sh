@@ -29,7 +29,8 @@
 # whose branch holds a parked marker carries "parked": <its reason code>.
 #
 # Skips apply under autonomy (autonomy_active in autonomy-lib.sh) only, except
-# a branch another live Claude session holds, which is skipped always; the
+# a branch another live Claude session holds and a branch whose pending audit
+# checkpoint is a hand-off from this session, which are skipped always; the
 # skip rules are in wiki/concepts/GAIA Next.md (## Skips under autonomy, ## Skips in every run).
 #
 # comments prints
@@ -76,6 +77,8 @@ next_usage() {
 . "$NEXT_SCRIPT_DIRECTORY/branch-name-lib.sh" || next_fail "cannot load branch-name-lib.sh" 2
 # shellcheck source=/dev/null
 . "$NEXT_SCRIPT_DIRECTORY/branch-worktree-lib.sh" || next_fail "cannot load branch-worktree-lib.sh" 2
+# shellcheck source=/dev/null
+. "$NEXT_SCRIPT_DIRECTORY/gaia-next-handoff-lib.sh" || next_fail "cannot load gaia-next-handoff-lib.sh" 2
 # shellcheck source=/dev/null
 . "$NEXT_SCRIPT_DIRECTORY/notebook/notebook-lib.sh" || next_fail "cannot load notebook-lib.sh" 2
 
@@ -264,6 +267,10 @@ pick() {
       skip "$item" "its worktree is locked by a live Claude session (pid $holder)"
       continue
     fi
+    if [ -n "$branch" ] && gaia_next_handoff_skip "$main_root" "$branch"; then
+      skip "$item" "a hand-off checkpoint from this session; it continues in a fresh session"
+      continue
+    fi
     reason="$( [ -z "$branch" ] || parked_reason "$branch")" || reason=""
     if [ "$autonomous" = 1 ] && [ -n "$reason" ]; then
       skip "$item" "parked ($reason)"
@@ -287,6 +294,10 @@ pick() {
     printf '%s' "$plan_branches" | grep -qxF -- "$branch" && continue
     if holder="$(foreign_session_pid "$branch")"; then
       skip "pr #$number" "its worktree is locked by a live Claude session (pid $holder)"
+      continue
+    fi
+    if gaia_next_handoff_skip "$main_root" "$branch"; then
+      skip "pr #$number" "a hand-off checkpoint from this session; it continues in a fresh session"
       continue
     fi
     reason="$(parked_reason "$branch")" || reason=""

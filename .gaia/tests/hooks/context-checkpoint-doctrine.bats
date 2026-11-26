@@ -12,10 +12,15 @@ setup() {
   EXCLUDE="$REPO_ROOT/.gaia/release-exclude"
 }
 
+# The hook owns the byte budget; read it rather than spelling the number.
+doctrine_byte_budget() {
+  sed -n 's/^maximum_doctrine_bytes=\([0-9][0-9]*\)$/\1/p' "$REPO_ROOT/.claude/hooks/context-checkpoint-inject.sh"
+}
+
 document_shape_ok() {
   local file_path="$1"
   [ -f "$file_path" ] || return 1
-  [ "$(wc -c <"$file_path" | tr -d ' ')" -le 3584 ] || return 1
+  [ "$(wc -c <"$file_path" | tr -d ' ')" -le "$(doctrine_byte_budget)" ] || return 1
   [ "$(tail -c 1 "$file_path" | od -An -tx1 | tr -d ' \n')" = "0a" ] || return 1
   [ "$(tail -c 2 "$file_path" | od -An -tx1 | tr -d ' \n')" = "0a0a" ] && return 1
   LC_ALL=C grep -q $'[\x01-\x09\x0b-\x1f\x7f]' "$file_path" && return 1

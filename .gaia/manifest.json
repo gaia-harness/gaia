@@ -373,6 +373,7 @@
     ".gaia/scripts/fitness-ownership.sh": "owned",
     ".gaia/scripts/fitness-publish.sh": "owned",
     ".gaia/scripts/frontend-lint-delta.sh": "owned",
+    ".gaia/scripts/gaia-next-handoff-lib.sh": "owned",
     ".gaia/scripts/gaia-next.sh": "owned",
     ".gaia/scripts/gate-member-warnings.sh": "owned",
     ".gaia/scripts/gh-artifact-lib.sh": "owned",
@@ -952,7 +953,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-26T09:11:01.136Z",
+  "generated": "2026-11-26T17:36:48.546Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
