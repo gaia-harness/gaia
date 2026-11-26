@@ -427,3 +427,34 @@ lock_worktree() {
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"cannot read the stopped debt fixes"* ]]
 }
+
+# worktree_for <branch>: runs the worktree verb against WORK.
+worktree_for() {
+  run --separate-stderr bash "$NEXT" worktree --root "$WORK" --branch "$1"
+}
+
+@test "a pr branch no tree holds gets a linked worktree under .claude/worktrees, the main checkout stays on main, and a repeat names the same tree" {
+  local expected="$WORK/.claude/worktrees/feat+2-pr-work"
+  worktree_for feat/2-pr-work
+  [ "$status" -eq 0 ]
+  jq -e --arg tree "$expected" '. == {branch: "feat/2-pr-work", worktree: $tree, added: true}' <<<"$output"
+  [ "$(git -C "$expected" branch --show-current)" = feat/2-pr-work ]
+  [ "$(git -C "$WORK" branch --show-current)" = main ]
+  worktree_for feat/2-pr-work
+  [ "$status" -eq 0 ]
+  jq -e --arg tree "$expected" '. == {branch: "feat/2-pr-work", worktree: $tree, added: false}' <<<"$output"
+  [ "$(git -C "$WORK" worktree list --porcelain | grep -c '^worktree ')" -eq 2 ]
+}
+
+@test "the worktree verb refuses a branch the main checkout holds, or one that does not exist, and adds nothing" {
+  git -C "$WORK" checkout -q feat/2-pr-work
+  worktree_for feat/2-pr-work
+  [ "$status" -eq 1 ]
+  [ "$stderr" = "gaia-next: the main checkout holds feat/2-pr-work, so no worktree can be added for it" ]
+  worktree_for feat/9-missing
+  [ "$status" -eq 1 ]
+  [ "$stderr" = "gaia-next: cannot add a worktree for feat/9-missing: no local branch feat/9-missing" ]
+  [ ! -e "$WORK/.claude/worktrees" ]
+  run bash "$NEXT" worktree --root "$WORK"
+  [ "$status" -eq 2 ]
+}

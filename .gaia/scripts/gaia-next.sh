@@ -7,6 +7,7 @@
 #   gaia-next.sh pick [--root <path>]
 #   gaia-next.sh debt --backlog <file> --report <file> [--root <path>]
 #   gaia-next.sh comments --pr <n> [--root <path>]
+#   gaia-next.sh worktree --branch <b> [--root <path>]
 #
 # --root names the checkout to read, default the one holding the working
 # directory; plans and run folders are read from its main checkout.
@@ -39,6 +40,14 @@
 # the lookup fails. Under autonomy a comment whose author's permission is not
 # admin or write is withheld: counted by author, its body never printed.
 #
+# worktree gives a pr job's branch the linked worktree the job runs in, so the
+# main checkout never leaves its branch: once an open pull request's branch sits
+# in the main checkout, the main-checkout hop guard denies checking the default
+# branch back out. It prints {"branch":<b>,"worktree":<abs>,"added":<bool>},
+# naming the linked worktree that already holds the branch (added false), else
+# the one it adds under .claude/worktrees/ (added true). It fails when the main
+# checkout itself holds the branch, or the add fails.
+#
 # Exit: 0 an answer; 1 a read failed (git, gh, the notebook, an input file),
 # with one stderr line; 2 usage, a library that will not load, or a --root
 # outside a git working tree.
@@ -55,7 +64,7 @@ next_fail() {
 }
 
 next_usage() {
-  printf 'usage: gaia-next.sh pick [--root <path>]\n       gaia-next.sh debt --backlog <file> --report <file> [--root <path>]\n       gaia-next.sh comments --pr <n> [--root <path>]\n' >&2
+  printf 'usage: gaia-next.sh pick [--root <path>]\n       gaia-next.sh debt --backlog <file> --report <file> [--root <path>]\n       gaia-next.sh comments --pr <n> [--root <path>]\n       gaia-next.sh worktree --branch <b> [--root <path>]\n' >&2
   exit 2
 }
 
@@ -64,24 +73,28 @@ next_usage() {
 # shellcheck source=/dev/null
 . "$NEXT_SCRIPT_DIRECTORY/branch-name-lib.sh" || next_fail "cannot load branch-name-lib.sh" 2
 # shellcheck source=/dev/null
+. "$NEXT_SCRIPT_DIRECTORY/branch-worktree-lib.sh" || next_fail "cannot load branch-worktree-lib.sh" 2
+# shellcheck source=/dev/null
 . "$NEXT_SCRIPT_DIRECTORY/notebook/notebook-lib.sh" || next_fail "cannot load notebook-lib.sh" 2
 
 verb="${1:-}"
 [ "$#" -gt 0 ] && shift
-root_argument="" backlog_file="" report_file="" pr=""
+root_argument="" backlog_file="" report_file="" pr="" branch_argument=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --root) [ "$#" -ge 2 ] || next_usage; root_argument="$2"; shift 2 ;;
     --backlog) [ "$#" -ge 2 ] || next_usage; backlog_file="$2"; shift 2 ;;
     --report) [ "$#" -ge 2 ] || next_usage; report_file="$2"; shift 2 ;;
     --pr) [ "$#" -ge 2 ] || next_usage; pr="$2"; shift 2 ;;
+    --branch) [ "$#" -ge 2 ] || next_usage; branch_argument="$2"; shift 2 ;;
     *) next_usage ;;
   esac
 done
 case "$verb" in
-  pick) [ -z "$backlog_file$report_file$pr" ] || next_usage ;;
-  debt) [ -n "$backlog_file" ] && [ -n "$report_file" ] && [ -z "$pr" ] || next_usage ;;
-  comments) [[ "$pr" =~ ^[1-9][0-9]{0,8}$ ]] && [ -z "$backlog_file$report_file" ] || next_usage ;;
+  pick) [ -z "$backlog_file$report_file$pr$branch_argument" ] || next_usage ;;
+  debt) [ -n "$backlog_file" ] && [ -n "$report_file" ] && [ -z "$pr$branch_argument" ] || next_usage ;;
+  comments) [[ "$pr" =~ ^[1-9][0-9]{0,8}$ ]] && [ -z "$backlog_file$report_file$branch_argument" ] || next_usage ;;
+  worktree) [ -n "$branch_argument" ] && [ -z "$backlog_file$report_file$pr" ] || next_usage ;;
   *) next_usage ;;
 esac
 
@@ -388,8 +401,23 @@ comments() {
          else [] end)}'
 }
 
+worktree() {
+  local holder added=false
+  holder="$(gaia_branch_worktree_holder "$branch_argument" "$tree_root")"
+  [ -z "$holder" ] || gaia_is_linked_worktree "$holder" ||
+    next_fail "the main checkout holds $branch_argument, so no worktree can be added for it"
+  if [ -z "$holder" ]; then
+    holder="$(gaia_add_branch_worktree "$branch_argument" "$tree_root" 2>&1)" ||
+      next_fail "cannot add a worktree for $branch_argument: $holder"
+    added=true
+  fi
+  jq -cn --arg branch "$branch_argument" --arg worktree "$holder" --argjson added "$added" \
+    '{branch: $branch, worktree: $worktree, added: $added}'
+}
+
 case "$verb" in
   pick) pick ;;
   debt) debt ;;
   comments) comments ;;
+  worktree) worktree ;;
 esac
