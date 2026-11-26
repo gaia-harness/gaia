@@ -156,8 +156,9 @@
 # neither knows the key. pr-sections prints the PR-body records from the same
 # lookup: accepted residuals and cross-remit waivers in the keyed form
 # /gaia-residue parses, triage-threshold waivers and honored triage marks as
-# key-less one-liners deduplicated by key, waiver-vetoed keys excluded for the
-# rounds the veto binds, diverts as a count only, and the not-filed section
+# key-less one-liners deduplicated by key, a vetoed key's accept, waiver and
+# triage rows excluded whatever the round (only divert rows keep the per-round
+# limit), diverts as a count only, and the not-filed section
 # from the outcomes files and <D>/filing-retry/. A waiver or triage line
 # renders only when the lookup says security false and severity not critical, and
 # every rendered reason passes `file-tech-debt.sh screen-text` first; a reason
