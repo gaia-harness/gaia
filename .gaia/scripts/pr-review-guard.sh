@@ -108,18 +108,20 @@ listing_of_files() {
 # concurrent lane's attributable writes do not read as the reviewer's. A record
 # is dropped only when it is one of:
 #   - a branch-keyed file (<40-hex base>.<branch slug>.*) of another branch;
-#   - a marker (<64-hex digest>[.<member>].ok|refused) or a light route record
+#   - a marker (<64-hex digest>[.<member>].{ok,refused}) or a light route record
 #     (light/<digest>.<member>.route.json) whose digest is none of this
 #     branch's own member digests and whose recorded tree and commit are both
 #     absent from HEAD's recent history.
 # Everything else stays, including any file that cannot be attributed. When the
 # own digests or HEAD's history cannot be read, no marker or route record is
 # dropped (another branch's branch-keyed files still are). Dropping a marker
-# is safe because the merge gate matches a marker by digest and the audit base
-# resolvers anchor on a recorded tree in this branch's history, so a marker at
-# another digest whose tree and commit are both outside HEAD's history can
-# affect neither. The 500-commit window is well past the resolvers' 50-commit
-# anchor walk, so a marker older than the window cannot anchor this branch.
+# or route record is safe because the merge gate matches a marker by digest and
+# the audit base resolvers anchor on a recorded tree in this branch's history,
+# so a record at another digest whose tree and commit are both outside HEAD's
+# history can affect neither. The 500-commit window is well past the
+# resolvers' anchor walk (MAXIMUM_WALK_COMMIT_COUNT in
+# .github/audit/resolve-audit-base.sh), so a record older than the window
+# cannot anchor this branch.
 audit_listing() {
   local root="$1" main_root="$2" audit_directory="$2/.gaia/local/audit"
   local library="$_script_directory/../../.claude/hooks/lib/audit-digest.sh"
