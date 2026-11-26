@@ -53,6 +53,7 @@ def secure: (.security == false | not);
 def secure_text:
   if .disposition == null then "undecided"
   elif .fix_state == "fixed" then "fixed"
+  elif .disposition == "dismiss" then "dismissed"
   else "fix" end;
 def disposition_text:
   if .disposition == null then "undecided"

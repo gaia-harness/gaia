@@ -19,10 +19,13 @@
 # form (the escaped regex below). Each word of the text is also read with its
 # path made lexical first (`.` segments and doubled slashes dropped, `x/..`
 # folded), so `.gaia/local/./runs`, `.gaia//local/runs` and
-# `.gaia/local/cache/../audit` count as the folders they name. It fails closed on two near misses: a command
+# `.gaia/local/cache/../audit` count as the folders they name. It fails closed on four near misses: a command
 # token naming that root with a glob or variable that could expand into either
-# folder, and a Grep or Glob search rooted at the state root itself, which
-# reads both recursively. The deny line is
+# folder, a Grep or Glob search rooted at the state root itself, which reads
+# both recursively, a Bash or Monitor `cd` or `pushd` into `.gaia` or
+# `.gaia/local` (a relative read after it names no folder), and a recursive
+# grep, rg, find, ls -R or tar whose operand is `.gaia`, `.gaia/local` or a
+# directory that contains them, unless the command excludes them. The deny line is
 # `BLOCKED: pr-reviewer may not read audit state: <path>`, where <path> is the
 # offending path or command token as the call named it, followed by one
 # sentence naming what the reviewer may search instead (its bundle's diff.patch
@@ -30,7 +33,9 @@
 # folders is denied too and the reviewer has no judgement to find its way out.
 #
 # HONEST LIMITS. This is heuristic defense-in-depth, not a sandbox. It
-# pattern-matches call text, so a path the shell assembles at run time
+# pattern-matches call text, so a recursive search with no path operand, one
+# through another tool, or a `cd` into a folder of the state root other than
+# `.gaia` and `.gaia/local` followed by a `../` read escapes it, and a path the shell assembles at run time
 # (`d=audit; cat .gaia/local/"$d"` is caught, but `cat $(printf '%s' ...)`
 # building the whole path is not), an indirection through another tool, or a
 # subprocess that opens the file itself escapes it. The before/after check
@@ -207,6 +212,96 @@ resolve_main_root() {
   set -e
 }
 
+# operand_reaches_state <operand>: 0 when the operand names `.gaia` or
+# `.gaia/local` itself, 2 when it is a directory that holds `.gaia/local` or
+# contains the state root, 1 otherwise.
+operand_reaches_state() {
+  local operand="$1" directory resolved state_root checkout_root
+  [ -n "$operand" ] || return 1
+  if [[ "${operand%/}" =~ (^|/)\.gaia(/local)?$ ]]; then return 0; fi
+  directory="$operand"
+  case "$directory" in
+    /*) ;;
+    *) directory="${GAIA_HOOK_CWD:-.}/$directory" ;;
+  esac
+  resolved=$(cd -P "$directory" 2>/dev/null && pwd -P) || return 1
+  [ -n "$resolved" ] || return 1
+  [ "$resolved" = / ] && return 2
+  # A checkout's own root holds its state root, in a linked worktree too.
+  checkout_root=$(git -C "$resolved" rev-parse --show-toplevel 2>/dev/null) || checkout_root=''
+  [ -z "$checkout_root" ] || checkout_root=$(cd -P "$checkout_root" 2>/dev/null && pwd -P) || checkout_root=''
+  if [ -n "$checkout_root" ] && [ "$resolved" = "$checkout_root" ]; then return 2; fi
+  resolve_main_root
+  [ -n "${main_root:-}" ] || return 1
+  state_root=$(cd -P "$main_root/.gaia/local" 2>/dev/null && pwd -P) || return 1
+  case "$state_root/" in "$resolved"/*) return 2 ;; esac
+  return 1
+}
+
+# check_state_access <command text>: deny a `cd` into the state root's parent
+# folders and a recursive search that would read the state root. Each shell
+# segment is judged on its own command word.
+check_state_access() {
+  local text="$1" segments line word command_name recursive operand status excluded
+  local -a words
+  segments=$(printf '%s' "$text" | tr ';|&(){}`' '\n')
+  while IFS= read -r line; do
+    read -r -a words <<<"$line"
+    command_name=''
+    recursive=0
+    excluded=0
+    for word in ${words[@]+"${words[@]}"}; do
+      word=$(strip_token_wrapping "$word")
+      if [ -z "$command_name" ]; then
+        case "$word" in *=*) continue ;; esac
+        command_name="${word##*/}"
+        case "$command_name" in rg | find | tar) recursive=1 ;; esac
+        continue
+      fi
+      case "$command_name" in
+        grep | egrep | fgrep)
+          case "$word" in
+            --recursive | --dereference-recursive) recursive=1 ;;
+            --*) ;;
+            -*) case "$word" in *[rR]*) recursive=1 ;; esac ;;
+          esac
+          ;;
+        ls)
+          case "$word" in
+            --recursive) recursive=1 ;;
+            --*) ;;
+            -*) case "$word" in *R*) recursive=1 ;; esac ;;
+          esac
+          ;;
+      esac
+    done
+    case "$command_name" in
+      cd | pushd)
+        for word in ${words[@]+"${words[@]}"}; do
+          word=$(strip_token_wrapping "$word")
+          case "$word" in "$command_name" | -*) continue ;; esac
+          operand=$(lexical_paths "$word")
+          if operand_reaches_state "$operand"; then deny "$word"; fi
+          break
+        done
+        ;;
+      grep | egrep | fgrep | rg | find | ls | tar)
+        [ "$recursive" -eq 1 ] || continue
+        if [[ "$line" =~ (exclude|prune|-not|!) && "$line" =~ (\.gaia|local) ]]; then excluded=1; fi
+        for word in ${words[@]+"${words[@]}"}; do
+          word=$(strip_token_wrapping "$word")
+          case "$word" in "$command_name" | -* | '') continue ;; esac
+          operand=$(lexical_paths "$word")
+          status=0
+          operand_reaches_state "$operand" || status=$?
+          if [ "$status" -eq 0 ]; then deny "$word"; fi
+          if [ "$status" -eq 2 ] && [ "$excluded" -eq 0 ]; then deny "$word"; fi
+        done
+        ;;
+    esac
+  done <<<"$segments"
+}
+
 case "$GAIA_HOOK_TOOL_NAME" in
   Read)
     check_text "$GAIA_HOOK_FILE_PATH"
@@ -231,6 +326,7 @@ case "$GAIA_HOOK_TOOL_NAME" in
     ;;
   Bash | Monitor)
     check_text "$GAIA_HOOK_COMMAND"
+    check_state_access "$GAIA_HOOK_COMMAND"
     ;;
 esac
 exit 0

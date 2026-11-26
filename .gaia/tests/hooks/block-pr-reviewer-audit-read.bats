@@ -67,3 +67,72 @@ payload() {
   invoke_hook "$(payload Read '{"file_path":"../../apps/web/a.ts"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
   assert_allowed_by_json || return 1
 }
+
+# reviewer_command <command> <cwd>: a reviewer Bash payload whose working directory is
+# this checkout, so a `.` operand resolves to a folder that holds the state root.
+reviewer_command() {
+  jq -n -c --arg command "$1" --arg cwd "$2" \
+    '{tool_name: "Bash", tool_input: {command: $command}, cwd: $cwd, agent_id: "agent-1", agent_type: "pr-reviewer"}'
+}
+
+@test "the reviewer is denied a cd into the state root and a recursive search that would read it, whatever the short-option cluster" {
+  local checkout command
+  checkout="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  for command in \
+    'cd .gaia/local && cat runs/feat+x/unit-1.json' \
+    'cd .gaia; ls' \
+    'pushd .gaia/local' \
+    'grep -r stop_reason .gaia' \
+    'grep -R stop_reason .gaia' \
+    'grep -rn stop_reason .gaia/' \
+    'grep -nr stop_reason .gaia/local' \
+    'grep --recursive stop_reason .gaia' \
+    'ls -R .gaia' \
+    'rg stop_reason .gaia' \
+    'find .gaia -name "*.json"' \
+    'grep -rn stop_reason .'; do
+    invoke_hook "$(reviewer_command "$command" "$checkout")" "$HOOK_ABSOLUTE_PATH"
+    assert_denied_by_json || { echo "Bash allowed: $command" >&2; return 1; }
+  done
+
+  # A search of the changed files, a search that excludes the state root, and a cd elsewhere stay allowed.
+  for command in \
+    'grep -rn stop_reason apps' \
+    'grep -n stop_reason .gaia/scripts/a.sh' \
+    "grep -rn stop_reason . --exclude-dir=.gaia" \
+    'ls -la .gaia/scripts' \
+    'cd apps/web && ls'; do
+    invoke_hook "$(reviewer_command "$command" "$checkout")" "$HOOK_ABSOLUTE_PATH"
+    assert_allowed_by_json || { echo "Bash denied: $command" >&2; return 1; }
+  done
+
+  # The same recursive search from the main thread is not the reviewer's to be denied.
+  invoke_hook "$(jq -n -c '{tool_name: "Bash", tool_input: {command: "grep -r x .gaia"}}')" "$HOOK_ABSOLUTE_PATH"
+  assert_allowed_by_json
+}
+
+# bats test_tags=protected
+@test "the reviewer is denied with the BLOCKED line for a cd or recursive search of audit state, writes nothing, and a non-reviewer is allowed" {
+  local checkout command before after
+  checkout="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  before="$(git -C "$checkout" status --porcelain --untracked-files=all 2>/dev/null | sort | md5sum)"
+  for command in \
+    'cd .gaia/local && cat runs/feat+x/unit-1.json' \
+    'pushd .gaia' \
+    'grep -r stop_reason .gaia' \
+    'grep -R x .gaia/local' \
+    'grep -rn x .' \
+    'ls -R .gaia' \
+    'rg x .gaia' \
+    "find .gaia -name '*.json'"; do
+    invoke_hook "$(reviewer_command "$command" "$checkout")" "$HOOK_ABSOLUTE_PATH"
+    assert_denied_by_json || { echo "Bash allowed: $command" >&2; return 1; }
+    grep -qF 'BLOCKED: pr-reviewer may not read audit state:' <<<"$output" || { echo "No BLOCKED line: $command" >&2; return 1; }
+  done
+  after="$(git -C "$checkout" status --porcelain --untracked-files=all 2>/dev/null | sort | md5sum)"
+  [ "$before" = "$after" ] || return 1
+
+  # The same recursive search without the reviewer agent type is allowed.
+  invoke_hook "$(jq -n -c --arg cwd "$checkout" '{tool_name: "Bash", tool_input: {command: "grep -r stop_reason .gaia"}, cwd: $cwd}')" "$HOOK_ABSOLUTE_PATH"
+  assert_allowed_by_json
+}
