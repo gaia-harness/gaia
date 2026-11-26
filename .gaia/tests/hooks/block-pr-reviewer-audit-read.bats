@@ -154,7 +154,7 @@ reviewer_command() {
   invoke_hook "$(payload Write '{"file_path":"/tmp/scratch/pr-review-7.json","content":"[]"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
   assert_allowed_by_json || return 1
 
-  # The main thread writes under the audit folder untouched.
+  # The main thread may still Write under the audit folder.
   invoke_hook "$(payload Write '{"file_path":"/repo/.gaia/local/audit/abc.ok","content":"x"}')" "$HOOK_ABSOLUTE_PATH"
   assert_allowed_by_json
 }
