@@ -36,10 +36,11 @@ def line_of: if type == "number" and . >= 1 then . else 1 end;
 # _ROWS_JQ: one round's PR-body candidate rows. A waiver or triage row exists
 # only inside the render bound (the lookup says security false and severity
 # not critical); divert rows carry no reason, since only their count is rendered.
-# An accept row drops a key any veto names, whatever its round: the veto
-# repairs it, so it is no longer a residual. Waiver rows drop a key only for
-# the rounds its veto binds. An accept row for a key the round history lists in
-# that round's human_accepted_keys (audit-accept-finding) leads with "Human decision: ".
+# An accept, waiver or triage row drops a key any veto names, whatever its
+# round: the veto repairs it, so it is no longer a residual or a waiver. A
+# divert row drops a key only for the rounds its veto binds. An accept row for
+# a key the round history lists in that round's human_accepted_keys
+# (audit-accept-finding) leads with "Human decision: ".
 # shellcheck disable=SC2016
 _ROWS_JQ="$_ROW_TEXT_JQ$_RESIDUAL_REASON_JQ"'
 def key_array: [.member, .finding_class, .path, .line];
@@ -51,7 +52,7 @@ def in_bound: . != null and .security == false and .severity != "critical";
 | [$history[] | select(.round == $round) | .human_accepted_keys // [] | .[]] as $human_accepted_keys
 | [ (.entries[] | select(.disposition != "fix")
       | select(key_array as $key | ($vetoed_keys | any(. == $key))
-          or (.disposition == "accept-residual" and ($ever_vetoed_keys | any(. == $key))) | not)
+          or (.disposition | IN("accept-residual", "waive-out-of-scope")) and ($ever_vetoed_keys | any(. == $key)) | not)
       | $lookup_by_key[(key_array | tojson)] as $lookup_entry
       | (if .disposition == "accept-residual" then "accept"
          elif .disposition == "divert" then "divert"
@@ -64,7 +65,7 @@ def in_bound: . != null and .security == false and .severity != "critical";
       | {round: $round, section: $section, member, path, line, finding_class,
          reason: (if $section == "divert" then "" elif $section == "accept" then (if key_array as $key | $human_accepted_keys | any(. == $key) then "Human decision: " else "" end) + text(residual_reason($lookup_entry)) else text(.reason) end)}),
     ($lookup[] | select(.triage == true and (.member | IN($triage_members[])) and in_bound)
-      | select(key_array as $key | ($disposed_keys | any(. == $key)) or ($vetoed_keys | any(. == $key)) | not)
+      | select(key_array as $key | ($disposed_keys | any(. == $key)) or ($ever_vetoed_keys | any(. == $key)) | not)
       | {round: $round, section: "triage", member, path, line, finding_class, reason: text(.triage_reason)}) ]
 '
 
