@@ -152,13 +152,14 @@ audit_listing() {
     if [[ "$relative" =~ ^([0-9a-f]{64})(\.[^./]+)?\.(ok|refused)$ ]] ||
       [[ "$relative" =~ ^light/([0-9a-f]{64})\.[^./]+\.route\.json$ ]]; then
       digest="${BASH_REMATCH[1]}"
-      printf '%s\n' "$own_digests" | grep -qx -- "$digest" || printf '%s\n' "$file" >>"$scratch/candidates"
+      grep -qx -- "$digest" <<<"$own_digests" || printf '%s\n' "$file" >>"$scratch/candidates"
     fi
   done <"$scratch/files"
 
   if [ -s "$scratch/candidates" ]; then
     printf '%s\n' "$recent" >"$scratch/recent"
-    # shellcheck disable=SC2016 -- the jq program's $-names are jq variables.
+    # The jq program's $-names are jq variables, not shell expansions.
+    # shellcheck disable=SC2016
     tr '\n' '\0' <"$scratch/candidates" | xargs -0 jq -n -R -r --rawfile recent "$scratch/recent" '
       ($recent | split("\n") | map(split(" ")) | flatten | map(select(. != "") | {(.): true}) | add // {}) as $known |
       inputs |
