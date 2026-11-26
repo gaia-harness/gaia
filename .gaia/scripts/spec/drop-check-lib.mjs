@@ -239,6 +239,33 @@ export function deferredText(specText) {
   return normalizeWhitespace(collected);
 }
 
+// The heading texts that open a decision record, matched whole and in any
+// case: `Decision` or `Decisions`, optionally followed by `taken` or `taken
+// here`, and `Amendment` or `Amendments`, optionally led by `Build` or `Spec`.
+const DECISION_HEADING =
+  /^(?:decisions?(?: taken(?: here)?)?|(?:build |spec )?amendments?)$/i;
+
+// The normalized text of every decision-record section of a SPEC: a heading of
+// level 2 or deeper whose whole text is in DECISION_HEADING, up to the next
+// heading at the same depth or shallower. Matching the whole heading keeps the
+// check from reading a behavior or a note as a decision.
+export function decisionRecordText(specText) {
+  const collected = [];
+  let level = 0;
+  for (const line of specText.split('\n')) {
+    const heading = /^(#{1,6}) (.+?)\s*$/.exec(line);
+    if (heading) {
+      const depth = heading[1].length;
+      if (level && depth > level) continue;
+      level =
+        depth > 1 && DECISION_HEADING.test(heading[2]) ? depth : 0;
+    } else if (level) {
+      collected.push(line);
+    }
+  }
+  return normalizeWhitespace(collected.join(' '));
+}
+
 export function behaviorKinds(texts) {
   const kinds = new Map();
   for (const text of texts) {

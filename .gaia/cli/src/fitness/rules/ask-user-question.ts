@@ -40,12 +40,11 @@ const recommendationFindings = (
   file: ProjectFile,
   site: Site
 ): RawFinding[] => {
-  // A bare `(Recommended)` names the mark to apply to a runtime-built option set.
+  // A bare `(Recommended)` names the mark to apply to a runtime-built option set:
+  // it covers every question no named option marks.
   const questionCount = site.headers.length;
-  const marked =
-    site.recommendedLabels.size === 0 && site.hasMarker ?
-      questionCount
-    : site.recommendedLabels.size;
+  const named = site.recommendedLabels.size;
+  const marked = site.hasBareMark ? Math.max(named, questionCount) : named;
 
   if (site.isNeutral) return [];
 
