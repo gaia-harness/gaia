@@ -84,9 +84,11 @@
 #     direction (optional) is the human's repair: the unit copies it into the
 #     key's fix entry, and the fixer follows it over suggested_fix. No check reads it.
 #     repair_paths (optional) names the other files the human's repair lands in;
-#     the unit copies it beside direction so the fixer lands it there (no check
-#     reads that copy). audit-veto-lib.sh reads a change there, with no owner finding
-#     near the repair's hunks, as the fix. record-residual writes one entry per key.
+#     audit-veto-lib.sh reads a change there, with no finding by that path's
+#     owner near the hunks the repair wrote, as the key's fix. The unit copies
+#     repair_paths into the key's fix entry beside direction, so the fixer
+#     lands the repair in those files; no check reads that copy.
+#     record-residual writes one entry per key.
 #     effective_from_round is the <s> that audit-loop-eval.sh next-unit prints
 #     when the veto is written (the first round the next unit opens), so a
 #     veto never re-fails the dispositions file that held the original waiver.
