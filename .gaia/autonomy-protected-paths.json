@@ -12,6 +12,7 @@
     ".gaia/autonomy-*.json",
     ".gaia/scripts/autonomy-*.sh",
     ".gaia/scripts/main-root-lib.sh",
+    ".gaia/scripts/branch-worktree-lib.sh",
     ".gaia/scripts/audit-loop-state-lib.sh",
     ".gaia/scripts/gaia-next.sh",
     ".gaia/scripts/audit-budget-lib.sh",

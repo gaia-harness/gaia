@@ -468,3 +468,12 @@ worktree_for() {
   [[ "$stderr" == *"is stale; run git worktree unlock "*"(when locked), then git worktree prune"* ]]
   [[ "$stderr" != *"main checkout holds"* ]]
 }
+
+@test "step 1 of the /gaia-next command ends the run for a named branch with an open pull request and skips the query for a detached checkout" {
+  local step
+  step=$(grep -m1 '^Then read the main checkout' "$REPO_ROOT/.claude/commands/gaia-next.md")
+  [ -n "$step" ]
+  [[ "$step" == *'gh pr list --head <branch> --state open'* ]]
+  [[ "$step" == *'prints more than 0, report the branch and its pull request and end this run'* ]]
+  [[ "$step" == *'detached checkout (empty branch name, which skips the pull request query)'* ]]
+}
