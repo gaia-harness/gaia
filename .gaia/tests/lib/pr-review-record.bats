@@ -268,7 +268,7 @@ EOF
 }
 
 # bats test_tags=protected
-@test "route-fix refuses an unowned, enforcement or empty repair path, and any repair path off a veto route, writing no veto; on a routed finding a repair path rewrites its key" {
+@test "route-fix refuses an unowned, empty or unnormalized repair path, and any repair path off a veto route, writing no veto; on a routed finding a repair path rewrites its key, an owned enforcement path included" {
   local enforcement_path repair_path expected
   review_folder feat/review
   alf_round 1 code-audit-frontend '[]' || return 1
@@ -285,7 +285,6 @@ EOF
     grep -qF -- "$expected" <<<"$output" || { printf 'repair path "%s" refused for another cause: %s\n' "$repair_path" "$output" >&2; return 1; }
   done <<EOF
 wiki/Foo.md|repair path to no member
-$enforcement_path|enforcement path the fixer can never edit
 |must be an array of non-empty paths
 ./src/b.sh|is not a repo-relative path
 /src/b.sh|is not a repo-relative path
@@ -310,7 +309,12 @@ EOF
   cp "$BATS_TEST_TMPDIR/vetoes.json" "$RUN_FOLDER/vetoes.json"
   record route-fix --root "$ALF_ROOT" --id pr-1 --repair-path src/b.sh
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-  [ "$(jq -c '.keys | map(.effective_from_round)' "$RUN_FOLDER/vetoes.json")" = '[-1]' ]
+  [ "$(jq -c '.keys | map(.effective_from_round)' "$RUN_FOLDER/vetoes.json")" = '[-1]' ] || return 1
+  # An enforcement path is a repair path like any other once a member owns it: the unit drafts it and stops for a human.
+  printf '  - name: code-audit-shell\n    globs:\n      - "%s"\n    audience: adopter\n' "$enforcement_path" >>"$ALF_ROOT/.gaia/audit-ci.yml"
+  record route-fix --root "$ALF_ROOT" --id pr-1 --repair-path src/b.sh --repair-path "$enforcement_path"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  [ "$(jq -c --arg enforcement_path "$enforcement_path" '.keys | map(.repair_paths == ([$enforcement_path, "src/b.sh"] | sort))' "$RUN_FOLDER/vetoes.json")" = '[true]' ]
 }
 
 @test "dropped refuses a finding with no routed fix and evidence-less input, and a dropped Critical or security-class finding closes only with dismiss" {
