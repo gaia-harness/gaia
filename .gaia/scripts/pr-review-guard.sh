@@ -12,8 +12,8 @@
 # snapshot refuses a dirty tree (untracked files count), otherwise writes one
 # JSON file holding the tree listing, a path and content-hash listing of the
 # local audit state and of the run folder, and HEAD's GAIA-Audit commit
-# statuses (the only status the reviewer could post; another integration's
-# status landing during the review is not the reviewer's write).
+# statuses (another integration's status landing during the review is not
+# the reviewer's write).
 # compare captures the same state again into --after, from the root and run
 # folder the snapshot recorded, and reports the first difference in this order:
 # the tree, the audit state, the GAIA-Audit statuses. --output-file names the one

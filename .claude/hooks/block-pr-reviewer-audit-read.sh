@@ -24,8 +24,8 @@
 # folder, a Grep or Glob search rooted at the state root itself, which reads
 # both recursively, a Bash or Monitor `cd` or `pushd` into `.gaia` or
 # `.gaia/local` (a relative read after it names no folder), and a recursive
-# grep, rg, find, ls -R or tar whose operand is `.gaia`, `.gaia/local` or a
-# directory that contains them, unless the command excludes them. The deny line is
+# grep, rg, find, ls -R or tar whose operand is `.gaia` or `.gaia/local`, or a
+# directory that contains them unless the command excludes a `.gaia` path. The deny line is
 # `BLOCKED: pr-reviewer may not read audit state: <path>`, where <path> is the
 # offending path or command token as the call named it, followed by one
 # sentence naming what the reviewer may search instead (its bundle's diff.patch
@@ -33,12 +33,12 @@
 # folders is denied too and the reviewer has no judgement to find its way out.
 #
 # HONEST LIMITS. This is heuristic defense-in-depth, not a sandbox. It
-# pattern-matches call text, so a recursive search with no path operand, one
-# through another tool, or a `cd` into a folder of the state root other than
-# `.gaia` and `.gaia/local` followed by a `../` read escapes it, and a path the shell assembles at run time
+# pattern-matches call text, so it is escaped by a recursive search with no
+# path operand, a `cd` into a folder under `.gaia` other than `.gaia/local`
+# followed by a `../` read, a path the shell assembles at run time
 # (`d=audit; cat .gaia/local/"$d"` is caught, but `cat $(printf '%s' ...)`
 # building the whole path is not), an indirection through another tool, or a
-# subprocess that opens the file itself escapes it. The before/after check
+# subprocess that opens the file itself. The before/after check
 # (.gaia/scripts/pr-review-guard.sh) is the backstop for writes: it compares
 # the tree, the audit state and the commit statuses around the dispatch.
 set -euo pipefail
@@ -213,8 +213,8 @@ resolve_main_root() {
 }
 
 # operand_reaches_state <operand>: 0 when the operand names `.gaia` or
-# `.gaia/local` itself, 2 when it is a directory that holds `.gaia/local` or
-# contains the state root, 1 otherwise.
+# `.gaia/local` itself, 2 when it is a directory that contains the state root,
+# 1 otherwise.
 operand_reaches_state() {
   local operand="$1" directory resolved state_root checkout_root
   [ -n "$operand" ] || return 1
@@ -238,8 +238,8 @@ operand_reaches_state() {
   return 1
 }
 
-# check_state_access <command text>: deny a `cd` into the state root's parent
-# folders and a recursive search that would read the state root. Each shell
+# check_state_access <command text>: deny a `cd` into `.gaia` or `.gaia/local`
+# and a recursive search that would read the state root. Each shell
 # segment is judged on its own command word.
 check_state_access() {
   local text="$1" segments line word command_name recursive operand status excluded
@@ -287,8 +287,8 @@ check_state_access() {
         ;;
       grep | egrep | fgrep | rg | find | ls | tar)
         [ "$recursive" -eq 1 ] || continue
-        # Excluded only when an exclusion flag names the state root itself, so an
-        # exclusion of an unrelated folder never waives the deny.
+        # Excluded when an exclusion flag names any path under `.gaia`, so an
+        # exclusion of a folder outside `.gaia` never waives the deny.
         if [[ "$line" =~ (exclude[a-z-]*|-not|!|-g|--glob)[=\ ]+(-[a-z]+\ +)?[\"\'\!]*(\./)?\.gaia || "$line" =~ \.gaia[^\ ]*\ +(-o\ +)?-prune ]]; then excluded=1; fi
         for word in ${words[@]+"${words[@]}"}; do
           word=$(strip_token_wrapping "$word")

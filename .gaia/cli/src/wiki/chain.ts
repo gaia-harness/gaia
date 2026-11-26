@@ -8,7 +8,7 @@
  *   begin   once, before sync         → refuse a protected branch
  *   commit  once, after lint          → commit every stage's wiki/ edits as
  *                                        `wiki: <YYYY-MM-DD> <HH:MM> UTC`
- *   finish  once, after commit        → push + PR + complete PR review + auto-merge
+ *   finish  once, after commit        → push + PR + PR review gate + auto-merge
  *   refresh-nudge after merge cleanup  → write the main checkout's wiki drift
  *                                        into the statusline cache
  *
@@ -117,12 +117,13 @@ const HELP_TEXT = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [a
   finish                       Push the wiki branch, open one PR, and enable
                                auto-merge, staying on the branch. It requires a
                                complete PR review (pr-review-gate.sh check) and
-                               exits 1 naming the gate line until one exists;
-                               the next run reuses the open PR. The merge wait
-                               and local cleanup follow the work lifecycle.
-                               Removes an empty wiki branch held in place, and
-                               leaves one in a linked worktree to the caller;
-                               no-op on any other branch.
+                               exits 1 naming the gate line until one exists (2
+                               when the gate cannot run); the next run reuses
+                               the open PR. The merge wait and local cleanup
+                               follow the work lifecycle. Removes an empty wiki
+                               branch held in place, and leaves one in a linked
+                               worktree to the caller; no-op on any other
+                               branch.
   refresh-nudge                Recompute the main checkout's wiki drift and write
                                it into the statusline cache now, rather than on
                                the next background refresh. Run after cleanup.

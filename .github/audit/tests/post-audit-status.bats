@@ -521,8 +521,8 @@ a frontend refusal keeps frontend pending under a dep-bump title|chore(deps): bu
 
 # A dep-bump pull request waives the frontend marker only, never the PR review:
 # GitHub auto-merge completes on this status alone, so a manifest-only PR whose
-# body carries no PR review section is declined with the verdict's own reason.
-@test "chore(deps) waiver: a waived dep-bump with no PR review section is declined for the missing review" {
+# branch has no local review record is declined with the verdict's own reason.
+@test "chore(deps) waiver: a waived dep-bump with no PR review record is declined for the missing review" {
   install_gh_mock ok
   install_resolver
   install_chore_deps_predicate

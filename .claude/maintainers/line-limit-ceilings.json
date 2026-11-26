@@ -35,7 +35,7 @@
     ".gaia/cli/src/scaffold/service.ts": 995,
     ".gaia/cli/src/update-deps/advisories.ts": 611,
     ".gaia/cli/src/update-deps/advisory-model.ts": 731,
-    ".gaia/cli/src/wiki/chain.ts": 523,
+    ".gaia/cli/src/wiki/chain.ts": 524,
     ".gaia/cli/src/wiki/commit-classify.ts": 639,
     ".gaia/scripts/audit-light-route.sh": 663,
     ".gaia/scripts/audit-light-telemetry.sh": 576,
