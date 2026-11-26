@@ -267,6 +267,35 @@ EOF
   [ "$status" -eq 0 ] || return 1
 }
 
+@test "dropped refuses a finding with no routed fix and evidence-less input, and a dropped Critical or security-class finding closes only with dismiss" {
+  review_folder feat/review
+  ran_review "$(entry src/a.sh 3 Critical false)" "$(entry PR\ body null Major true)" "$(entry src/a.sh 5 Major false)" || return 1
+  record dispose --id pr-2 --disposition fix
+  [ "$status" -eq 0 ] || return 1
+  # Never routed: refused, record unchanged.
+  cp "$RUN_FOLDER/pr-review.json" "$BATS_TEST_TMPDIR/before.json"
+  record dropped --id pr-3 --by code-audit-frontend --evidence "guarded upstream"
+  [ "$status" -eq 1 ] || return 1
+  cmp -s "$BATS_TEST_TMPDIR/before.json" "$RUN_FOLDER/pr-review.json" || return 1
+  # A routed finding needs the member and the evidence.
+  record route-fix --root "$ALF_ROOT" --id pr-2
+  [ "$status" -eq 0 ] || return 1
+  record dropped --id pr-2 --by code-audit-frontend --evidence "   "
+  [ "$status" -ne 0 ] || return 1
+  # Before the drop a security finding refuses dismiss; after it dismiss is accepted, other non-fix stays refused.
+  record dispose --id pr-2 --disposition dismiss --reason "not a bug"
+  [ "$status" -eq 1 ] || return 1
+  record dropped --id pr-2 --by code-audit-frontend --evidence "guarded upstream"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(recorded '.findings[1] | "\(.fix_state)|\(.disposition)"')" = "dropped|null" ] || return 1
+  record dispose --id pr-2 --disposition waive-out-of-scope --basis triage-threshold --reason "guarded upstream"
+  [ "$status" -eq 1 ] || return 1
+  [ "$output" = "a Critical or security-class finding takes fix" ] || return 1
+  record dispose --id pr-2 --disposition dismiss --reason "guarded upstream"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(recorded '.findings[1].disposition')" = dismiss ] || return 1
+}
+
 @test "open on a record that already has an outcome prints exists and writes nothing" {
   review_folder exists
   ran_review "$(entry src/a.sh 3 Major false)" || return 1

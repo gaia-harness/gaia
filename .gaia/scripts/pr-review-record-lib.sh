@@ -168,7 +168,9 @@ cmd_not_run() {
 # The first rule a disposition breaks, as {kind: "usage"|"refusal", line}, or
 # nothing. The set and the Critical, security, reason, issue and basis rules are
 # the audit's (audit-dispositions-grade-lib.sh), plus `dismiss`; divert is the
-# audit's own refusal for a finding no member authored.
+# audit's own refusal for a finding no member authored. A Critical or
+# security-class finding takes fix, except `dismiss` once its fix was dropped
+# with evidence: the reopened finding then has a human-visible way to close.
 DISPOSE_JQ='
 def trim: gsub("^\\s+|\\s+$"; "");
 def usage($line): {kind: "usage", line: $line};
@@ -180,7 +182,7 @@ def refusal($line): {kind: "refusal", line: $line};
     (select(($severity != "" and $severity != $finding.severity) or ($security != "" and ($security == "true") != $finding.security))
       | refusal("finding class is fixed at the reviewer'"'"'s output")),
     (select($disposition == "divert") | refusal("divert-not-allowed: \($finding.id)")),
-    (select(($finding.severity == "Critical" or $finding.security) and $disposition != "fix") | refusal("a Critical or security-class finding takes fix")),
+    (select(($finding.severity == "Critical" or $finding.security) and $disposition != "fix" and ($finding.fix_state == "dropped" and $disposition == "dismiss" | not)) | refusal("a Critical or security-class finding takes fix")),
     (select(($finding.fix_state | IN("routed", "fixed")) and $disposition != "fix") | refusal("\($finding.id) has a fix routed or fixed")),
     (select($disposition == "accept-residual" and ($accepted | not)) | refusal("accept-residual needs a human accept: \($finding.id)")),
     (select($disposition | IN("dismiss", "file", "waive-out-of-scope", "accept-residual")) | select($reason_text == "") | refusal("empty-reason: \($finding.id)")),
