@@ -22,6 +22,7 @@
 #   gaia_loop_knobs_initial                             knobs frozen at round 1
 #   gaia_loop_context_config_initial <main-root>        line config frozen at round 1
 #   gaia_loop_context_config_effective <main-root> <state-json>
+#   gaia_loop_round_cap_effective <main-root> <state-json>   C and whether the live cap is valid
 # Run (the main thread), it is a read-only CLI: it never writes a file, never
 # takes the state lock, never calls gaia_loop_write_state.
 #   audit-loop-eval.sh findings|evaluate-round|brief|record-values|state-path|current-round
@@ -61,7 +62,7 @@
 # more than 5 rounds and 1.8% more than 6, so it interrupts only the long tail;
 # the signals below catch non-convergence earlier. A grant of 3 is the
 # smallest that lets both evidence windows below see fresh rounds before the
-# next checkpoint. The cap: a unit admitted below round 10 ends at round 10,
+# next checkpoint. The cap: a unit admitted below C ends at C,
 # and past it every unit needs a human answer to the checkpoint the cap pins,
 # whatever the context line or the fold says.
 #
@@ -90,7 +91,10 @@
 # sidecar never buys a round). The fold is uncapped (a grant of 10 at round 5
 # folds to 15): the hard cap is a decision rule, applied below.
 #
-# DECISION. No decision function reads a file: the bound hook passes the
+# DECISION. C is the effective round cap: the human-set cap of the override
+# file, frozen per branch and read by gaia_loop_round_cap_effective, and the hard
+# cap 10 when none is set; the hook's autonomy budget alone is bounded by the
+# hard cap. No decision function reads a file: the bound hook passes the
 # context reading (exactly what gaia_context_read printed) and the effective line
 # config. s = used + 1; k = K; <eligible> is the snapshot's accept_eligible (false
 # with no snapshot). The order of the steps is the security property. Enriching,
@@ -98,31 +102,31 @@
 # adds it in memory, see DEFAULT STOP), nor in the unit and member decisions in a
 # grant window (latest unit admitted on a grant, no checkpoint since, through_round
 # >= s): a grant of K buys up to K rounds. stop_override also makes gaia_loop_decide
-# skip its allowance and verdict steps, and step 6 allow `fallback s min(s+k-1, 10)`.
+# skip its allowance and verdict steps, and step 6 allow `fallback s min(s+k-1, C)`.
 #   gaia_loop_decide (a new-tree dispatch outside the unit protocol): deny
-#   `cap` when used >= 10; deny `allowance` when used >= allowed; else deny
+#   `cap` when used >= C; deny `allowance` when used >= allowed; else deny
 #   `stalled` or `enriching` when that is round r = used's verdict and no
 #   answer exists for a checkpoint at round >= r; else allow.
 #   gaia_loop_decide_unit, first match wins:
-#     1. used >= 10: the latest checkpoint's unconsumed answer (as in step 3)
+#     1. used >= C: the latest checkpoint's unconsumed answer (as in step 3)
 #        admits one unit, a grant `allow grant s s+k-1` and an accept `allow
 #        accept s s`; with none, `deny cap <eligible> true`.
 #     2. a denying signal not lifted above, with no checkpoint at round >= used
 #        answered: `deny rubric:<signal> <eligible> false`, first in SIGNALS order.
 #     3. the latest checkpoint is answered and its index is greater than the
 #        latest unit's after_checkpoint (or no unit exists), or the latest answer is an
-#        accept whose closing round is unrecorded (gaia_loop_next_closing): a grant gives `allow grant s min(s+k-1, 10)`,
-#        an accept `allow accept s s`; else a grant window gives `allow grant s min(s+k-1, through_round)`.
+#        accept whose closing round is unrecorded (gaia_loop_next_closing): a grant gives `allow grant s min(s+k-1, C)`,
+#        an accept `allow accept s s`; else a grant window gives `allow grant s min(s+k-1, through_round, C)`.
 #     4. the latest answer is an accept and a round is recorded after the
 #        checkpoint it answers (its closing round is spent): `deny fallback
 #        <eligible> false`, whatever the reading. An accept never re-arms the loop.
 #     5. a `fresh <tokens> <window>` reading with ask_tokens above 0: tokens >=
 #        the line computed against that reading's own window denies `context
-#        <eligible> false`; else `allow context s min(s+k-1, 10)`.
+#        <eligible> false`; else `allow context s min(s+k-1, C)`.
 #     6. any other reading, or ask_tokens 0: the fallback fold, `deny fallback <eligible> false`
-#        when used >= allowed, else `allow fallback s min(s+k-1, 10, allowed)`.
-#   gaia_loop_decide_member, in a unit: used >= 10 denies `cap` first unless
-#   the latest unit runs past round 10 (an answer admitted it there); then
+#        when used >= allowed, else `allow fallback s min(s+k-1, C, allowed)`.
+#   gaia_loop_decide_member, in a unit: used >= C denies `cap` first unless
+#   the latest unit runs past round C (an answer admitted it there); then
 #   the latest unit's through_round must reach s, else `deny window`; then a
 #   denying signal unanswered denies as in step 2; else `allow`. A member
 #   dispatched outside a unit is judged by gaia_loop_decide_unit with k = 1, a
@@ -237,6 +241,8 @@ _GAIA_LOOP_EVAL_DIRECTORY="${BASH_SOURCE[0]%/*}"
 . "$_GAIA_LOOP_EVAL_DIRECTORY/context-checkpoint-lib.sh" || return 6 2>/dev/null || exit 6
 # shellcheck source=/dev/null
 . "$_GAIA_LOOP_EVAL_DIRECTORY/audit-loop-signals-lib.sh" || return 6 2>/dev/null || exit 6
+# shellcheck source=/dev/null
+. "$_GAIA_LOOP_EVAL_DIRECTORY/audit-loop-automatic-lib.sh" || return 6 2>/dev/null || exit 6
 # shellcheck source=/dev/null
 . "$_GAIA_LOOP_EVAL_DIRECTORY/audit-triage-lib.sh" || return 6 2>/dev/null || exit 6
 # shellcheck source=/dev/null

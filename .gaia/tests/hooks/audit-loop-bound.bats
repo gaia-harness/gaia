@@ -1176,7 +1176,7 @@ scratch_copy() {
   rm -rf "$scratch_directory"
   mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
   for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
-    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-dispositions-check.sh audit-dispositions-grade-lib.sh audit-dispositions-snapshot-lib.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh audit-decided-unattended-lib.sh pr-body-sections-lib.sh autonomy-lib.sh audit-member-digest.sh; do
+    audit-loop-eval.sh audit-loop-signals-lib.sh audit-loop-automatic-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-dispositions-check.sh audit-dispositions-grade-lib.sh audit-dispositions-snapshot-lib.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh audit-decided-unattended-lib.sh pr-body-sections-lib.sh autonomy-lib.sh audit-member-digest.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$scratch_directory/.gaia/scripts/$script_name"
   done
   ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
@@ -2356,4 +2356,202 @@ decision_log_lines() {
   [ "$(state_field '.history.units[-1].budget')" = true ]
   [ "$(budget_records | wc -l | tr -d ' ')" -eq 2 ]
   [ "$(decision_log_lines)" -eq 2 ]
+}
+
+# --- the human-set round cap ----------------------------------------------------
+
+# cap_override <audit-loop-json> [ask-tokens]: the machine-local override with
+# an audit_loop object, optionally beside an ask_tokens line.
+cap_override() {
+  mkdir -p "$ALF_ROOT/.gaia/local/protected"
+  jq -n -c --argjson audit_loop "$1" --argjson ask_tokens "${2:-null}" \
+    '{version: 1, audit_loop: $audit_loop} + (if $ask_tokens == null then {} else {context_checkpoint: {ask_tokens: $ask_tokens}} end)' \
+    >"$ALF_ROOT/.gaia/local/protected/checkpoint-override.json"
+}
+
+# unit_row: the latest unit's admission, `<admitted_on> <start> <through>`.
+unit_row() {
+  state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round] | map(tostring) | join(" ")'
+}
+
+# session_start_message: the systemMessage the session-start hook shows, empty when silent.
+session_start_message() {
+  local result
+  result="$(printf '%s' "$(jq -n -c --arg cwd "$ALF_ROOT" '{cwd: $cwd}')" |
+    bash "$REPO_ROOT/.claude/hooks/context-override-session-start.sh")" || return 1
+  [ -z "$result" ] || jq -r '.systemMessage' <<<"$result"
+}
+
+# bats test_tags=protected
+@test "round cap: a human-set cap bounds every admission no human answered, the budget excepted, with its freeze, range and notices" {
+  local hard="$_GAIA_LOOP_HARD_CAP" row override_file value expected
+  override_file="$ALF_ROOT/.gaia/local/protected/checkpoint-override.json"
+
+  echo "case: at the cap with enriching the unit dispatch pins cap, whatever the reading"
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 "$(sig_snap enriching true)"
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_pinned cap
+
+  echo "case: below the cap with no checkpoint a unit is admitted on the context line and ends at the cap"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "context 3 4" ]
+
+  echo "case: a context checkpoint pending at the cap is not a way past it for another session"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  alf_add_checkpoint 4 context
+  write_context_reading 40000 1000000 0 "$SIDV"
+  unit_dispatch "$SIDV"
+  assert_pinned cap
+
+  echo "case: a grant answering the cap checkpoint buys a whole unit past it, and the next unit asks again"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  alf_add_checkpoint 4 cap
+  alf_add_answer 1 grant 3
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "grant 5 7" ]
+  seed_rounds 7 '{"verdict":"continue","A":1}'
+  alf_add_checkpoint 4 cap
+  alf_add_answer 1 grant 3
+  alf_state_edit '.history.units = [{unit: 1, start_round: 5, k: 3, through_round: 7, after_checkpoint: 1, admitted_on: "grant"}]'
+  unit_dispatch
+  assert_pinned cap
+
+  echo "case: a grant answered below the cap ends at it, and a member opening the next round inside that unit is denied"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 3 '{"verdict":"continue","A":1}'
+  alf_add_checkpoint 3 fallback
+  alf_add_answer 1 grant 3
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "grant 4 4" ]
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.units = [{unit: 1, start_round: 4, k: 3, through_round: 4, after_checkpoint: 1, admitted_on: "grant"}]'
+  new_tree
+  nested
+  assert_pinned cap
+
+  echo "case: a cap frozen at 6 is lowered live and never raised"
+  fresh_fixture
+  cap_override '{"round_cap":8}'
+  seed_rounds 5 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50, round_cap: 6}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "context 6 6" ]
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50, round_cap: 6}'
+  unit_dispatch
+  assert_pinned cap
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50, round_cap: 6}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_pinned cap
+
+  echo "case: a branch frozen before the cap existed takes the live cap"
+  fresh_fixture
+  cap_override '{"round_cap":5}'
+  seed_rounds 5 "$(sig_snap enriching true)"
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_pinned cap
+
+  echo "case: with no cap set the cap in use is the hard cap and is frozen"
+  fresh_fixture
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.context_config.round_cap')" -eq "$hard" ]
+
+  echo "case: an invalid cap is not frozen and the decisions use the hard cap"
+  fresh_fixture
+  cap_override '{"round_cap":"4"}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "context 5 7" ]
+  [ "$(state_field '.history.context_config | has("round_cap")')" = false ]
+
+  echo "case: the autonomy budget is bounded by the hard cap, not the cap"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  write_switch '{"audit_extra_units_per_pr":3,"audit_units_pool":3}'
+  seed_rounds 4 "$(sig_snap enriching true)"
+  write_context_reading 320000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "grant 5 $(minimum_of $((4 + GAIA_CONTEXT_UNIT_ROUNDS)) "$hard")" ]
+  [ "$(state_field '.history.units[-1].budget')" = true ]
+  [ "$(budget_field '.pool_spent')" -eq 1 ]
+
+  echo "case: the code-review decider reads the cap as the loop's end"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  run bash -c 'SCRIPT_DIRECTORY="$1/.gaia/scripts"; . "$SCRIPT_DIRECTORY/audit-code-review-decide.sh"; loop_hard_cap "$2"' _ "$REPO_ROOT" "$ALF_ROOT"
+  [ "$output" = 4 ]
+  rm -f "$override_file"
+  run bash -c 'SCRIPT_DIRECTORY="$1/.gaia/scripts"; . "$SCRIPT_DIRECTORY/audit-code-review-decide.sh"; loop_hard_cap "$2"' _ "$REPO_ROOT" "$ALF_ROOT"
+  [ "$output" = "$hard" ]
+
+  echo "case: the cap is parsed beside ask_tokens, never changing what it reads"
+  fresh_fixture
+  mkdir -p "$ALF_ROOT/.gaia/local/protected"
+  printf '%s\n' '{"version":1,"context_checkpoint":{"ask_tokens":350000}}' >"$override_file"
+  [ "$(gaia_loop_round_cap_state "$ALF_ROOT")" = "absent $hard -" ]
+  [ "$(gaia_context_override_state "$ALF_ROOT")" = 'ok 350000 350000' ]
+  [ -z "$(session_start_message)" ]
+  cap_override '{"round_cap":"4"}' 350000
+  [ "$(gaia_context_override_state "$ALF_ROOT")" = 'ok 350000 350000' ]
+  [ "$(gaia_loop_round_cap_state "$ALF_ROOT")" = "invalid $hard \"4\"" ]
+
+  echo "case: a cap above the hard cap reads as the hard cap with a notice"
+  fresh_fixture
+  cap_override '{"round_cap":15}'
+  [ "$(gaia_loop_round_cap_state "$ALF_ROOT")" = "capped $hard 15" ]
+  [ "$(session_start_message)" = "WARNING: GAIA audit loop round cap capped: $override_file sets audit_loop.round_cap to 15, above the $hard limit, so $hard is used." ]
+  [ "$(gaia_loop_round_cap_effective "$ALF_ROOT" '{"history":{}}')" = "$hard true" ]
+
+  echo "case: a cap that is not a whole number from 1 to the hard cap is invalid, with a notice"
+  for value in 0 -1 4.5 '"4"'; do
+    fresh_fixture
+    cap_override "{\"round_cap\":$value}"
+    [ "$(gaia_loop_round_cap_state "$ALF_ROOT")" = "invalid $hard $value" ]
+    [ "$(gaia_loop_round_cap_effective "$ALF_ROOT" '{"history":{}}')" = "$hard false" ]
+    expected="WARNING: GAIA audit loop round cap is invalid: $override_file sets audit_loop.round_cap to $value, not a whole number from 1 to $hard, so automatic continue and the hand-off are off and every checkpoint asks. Fix or delete the key."
+    [ "$(session_start_message)" = "$expected" ]
+  done
+
+  echo "case: an ask_tokens warning and a cap notice share one message; a whole-file-invalid override prints only the file warning"
+  fresh_fixture
+  mkdir -p "$ALF_ROOT/.gaia/local/protected"
+  printf '%s\n' '{"version":1,"context_checkpoint":{"ask_tokens":"x"},"audit_loop":{"round_cap":15}}' >"$override_file"
+  row="$(session_start_message)"
+  case "$row" in "WARNING: GAIA context checkpoint override is invalid: "*". Fix or delete the file. WARNING: GAIA audit loop round cap capped: "*) ;; *) printf 'got: %s\n' "$row" >&2; return 1 ;; esac
+  printf '%s\n' '{"version":2,"audit_loop":{"round_cap":15}}' >"$override_file"
+  row="$(session_start_message)"
+  case "$row" in "WARNING: GAIA context checkpoint override is invalid: "*) ;; *) printf 'got: %s\n' "$row" >&2; return 1 ;; esac
+  grep -qF -- 'round cap' <<<"$row" && return 1
+  true
 }

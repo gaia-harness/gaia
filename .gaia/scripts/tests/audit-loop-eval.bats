@@ -69,7 +69,7 @@ cli_copy() {
   CLI="$BATS_TEST_TMPDIR/cli/.gaia/scripts"
   mkdir -p "$CLI" "$BATS_TEST_TMPDIR/cli/.claude/hooks/lib"
   cp -R "$SCRIPTS/../../.claude/hooks/lib/." "$BATS_TEST_TMPDIR/cli/.claude/hooks/lib/"
-  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-member-digest.sh resolve-audit-members.sh; do
+  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh audit-loop-automatic-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-member-digest.sh resolve-audit-members.sh; do
     cp "$SCRIPTS/$script_file" "$CLI/$script_file"
   done
   cat >"$CLI/usage.sh" <<'EOF'
@@ -1398,11 +1398,11 @@ grant_window_state() {
   mkdir -p "${settings%/*}"
   printf '{"version":1,"context_checkpoint":{"ask_tokens":250000,"ask_window_pct":40}}\n' >"$settings"
   [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3)")" = "250000 50" ]
-  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":250000,"ask_window_pct":50}' ]
+  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":250000,"ask_window_pct":50,"round_cap":10}' ]
   printf '{"version":1,"context_checkpoint":{"ask_tokens":600000}}\n' >"$settings"
-  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":400000,"ask_window_pct":50}' ]
+  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":400000,"ask_window_pct":50,"round_cap":10}' ]
   printf '{"version":1,"context_checkpoint":{"ask_tokens":0}}\n' >"$settings"
-  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":0,"ask_window_pct":50}' ]
+  [ "$(gaia_loop_context_config_initial "$ALF_ROOT")" = '{"ask_tokens":0,"ask_window_pct":50,"round_cap":10}' ]
   [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3 '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}')")" = "300000 50" ]
   [ "$(gaia_loop_context_config_effective "$ALF_ROOT" "$(make_state 3 '.history.context_config = {ask_tokens: 0, ask_window_pct: 50}')")" = "0 50" ]
   rm "$settings"

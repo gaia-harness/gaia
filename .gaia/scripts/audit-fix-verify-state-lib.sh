@@ -56,6 +56,7 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/autonomy-lib.sh'             # whether the switch is live, the audit budget's size, and the decision log a spend is written to and the PR-body section reads
   '.gaia/scripts/filing-outcomes-lib.sh'      # reads which keys the filer refused as branch-authored
   '.gaia/scripts/audit-loop-signals-lib.sh'   # rubric signals and unit/member decisions
+  '.gaia/scripts/audit-loop-automatic-lib.sh' # the round cap and the trigger set an unattended admission may cover
   '.gaia/scripts/audit-veto-lib.sh'           # decides veto satisfaction
   '.gaia/scripts/audit-loop-stop-lib.sh'      # decides the default-stop inputs, the stop override and the reopened round
   '.gaia/scripts/audit-triage-lib.sh'         # the triage mark the dispositions check honors

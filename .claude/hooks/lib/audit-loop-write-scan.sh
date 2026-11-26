@@ -296,17 +296,28 @@ words_run_guarded_script() {
 
 # runs_guarded_script <command> [matcher]: rc 0 when a simple command in the
 # line executes a script the matcher accepts (default guarded_script_kind: a
-# recorder or a reaper script, with SCRIPT_KIND naming which). Each
+# recorder or a reaper script, with SCRIPT_KIND naming which; the context
+# writer matchers get the same heredoc data view). Each
 # segment is read twice, as the shell groups its quotes (a
 # quoted path with a space stays one word) and as blank-separated words with
 # their quotes stripped (a quote the segment split cut in half), and either
 # reading executing a recorder counts.
 runs_guarded_script() {
   local command_line="$1" matcher="${2:-guarded_script_kind}" segments segment words word_index count word
-  if [ "$matcher" = guarded_script_kind ]; then
-    case "$command_line" in
-      *audit-loop-grant.sh* | *audit-loop-ask-grant.sh* | *state-reaper*) ;;
-      *) return 1 ;;
+  if [ "$matcher" = guarded_script_kind ] || [ "$matcher" = context_writer_execute_matcher ] || [ "$matcher" = context_writer_source_matcher ]; then
+    case "$matcher" in
+      guarded_script_kind)
+        case "$command_line" in
+          *audit-loop-grant.sh* | *audit-loop-ask-grant.sh* | *state-reaper*) ;;
+          *) return 1 ;;
+        esac
+        ;;
+      *)
+        case "$command_line" in
+          *gaia-statusline.sh* | *context-reading.sh* | *context-checkpoint-lib.sh*) ;;
+          *) return 1 ;;
+        esac
+        ;;
     esac
     # A heredoc body the walker proves is data (a `cat` or `tee` into a file)
     # is text, not commands; its lines would otherwise each read as a segment.

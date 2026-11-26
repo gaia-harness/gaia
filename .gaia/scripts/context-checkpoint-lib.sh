@@ -21,7 +21,12 @@
 # file are denied by block-audit-loop-write.sh, except the spellings under its
 # WHAT IS NOT COVERED. A raise or off that slips past still waits for the next
 # branch (the frozen line), and the round-count fallback and hard round cap
-# still bound the loop. The window share stays internal,
+# still bound the loop. The same file may also set the audit loop's round cap,
+# {"audit_loop":{"round_cap":4}}: a whole number from 1 to the hard round cap;
+# above it reads as the hard cap with a notice, and anything else is invalid,
+# which turns automatic continue and the hand-off off and leaves every
+# checkpoint asking. It is parsed independently of ask_tokens, by
+# gaia_loop_round_cap_state in audit-loop-automatic-lib.sh. The window share stays internal,
 # because a lowered share would undercut the minimum on a large window.
 #
 # Low confidence: the shipped defaults are tunable estimates, not measured

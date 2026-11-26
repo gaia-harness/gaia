@@ -315,6 +315,7 @@
     ".gaia/scripts/audit-light-mark.sh": "owned",
     ".gaia/scripts/audit-light-route.sh": "owned",
     ".gaia/scripts/audit-loop-allowance-lib.sh": "owned",
+    ".gaia/scripts/audit-loop-automatic-lib.sh": "owned",
     ".gaia/scripts/audit-loop-eval.sh": "owned",
     ".gaia/scripts/audit-loop-record.sh": "owned",
     ".gaia/scripts/audit-loop-report-lib.sh": "owned",

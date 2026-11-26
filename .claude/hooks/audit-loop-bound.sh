@@ -35,7 +35,8 @@
 # (.gaia/scripts/audit-budget-lib.sh owns the record and the limits), only
 # when the trigger is the round-count fallback or a signal a grant window
 # lifts (enriching, stalled, nitpicky, small-tail), the dispatch is below the
-# hard cap, and the latest answer is not an accept. Never from the budget: the
+# hard cap (the budget's bound is never C, the effective round cap the eval
+# header's DECISION owns), and the latest answer is not an accept. Never from the budget: the
 # context trigger (its answer is a new session), reintroduced, waiver-drift,
 # the cap, a member dispatch, and an accept, which only a human gives. Every
 # spend is appended to the decision log (autonomy_log_decision) before the
@@ -388,13 +389,10 @@ budget_answer() {
   . "$scripts/autonomy-lib.sh" 2>/dev/null || return 0
   type autonomy_log_decision >/dev/null 2>&1 && type gaia_audit_budget_spend >/dev/null 2>&1 || return 0
   autonomy_active "$main" || return 0
-  case "$budget_trigger" in
-    fallback | rubric:enriching | rubric:stalled | rubric:nitpicky | rubric:small-tail) ;;
-    *)
-      BUDGET_NOTE="the $budget_trigger trigger is never answered from the budget"
-      return 0
-      ;;
-  esac
+  if ! gaia_loop_grant_window_trigger "$budget_trigger"; then
+    BUDGET_NOTE="the $budget_trigger trigger is never answered from the budget"
+    return 0
+  fi
   if [ "$at_cap" != false ] || [ "$rounds_used" -ge "$_GAIA_LOOP_HARD_CAP" ]; then
     BUDGET_NOTE='the hard round cap is never answered from the budget'
     return 0
@@ -560,6 +558,7 @@ adopt_renamed() {
 run_decision() {
   local libs_failed=0 lookup_exit_status dirty_exit_status state_under_lock used round_index snapshot decision now stamp_file slug closing NEXT_STATE current_pr_number old_file closed=0
   local verb trigger decision_third_field decision_fourth_field accept_is_eligible cap extra nonce question in_unit reading ask_tokens ask_percent config view recommended context_line
+  local round_cap round_cap_valid budget_trigger budget_cap_field hard_decision hard_verb
   local admitted_on start_round through_round reopen
   HELD=''
   trap 'exit 143' TERM INT HUP
@@ -578,7 +577,7 @@ run_decision() {
   [ "$libs_failed" -eq 1 ] || . "$scripts/audit-loop-eval.sh" 2>/dev/null || libs_failed=1
   [ "$libs_failed" -eq 1 ] || [ -f "$scripts/audit-dispositions-check.sh" ] || libs_failed=1
   [ "$libs_failed" -eq 0 ] ||
-    finish_deny "BLOCKED: the audit loop checkpoint cannot load its libraries from $scripts. Fail-loud, not fail-open: restore audit-loop-state-lib.sh, context-checkpoint-lib.sh, audit-loop-eval.sh (with audit-loop-signals-lib.sh, audit-triage-lib.sh and audit-veto-lib.sh) and audit-dispositions-check.sh."
+    finish_deny "BLOCKED: the audit loop checkpoint cannot load its libraries from $scripts. Fail-loud, not fail-open: restore audit-loop-state-lib.sh, context-checkpoint-lib.sh, audit-loop-eval.sh (with audit-loop-signals-lib.sh, audit-loop-automatic-lib.sh, audit-triage-lib.sh and audit-veto-lib.sh) and audit-dispositions-check.sh."
   # shellcheck source=lib/cross-repo-refusal.sh
   . "$(dirname "${BASH_SOURCE[0]}")/lib/cross-repo-refusal.sh" 2>/dev/null || libs_failed=1
   if [ "$libs_failed" -ne 0 ] || ! type gaia_cross_repo_deny_reason >/dev/null 2>&1; then
@@ -802,6 +801,10 @@ run_decision() {
   config=$(gaia_loop_context_config_effective "$main" "$WORKING_STATE") ||
     finish_deny 'BLOCKED: the audit loop checkpoint could not compute its context line config. Fail-loud, not fail-open: retry the dispatch.'
   read -r ask_tokens ask_percent <<<"$config"
+  config=$(gaia_loop_round_cap_effective "$main" "$WORKING_STATE") ||
+    finish_deny 'BLOCKED: the audit loop checkpoint could not compute its round cap. Fail-loud, not fail-open: retry the dispatch.'
+  # shellcheck disable=SC2034 # round_cap_valid is read by the automatic continue
+  read -r round_cap round_cap_valid <<<"$config"
   reading=$(gaia_context_read "$main" "$session" "$(date +%s)")
   [ -n "$reading" ] || reading=unparseable
 
@@ -813,9 +816,9 @@ run_decision() {
   [ "$in_unit" = true ] || view=$(answer_view "$WORKING_STATE") ||
     finish_deny 'BLOCKED: the audit loop checkpoint could not compute its decision. Fail-loud, not fail-open: retry the dispatch.'
   if [ "$kind" = unit ]; then
-    decision=$(gaia_loop_decide_unit "$view" "$snapshot" "$reading" "$ask_tokens" "$ask_percent")
+    decision=$(gaia_loop_decide_unit "$view" "$snapshot" "$reading" "$ask_tokens" "$ask_percent" "$round_cap")
   else
-    decision=$(gaia_loop_decide_member "$view" "$snapshot" "$in_unit" "$reading" "$ask_tokens" "$ask_percent")
+    decision=$(gaia_loop_decide_member "$view" "$snapshot" "$in_unit" "$reading" "$ask_tokens" "$ask_percent" "$round_cap")
   fi || finish_deny 'BLOCKED: the audit loop checkpoint could not compute its decision. Fail-loud, not fail-open: retry the dispatch.'
   # A deny reads `deny <trigger> <accept_eligible> <cap>`; a unit allow reads
   # `allow <admitted_on> <start_round> <through_round>`.
@@ -824,7 +827,18 @@ run_decision() {
     finish_deny 'BLOCKED: the audit loop checkpoint got an unreadable decision. Fail-loud, not fail-open: retry the dispatch.'
   BUDGET_SPENT=false
   BUDGET_NOTE=''
-  [ "$verb" != deny ] || [ "$kind" != unit ] || budget_answer "$trigger" "$decision_fourth_field" "$used"
+  if [ "$verb" = deny ] && [ "$kind" = unit ]; then
+    # The budget is bounded by the hard cap, so a C-cap deny is judged again
+    # against it; any other deny is the same under both caps.
+    budget_trigger=$trigger budget_cap_field=$decision_fourth_field
+    if [ "$trigger" = cap ] && [ "$round_cap" -lt "$_GAIA_LOOP_HARD_CAP" ]; then
+      hard_decision=$(gaia_loop_decide_unit "$view" "$snapshot" "$reading" "$ask_tokens" "$ask_percent") ||
+        finish_deny 'BLOCKED: the audit loop checkpoint could not compute its decision. Fail-loud, not fail-open: retry the dispatch.'
+      read -r hard_verb budget_trigger _ budget_cap_field _ <<<"$hard_decision"
+      [ "$hard_verb" = deny ] || budget_trigger=''
+    fi
+    [ -z "$budget_trigger" ] || budget_answer "$budget_trigger" "$budget_cap_field" "$used"
+  fi
   case "$verb" in
     allow) ;;
     deny)

@@ -149,7 +149,7 @@ row_payload() {
 # A row naming a refusal text also asserts its payload never spells audit-loop,
 # so the protected folder is armed by the `local/protected` literal alone and an
 # omitted literal would exit 0 there.
-@test "with jq absent these blocking hooks refuse: dotenv edit, eslint config edit, app/foo.ts edit, dotenv read, force push to main, --no-verify, manifest write, rm -rf /, key path read, description-first dotenv read, member dispatch, audit-loop state write, new protected-folder file, protected-folder redirect, gh pr merge" {
+@test "with jq absent these blocking hooks refuse: dotenv edit, eslint config edit, app/foo.ts edit, dotenv read, force push to main, --no-verify, manifest write, rm -rf /, key path read, description-first dotenv read, member dispatch, audit-loop state write, new protected-folder file, protected-folder redirect, statusline and context writer names, gh pr merge" {
   local original_path="$PATH" row label hook kind argument needle json
   for row in \
     "secrets-write|block-secrets-write.sh|edit|.env.local|" \
@@ -165,6 +165,9 @@ row_payload() {
     "audit-loop-bound|audit-loop-bound.sh|agent|code-audit-frontend|" \
     "audit-loop-write-state|block-audit-loop-write.sh|write|.gaia/local/protected/audit-loop/state.json|" \
     "audit-loop-write-new-file|block-audit-loop-write.sh|write|/Users/you/work/repo/.gaia/local/protected/new-state.json|cannot be checked" \
+    "audit-loop-write-statusline|block-audit-loop-write.sh|bash|bash .gaia/statusline/gaia-statusline.sh|cannot be checked" \
+    "audit-loop-write-context-reading|block-audit-loop-write.sh|bash|source .gaia/statusline/context-reading.sh|cannot be checked" \
+    "audit-loop-write-context-lib|block-audit-loop-write.sh|bash|. .gaia/scripts/context-checkpoint-lib.sh|cannot be checked" \
     "audit-loop-write-redirect|block-audit-loop-write.sh|bash|printf x > /Users/you/work/repo/.gaia/local/protected/new-state.json|cannot be checked" \
     "pr-merge-audit-check|pr-merge-audit-check.sh|bash|gh pr merge 42 --squash|" \
     "worthiness-presence-check|worthiness-presence-check.sh|bash|gh pr merge 42 --squash|"; do

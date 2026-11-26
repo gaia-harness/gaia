@@ -592,6 +592,63 @@ assert_reaper_denied() {
   assert_recorder_denied "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF' && $ASK_RECORDER${nl}data${nl}EOF"
 }
 
+# --- context writer execution ---
+
+# The writers mint the reading the checkpoint trusts, so running the statusline
+# or sourcing a writer and calling it is denied; naming the files is not.
+@test "context writer: Claude's write to the cap and its Bash or Monitor run of the context writers are denied, while naming them is allowed" {
+  local row nl=$'\n'
+  echo "case: Write of the override file"
+  run_edit Write "$OVERRIDE"
+  assert_denied_by_json
+  echo "case: Edit of the override file"
+  run_edit Edit "$OVERRIDE"
+  assert_denied_by_json
+  local denied=(
+    "bash .gaia/statusline/gaia-statusline.sh < payload.json"
+    ".gaia/statusline/gaia-statusline.sh"
+    "sh .gaia/statusline/context-reading.sh"
+    "source .gaia/statusline/context-reading.sh"
+    "exec .gaia/statusline/gaia-statusline.sh"
+    "FOO=1 bash \".gaia/statusline/gaia-statusline.sh\""
+    ". .gaia/scripts/context-checkpoint-lib.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
+    ". .gaia/statusline/context-reading.sh && gaia_statusline_write_context /x 1 1"
+    "echo hi${nl}bash $MAIN/.gaia/statusline/gaia-statusline.sh"
+  )
+  local allowed=(
+    "grep -rn gaia_context_write .gaia"
+    "git add .gaia/statusline/gaia-statusline.sh"
+    "bash -n .gaia/statusline/gaia-statusline.sh"
+    "cat $OVERRIDE"
+    "shellcheck .gaia/statusline/context-reading.sh"
+    ". .gaia/scripts/context-checkpoint-lib.sh; gaia_context_read /x id 1"
+    ". .gaia/scripts/context-checkpoint-lib.sh; gaia_context_effort_write /x id 1"
+    "bash -c '. .gaia/scripts/context-checkpoint-lib.sh && gaia_context_yield_limit'"
+    "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF'${nl}bash .gaia/statusline/gaia-statusline.sh${nl}EOF"
+    "bash .gaia/scripts/bats5.sh .gaia/tests/statusline/context-reading.bats < /dev/null"
+    "bash .gaia/statusline/gaia-statusline-left.sh"
+    "bash .gaia/statusline/gaia-statusline-right.sh"
+  )
+  for row in "${denied[@]}"; do
+    echo "case denied (Bash): $row"
+    run_bash "$row"
+    assert_pins_only_class context-writer
+    grep -qiF -- "context reading" <<<"$output" || return 1
+    echo "case denied (Monitor): $row"
+    run_monitor "$row"
+    assert_pins_only_class context-writer
+    grep -qiF -- "context reading" <<<"$output" || return 1
+  done
+  for row in "${allowed[@]}"; do
+    echo "case allowed: $row"
+    run_bash "$row"
+    assert_row_allowed
+    echo "case allowed (Monitor): $row"
+    run_monitor "$row"
+    assert_row_allowed
+  done
+}
+
 # --- deny text, every class ---
 
 @test "each deny message names the guard, its class and both answer channels" {
@@ -668,11 +725,12 @@ class_pin() {
     context) printf '%s' 'the context readings (<main>/.gaia/local/cache/shared/context/)' ;;
     recorder) printf '%s' 'run only as hooks' ;;
     reaper) printf '%s' 'the local-state reaper scripts' ;;
+    context-writer) printf '%s' 'mints the context reading' ;;
   esac
 }
 
 # assert_pins_only_class <class>: the last run is a deny carrying that class's
-# pin and none of the other five classes' pins.
+# pin and none of the other classes' pins.
 assert_pins_only_class() {
   local expected_class="$1" other_class
   assert_denied_by_json
@@ -680,7 +738,7 @@ assert_pins_only_class() {
     printf 'class %s: its pin is missing from: %s\n' "$expected_class" "$output" >&2
     return 1
   }
-  for other_class in state override folder context recorder reaper; do
+  for other_class in state override folder context recorder reaper context-writer; do
     if [ "$other_class" != "$expected_class" ]; then
       if grep -qF -- "$(class_pin "$other_class")" <<<"$output"; then
         printf 'class %s: carries the %s pin: %s\n' "$expected_class" "$other_class" "$output" >&2
