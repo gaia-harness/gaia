@@ -341,6 +341,7 @@
     ".gaia/scripts/autonomy-park.sh": "owned",
     ".gaia/scripts/branch-authorship-lib.sh": "owned",
     ".gaia/scripts/branch-name-lib.sh": "owned",
+    ".gaia/scripts/branch-worktree-lib.sh": "owned",
     ".gaia/scripts/changelog-range.sh": "owned",
     ".gaia/scripts/check-debt-issue-metadata.sh": "owned",
     ".gaia/scripts/check-hook-command-rooting.sh": "owned",
@@ -950,7 +951,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-25T15:01:51.566Z",
+  "generated": "2026-11-26T09:11:01.136Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
