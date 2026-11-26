@@ -348,7 +348,11 @@ fixer_result_on() {
 # pr_review_base: a pr-reviewer veto on f.txt:2 from round 2, which a
 # main-thread commit repaired (round 2 on TREE_FIXED). The roster gives f.txt to
 # code-audit-shell, which reviews rounds 2 and 3. Round 2's owner reported
-# NEIGHBOUR, two lines from the vetoed line; round 3 reports nothing.
+# NEIGHBOUR, two lines from the vetoed line; round 3 reports nothing. A round-3
+# tree argument other than TREE_FIXED changes f.txt there, and round 3 then
+# dispatches no member: a clean round-3 owner review would satisfy the key on
+# its own, so only the round-2 review, and what the dispositions say of its
+# NEIGHBOUR, decides the case.
 pr_review_base() {
   local round_three_tree="${1:-TREE_FIXED}"
   VETOED_IDENTITY='["pr-reviewer","pr-review/pr-1","f.txt",2]'
@@ -357,7 +361,9 @@ pr_review_base() {
   inline_base TREE_FIXED || return 1
   STATE="$(jq -c --argjson neighbour "$NEIGHBOUR" '.history.rounds[1].members = ["code-audit-shell"]
     | .history.rounds[1].snapshot = {keys: [$neighbour]}
-    | .history.rounds += [.history.rounds[1] | .round = 3 | .snapshot = null | .tree = $round_three_tree]' --arg round_three_tree "${!round_three_tree}" <<<"$STATE")"
+    | .history.rounds += [.history.rounds[1] | .round = 3 | .snapshot = null | .tree = $round_three_tree
+      | if $undispatched then .members = [] else . end]' --arg round_three_tree "${!round_three_tree}" \
+    --argjson undispatched "$([ "$round_three_tree" = TREE_FIXED ] && echo false || echo true)" <<<"$STATE")"
   ROUND_KEYS='[]'
 }
 
@@ -379,25 +385,26 @@ pr_review_veto_state() {
   reset_run # waived, filed or diverted neighbour still blocks
   local disposition
   for disposition in waive-out-of-scope file divert; do
-    pr_review_base || return 1
+    pr_review_base TREE_MOVED || return 1
     fix_entry 2 "$disposition" "$NEIGHBOUR"
     [ "$(pr_review_veto_state)" = 0 ] || { echo "a neighbour disposed $disposition"; return 1; }
   done
   reset_run # disposed fix but the fixer did not fix it
-  pr_review_base || return 1
+  pr_review_base TREE_MOVED || return 1
   fix_entry 2 fix "$NEIGHBOUR"
   fixer_result_on 2 disputed "$NEIGHBOUR"
   [ "$(pr_review_veto_state)" = 0 ] || { echo "a neighbour the fixer disputed"; return 1; }
   reset_run # the same defect re-reported in round r still blocks, even with a round-r fix record for it
-  pr_review_base || return 1
+  pr_review_base TREE_MOVED || return 1
   fix_entry 2 fix "$NEIGHBOUR"
   fixer_result_on 2 fixed "$NEIGHBOUR"
+  STATE="$(jq -c '.history.rounds[2].members = ["code-audit-shell"]' <<<"$STATE")"
   ROUND_KEYS='[["code-audit-shell","holistic/unclassified","f.txt",3]]'
   fix_entry 3 fix '["code-audit-shell","holistic/unclassified","f.txt",3]'
   fixer_result_on 3 fixed '["code-audit-shell","holistic/unclassified","f.txt",3]'
   [ "$(pr_review_veto_state)" = 0 ] || { echo "a re-report in round r"; return 1; }
   reset_run # a cross-remit audit-member key keeps reading every owner finding nearby as its re-report
-  pr_review_base || return 1
+  pr_review_base TREE_MOVED || return 1
   VETOED_IDENTITY='["code-audit-frontend","rule/x","f.txt",2]'
   veto 2
   fix_entry 2 fix "$NEIGHBOUR"
