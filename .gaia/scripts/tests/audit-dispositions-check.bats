@@ -1758,17 +1758,6 @@ decide() {
   [ "$(jq -c '.keys[0].repair_paths' "$RUN_FOLDER/vetoes.json")" = '["lib/s.sh"]' ]
 }
 
-@test "needs-human: a fix decision naming an owned enforcement repair path records it, for the unit to draft and stop on" {
-  local enforcement_path roster="$ALF_ROOT/.gaia/audit-ci.yml"
-  stop_rounds "$(minor_rows f.txt 1 1)"
-  enforcement_path="$(bash -c '. "$1" && printf "%s" "${ENFORCEMENT_PATHS[0]}"' _ "$SCRIPTS/audit-fix-verify-state-lib.sh")"
-  [ -n "$enforcement_path" ] || return 1
-  printf '  - name: %s\n    globs:\n      - "%s"\n    audience: adopter\n' "$SHELL_MAINTAINER" "$enforcement_path" >>"$roster"
-  decide 1 fix "$(jq -n -c --arg path "$enforcement_path" '{repair_paths: [$path]}')"
-  [ "$status" -eq 0 ] || { echo "an owned enforcement repair path was refused: $status $output"; return 1; }
-  [ "$(jq -c --arg path "$enforcement_path" '.keys | map(.repair_paths == [$path])' "$RUN_FOLDER/vetoes.json")" = '[true]' ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
-}
-
 # race_shims <directory>: a forced interleave of two fix decisions. Its mkdir
 # exits 0 even when the directory exists, as uutils mkdir does for two racing
 # creators, and counts attempts on the veto lock. Its date holds the first

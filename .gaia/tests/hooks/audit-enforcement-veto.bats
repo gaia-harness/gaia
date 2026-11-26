@@ -136,24 +136,50 @@ review_round() {
 }
 
 # bats test_tags=protected
-@test "drafted repair in an enforcement repair path: record-residual records the path, the human's commit of the draft lands it with the key's own path untouched, and the owner's clean review clears check-all" {
-  local settings=.claude/settings.json
+@test "drafted repair in an enforcement repair path: the key sits on a file another member's repair path does not share, the veto stays unsatisfied until the repair path's owner reviews it clean, and the human's commit of the draft lands it" {
+  local settings=.claude/settings.json key_path=lib/notes.sh repair_owner=code-audit-shell
+  # The Evidence shape: the veto is keyed on a file outside ENFORCEMENT_PATHS
+  # that MEMBER owns, and its repair lands in an enforcement path another
+  # member owns, so the key's reviewer alone must not satisfy it.
+  printf 'auditors:\n  - name: %s\n    globs:\n      - "%s"\n    audience: adopter\n  - name: %s\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n' \
+    "$repair_owner" "$settings" "$MEMBER" >"$ALF_ROOT/.gaia/audit-ci.yml"
+  alf_fill "$key_path" 160 branch
   alf_fill "$settings" 4 settings
-  alf_git add -f "$settings"
-  alf_commit "add the settings file"
-  jq -c --arg path "$settings" '. + {reason: "add the allow entry", repair_paths: [$path]}' "$BATS_TEST_TMPDIR/finding.json" >"$BATS_TEST_TMPDIR/repair.json"
+  alf_git add -f "$key_path" "$settings"
+  alf_commit "add the key file and the settings file"
+  alf_state_edit '.history.rounds[0].tree = $tree | .history.rounds[0].commit = $commit' --arg tree "$ALF_TREE" --arg commit "$ALF_COMMIT"
+  alf_sidecar "$MEMBER" "[{\"path\":\"$key_path\",\"line\":140,\"finding_class\":\"holistic/unclassified\",\"severity\":\"major\",\"security\":false}]" 11
+  alf_dispositions 1 "[{\"member\":\"$MEMBER\",\"finding_class\":\"holistic/unclassified\",\"path\":\"$key_path\",\"line\":140,\"disposition\":\"file\",\"reason\":\"pre-existing\"}]"
+  jq -n -c --arg member "$MEMBER" --arg path "$key_path" \
+    '{key: {member: $member, finding_class: "holistic/unclassified", path: $path, line: 140}, outcome: "refused-authored"}' \
+    >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  jq -n -c --arg member "$MEMBER" --arg path "$key_path" --arg repair "$settings" \
+    '{member: $member, finding_class: "holistic/unclassified", path: $path, line: 140, severity: "major", security: false,
+      failure_mode: "deadlock", reason: "add the allow entry", repair_paths: [$repair]}' >"$BATS_TEST_TMPDIR/repair.json"
   run bash "$SCRIPTS/audit-dispositions-check.sh" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" \
     --finding "$BATS_TEST_TMPDIR/repair.json" --decision fix
   [ "$status" -eq 0 ] || { printf 'the enforcement repair path was refused: %s\n' "$output" >&2; return 1; }
   [ "$(jq -c '.keys | map(.repair_paths)' "$RUN_FOLDER/vetoes.json")" = "[[\"$settings\"]]" ] || return 1
   dispatch audit-loop-unit
   allowed || return 1
-  alf_dispositions 2 "[{\"member\":\"$MEMBER\",\"finding_class\":\"holistic/unclassified\",\"path\":\"$ENFORCED\",\"line\":140,\"disposition\":\"fix\",\"reason\":\"vetoed\",\"repair_paths\":[\"$settings\"],\"enforcement_draft\":true}]"
+  alf_dispositions 2 "[{\"member\":\"$MEMBER\",\"finding_class\":\"holistic/unclassified\",\"path\":\"$key_path\",\"line\":140,\"disposition\":\"fix\",\"reason\":\"vetoed\",\"repair_paths\":[\"$settings\"],\"enforcement_draft\":true}]"
   alf_set_line "$settings" 2 allowed
   veto unsatisfied 2 || return 1
   alf_commit "fix(audit): commit the drafted settings repair"
-  review_round '[]' || return 1
+  dispatch audit-loop-unit
+  allowed || return 1
+  dispatch "$MEMBER" "$IN_UNIT"
+  allowed || return 1
+  [ "$(rounds)" -eq 3 ] || return 1
+  alf_stamp 3 30
+  alf_sidecar "$MEMBER" '[]' 31
+  # The key's reviewer reported nothing, but the repair path's owner was not dispatched.
+  veto unsatisfied 3 || return 1
+  dispatch "$repair_owner" "$IN_UNIT"
+  allowed || return 1
+  alf_sidecar "$repair_owner" '[]' 32
   veto satisfied 3 || return 1
+  alf_dispositions 3 '[]'
   check_all
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
