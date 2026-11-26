@@ -11,16 +11,17 @@
 #
 # snapshot refuses a dirty tree (untracked files count), otherwise writes one
 # JSON file holding the tree listing, a path and content-hash listing of the
-# local audit state and of the run folder, and HEAD's GAIA-Audit commit
+# local audit state and of the run folder, HEAD's GAIA-Audit commit
 # statuses (another integration's status landing during the review is not
 # the reviewer's write), and the own scope that decides which audit records are
 # this branch's. The audit listing leaves out records provably keyed
 # to another branch or head, since the audit directory is shared by every
 # lane's worktree (`audit_listing` owns the rule).
 # compare captures the same state again into --after, from the root, run
-# folder and own scope the snapshot recorded, and reports the first difference in this order:
-# the tree, the audit state, the GAIA-Audit statuses. --output-file names the one
-# file the tree listing ignores: the reviewer's own output.
+# folder and own scope the snapshot recorded, and reports the first difference
+# in this order: the tree, HEAD, the audit state and run folder, the
+# GAIA-Audit statuses. --output-file names the one file the tree listing
+# ignores: the reviewer's own output.
 #
 # Exit 0 clean, 1 the first difference (one line on stdout), 2 usage or an
 # environment that cannot answer (no jq, no hash tool, a `gh` that fails: a

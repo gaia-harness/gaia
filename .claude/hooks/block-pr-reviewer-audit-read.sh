@@ -42,7 +42,7 @@
 # building the whole path is not), an indirection through another tool, or a
 # subprocess that opens the file itself. The before/after check
 # (.gaia/scripts/pr-review-guard.sh) is the backstop for writes: it compares
-# the tree, the audit state (less records provably keyed to another branch),
+# the tree, the audit state (less records provably keyed to another branch or head),
 # the dispatch's run folder and HEAD's GAIA-Audit statuses around the dispatch.
 set -euo pipefail
 
