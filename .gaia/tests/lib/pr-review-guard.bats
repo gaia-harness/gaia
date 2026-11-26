@@ -204,3 +204,44 @@ marker_body() {
   run compare_after
   [ "$status" -eq 1 ]
 }
+
+@test "compare ignores a light input file another digest's lane writes" {
+  arm_branch_digests
+  mkdir -p "$AUDIT_DIRECTORY/light"
+  take_snapshot
+  printf '[]' >"$REVIEWER_OUTPUT"
+  printf 'input\n' >"$AUDIT_DIRECTORY/light/$FOREIGN_DIGEST.code-audit-frontend.input.md"
+  run compare_after
+  [ "$status" -eq 0 ]
+}
+
+@test "compare ignores a light verdict file another digest's lane writes" {
+  arm_branch_digests
+  mkdir -p "$AUDIT_DIRECTORY/light"
+  take_snapshot
+  printf '[]' >"$REVIEWER_OUTPUT"
+  printf '{}\n' >"$AUDIT_DIRECTORY/light/$FOREIGN_DIGEST.code-audit-frontend.verdict.json"
+  run compare_after
+  [ "$status" -eq 0 ]
+}
+
+@test "compare ignores a light folder temp file a concurrent route writes" {
+  arm_branch_digests
+  mkdir -p "$AUDIT_DIRECTORY/light"
+  take_snapshot
+  printf '[]' >"$REVIEWER_OUTPUT"
+  printf '{}\n' >"$AUDIT_DIRECTORY/light/.route.AbC123"
+  printf 'x\n' >"$AUDIT_DIRECTORY/light/.input.XyZ789"
+  run compare_after
+  [ "$status" -eq 0 ]
+}
+
+@test "compare stops on a light input file written at this branch's own digest" {
+  arm_branch_digests
+  mkdir -p "$AUDIT_DIRECTORY/light"
+  take_snapshot
+  printf '[]' >"$REVIEWER_OUTPUT"
+  printf 'input\n' >"$AUDIT_DIRECTORY/light/$OWN_DIGEST.code-audit-frontend.input.md"
+  run compare_after
+  [ "$status" -eq 1 ]
+}

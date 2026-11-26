@@ -113,7 +113,10 @@ listing_of_files() {
 #   - a marker (<64-hex digest>[.<member>].{ok,refused}) or a light route record
 #     (light/<digest>.<member>.route.json) whose digest is none of this
 #     branch's own member digests and whose recorded tree and commit are both
-#     absent from HEAD's recent history.
+#     absent from HEAD's recent history;
+#   - a light input or verdict file (light/<digest>.<member>.{input.md,verdict.json})
+#     whose digest is none of this branch's own member digests;
+#   - a light folder temp file (light/.<name>.XXXXXX).
 # Everything else stays, including any file that cannot be attributed. When
 # <own-digests> is empty or HEAD's history cannot be read, no marker or route
 # record is dropped (another branch's branch-keyed files still are). Dropping
@@ -150,7 +153,20 @@ audit_listing() {
       esac
       continue
     fi
+    # A light folder temp file (light/.route.XXXXXX, light/.input.XXXXXX) is a
+    # concurrent route's in-flight write that no reader opens.
+    if [[ "$relative" =~ ^light/\.[^/]+$ ]]; then
+      printf '%s\n' "$file" >>"$scratch/dropped"
+      continue
+    fi
     [ -n "$own_digests" ] && [ -n "$recent" ] || continue
+    # A light input or verdict file is read only at its own digest and has no
+    # recorded tree to check, so another digest's file is dropped on the digest.
+    if [[ "$relative" =~ ^light/([0-9a-f]{64})\.[^./]+\.(input\.md|verdict\.json)$ ]]; then
+      digest="${BASH_REMATCH[1]}"
+      grep -qx -- "$digest" <<<"$own_digests" || printf '%s\n' "$file" >>"$scratch/dropped"
+      continue
+    fi
     if [[ "$relative" =~ ^([0-9a-f]{64})(\.[^./]+)?\.(ok|refused)$ ]] ||
       [[ "$relative" =~ ^light/([0-9a-f]{64})\.[^./]+\.route\.json$ ]]; then
       digest="${BASH_REMATCH[1]}"
