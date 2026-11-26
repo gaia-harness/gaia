@@ -157,17 +157,29 @@ mgf_commit() {
 # mgf_record <number> <is-cross-repository> <title> [<changed-path>...]: the
 # pull request every `gh pr view` answers with, its head at the CURRENT local
 # HEAD, so call it after the commits that make up the pull request. Its body
-# carries the head stamp for that HEAD, which every audited allow requires.
+# carries the head stamp for that HEAD, which every audited allow requires, and
+# a complete `## PR review` section (no findings) for it, which every allow
+# requires too; `headRefName` is the sandbox's branch, the key the review
+# record is found by.
 mgf_record() {
-  local number="$1" cross="$2" title="$3" head base_branch="${CATCHUP_BASE_BRANCH:-main}"
+  local number="$1" cross="$2" title="$3" head base_branch="${CATCHUP_BASE_BRANCH:-main}" head_ref
   shift 3
   head="$(git -C "$REPO" rev-parse HEAD)"
+  head_ref="$(git -C "$REPO" rev-parse --abbrev-ref HEAD)"
   printf '%s\n' "$@" | jq -R -s -c \
-    --argjson number "$number" --argjson is_cross_repository "$cross" --arg title "$title" --arg head_object_id "$head" --arg base_branch "$base_branch" \
-    '{number: $number, isCrossRepository: $is_cross_repository, title: $title, baseRefName: $base_branch, headRefOid: $head_object_id,
-      body: ("Summary.\n\n<!-- gaia-pr-body-head: " + $head_object_id + " -->"),
+    --argjson number "$number" --argjson is_cross_repository "$cross" --arg title "$title" --arg head_object_id "$head" --arg base_branch "$base_branch" --arg head_ref "$head_ref" \
+    '{number: $number, isCrossRepository: $is_cross_repository, title: $title, baseRefName: $base_branch, headRefOid: $head_object_id, headRefName: $head_ref,
+      body: ("Summary.\n\n<!-- gaia-pr-body-head: " + $head_object_id + " -->\n\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head_object_id + "\nNo findings.\n<!-- gaia:pr-review:end -->"),
       files: (split("\n") | map(select(length > 0)) | map({path: .}))}' \
     > "$MGF_STUB_DIRECTORY/record.json"
+  # Opt-in: a suite whose allows rest on a complete review sets
+  # MGF_PLANT_REVIEW, and the local record the gates require is planted for this
+  # head (the section above never stands in for it). A suite that tests a
+  # missing record leaves it unset.
+  if [ -n "${MGF_PLANT_REVIEW:-}" ]; then
+    . "$MGF_REPO_ROOT/.gaia/tests/helpers/plant-review-record.sh"
+    plant_review_record "$head_ref" "$number" "$head" "$REPO"
+  fi
 }
 
 # mgf_member_digest <member>: the member's branch-own digest for REPO's HEAD

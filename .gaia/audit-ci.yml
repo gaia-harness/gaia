@@ -298,6 +298,9 @@ auditors:
       - ".gaia/scripts/audit-pr-sections-lib.sh"
       - ".gaia/scripts/audit-recorded-decision-lib.sh"
       - ".gaia/scripts/audit-decided-unattended-lib.sh"
+      - ".gaia/scripts/pr-body-sections-lib.sh"
+      - ".gaia/scripts/pr-review-record.sh"
+      - ".gaia/scripts/pr-review-record-lib.sh"
       - ".gaia/scripts/filing-outcomes-lib.sh"
       - ".gaia/scripts/audit-fix-verify.sh"
       - ".gaia/scripts/audit-fix-verify-state-lib.sh"
@@ -474,6 +477,9 @@ unowned:
   - ".gaia/migrations/**"
   - ".claude/agents/worthiness-evaluator.md"
   - ".claude/agents/security-test-writer.md"
+  # A read-only reviewer no member's remit region covers: the main thread acts
+  # on its verdict, so it is declared unowned by name.
+  - ".claude/agents/pr-reviewer.md"
   - ".claude/commands/**/*.md"
   - ".claude/loop.md"
   - ".gaia/cli/health/**/*.md"

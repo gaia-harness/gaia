@@ -46,12 +46,12 @@ _decided_unattended_section() {
     0 | 1) ;;
     *) _error "the machine-local reference screen could not run (exit $local_status)"; return 3 ;;
   esac
-  jq -r -n --arg texts "$texts" --argjson clean "$clean" --arg local_lines "$local_lines" '
+  jq -r -n --arg heading "$PR_BODY_HEADING_DECIDED_UNATTENDED" --arg texts "$texts" --argjson clean "$clean" --arg local_lines "$local_lines" '
     ($local_lines | [scan("^line ([0-9]+):"; "m")[0] | tonumber]) as $local_hits
     | ($texts | split("\n")) as $rows
     | [range(0; $rows | length) | select($clean[.] == true and ((. + 1) | IN($local_hits[]) | not)) | "- \($rows[.])"] as $shown
     | (($rows | length) - ($shown | length)) as $withheld
-    | (["## Decided unattended", ""] + $shown
+    | ([$heading, ""] + $shown
        + (if $withheld > 0 then ["- \($withheld) decision(s) withheld: text failed the secret or machine-local reference screen"] else [] end))
     | join("\n")' || return 3
 }

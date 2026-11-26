@@ -40,6 +40,8 @@ Then publish from the worktree. Every run that reaches this point is a worktree 
 On a manifest-only run, first run `bash .gaia/scripts/resolve-audit-members.sh`; when it names a member other than `code-audit-frontend`, dispatch the `audit-loop-unit` agent per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`. Whenever the run changed `.gaia/cli/package.json`, `code-audit-maintainer-node` is among them. If the `pnpm -C .gaia/cli bundle` rebuild moved a committed `.gaia/cli` bundle file (Phase 8's `git add -A` picks up only a bundle that actually moved), the diff is NOT manifest-only, so `code-audit-frontend` is owed too, same as any other member. Otherwise, on a manifest-only run, the `chore(deps)` title waives only `code-audit-frontend` (see the bypass paragraph in `wiki/concepts/Audit Gate Reference.md`), so each other member's earned marker is what completes the handshake. Skip this and `GAIA-Audit` stays at `members pending` and the queued merge waits on it indefinitely. Once `wiki/concepts/PR Merge Workflow.md` `#### Posting the status last` conditions hold, post the status per that section before the merge call below.
 <!-- gaia:maintainer-only:end -->
 
+Run the PR review per `wiki/concepts/PR Merge Workflow.md` `#### PR review` before the merge.
+
 ```bash
 gh pr merge <N> --squash --delete-branch --auto
 ```

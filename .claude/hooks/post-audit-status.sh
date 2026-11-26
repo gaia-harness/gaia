@@ -68,6 +68,12 @@
 #   The SUCCESS arm also declines while audit-gate-owed.sh reports owed work or
 #   cannot answer; the REFUSAL arm reads neither.
 #
+#   The SUCCESS arm also declines while the PR's review record is incomplete
+#   (an undecided finding, an unfixed fix finding, a review that did not run,
+#   or a PR body section out of step with the record): GitHub auto-merge never
+#   runs the merge hook, so this status is the only place it can be held. The
+#   REFUSAL arm never reads the review record.
+#
 #   The REFUSAL arm skips the member-aware gate by design (see Purpose above),
 #   so none of the roster conditions above bound it. Re-arming that gate here
 #   would be a regression rather than a tightening: it would withhold the

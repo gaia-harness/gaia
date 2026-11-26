@@ -273,6 +273,19 @@ describe('extractPathRefs', () => {
         notContain: ['.claude/skills/react-doctor'],
         text: 'skill_directory="$package_directory/.claude/skills/react-doctor"\n',
       },
+      {
+        contain: [],
+        // pr-review-bundle.sh probes the adopter's own pull request template
+        // candidates with git ls-files and treats a missing one as absent. They
+        // are never sourced or executed, so the exact tokens are allowlisted.
+        file: '.gaia/scripts/pr-review-bundle.sh',
+        name: 'skips the allowlisted adopter pull request template probes',
+        notContain: [
+          '.github/pull_request_template.md',
+          '.github/PULL_REQUEST_TEMPLATE.md',
+        ],
+        text: 'git -C "$root" ls-files --error-unmatch .github/pull_request_template.md .github/PULL_REQUEST_TEMPLATE.md\n',
+      },
     ]
   )('$name', (row) => {
     for (const paths of pathsPerLine(row)) {

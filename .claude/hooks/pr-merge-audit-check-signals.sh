@@ -118,12 +118,13 @@ pr_record_head=""
 pr_record_number=""
 pr_record_files=""
 pr_record_body=""
+pr_record_head_ref=""
 resolve_pr_record() {
   [ -z "$pr_record_read" ] || return 0
   pr_record_read=yes
 
   command -v gh >/dev/null 2>&1 || return 0
-  pr_record=$(gh pr view --json title,baseRefName,headRefOid,number,files,body 2>/dev/null || true)
+  pr_record=$(gh pr view --json title,baseRefName,headRefOid,headRefName,number,files,body 2>/dev/null || true)
   [ -n "$pr_record" ] || return 0
 
   # `// ""` so a JSON null reaches the callers as the same empty string an
@@ -137,6 +138,7 @@ resolve_pr_record() {
   pr_record_number=$(printf '%s' "$pr_record" | jq -r '.number // ""' 2>/dev/null || true)
   pr_record_files=$(printf '%s' "$pr_record" | jq -r '(.files // [])[] | .path // empty' 2>/dev/null || true)
   pr_record_body=$(printf '%s' "$pr_record" | jq -r '.body // ""' 2>/dev/null || true)
+  pr_record_head_ref=$(printf '%s' "$pr_record" | jq -r '.headRefName // ""' 2>/dev/null || true)
 }
 
 # gate_require_body_stamp: deny unless the PR body's head stamp names the head
@@ -155,6 +157,58 @@ gate_require_body_stamp() {
   fi
   if [ -z "$pr_record_head" ] || ! stamp_reason="$(pr_body_stamp_verdict "$pr_record_body" "$pr_record_head")"; then
     gate_emit_deny "PR merge gate: ${stamp_reason}. Re-check the PR summary against the branch's commits and diff (wiki/concepts/PR Merge Workflow.md, #### Posting the status last), run \`.gaia/scripts/pr-body-stamp.sh write\`, then retry gh pr merge."
+  fi
+}
+
+# gate_require_pr_review <out-of-scope 0|1>: deny unless the pull request's
+# review record is complete (.claude/hooks/lib/pr-review-verdict.sh). Called on
+# every allow path, before any bypass stamp, so an unreviewed pull request
+# never gets one. The record lives under the main checkout's run folder, found
+# through the PR's head branch name. Only presence and completeness are read,
+# never a finding's content. On the out-of-scope path the verdict also checks
+# the commits after the reviewed head against the base tip, which is the
+# remote-tracking ref of the base branch the record names, empty (so no merge
+# is exempt) when that ref does not verify.
+gate_require_pr_review() {
+  local out_of_scope="${1:-0}" review_reason review_record base_tip="" release_merge_base=""
+  resolve_pr_record
+  # shellcheck source=lib/pr-review-verdict.sh
+  if [ ! -f "$_library_directory/pr-review-verdict.sh" ] || ! . "$_library_directory/pr-review-verdict.sh"; then
+    gate_emit_deny "PR merge gate: cannot load .claude/hooks/lib/pr-review-verdict.sh, so it cannot check the PR review record. Restore it (it ships with the framework) and retry."
+  fi
+  if [ -z "$pr_record_number" ] || [ -z "$pr_record_head" ] || [ -z "$pr_record_head_ref" ]; then
+    gate_emit_deny "BLOCKED: PR review: the pull request record could not be read, so the review record cannot be checked."
+  fi
+  # A release pull request needs no review record. The base is the merge base
+  # of the record's own base and head, never a local ref, so a branch cannot
+  # pick the base its release claim is measured against.
+  # The title prefix test keeps the base lookup off every other pull request.
+  case "$pr_record_title" in "chore(release): v"*) gate_resolve_base ;; esac
+  if [ "$gate_anchor" = pr-record ] && [ -n "$gate_base" ] \
+     && [ -f "$_library_directory/pr-review-waiver.sh" ] && . "$_library_directory/pr-review-waiver.sh" \
+     && release_merge_base="$(git -C "$tree_root" merge-base "$gate_base" "$pr_record_head" 2>/dev/null)" \
+     && pr_review_release_waived "$tree_root" "$pr_record_title" "$release_merge_base" "$pr_record_head"; then
+    return 0
+  fi
+  review_record="$(pr_review_load_record "$root" "$pr_record_head_ref")"
+  if [ "$out_of_scope" = 1 ]; then
+    gate_resolve_base
+    if [ "$gate_anchor" = pr-record ] && [ -n "$pr_record_base" ]; then
+      base_tip="$(git -C "$tree_root" rev-parse --verify --quiet "refs/remotes/origin/${pr_record_base}^{commit}" 2>/dev/null)" || base_tip=""
+    fi
+  fi
+  if ! review_reason="$(pr_review_verdict "$review_record" "$pr_record_number" "$pr_record_body" "$out_of_scope" "$tree_root" "$pr_record_head" "$base_tip")"; then
+    case "$review_reason" in
+      "no review record for PR #"*)
+        gate_emit_deny "BLOCKED: PR review: no review record for PR #${pr_record_number}. Run the PR review (wiki/concepts/PR Merge Workflow.md, #### PR review), dispose every finding, and re-post GAIA-Audit if a fix moved HEAD."
+        ;;
+      "commits after the review on PR #"*)
+        gate_emit_deny "BLOCKED: PR review: ${review_reason}"
+        ;;
+      *)
+        gate_emit_deny "BLOCKED: PR review: ${review_reason}."
+        ;;
+    esac
   fi
 }
 
