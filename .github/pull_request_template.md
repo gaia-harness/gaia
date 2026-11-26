@@ -1,6 +1,6 @@
 ## Summary
 
-<!-- What does this change, and why? One or two sentences. -->
+<!-- What does this change, and why? One or two sentences. Then, at the end of this section, one `Closes #<n>` line per issue the PR closes and a `Refs #<n>` or `Part of #<n>` line per issue it only touches. -->
 
 ## Type of change
 
