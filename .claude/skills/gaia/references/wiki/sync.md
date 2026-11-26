@@ -8,7 +8,7 @@ Contents: Playbook; Step 1: Read state and compute drift; Step 2: Drift cap chec
 
 Evaluate every commit between `wiki/.state.json` `last_evaluated_sha` and HEAD. For each, decide whether the wiki needs an update. Edit pages, log decisions, advance state. Sync commits nothing: its edits stay uncommitted, and the router lands them with the later stages' edits in the run's one commit (`gaia wiki chain commit`, `references/wiki.md` → "The run", step 6).
 
-Everything else that reads it, the statusline nudge included, is a read-only consumer. See `wiki/concepts/Wiki Sync.md` (The pieces).
+Which stage writes which `wiki/.state.json` field, and which readers (the statusline nudge among them) only read it: `wiki/concepts/Wiki Sync.md` (The pieces).
 
 ## Step 1: Read state and compute drift
 

@@ -101,7 +101,7 @@ This lens activates only for hook scripts; it does not apply to `.gaia/` or `.gi
 
 When a changed file is a `.bats` suite, the shared correctness core above still applies (it is bash), and additionally check that the suite **actually enforces what it claims**. A hollow assertion is worse than a missing one: it reports green forever and nobody looks again.
 
-- **Assertions that cannot fail**, per `.claude/rules/bats-assertions.md`. Flag either shape: the fixes are POSIX `[ ... ]` / `grep -qF ... <<<"$output" || return 1`, and `<positive-match-for-the-bad-case> && return 1`.
+- **Assertions that cannot fail.** `.claude/rules/bats-assertions.md` owns the shapes that never fail and their fixes: flag any such shape in the diff and name the rule's fix.
 - **A weakened or deleted assertion.** Read the diff's removals, not just its additions. An assertion deleted, loosened (an exact `[ "$output" = ... ]` downgraded to a substring grep), or a `@test` silently dropped is a coverage regression: the guarded script keeps its gate in name only. Require the diff to justify a removal; an unexplained one is a finding.
 - **`skip` that hides a failure.** A `skip` added to a previously-running test, or a guard broad enough to skip in CI (a missing-binary check that is always true there), silently retires coverage. A legitimate skip names a genuine unavailable precondition.
 
