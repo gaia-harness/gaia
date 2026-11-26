@@ -26,10 +26,13 @@
 # the gate reads that context. Prose cannot hold a boundary an agent has a
 # standing reason to cross. The only ways past a checkpoint are a selection of
 # the pinned question recorded by audit-loop-ask-grant.sh, a line a human
-# types (audit-loop-grant.sh), and a unit a human pre-granted in the autonomy
-# switch (THE AUTONOMY BUDGET).
+# types (audit-loop-grant.sh), this hook's own automatic continue from its own
+# inputs (AUTOMATIC CONTINUE AND HAND-OFF in audit-loop-automatic-lib.sh, the
+# rule's owner), and a unit a human pre-granted in the autonomy switch (THE
+# AUTONOMY BUDGET).
 #
-# THE AUTONOMY BUDGET. While the autonomy switch is live (autonomy_active), a
+# THE AUTONOMY BUDGET. Tried only where the automatic continue declines. While
+# the autonomy switch is live (autonomy_active), a
 # unit dispatch the decision would deny at a checkpoint is admitted as if a
 # grant of K had answered it, spending one unit from the budget
 # (.gaia/scripts/audit-budget-lib.sh owns the record and the limits), only
@@ -42,8 +45,8 @@
 # spend is appended to the decision log (autonomy_log_decision) before the
 # unit is recorded; the unit carries `budget: true` and admitted_on `grant`,
 # so its window lifts the same signals a human grant's does. Anything else
-# denies as an unanswered checkpoint, which an unattended run parks on, and
-# the deny names why no unit was spent.
+# hands off or denies as an unanswered checkpoint, which an unattended run
+# parks on, and the deny names why no unit was spent.
 #
 # WHAT IS BOUNDED. The branch, not the session. The history lives in one
 # state file under the main checkout's local state directory, keyed by the
@@ -93,9 +96,13 @@
 # re-read the state; run the dispositions check (every path, joins included);
 # join an already-recorded wave; link, close or carry over the pull request
 # record; freeze the knobs and the line config when absent; evaluate the
-# previous round when its snapshot is missing; read the context; decide. On an
+# previous round when its snapshot is missing; read the context; decide. A
+# checkpoint deny builds its pinned question in memory first; at a unit
+# dispatch the automatic continue is tried, then the budget, then the
+# hand-off, before an ordinary checkpoint. On an
 # allowed unit the hook appends its window to `history.units`, after any
-# reopened round; on an allowed member it records the round. A light reviewer dispatch stops after the
+# reopened round; a failed write of an automatic unit records the ordinary
+# checkpoint instead. On an allowed member it records the round. A light reviewer dispatch stops after the
 # audited root, the dirty check and the fork refusal: it allows there, before
 # any state is read.
 #
@@ -135,7 +142,9 @@
 #   `BLOCKED: audit checkpoint`    a context, cap, fallback or rubric
 #                                  checkpoint; always records a checkpoint with
 #                                  a fresh nonce and a pinned question,
-#                                  superseding any pending one.
+#                                  superseding any pending one. A hand-off
+#                                  checkpoint also carries `handoff: true` and
+#                                  asks no question.
 #   `BLOCKED: audit window`        a member dispatch past its unit's window;
 #                                  records nothing new.
 #   `BLOCKED: audit dispositions`  the dispositions check failed; its
@@ -344,23 +353,30 @@ corrupt_message() {
     "$BRANCH_KEY" "$why" "$state_file_path" "$state_file_path" "$state_file_path" "$stamp"
 }
 
-# checkpoint_message <state-json> <used> <trigger> <question-json>
+# checkpoint_message <state-json> <used> <trigger> <question-json> [<handoff:true|false>]
 checkpoint_message() {
-  local state_json="$1" used="$2" trigger="$3" question="$4" grant_round_count
+  local state_json="$1" used="$2" trigger="$3" question="$4" handoff="${5:-false}" grant_round_count
   grant_round_count=$(jq -r '.history.knobs.grant_rounds // 3' <<<"$state_json")
   printf 'BLOCKED: audit checkpoint on branch %s after %s rounds (%s).\n' "$BRANCH_KEY" "$used" "$trigger"
   jq -r '.history.rounds | to_entries[]
     | "  round \(.key + 1): A=\(.value.snapshot.A // "n/a") verdict=\(.value.snapshot.verdict // "unevaluated")"' <<<"$state_json"
-  printf '\nThis stops the loop for a human decision; it is not a defect and not a merge blocker.\n'
-  printf 'Interactive run: on the main thread of this session, ask this question with AskUserQuestion exactly as printed, passing the JSON below as the whole tool input (do not reword, reorder, add or drop an option). Inside an audit-loop-unit: stop with stop_reason checkpoint-deny and return; the main thread asks.\n'
-  # shellcheck disable=SC2016 # the backticks are a literal Markdown fence
-  printf '```json\n%s\n```\n' "$question"
-  printf 'The human may instead type one of these lines as the whole prompt, in this same session (the grant hook resolves the checkpoint by this session id when the session working directory is on another branch):\n'
+  if [ "$handoff" = true ]; then
+    printf '\n'
+    gaia_loop_handoff_instructions
+    printf 'A human present who wants to stay in this session instead may type one of these lines as the whole prompt (the grant hook resolves the checkpoint by this session id when the session working directory is on another branch):\n'
+  else
+    printf '\nThis stops the loop for a human decision; it is not a defect and not a merge blocker.\n'
+    printf 'Interactive run: on the main thread of this session, ask this question with AskUserQuestion exactly as printed, passing the JSON below as the whole tool input (do not reword, reorder, add or drop an option). Inside an audit-loop-unit: stop with stop_reason checkpoint-deny and return; the main thread dispatches the next unit, and the hook decides.\n'
+    # shellcheck disable=SC2016 # the backticks are a literal Markdown fence
+    printf '```json\n%s\n```\n' "$question"
+    printf 'The human may instead type one of these lines as the whole prompt, in this same session (the grant hook resolves the checkpoint by this session id when the session working directory is on another branch):\n'
+  fi
   printf 'Grant (type exactly as the whole prompt): %s\n' "$(gaia_loop_grant_line "$grant_round_count")"
   printf 'Accept (type exactly as the whole prompt): %s\n' "$(gaia_loop_accept_line)"
   [ -z "${BUDGET_NOTE-}" ] || printf 'Autonomy budget: no unit spent, because %s.\n' "$BUDGET_NOTE"
+  # A hand-off parks nothing: the fresh session it hands to continues the loop.
   # shellcheck disable=SC2016 # the backticks are literal text in the message
-  printf 'Unattended run (no human in the session: a headless, scheduled, or /loop run): never ask; park with `bash %s/autonomy-park.sh --reason audit-checkpoint --pr <n> --root %s`; when the park exits non-zero, print the Grant line above before stopping so the grant still reaches the human; print no continuation prompt.\n' "$scripts" "$root"
+  [ "$handoff" = true ] || printf 'Unattended run (no human in the session: a headless, scheduled, or /loop run): never ask; park with `bash %s/autonomy-park.sh --reason audit-checkpoint --pr <n> --root %s`; when the park exits non-zero, print the Grant line above before stopping so the grant still reaches the human; print no continuation prompt.\n' "$scripts" "$root"
   printf '\nClaude never writes the state file and never types or simulates these lines. A dispatch on an already-audited tree is still allowed.\n'
   # shellcheck disable=SC2016 # the backticks are literal text in the message
   printf 'Evidence and recommendation: `bash %s/audit-loop-eval.sh brief --root %s`.\n' "$scripts" "$root"
@@ -440,6 +456,24 @@ budget_answer() {
   decision_third_field=$((rounds_used + 1))
   decision_fourth_field=$(_gaia_loop_minimum $((rounds_used + GAIA_CONTEXT_UNIT_ROUNDS)) "$_GAIA_LOOP_HARD_CAP")
   BUDGET_SPENT=true
+}
+
+# record_checkpoint <handoff:true|false>: append the checkpoint run_decision
+# built in memory (its locals) in one write, then deny with its message. Every
+# checkpoint deny appends a new checkpoint; the latest is the one pending, so
+# this supersedes any earlier one, legacy ones included.
+record_checkpoint() {
+  WORKING_STATE=$(jq -c --argjson rounds_used "$used" --arg why "$trigger" --arg session_id "$session" --arg r "$root" \
+    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg nonce "$nonce" --argjson accept_is_eligible "$accept_is_eligible" --argjson pinned_question "$question" --argjson disputes "$disputes" --argjson handoff "$1" \
+    '.history.checkpoints += [{index: ((.history.checkpoints | length) + 1), at_round: $rounds_used, reason: $why,
+      recorded_at: $now, session_id: $session_id, audited_root: $r, nonce: $nonce, trigger: $why,
+      accept_eligible: $accept_is_eligible, question: $pinned_question, disputes: $disputes}
+      + (if $handoff then {handoff: true} else {} end)]' <<<"$WORKING_STATE") ||
+    finish_deny 'BLOCKED: the audit loop checkpoint could not build the checkpoint record. Fail-loud, not fail-open: retry the dispatch.'
+  gaia_loop_write_state "$file" "$WORKING_STATE" ||
+    finish_deny "BLOCKED: the audit loop checkpoint could not write $file. Fail-loud, not fail-open: check the directory and retry."
+  carry_over
+  finish_deny "$(checkpoint_message "$WORKING_STATE" "$used" "$trigger" "$question" "$1")"
 }
 
 # add_member <state-json> <index> : append $member to round <index> when absent.
@@ -559,7 +593,7 @@ run_decision() {
   local libs_failed=0 lookup_exit_status dirty_exit_status state_under_lock used round_index snapshot decision now stamp_file slug closing NEXT_STATE current_pr_number old_file closed=0
   local verb trigger decision_third_field decision_fourth_field accept_is_eligible cap extra nonce question in_unit reading ask_tokens ask_percent config view recommended context_line
   local round_cap round_cap_valid budget_trigger budget_cap_field hard_decision hard_verb
-  local admitted_on start_round through_round reopen
+  local admitted_on start_round through_round reopen automatic_answer checkpoint_state checkpoint_trigger disputes
   HELD=''
   trap 'exit 143' TERM INT HUP
   trap '[ -z "$HELD" ] || gaia_loop_unlock "$HELD"' EXIT
@@ -803,7 +837,6 @@ run_decision() {
   read -r ask_tokens ask_percent <<<"$config"
   config=$(gaia_loop_round_cap_effective "$main" "$WORKING_STATE") ||
     finish_deny 'BLOCKED: the audit loop checkpoint could not compute its round cap. Fail-loud, not fail-open: retry the dispatch.'
-  # shellcheck disable=SC2034 # round_cap_valid is read by the automatic continue
   read -r round_cap round_cap_valid <<<"$config"
   reading=$(gaia_context_read "$main" "$session" "$(date +%s)")
   [ -n "$reading" ] || reading=unparseable
@@ -827,7 +860,36 @@ run_decision() {
     finish_deny 'BLOCKED: the audit loop checkpoint got an unreadable decision. Fail-loud, not fail-open: retry the dispatch.'
   BUDGET_SPENT=false
   BUDGET_NOTE=''
+  AUTOMATIC=false
+  automatic_answer=ask
+  if [ "$verb" = deny ]; then
+    accept_is_eligible="$decision_third_field"
+    cap="$decision_fourth_field"
+    case "$accept_is_eligible $cap" in
+      "true true" | "true false" | "false true" | "false false") ;;
+      *) finish_deny 'BLOCKED: the audit loop checkpoint got an unreadable decision. Fail-loud, not fail-open: retry the dispatch.' ;;
+    esac
+  fi
+  if [ "$verb" = deny ] && [ "$trigger" != window ]; then
+    nonce=$(gaia_loop_new_nonce) ||
+      finish_deny 'BLOCKED: the audit loop checkpoint could not draw a checkpoint nonce. Fail-loud, not fail-open: retry the dispatch.'
+    recommended=$(gaia_loop_recommended "$trigger" "$(gaia_loop_accept_blockers "$main" "$root" "$WORKING_STATE" "$tree" "$snapshot")") || recommended=''
+    context_line=''
+    if [[ $reading =~ ^fresh\ [0-9]+\ ([0-9]+)$ ]]; then
+      context_line=$(gaia_context_line "${BASH_REMATCH[1]}" "$ask_tokens" "$ask_percent") || context_line=''
+    fi
+    disputes=$(gaia_loop_checkpoint_disputes "$run_directory" "$used") && question=$(gaia_loop_pinned_question "$BRANCH_KEY" "$nonce" "$used" "$GAIA_CONTEXT_UNIT_ROUNDS" "$accept_is_eligible" "$cap" "$trigger" "$reading" "$recommended" "$context_line" "$disputes") && [ -n "$question" ] ||
+      finish_deny "BLOCKED: the audit loop checkpoint could not build its pinned question (trigger $trigger). Fail-loud, not fail-open: retry the dispatch."
+  fi
   if [ "$verb" = deny ] && [ "$kind" = unit ]; then
+    automatic_answer=$(gaia_loop_automatic_answer "$trigger" "$question" "$reading" "$ask_tokens" "$context_line" "$disputes" \
+      "$(jq -r '(.allowance.answers | last | .kind) // ""' <<<"$WORKING_STATE")" "$round_cap_valid" "$used" "$round_cap") || automatic_answer=ask
+    checkpoint_state="$WORKING_STATE" checkpoint_trigger="$trigger"
+  fi
+  if [ "$automatic_answer" = automatic ]; then
+    verb=allow trigger=grant AUTOMATIC=true decision_third_field=$((used + 1))
+    decision_fourth_field=$(_gaia_loop_minimum $((used + GAIA_CONTEXT_UNIT_ROUNDS)) "$round_cap")
+  elif [ "$verb" = deny ] && [ "$kind" = unit ]; then
     # The budget is bounded by the hard cap, so a C-cap deny is judged again
     # against it; any other deny is the same under both caps.
     budget_trigger=$trigger budget_cap_field=$decision_fourth_field
@@ -842,12 +904,6 @@ run_decision() {
   case "$verb" in
     allow) ;;
     deny)
-      accept_is_eligible="$decision_third_field"
-      cap="$decision_fourth_field"
-      case "$accept_is_eligible $cap" in
-        "true true" | "true false" | "false true" | "false false") ;;
-        *) finish_deny 'BLOCKED: the audit loop checkpoint got an unreadable decision. Fail-loud, not fail-open: retry the dispatch.' ;;
-      esac
       if [ "$trigger" = window ]; then
         [ "$WORKING_STATE" = "$state_under_lock" ] ||
           gaia_loop_write_state "$file" "$WORKING_STATE" ||
@@ -855,27 +911,7 @@ run_decision() {
         carry_over
         finish_deny "$(window_message "$WORKING_STATE" "$used")"
       fi
-      nonce=$(gaia_loop_new_nonce) ||
-        finish_deny 'BLOCKED: the audit loop checkpoint could not draw a checkpoint nonce. Fail-loud, not fail-open: retry the dispatch.'
-      recommended=$(gaia_loop_recommended "$trigger" "$(gaia_loop_accept_blockers "$main" "$root" "$WORKING_STATE" "$tree" "$snapshot")") || recommended=''
-      context_line=''
-      if [[ $reading =~ ^fresh\ [0-9]+\ ([0-9]+)$ ]]; then
-        context_line=$(gaia_context_line "${BASH_REMATCH[1]}" "$ask_tokens" "$ask_percent") || context_line=''
-      fi
-      disputes=$(gaia_loop_checkpoint_disputes "$run_directory" "$used") && question=$(gaia_loop_pinned_question "$BRANCH_KEY" "$nonce" "$used" "$GAIA_CONTEXT_UNIT_ROUNDS" "$accept_is_eligible" "$cap" "$trigger" "$reading" "$recommended" "$context_line" "$disputes") && [ -n "$question" ] ||
-        finish_deny "BLOCKED: the audit loop checkpoint could not build its pinned question (trigger $trigger). Fail-loud, not fail-open: retry the dispatch."
-      # Every checkpoint deny appends a new checkpoint; the latest is the one
-      # pending, so this supersedes any earlier one, legacy ones included.
-      WORKING_STATE=$(jq -c --argjson rounds_used "$used" --arg why "$trigger" --arg session_id "$session" --arg r "$root" \
-        --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg nonce "$nonce" --argjson accept_is_eligible "$accept_is_eligible" --argjson pinned_question "$question" --argjson disputes "$disputes" \
-        '.history.checkpoints += [{index: ((.history.checkpoints | length) + 1), at_round: $rounds_used, reason: $why,
-          recorded_at: $now, session_id: $session_id, audited_root: $r, nonce: $nonce, trigger: $why,
-          accept_eligible: $accept_is_eligible, question: $pinned_question, disputes: $disputes}]' <<<"$WORKING_STATE") ||
-        finish_deny 'BLOCKED: the audit loop checkpoint could not build the checkpoint record. Fail-loud, not fail-open: retry the dispatch.'
-      gaia_loop_write_state "$file" "$WORKING_STATE" ||
-        finish_deny "BLOCKED: the audit loop checkpoint could not write $file. Fail-loud, not fail-open: check the directory and retry."
-      carry_over
-      finish_deny "$(checkpoint_message "$WORKING_STATE" "$used" "$trigger" "$question")"
+      record_checkpoint "$([ "$automatic_answer" = handoff ] && echo true || echo false)"
       ;;
     *) finish_deny 'BLOCKED: the audit loop checkpoint got an unreadable decision. Fail-loud, not fail-open: retry the dispatch.' ;;
   esac
@@ -898,14 +934,20 @@ run_decision() {
         finish_deny "BLOCKED: the audit loop checkpoint could not record reopened round $start_round. Fail-loud, not fail-open: check the checkout and retry."
     fi
     NEXT_STATE=$(jq -c --arg admitted_on_trigger "$admitted_on" --argjson start_round "$start_round" --argjson through_round "$through_round" --argjson unit_rounds "$GAIA_CONTEXT_UNIT_ROUNDS" \
-      --arg now "$now" --arg session_id "$session" --argjson budget "$BUDGET_SPENT" \
+      --arg now "$now" --arg session_id "$session" --argjson budget "$BUDGET_SPENT" --argjson automatic "$AUTOMATIC" \
       '.history.units = ((.history.units // []) + [{unit: (((.history.units // []) | length) + 1),
         start_round: $start_round, k: $unit_rounds, through_round: $through_round, admitted_on: $admitted_on_trigger,
         after_checkpoint: (.history.checkpoints | length), recorded_at: $now, session_id: $session_id}
-        + (if $budget then {budget: true} else {} end)])' <<<"$WORKING_STATE") ||
+        + (if $budget then {budget: true} else {} end) + (if $automatic then {automatic: true} else {} end)])' <<<"$WORKING_STATE") ||
       finish_deny 'BLOCKED: the audit loop checkpoint could not build the unit record. Fail-loud, not fail-open: retry the dispatch.'
-    gaia_loop_write_state "$file" "$NEXT_STATE" ||
-      finish_deny "BLOCKED: the audit loop checkpoint could not write $file. Fail-loud, not fail-open: check the directory and retry."
+    if ! gaia_loop_write_state "$file" "$NEXT_STATE"; then
+      # Nothing is admitted: an automatic unit that cannot be written leaves the
+      # ordinary checkpoint for a human, on the state as it stood before it.
+      [ "$AUTOMATIC" = true ] ||
+        finish_deny "BLOCKED: the audit loop checkpoint could not write $file. Fail-loud, not fail-open: check the directory and retry."
+      WORKING_STATE="$checkpoint_state" trigger="$checkpoint_trigger"
+      record_checkpoint false
+    fi
     carry_over
     finish_allow
   fi

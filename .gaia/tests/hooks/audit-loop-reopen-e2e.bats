@@ -96,6 +96,12 @@ below() {
   gaia_context_write "$ALF_ROOT" "$SID" "$((GAIA_CONTEXT_ASK_TOKENS_DEFAULT * 100 / 1000000))" "$((GAIA_CONTEXT_ASK_TOKENS_DEFAULT - 1))" 1000000 "$(date +%s)"
 }
 
+# no_reading: remove the session's reading. Below the line an enriching
+# checkpoint continues automatically; with no reading it pins and asks.
+no_reading() {
+  rm -f "$(gaia_context_file "$ALF_ROOT" "$SID")"
+}
+
 assert_allowed() {
   [ "$status" -eq 0 ] || { printf 'status %s: %s\n' "$status" "$output" >&2; return 1; }
   [ -z "$output" ] || { printf 'unexpected output: %s\n' "$output" >&2; return 1; }
@@ -571,12 +577,14 @@ fresh_fixture() {
         assert_allowed
         alf_state_edit '.history.rounds[2].snapshot.default_stop = false'
         veto_key 4
+        no_reading
         unit_dispatch
         assert_rubric_checkpoint
         ;;
       *)
         stop_case fixed
         veto_key 4
+        no_reading
         unit_dispatch
         assert_rubric_checkpoint
         [ "$(state_field '.history.rounds[2].snapshot.default_stop')" = true ]

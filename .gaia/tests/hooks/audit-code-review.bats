@@ -498,7 +498,7 @@ published_clause() {
   jq -c --argjson review "$review_json" '. + {review: $review}' <<<'{"total":1,"members":{"code-audit-shell":1},"grants":0}' >"$values"
   printf 'body\n' >"$body_in"
   bash "$SCRIPTS/audit-loop-record.sh" --pr 7 --values-json "$values" --body-in "$body_in" --body-out "$body_out" >/dev/null || return 1
-  sed -n 's/^.*human grants: [0-9]*; budget grants: [0-9]*; code review: //p' "$body_out"
+  sed -n 's/^.*human grants: [0-9]*; budget grants: [0-9]*; automatic grants: [0-9]*; code review: //p' "$body_out"
 }
 
 # published_clause_through_eval: the same clause, with the values taken from the
@@ -510,7 +510,7 @@ published_clause_through_eval() {
   jq -e 'has("review")' "$values" >/dev/null || return 1
   printf 'body\n' >"$body_in"
   bash "$SCRIPTS/audit-loop-record.sh" --pr 7 --values-json "$values" --body-in "$body_in" --body-out "$body_out" >/dev/null || return 1
-  sed -n 's/^.*human grants: [0-9]*; budget grants: [0-9]*; code review: //p' "$body_out"
+  sed -n 's/^.*human grants: [0-9]*; budget grants: [0-9]*; automatic grants: [0-9]*; code review: //p' "$body_out"
 }
 
 # --- the real merge gate and the audit-loop bound, with the record present and absent ---

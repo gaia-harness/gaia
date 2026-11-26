@@ -49,7 +49,9 @@
 # once a round exists), and leaves the key out when that prints nothing. With a
 # recorded round it adds `budget_grants`, the units the autonomy budget spent on
 # the branch or its pull request (gaia_audit_budget_count), left out at zero;
-# `grants` counts human answers only.
+# `grants` counts human answers only. It also adds `automatic_grants`, the units
+# the bound hook admitted on its own, left out at zero, never counted in `grants`
+# or `budget_grants`.
 # Exit 0 ok, 2 usage or no recorded round (unit-window: no unit;
 # pinned-question: no pending pinned question), 4 detached HEAD, 5 corrupt
 # state, an unreadable vetoes.json, or a branch that is not keyable, 6 jq or
@@ -346,7 +348,8 @@ _gaia_loop_cli() {
       subcommand_output="$(printf '%s' "$state" | jq -c '{total: (.history.rounds | length),
         members: (reduce .history.rounds[] as $round_entry ({}; reduce ($round_entry.members[]) as $member (.; .[$member] += [$round_entry.tree]))
                   | map_values(unique | length) | to_entries | sort_by(.key) | from_entries),
-        grants: ([.allowance.answers[] | select(.kind == "grant")] | length)}')" || return 1
+        grants: ([.allowance.answers[] | select(.kind == "grant")] | length)}
+        + (([.history.units[]? | select(.automatic == true)] | length) as $automatic | if $automatic > 0 then {automatic_grants: $automatic} else {} end)')" || return 1
       budget_keys=()
       while IFS= read -r budget_key_line; do budget_keys+=("$budget_key_line"); done < <(gaia_audit_budget_keys "$state" "$branch_key")
       subcommand_output="$(printf '%s' "$subcommand_output" | jq -c --argjson budget_grants "$(gaia_audit_budget_count "$main" ${budget_keys[@]+"${budget_keys[@]}"})" \

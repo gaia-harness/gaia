@@ -2,8 +2,9 @@
 #
 # Guard red-proofs for audit-loop-automatic-lib.sh and the round cap helpers in
 # audit-loop-allowance-lib.sh: each range and validity guard of
-# gaia_loop_round_cap_state, gaia_loop_round_cap_effective and the freeze is
-# broken in a scratch copy and a case goes red. The behavior itself is proved
+# gaia_loop_round_cap_state, gaia_loop_round_cap_effective and the freeze, and
+# each ask guard of gaia_loop_automatic_answer, is broken in a scratch copy and
+# a case goes red. The behavior itself is proved
 # through the bound hook (audit-loop-bound.bats), not here.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/scripts/tests/audit-loop-automatic-lib.bats < /dev/null
@@ -167,4 +168,36 @@ frozen_state() {
   mutate AUTO_LIB audit-loop-automatic-lib.sh -e 's/ | rubric:small-tail)/)/'
   probe gaia_loop_grant_window_trigger rubric:small-tail
   [ "$status" -eq 1 ]
+}
+
+# A question whose in-session grant leads under its plain label: with nothing
+# else at stake, below the line it continues automatically.
+IN_SESSION_LEAD='{"questions":[{"options":[{"label":"Continue audit in this session (Recommended)"},{"label":"Stop and file the remainder"}]}]}'
+
+# guard_holds <sed-expression> <trigger> <reading> <ask_tokens> <line> <disputes> <latest> <cap_valid> <used> <cap>:
+# the real lib asks on these arguments, and with the guard the expression
+# deletes it no longer does.
+guard_holds() {
+  local expression="$1"
+  shift
+  probe gaia_loop_automatic_answer "$1" "$IN_SESSION_LEAD" "${@:2}"
+  [ "$status" -eq 0 ] && [ "$output" = ask ] || { printf 'real lib: status %s output [%s]\n' "$status" "$output" >&2; return 1; }
+  mutate AUTO_LIB audit-loop-automatic-lib.sh -e "$expression"
+  probe gaia_loop_automatic_answer "$1" "$IN_SESSION_LEAD" "${@:2}"
+  AUTO_LIB="$SCRIPTS/audit-loop-automatic-lib.sh"
+  [ "$output" != ask ] || { printf 'mutant still asks: %s\n' "$expression" >&2; return 1; }
+}
+
+@test "automatic answer: each human-decision guard asks, and without it the answer is automatic" {
+  guard_holds 's/\[ "\$cap_valid" != true \] || //' rubric:enriching 'fresh 50000 1000000' 300000 300000 '[]' '' false 4 10
+  guard_holds 's/ || \[ "\$used" -ge "\$cap" \]//' rubric:enriching 'fresh 50000 1000000' 300000 300000 '[]' '' true 4 4
+  guard_holds 's/ || \[ "\$disputed" != false \]//' rubric:enriching 'fresh 50000 1000000' 300000 300000 '[{"path":"a","line":1,"severity":null,"reason":"x","repeated":false}]' '' true 4 10
+  guard_holds 's/ || \[ "\$latest_answer_kind" = accept \]//' rubric:enriching 'fresh 50000 1000000' 300000 300000 '[]' accept true 4 10
+}
+
+@test "automatic answer: each live-line and reading guard asks, and without it the answer continues or hands off" {
+  guard_holds 's/\[ "\$ask_tokens" -eq 0 \] || //' rubric:enriching 'fresh 50000 1000000' 0 300000 '[]' '' true 4 10
+  guard_holds 's/ || \[ -z "\$line" \]//' context 'fresh 50000 1000000' 300000 '' '[]' '' true 4 10
+  guard_holds 's/ || \[ "\$line" -eq 0 \]//' context 'fresh 50000 1000000' 300000 0 '[]' '' true 4 10
+  guard_holds 's/ || ! \[\[ \$reading =~ .* \]\]; then/; then/' context stale 300000 300000 '[]' '' true 4 10
 }

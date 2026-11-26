@@ -45,9 +45,9 @@ parse_section() {
   [ -z "$(printf '%s\n' "$section" | sed -n 3p)" ] || return 1
   [ "$(printf '%s\n' "$section" | sed -n 5p)" = "$END" ] || return 1
   line="$(printf '%s\n' "$section" | sed -n 4p)"
-  printf '%s\n' "$line" | grep -Eq '^Total rounds: [0-9]+; per member: (none|code-audit-[a-z0-9-]+ [0-9]+(, code-audit-[a-z0-9-]+ [0-9]+)*); human grants: [0-9]+; budget grants: [0-9]+\.$' || return 1
+  printf '%s\n' "$line" | grep -Eq '^Total rounds: [0-9]+; per member: (none|code-audit-[a-z0-9-]+ [0-9]+(, code-audit-[a-z0-9-]+ [0-9]+)*); human grants: [0-9]+; budget grants: [0-9]+; automatic grants: [0-9]+\.$' || return 1
   total="$(printf '%s\n' "$line" | sed -E 's/^Total rounds: ([0-9]+);.*/\1/')"
-  grants="$(printf '%s\n' "$line" | sed -E 's/.*human grants: ([0-9]+); budget grants: [0-9]+\.$/\1/')"
+  grants="$(printf '%s\n' "$line" | sed -E 's/.*human grants: ([0-9]+); budget grants: [0-9]+; automatic grants: [0-9]+\.$/\1/')"
   members="$(printf '%s\n' "$line" | sed -E 's/^.*per member: (.*); human grants: .*$/\1/')"
   if [ "$members" = none ]; then
     printf '%s %s\n' "$total" "$grants"
@@ -265,7 +265,7 @@ values_with_light() {
   : > "$TEMPORARY_DIRECTORY/in.md"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 0 ]
-  grep -qxF 'Total rounds: 3; per member: code-audit-frontend 3; light reviews: code-audit-frontend 2, code-audit-maintainer-shell 1; human grants: 1; budget grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
+  grep -qxF 'Total rounds: 3; per member: code-audit-frontend 3; light reviews: code-audit-frontend 2, code-audit-maintainer-shell 1; human grants: 1; budget grants: 0; automatic grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
 }
 
 @test "budget: budget grants render right after an unchanged human grants count, 0 when absent, and a bad count is refused" {
@@ -273,11 +273,11 @@ values_with_light() {
   printf '{"total":4,"members":{"code-audit-frontend":4},"grants":1,"budget_grants":1}\n' > "$TEMPORARY_DIRECTORY/values.json"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 0 ]
-  grep -qxF 'Total rounds: 4; per member: code-audit-frontend 4; human grants: 1; budget grants: 1.' "$TEMPORARY_DIRECTORY/out.md"
+  grep -qxF 'Total rounds: 4; per member: code-audit-frontend 4; human grants: 1; budget grants: 1; automatic grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
   printf '{"total":4,"members":{"code-audit-frontend":4},"grants":0}\n' > "$TEMPORARY_DIRECTORY/values.json"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/absent.md"
   [ "$status" -eq 0 ]
-  grep -qxF 'Total rounds: 4; per member: code-audit-frontend 4; human grants: 0; budget grants: 0.' "$TEMPORARY_DIRECTORY/absent.md"
+  grep -qxF 'Total rounds: 4; per member: code-audit-frontend 4; human grants: 0; budget grants: 0; automatic grants: 0.' "$TEMPORARY_DIRECTORY/absent.md"
   printf '{"total":4,"members":{},"grants":0,"budget_grants":-1}\n' > "$TEMPORARY_DIRECTORY/values.json"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/bad.md"
   [ "$status" -eq 2 ]
@@ -298,7 +298,7 @@ values_with_light() {
   cmp -s "$TEMPORARY_DIRECTORY/without.md" "$TEMPORARY_DIRECTORY/empty.md"
   cmp -s "$TEMPORARY_DIRECTORY/without.md" "$TEMPORARY_DIRECTORY/zeros.md"
   grep -qF 'light reviews' "$TEMPORARY_DIRECTORY/without.md" && return 1
-  grep -qxF 'Total rounds: 3; per member: code-audit-frontend 3; human grants: 1; budget grants: 0.' "$TEMPORARY_DIRECTORY/without.md"
+  grep -qxF 'Total rounds: 3; per member: code-audit-frontend 3; human grants: 1; budget grants: 0; automatic grants: 0.' "$TEMPORARY_DIRECTORY/without.md"
   printf 'case: %s\n' 'quick: an empty object and all-zero counts render exactly the line without the key' >&2
   values 0 '{}' 0
   : > "$TEMPORARY_DIRECTORY/in.md"
@@ -318,7 +318,7 @@ values_with_light() {
 
 @test "light: a body without the clause round-trips unchanged when the new values carry no light key" {
   values 3 '{"code-audit-frontend":3}' 1
-  printf 'Intro\n\n%s\n## Audit rounds\n\nTotal rounds: 3; per member: code-audit-frontend 3; human grants: 1; budget grants: 0.\n%s\n\nTail\n' \
+  printf 'Intro\n\n%s\n## Audit rounds\n\nTotal rounds: 3; per member: code-audit-frontend 3; human grants: 1; budget grants: 0; automatic grants: 0.\n%s\n\nTail\n' \
     "$START" "$END" > "$TEMPORARY_DIRECTORY/in.md"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 0 ]
@@ -352,7 +352,7 @@ values_with_quick() {
   : > "$TEMPORARY_DIRECTORY/in.md"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 0 ]
-  grep -qxF 'Total rounds: 0; per member: none; quick review, no full member: code-audit-frontend; human grants: 0; budget grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
+  grep -qxF 'Total rounds: 0; per member: none; quick review, no full member: code-audit-frontend; human grants: 0; budget grants: 0; automatic grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
   grep -qF 'light reviews' "$TEMPORARY_DIRECTORY/out.md" && return 1
   true
 }
@@ -362,7 +362,7 @@ values_with_quick() {
   : > "$TEMPORARY_DIRECTORY/in.md"
   record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 0 ]
-  grep -qxF 'Total rounds: 0; per member: none; light reviews: code-audit-frontend 2; quick review, no full member: code-audit-frontend, code-audit-maintainer-shell; human grants: 0; budget grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
+  grep -qxF 'Total rounds: 0; per member: none; light reviews: code-audit-frontend 2; quick review, no full member: code-audit-frontend, code-audit-maintainer-shell; human grants: 0; budget grants: 0; automatic grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
 }
 
 # ---------------------------------------------------------------------------
@@ -556,32 +556,32 @@ review_refused() {
   run bash "$SCRIPT" --pr 12 --values-json "$TEMPORARY_DIRECTORY/values.json" \
     --body-in "$TEMPORARY_DIRECTORY/in.md" --body-out "$TEMPORARY_DIRECTORY/out.md"
   [ "$status" -eq 0 ]
-  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0.' ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; automatic grants: 0.' ]
 }
 
 @test "review: a ran result renders its counts, denials and the estimated session cost" {
   render_review '{"outcome":"ran","added":12,"kept":9,"dropped":2,"unaccounted":1,"merged":1,"fixed":7,"kept_by_disposition":{"fixed":7,"waived":0,"filed":1,"accepted":0,"diverted":0,"open":1},"denials":2,"denial_tools":["Bash","Read"],"cost":2.08,"level":"high","model":"claude-opus-4-1","claude_version":"2.1.3"}'
   [ "$status" -eq 0 ]
-  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; code review: ran; added 12, kept 9, dropped 2, unaccounted 1, merged 1, fixed 7; denials 2 (Bash, Read); estimated cost $2.08 for the review session only.' ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; automatic grants: 0; code review: ran; added 12, kept 9, dropped 2, unaccounted 1, merged 1, fixed 7; denials 2 (Bash, Read); estimated cost $2.08 for the review session only.' ]
 }
 
 @test "review: ran, clean and ran, no findings render without finding counts" {
   render_review '{"outcome":"ran, clean","cost":1.45}'
   [ "$status" -eq 0 ]
-  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; code review: ran, clean; estimated cost $1.45 for the review session only.' ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; automatic grants: 0; code review: ran, clean; estimated cost $1.45 for the review session only.' ]
   render_review '{"outcome":"ran, no findings","denials":3,"denial_tools":["Bash"],"cost":1.02}'
   [ "$status" -eq 0 ]
-  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; code review: ran, no findings, 3 denials (Bash); estimated cost $1.02 for the review session only.' ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; automatic grants: 0; code review: ran, no findings, 3 denials (Bash); estimated cost $1.02 for the review session only.' ]
 }
 
 @test "review: not run and not needed render outcome, reason and cost, with no counts" {
   render_review '{"outcome":"not run","reason":"timed out","cost":"unknown"}'
   [ "$status" -eq 0 ]
-  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; code review: not run: timed out; estimated cost unknown.' ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; automatic grants: 0; code review: not run: timed out; estimated cost unknown.' ]
   render_review '{"outcome":"not run","reason":"no record","cost":"none"}'
-  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; code review: not run: no record; cost none.' ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; automatic grants: 0; code review: not run: no record; cost none.' ]
   render_review '{"outcome":"not needed","reason":"release branch","cost":"none"}'
-  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; code review: not needed: release branch; cost none.' ]
+  [ "$(sed -n 4p "$TEMPORARY_DIRECTORY/out.md")" = 'Total rounds: 1; per member: none; human grants: 0; budget grants: 0; automatic grants: 0; code review: not needed: release branch; cost none.' ]
 }
 
 @test "review: an unknown reason, a free-text field, a pending outcome, a bad model and counts on a not run all exit 2" {
@@ -592,4 +592,50 @@ review_refused() {
   review_refused '{"outcome":"not run","reason":"timed out","added":2,"cost":"none"}'
   review_refused '{"outcome":"not run","cost":"none"}'
   review_refused '{"outcome":"ran, clean","cost":1,"denial_tools":["rm -rf"]}'
+}
+
+# automatic_units_state <automatic-count>: a branch state with one human grant, a
+# pre-change unit (no `automatic` key) and <automatic-count> units marked automatic.
+automatic_units_state() {
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.gaia/tests/helpers/audit-loop-fixture.sh"
+  alf_init
+  alf_branch feat/automatic
+  alf_fill f.txt 3 feature
+  alf_commit "round 1"
+  alf_add_round '["code-audit-frontend"]'
+  alf_add_checkpoint 1 allowance
+  alf_add_answer 1 grant 2
+  # shellcheck disable=SC2016
+  alf_state_edit '.history.units = ([{unit: 1, start_round: 1, k: 3, through_round: 3, after_checkpoint: 1, admitted_on: "grant"}]
+    + [range(0; $automatic_count) | {unit: (. + 2), start_round: 1, k: 3, through_round: 3, after_checkpoint: 1, admitted_on: "context", automatic: true}])' \
+    --argjson automatic_count "$1"
+}
+
+@test "audit rounds record: automatic grants are counted from record-values apart from human and budget grants" {
+  local values_output
+  : > "$TEMPORARY_DIRECTORY/in.md"
+  automatic_units_state 2
+  values_output="$(bash "$REPO_ROOT/.gaia/scripts/audit-loop-eval.sh" record-values --root "$ALF_ROOT")"
+  [ "$(printf '%s' "$values_output" | jq -r '[.grants, .automatic_grants, (.budget_grants // 0)] | join(",")')" = "1,2,0" ]
+  printf '%s\n' "$values_output" > "$TEMPORARY_DIRECTORY/values.json"
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
+  [ "$status" -eq 0 ]
+  grep -qE 'human grants: 1; budget grants: 0; automatic grants: 2[.;]' "$TEMPORARY_DIRECTORY/out.md"
+  # Only the pre-change unit left: it counts 0, the key is left out, and the line reads 0.
+  alf_state_edit '.history.units |= map(select(.automatic != true))'
+  values_output="$(bash "$REPO_ROOT/.gaia/scripts/audit-loop-eval.sh" record-values --root "$ALF_ROOT")"
+  [ "$(printf '%s' "$values_output" | jq 'has("automatic_grants")')" = false ]
+  printf '%s\n' "$values_output" > "$TEMPORARY_DIRECTORY/values.json"
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/zero.md"
+  grep -qE 'human grants: 1; budget grants: 0; automatic grants: 0[.;]' "$TEMPORARY_DIRECTORY/zero.md"
+  # Beside a code-review clause the count sits right after the budget count.
+  printf '{"total":1,"members":{},"grants":0,"automatic_grants":1,"review":{"outcome":"ran, clean","cost":1.45}}\n' > "$TEMPORARY_DIRECTORY/values.json"
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/review.md"
+  [ "$status" -eq 0 ]
+  grep -qF 'budget grants: 0; automatic grants: 1; code review: ran, clean; ' "$TEMPORARY_DIRECTORY/review.md"
+  # A negative count is refused like a bad budget count.
+  printf '{"total":1,"members":{},"grants":0,"automatic_grants":-1}\n' > "$TEMPORARY_DIRECTORY/values.json"
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/bad.md"
+  [ "$status" -eq 2 ]
 }
