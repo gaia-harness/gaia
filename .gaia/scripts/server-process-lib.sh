@@ -232,7 +232,7 @@ _gaia_server_main() {
       done
       _gaia_server_is_integer "$pid" && [ "$pid" -gt 1 ] || { _gaia_server_usage; return 2; }
       _gaia_server_is_port "$port" || { _gaia_server_usage; return 2; }
-      case "$kind" in dev | storybook) ;; *) _gaia_server_usage; return 2 ;; esac
+      _gaia_server_kind_valid "$kind" || { _gaia_server_usage; return 2; }
       case "$tree_root" in /*) ;; *) _gaia_server_usage; return 2 ;; esac
       local state_directory
       state_directory="$(_gaia_server_state_directory "$tree_root")" || {

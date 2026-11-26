@@ -81,7 +81,7 @@ A candidate whose resolution is `gone` is labelled a likely-already-fixed dismis
 
 ## The three arms
 
-State the default posture explicitly before offering them: dismiss or keep is the default, and promotion is the exception that needs a reason. Offer the arms for each candidate as one `AskUserQuestion` with the options `Dismiss`, `Keep` and `Promote`, the arm the evidence supports leading and marked ` (Recommended)`; that is `Dismiss` for a `gone` or previously promoted candidate, and never `Promote` without a reason stated in its description. Promoting freely grows the backlog instead of draining it.
+State the default posture explicitly before offering them: dismiss or keep is the default, and promotion is the exception that needs a reason. Offer the arms for each candidate as one `AskUserQuestion` (header `Residual`) with the options `Dismiss`, `Keep` and `Promote`, the arm the evidence supports leading and marked ` (Recommended)`; that is `Dismiss` for a `gone` or previously promoted candidate, and never `Promote` without a reason stated in its description. Promoting freely grows the backlog instead of draining it.
 
 <!-- gaia:maintainer-only:start -->
 GAIA maintainers: before recommending an arm for a residual on a harness path, Read `.claude/maintainers/harness-triage-threshold.md`; never promote a residual it waives.
@@ -93,7 +93,7 @@ One human answer per residual, never batched, collected through an explicit user
 
 - **The finding class is the residual's own.** Pass the `class` carried in the candidate's `raw_key` verbatim as the recipe's `<finding_class>`, so the filed issue's dedup key is byte-identical to the residual's own key. Never mint a fresh class.
 - **`footprint:<class>`** comes from the recipe's own step 6 rubric, applied to the cited line the command has already read. It is a reach grade (`narrow`, `wide`, or `spec`), never the finding class above.
-- **`severity:<tier>`** comes from the recipe's own severity vocabulary, chosen from the residual's failure-mode text and its canonical disposition, and it is a judgment asked of the human after the promote answer, not guessed by the command: one more `AskUserQuestion` call asks it, the tier the failure mode suggests first and marked ` (Recommended)`, any tier past four options named in the question text, together with the `security` read below as a second question.
+- **`severity:<tier>`** comes from the recipe's own severity vocabulary, chosen from the residual's failure-mode text and its canonical disposition, and it is a judgment asked of the human after the promote answer, not guessed by the command: one more `AskUserQuestion` call asks it (header `Severity`), the tier the failure mode suggests first and marked ` (Recommended)`, any tier past four options named in the question text, together with the `security` read below as a second question (header `Security`) whose options are `Security-class (Recommended)`, the conservative read, and `Not security-class`.
   <!-- gaia:maintainer-only:start -->
 - **`audience:<side>`** comes from the cited path, per the recipe's own adopter/maintainer split. Maintainer repository only; scrubbed from adopter bundles.
   <!-- gaia:maintainer-only:end -->
@@ -104,7 +104,7 @@ When the recipe refuses to file because the key matches one of its own dedup arm
 
 ### Dismiss
 
-The safe arm, and the default. It may be offered in a batch, bounded by the batch size, and the batch takes an explicit confirmation that lists every entry it will dismiss before anything is appended, asked as an `AskUserQuestion`: `Dismiss them all (Recommended)` or `Review them one at a time`. Each dismissal appends one `dismissed` record.
+The safe arm, and the default. It may be offered in a batch, bounded by the batch size, and the batch takes an explicit confirmation that lists every entry it will dismiss before anything is appended, asked as an `AskUserQuestion` (header `Dismiss all`): `Dismiss them all (Recommended)` or `Review them one at a time`. Each dismissal appends one `dismissed` record.
 
 ### Keep
 

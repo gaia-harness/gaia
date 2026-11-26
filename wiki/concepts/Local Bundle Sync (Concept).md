@@ -4,7 +4,7 @@ status: active
 created: 2026-10-27
 updated: 2026-10-27
 promoted_at: 2026-10-26T20:41:00Z
-promoted_hash: sha256:98998035aadad2b612b8bea91c8dbb9b70ab5a1c29eb092cd47b380a95db458d
+promoted_hash: sha256:43f862fcb719275609ad6c26d8598ae2f899f0c162dcce97055cc74d54233187
 pr_number: 3110
 tags: [update-gaia, distribution, promoted]
 ---
@@ -53,7 +53,7 @@ The local path ships to adopters behind the explicit opt-in rather than living i
 
 ## Divergence
 
-The stated contract said a `-dev` tag sorts below its plain release "under sort -V and semver". GNU and BSD `sort -V` rank `v2.2.0-dev.<sha>` above `v2.2.0`, so the shipped code ranks cached tags by semver only and uses `sort -V` on no tag. The stated contract also left open which tag a deferral records on a local sync; it records the run's baseline tag, never the target build's.
+See [[Local Bundle Sync (Decision)#Divergence]].
 
 ## Related
 

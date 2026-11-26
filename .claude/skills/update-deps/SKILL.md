@@ -136,13 +136,14 @@ out of the discovery payload and the statusline count.
   row's `installCommand` as text. No prompt, no error.
 - **`status` is `current` or `unknown`**: report the row only.
 - **Interactively with `offerInstall: true`**: show the row, then ask with
-  `AskUserQuestion` (single-select): **Upgrade playwright-cli to `<latest>`
+  `AskUserQuestion` (header `Playwright`, single-select): **Upgrade playwright-cli to `<latest>`
   globally** (first, marked ` (Recommended)`) or **Skip**. Only after the Upgrade answer, run
   `npm install -g @playwright/cli@latest`. Record `upgraded` or `declined` as
   the action taken.
+
 - **Interactively with `offerBump: true`** (the react-doctor row, which
   reports the `.gaia/react-doctor-version` pin): show the row, then ask with
-  `AskUserQuestion` (single-select): **Bump the react-doctor pin to
+  `AskUserQuestion` (header `React Doctor`, single-select): **Bump the react-doctor pin to
   `<latest>`** (first, marked ` (Recommended)`) or **Skip**. Put this warning
   in the Bump option's description: the pin and `.gaia/templates/react-doctor/`
   are GAIA-owned, so a later GAIA release that moves them raises a merge
@@ -308,7 +309,7 @@ snoozes AND any newly named), or the omitted ones are dropped from the ledger.
   ```
   Each name expands to its whole companion group (a partial group cannot be
   skipped); an unknown name errors so you can re-ask. Apply set = the payload
-  minus the skip set. Confirm the resulting apply set with `AskUserQuestion`:
+  minus the skip set. Confirm the resulting apply set with `AskUserQuestion` (header `Apply set`):
   **Apply these** (Recommended) or **Change the skip set**.
   **If the apply set is now empty** (everything is skipped), print
   `Snoozed N group(s); nothing else to update.`, then continue as a

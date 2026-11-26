@@ -10,7 +10,7 @@ tags: [dependency, storybook]
 
 # Storybook
 
-Component-Driven Development environment. v10 with `@storybook/react-vite`. Stories are CSF Next (CSF4) only, with `features.experimentalTestSyntax` on in `.storybook/main.ts` so a story carries `.test()` behaviors; [[Stories as Tests]] owns the doctrine.
+Component-Driven Development environment. [[Stories as Tests]] owns the doctrine. See [[Storybook Stories]].
 
 ## Companion packages
 

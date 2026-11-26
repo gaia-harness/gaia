@@ -7,7 +7,7 @@ The one statement of how a new project or clone gets pnpm and Chromium, and of h
 The caller's `toolchain-check.sh` call exited 1. Bring each short tool up to its latest release (node: the floor's major) in this run, rather than stopping. For each `BELOW` or `MISSING` line, show the tool, its installed version and its floor with its `GUIDE` line verbatim, then act on that tool's `ROUTE` line by its class:
 
 - **pnpm**, whatever its class: run `## pnpm` below instead.
-- **`run`:** ask once with `AskUserQuestion`, naming the tool, the installed version, the floor and the exact command, with options `Install it (Recommended)` and `Stop`. On `Install it`, run the command.
+- **`run`:** ask once with `AskUserQuestion` (header `Toolchain`), naming the tool, the installed version, the floor and the exact command, with options `Install it (Recommended)` and `Stop`. On `Install it`, run the command.
 - **`user`:** the command needs `sudo`, whose password Claude cannot type. Give it to the user as `! <command>`, to type in the prompt so it runs in this session, and wait for them to say it ran.
 - **`terminal`:** the command is interactive, such as the Homebrew installer, or changes `PATH` that only a new shell sees, such as `winget`. Never run it. Tell the user to run it in a fresh terminal, then start Claude Code again from that terminal and re-run the command that stopped.
 - **No `ROUTE` line:** no exact command exists for this machine. The user updates the tool by its `GUIDE` line, then says so.
@@ -28,7 +28,7 @@ Branch on its first word:
 
 **`MISSING`:** tell the user "Installing pnpm globally: `corepack disable pnpm`, if corepack is here, then `npm install -g pnpm@latest`", then run the block below, then continue.
 
-**`BELOW`:** a stale pnpm. Do not silently proceed. Ask with `AskUserQuestion` for consent before touching the user's toolchain, naming the installed version and the floor from that line, with exactly these two options:
+**`BELOW`:** a stale pnpm. Do not silently proceed. Ask with `AskUserQuestion` (header `pnpm update`) for consent before touching the user's toolchain, naming the installed version and the floor from that line, with exactly these two options:
 
 - **Yes (Recommended)**: "Update pnpm globally: `corepack disable pnpm`, if corepack is here, then `npm install -g pnpm@latest`. Required to continue."
 - **No**: "Keep the current pnpm and stop. Nothing has been changed, so it's safe to exit and re-run later."

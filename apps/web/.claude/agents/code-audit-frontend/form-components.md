@@ -23,4 +23,4 @@ Flag, in every other `.tsx` file:
 | a GAIA wrapper per control type (Input, Select, Checkbox), or one that renders the control itself | the ui control as `ConformField`'s child                                                      |
 | a disabled link standing in for a disabled action                    | a disabled `ui/button`                                                                        |
 
-Exceptions (native OK): `<input type="hidden">`, `<input type="file">`, `<input type="range">`.
+See `apps/web/.claude/skills/react-code/SKILL.md` (Gate 2: Form Element Check).

@@ -23,7 +23,7 @@ Default.test('shows the required error', async ({canvas}) => {
 > [!warning] Never manually mock framework deps
 > Don't mock `react-router`, `react-i18next`, or other framework deps. Use the stubs in `apps/web/test/stubs/` instead; they wire real providers with sensible defaults.
 
-`apps/web/test/stubs/` exposes `stubs.reactRouter()`, `stubs.state()`, etc. Apply as decorators in the component's story file under `tests/`; the same decorators serve Storybook, Chromatic and the Vitest run. Only mock **external services** or **utilities** the component imports directly.
+Apply as decorators in the component's story file under `tests/`; the same decorators serve Storybook, Chromatic and the Vitest run. Only mock **external services** or **utilities** the component imports directly. See [[Storybook Stories#Stubs]].
 
 ## Spying on a callback
 

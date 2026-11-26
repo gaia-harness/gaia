@@ -79,7 +79,7 @@ Wrote ../website/src/pages/changelog/releases/<version>.ts
 
 Omit a section if it's empty. Never drop something silently: if it didn't make the notes, it appears under Dropped or Needs a human ruling.
 
-**Resolve every human ruling with `AskUserQuestion` before you finish**, one question per line, options `Keep` and `Drop`, the recommended one first and labelled `(Recommended)`. Put the proposed plain-language rewrite in the question so the maintainer rules on the text that would ship. Then apply the answers to the `.ts` file.
+**Resolve every human ruling with `AskUserQuestion` before you finish**, one question per line (header `Ruling`), options `Keep` and `Drop`, the recommended one first and labelled `(Recommended)`. Put the proposed plain-language rewrite in the question so the maintainer rules on the text that would ship. Then apply the answers to the `.ts` file.
 
 ## The rewriting rules
 

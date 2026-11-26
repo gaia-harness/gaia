@@ -72,6 +72,7 @@ SHAPES_NAMES=(
 )
 
 # The entries a play-body edit to Play With Tests must rotate.
+# subset of .gaia/tests/hooks/extract-test-signals-stories.bats#SHAPES_NAMES
 PLAY_SOURCE_NAMES=(
   "Play With Tests   base story"
   "Play With Tests   shows the marker"

@@ -147,7 +147,7 @@ Review this dimension only over paths whose `LENSES=` line lists `accessibility`
 - **Images**: `<img>` must have descriptive `alt` or `alt=""` for decorative images
 - **Color**: Never the sole indicator of meaning, pair with text or icons
 - **Focus management**: Modals/dialogs receive focus on open, return to trigger on close
-- **ARIA**: `aria-live="polite"` for dynamic updates (toasts), `aria-expanded`/`aria-controls` for disclosure widgets, `aria-label` only when visible text is insufficient
+- **ARIA**: `aria-label` only when visible text is insufficient. See `apps/web/.claude/agents/code-audit-frontend/react-buckets.md` (React Patterns & Accessibility (react-patterns)).
 
 ### 6. Maintainability
 

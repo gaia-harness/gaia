@@ -93,15 +93,8 @@ is_settings_path() {
   [[ "$candidate_path" == ".claude/settings.json" || "$candidate_path" == */.claude/settings.json ]]
 }
 
-case "$GAIA_HOOK_TOOL_NAME" in
-  Bash | Monitor)
-    command_line="$GAIA_HOOK_COMMAND"
-    [[ -n "$command_line" ]] || exit 0
-    gaia_bash_command_writes_target "$command_line" is_settings_path && ask
-    exit 0
-    ;;
-
-  *)
-    exit 0
-    ;;
-esac
+gaia_hook_is_command_tool "$GAIA_HOOK_TOOL_NAME" || exit 0
+command_line="$GAIA_HOOK_COMMAND"
+[[ -n "$command_line" ]] || exit 0
+gaia_bash_command_writes_target "$command_line" is_settings_path && ask
+exit 0

@@ -204,6 +204,7 @@ const GRAPH_KINDS: readonly FileKind[] = [
 const hasKind = (file: ProjectFile, kinds: readonly FileKind[]): boolean =>
   kinds.some((kind) => file.kinds.includes(kind));
 
+// subset of .gaia/cli/src/fitness/types.ts#FileKind
 const REFERENCE_KINDS: readonly FileKind[] = ['reference', 'playbook'];
 
 type EdgeMap = ReadonlyMap<string, readonly LinkEdge[]>;

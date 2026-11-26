@@ -4,7 +4,7 @@
  * `run`'s only additions over those four are argv parsing and printing.
  */
 import {describe, expect, test} from 'vitest';
-import {LABEL_FEATURES} from '../../schemas/labels.js';
+import {LABEL_AUDIENCES, LABEL_FEATURES} from '../../schemas/labels.js';
 import type {
   LabelAudience,
   LabelEntry,
@@ -30,7 +30,7 @@ const registry = readRegistry(repoRoot);
 
 const ALL_FEATURES: LabelFeature[] = [...LABEL_FEATURES];
 
-const AUDIENCES: LabelAudience[] = ['adopter', 'maintainer'];
+const AUDIENCES: LabelAudience[] = [...LABEL_AUDIENCES];
 
 const NO_FLAGS: SyncFlags = {
   adopt: false,

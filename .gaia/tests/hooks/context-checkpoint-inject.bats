@@ -622,9 +622,9 @@ mark_band() {
   git -C "$spaced_root" commit -q --allow-empty -m init
   MAIN_ROOT="$(cd "$spaced_root" && pwd -P)"
   install_hook "$MAIN_ROOT"
-  printf 'A line with a "quote", a back\\slash and a trailing \\\n' >>"$DOCTRINE"
-  grep -qF '"quote"' "$DOCTRINE"
-  grep -qF 'back\slash' "$DOCTRINE"
+  printf '"q" b\\s \\\n' >>"$DOCTRINE"
+  grep -qF '"q"' "$DOCTRINE"
+  grep -qF 'b\s' "$DOCTRINE"
   [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -le 3584 ]
   write_reading "$RED"
   invoke "$(payload "$MAIN_ROOT")"

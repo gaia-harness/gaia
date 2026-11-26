@@ -72,7 +72,7 @@ When a gate ran, copy its log to `<RUN_FOLDER>/simplify-gate.log` with one plain
 bash .gaia/scripts/simplify-discard.sh --root <RESOLVED_ROOT> --patch <RUN_FOLDER>/simplify-discarded.patch
 ```
 
-Exit 0 records `Result: discarded` and the run continues. Any other exit, or a denied call, halts: the edits are in the tree, or in the patch when the stderr line says the reset failed. Append `## Simplify pass (HALTED)` with that stderr line or the denial, a heading step 1 does not match, then ask one `AskUserQuestion`, `Stay halted (Recommended)` first, then `Discuss this`, and append the pick as `Answered: <label>`.
+Exit 0 records `Result: discarded` and the run continues. Any other exit, or a denied call, halts: the edits are in the tree, or in the patch when the stderr line says the reset failed. Append `## Simplify pass (HALTED)` with that stderr line or the denial, a heading step 1 does not match, then ask one `AskUserQuestion` (header `Simplify`), `Stay halted (Recommended)` first, then `Discuss this`, and append the pick as `Answered: <label>`.
 
 ### 7. Report
 

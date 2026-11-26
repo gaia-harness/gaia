@@ -62,11 +62,9 @@ rules for the Socratic loop:
 1. **Closed-set questions use `AskUserQuestion`** with recommended
    option first, up to two ranked alternatives next (name any further
    viable one in the question text), then `Discuss this` (drops to
-   plain Q&A): at most four options. Never list `Other`, which the
-   tool supplies, or `Save partial and resume later`, which the user
-   reaches through `Other` or `Discuss this` (see `clarify-loop.md`,
-   `## Escape option`). See `clarify-prompts.md` for the templates and
-   `.claude/rules/user-questions.md` for the general rule.
+   plain Q&A): at most four options. See
+   `.claude/skills/gaia/references/spec/clarify-prompts.md` (Rule 2:
+   Closed-set questions use `AskUserQuestion`).
 2. **Open-ended questions use plain prompts.** No enumerated options
    when enumeration would be reductive.
 3. **Per-topic exhaustion checkpoint is required.** When you run out

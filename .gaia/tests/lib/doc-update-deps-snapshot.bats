@@ -76,19 +76,24 @@ check_no_lockfile_copy() {
 # 2. Each recipe takes and restores a git baseline
 # ---------------------------------------------------------------------------
 
+# check_git_baseline <recipe> <needle>...: every needle appears in the recipe.
 check_git_baseline() {
-  local needle
-  for needle in "$BASELINE_CREATE" "$BASELINE_FALLBACK" "$BASELINE_HOLDS_LOCKFILE" "$BASELINE_RESTORE"; do
-    grep -qF -- "$needle" "$1" || {
-      echo "${1} lacks the baseline step: ${needle}" >&2
+  local recipe="$1" needle
+  shift
+  for needle in "$@"; do
+    grep -qF -- "$needle" "$recipe" || {
+      echo "${recipe} lacks the baseline step: ${needle}" >&2
       return 1
     }
   done
 }
 
 @test "both recipes take, check and restore a git baseline" {
-  check_git_baseline "$REFRESH"
-  check_git_baseline "$SECURITY"
+  check_git_baseline "$SECURITY" "$BASELINE_CREATE" "$BASELINE_FALLBACK" "$BASELINE_HOLDS_LOCKFILE" "$BASELINE_RESTORE"
+  # The refresh recipe reverts through the security recipe's restore rather
+  # than restating it.
+  check_git_baseline "$REFRESH" "$BASELINE_CREATE" "$BASELINE_FALLBACK" "$BASELINE_HOLDS_LOCKFILE" \
+    'See `.claude/skills/update-deps/references/security.md` (3. Snapshots)'
 }
 
 # ---------------------------------------------------------------------------
