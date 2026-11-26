@@ -69,7 +69,7 @@ cli_copy() {
   CLI="$BATS_TEST_TMPDIR/cli/.gaia/scripts"
   mkdir -p "$CLI" "$BATS_TEST_TMPDIR/cli/.claude/hooks/lib"
   cp -R "$SCRIPTS/../../.claude/hooks/lib/." "$BATS_TEST_TMPDIR/cli/.claude/hooks/lib/"
-  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-member-digest.sh; do
+  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-member-digest.sh resolve-audit-members.sh; do
     cp "$SCRIPTS/$script_file" "$CLI/$script_file"
   done
   cat >"$CLI/usage.sh" <<'EOF'
@@ -2100,6 +2100,20 @@ accept_brief_is() {
   echo "case: a refusal for the HEAD digest is a review of HEAD: accept again"
   head_clearance "$MEMBER" refused
   accept_brief_is accept 0 '[]'
+  echo "case: a fixer commit into another member's domain leaves that member unreviewed though the latest round never listed it: a grant"
+  alf_set_line lib/s.sh 1 "changed by a fixer"
+  alf_commit "fixer commit into lib"
+  head_clearance "$MEMBER" refused
+  accept_brief_is grant 0 "[\"$SHELL_MAINTAINER\"]"
+  echo "case: once that member holds a marker for HEAD: accept again"
+  head_clearance "$SHELL_MAINTAINER" ok
+  accept_brief_is accept 0 '[]'
+  echo "case: a latest round recorded with no members (a reopened round) still owes every member of the branch: a grant"
+  alf_state_edit '.history.rounds[-1].members = []'
+  alf_set_line lib/s.sh 2 "after the reopened round"
+  alf_commit "after the reopened round"
+  head_clearance "$MEMBER" ok
+  accept_brief_is grant 0 "[\"$SHELL_MAINTAINER\"]"
 }
 
 # review_record_setup: the review scripts beside the scratch copy, and the run

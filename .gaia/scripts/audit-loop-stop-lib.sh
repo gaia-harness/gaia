@@ -129,17 +129,22 @@ _gaia_loop_stop_inputs() {
 # an Accept closing round could not finish at <head-tree>. That round runs no
 # fixer, so a veto open after the latest round (unsatisfied at it, or
 # effective only after it) stays open and the clean stop refuses it. A member
-# of the latest round with neither an earned marker nor a refusal for its
-# digest at <head-tree> has not reviewed the head, so an accept would take
-# hunks no member read; a refusal counts as reviewed, since it is how a
-# member reports the open Major an accept acknowledges. Derived in memory
-# and never stored, like the stop override. Anything unreadable is a
-# blocker: it can only turn an accept recommendation into a grant. A null
+# owed a review of the branch (the set resolve-audit-members.sh resolves at
+# <audited-root>, plus the latest round's members) with neither an earned
+# marker nor a refusal for its digest at <head-tree> has not reviewed the
+# head, so an accept would take hunks no member read; a refusal counts as
+# reviewed, since it is how a member reports the open Major an accept
+# acknowledges. Owed members come from the branch, not from the latest
+# round's list, so a fixer commit into another member's domain and a reopened
+# round recorded with no members both surface. Derived in memory
+# and never stored, like the stop override. Anything unreadable, the member
+# set included, is a blocker: it can only turn an accept recommendation into
+# a grant. A null
 # snapshot prints null unchanged. Run it in a command substitution: the
 # clearance library it sources stays there.
 gaia_loop_accept_blockers() {
   local main="$1" root="$2" state="$3" tree="$4" snapshot="${5:-null}" scripts="$_GAIA_LOOP_EVAL_DIRECTORY"
-  local branch_key round vetoes_file later_vetoes='[]' veto_state unsatisfied='["unreadable vetoes"]' member digest unreviewed='[]'
+  local branch_key round vetoes_file later_vetoes='[]' veto_state unsatisfied='["unreadable vetoes"]' member digest unreviewed='[]' owed resolved
   [ "$snapshot" = null ] && { printf 'null\n'; return 0; }
   branch_key="$(printf '%s' "$state" | jq -r '.branch')" || return 5
   round="$(printf '%s' "$state" | jq -r '.history.rounds | length')" || return 5
@@ -151,6 +156,12 @@ gaia_loop_accept_blockers() {
       unsatisfied="$(printf '%s' "$veto_state" | jq -c --argjson later "${later_vetoes:-[]}" '.unsatisfied + $later | unique')" ||
       unsatisfied='["unreadable vetoes"]'
   fi
+  if resolved="$(bash "$scripts/resolve-audit-members.sh" --root "$root" 2>/dev/null)"; then
+    owed="$(printf '%s\n' "$resolved" | jq -R -s -c --argjson state "$state" \
+      '[split("\n")[] | select(length > 0)] + [($state.history.rounds | last | .members // [])[] | strings] | unique')" || owed='["unresolvable members"]'
+  else
+    owed='["unresolvable members"]'
+  fi
   # shellcheck source=/dev/null
   . "$scripts/../../.claude/hooks/lib/audit-clearance.sh" 2>/dev/null
   while IFS= read -r member; do
@@ -160,7 +171,7 @@ gaia_loop_accept_blockers() {
       continue
     fi
     unreviewed="$(jq -n -c --argjson unreviewed "$unreviewed" --arg member "$member" '$unreviewed + [$member]')"
-  done < <(printf '%s' "$state" | jq -r '(.history.rounds | last | .members // [])[] | strings')
+  done < <(printf '%s' "$owed" | jq -r '.[]')
   printf '%s' "$snapshot" | jq -c --argjson unsatisfied "${unsatisfied:-[\"unreadable vetoes\"]}" --argjson unreviewed "$unreviewed" \
     'if type != "object" then error("not a snapshot") else . end
     | . + {accept_blockers: {unsatisfied_vetoes: $unsatisfied, unreviewed_members: $unreviewed}}' 2>/dev/null || return 5
