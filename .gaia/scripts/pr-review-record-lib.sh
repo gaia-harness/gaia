@@ -271,7 +271,8 @@ _repair_paths_recorded() {
 # the finding's own, written as the veto key's repair_paths; the key keeps the
 # finding's path and line. Given on a finding already routed with a different
 # list, they rewrite its key in place, so the fix counts from the next round and
-# a repair already made no longer counts; the same list again changes nothing.
+# a repair that already landed in a round no longer counts; the same list again
+# changes nothing.
 cmd_route_fix() {
   require_main_root_match
   require_record
