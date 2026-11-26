@@ -649,6 +649,29 @@ assert_reaper_denied() {
   done
 }
 
+# The journey: a human sets the cap outside Claude's tools, Claude's attempts to
+# overwrite it and to mint a reading through the statusline are each denied, and
+# the human's cap is still what the loop reads.
+@test "a human-set round cap stands after Claude's write to it and its run of the context writer are denied" {
+  local repo_root="$BATS_TEST_DIRNAME/../../.."
+  local reading_dir="$MAIN/.gaia/local/cache/shared/context"
+  local payload="$BATS_TEST_TMPDIR/payload.json"
+  printf '%s' '{"audit_loop":{"round_cap":4},"version":1}' >"$OVERRIDE"
+  rm -f "$CONTEXT_FILE"
+  printf '%s' '{"session_id":"0a1b2c3d-1111-4222-8333-444455556666","context_window":{"used_percentage":10,"context_window_size":200000}}' >"$payload"
+
+  run_edit Write "$OVERRIDE"
+  assert_denied_by_json
+
+  run_bash "bash .gaia/statusline/gaia-statusline.sh < $payload"
+  assert_pins_only_class context-writer
+  [ -z "$(find "$reading_dir" -type f)" ]
+
+  run bash -c '_GAIA_LOOP_HARD_CAP=10; . "$1/.gaia/scripts/audit-loop-automatic-lib.sh"; gaia_loop_round_cap_state "$2"' _ "$repo_root" "$MAIN"
+  [ "$status" -eq 0 ]
+  [ "$output" = "ok 4 4" ]
+}
+
 # --- deny text, every class ---
 
 @test "each deny message names the guard, its class and both answer channels" {
