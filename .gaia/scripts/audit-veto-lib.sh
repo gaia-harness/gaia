@@ -166,7 +166,8 @@ _gaia_veto_owners() { _roster_owners "$1" "$_GAIA_LOOP_EVAL_DIRECTORY" "$(jq -c 
 # A key whose entry names repair_paths (its repair lands in other files) also
 # counts round j's change to one of those paths as touching it, and further
 # needs, for every repair path, a later round whose diff touches it, from which
-# on the path's roster owner was dispatched and reported no finding on it. An
+# on the path's roster owner was dispatched and reported no finding on it but
+# ones an earlier round disposed `fix` under their own keys and fixed. An
 # unowned repair path never satisfies. Without repair_paths, a fix that lands
 # only in another file leaves the key unsatisfied on both routes.
 # Reviewed: at least one round in the span dispatched the key's reviewer,

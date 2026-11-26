@@ -1708,7 +1708,7 @@ decide() {
   [ "$(jq -c '[.keys[] | [.direction, has("repair_paths")]]' "$RUN_FOLDER/vetoes.json")" = '[["in place after all",false]]' ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
 }
 
-@test "needs-human: a fix decision's repair_paths is refused when the roster gives one to no member, is unreadable, or is not a list of paths" {
+@test "needs-human: a fix decision's repair_paths is refused when the roster gives one to no member or cannot be read, or when it is not a list of paths" {
   stop_rounds "$(minor_rows f.txt 1 1)"
   with_f_txt_ownerless decide 1 fix '{"repair_paths":["lib/s.sh","g.txt"]}'
   [ "$status" -eq 3 ] || { echo "an unowned repair path recorded: $status $output"; return 1; }
