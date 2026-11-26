@@ -548,6 +548,7 @@ tree_state() {
   run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
   green || return 1
   grep -qxF -- '## Accepted residuals (recorded, not fixed)' <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- 'f.txt:4' <<<"$output" || { echo "$output"; return 1; }
   jq -n -c '{version: 1, keys: [{member: "code-audit-frontend", finding_class: "c/imp", path: "f.txt", line: 3, effective_from_round: 2},
     {member: "code-audit-frontend", finding_class: "c/xr", path: "f.txt", line: 4, effective_from_round: 2}]}' >"$RUN_FOLDER/vetoes.json"
   run bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
