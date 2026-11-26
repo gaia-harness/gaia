@@ -62,12 +62,14 @@ next_round() {
 }
 
 # cli_copy: the scripts in a scratch dir beside a stub usage.sh whose
-# behaviour STUB_USAGE_MODE (ok, fail, hang) picks. Sets CLI.
+# behaviour STUB_USAGE_MODE (ok, fail, hang) picks, with the hook libraries
+# where the scripts resolve them, so the brief can read member markers. Sets CLI.
 cli_copy() {
   local script_file
-  CLI="$BATS_TEST_TMPDIR/scripts"
-  mkdir -p "$CLI"
-  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh; do
+  CLI="$BATS_TEST_TMPDIR/cli/.gaia/scripts"
+  mkdir -p "$CLI" "$BATS_TEST_TMPDIR/cli/.claude/hooks/lib"
+  cp -R "$SCRIPTS/../../.claude/hooks/lib/." "$BATS_TEST_TMPDIR/cli/.claude/hooks/lib/"
+  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-member-digest.sh; do
     cp "$SCRIPTS/$script_file" "$CLI/$script_file"
   done
   cat >"$CLI/usage.sh" <<'EOF'
@@ -506,9 +508,11 @@ brief_check() {
   [ "$(read_json "$BRIEF" '.allowed')" = 5 ]
   [ "$(read_json "$BRIEF" '[.per_round[].A] | map(tostring) | join(",")')" = "6,5,4,3,2" ]
   fresh_fixture
-  echo "case: quiet recommends accept"
+  echo "case: quiet, with the member's marker for HEAD, recommends accept"
   alf_fill f.txt 12 feature
   next_round 1 '[{"path":"untouched.txt","line":1,"severity":"critical"},{"path":"untouched.txt","line":2,"severity":"minor"},{"path":"untouched.txt","line":3,"severity":"minor"}]'
+  stop_roster
+  earn_marker "$MEMBER" 1
   brief_check accept false 1 0 2
   [ "$(read_json "$BRIEF" '.verdict')" = quiet ]
   fresh_fixture
@@ -524,10 +528,12 @@ brief_check() {
   brief_check grant true 0 1 0
   [ "$(read_json "$BRIEF" '.verdict')" = continue ]
   fresh_fixture
-  echo "case: enriching recommends accept"
+  echo "case: enriching, accept-eligible and with the member's marker for HEAD, recommends accept"
   alf_sequence 6 5
   alf_set_line f.txt 8 repaired
-  next_round 3 "$(plus "$(alf_entries f.txt 1 3)" f.txt 8)"
+  next_round 3 "$(non_security_entries "$(plus "$(alf_entries f.txt 1 3)" f.txt 8)")"
+  stop_roster
+  earn_marker "$MEMBER" 3
   brief_check accept false 0 4 0
   [ "$(read_json "$BRIEF" '.verdict')" = enriching ]
   fresh_fixture
@@ -2049,6 +2055,51 @@ grade_round_keys() {
   run bash "$SCRIPTS/audit-loop-eval.sh" veto-state --root "$ALF_ROOT" --round 3
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [ "$(jq -c '.reviewers' <<<"$output")" = "[\"$MEMBER\",\"$SHELL_MAINTAINER\"]" ] || { echo "$output"; return 1; }
+}
+
+# head_clearance <member> <ok|refused>: an earned marker or a refusal for the member's digest at HEAD's tree.
+head_clearance() {
+  local digest marker_name provenance=earned
+  [ "$2" = refused ] && provenance=refused
+  digest="$(bash "$REPO_ROOT/.gaia/scripts/audit-member-digest.sh" --root "$ALF_ROOT" --member "$1" --ref "$(alf_git rev-parse 'HEAD^{tree}')")" || return 1
+  marker_name="$digest.$1.$2"
+  [ "$1" = code-audit-frontend ] && marker_name="$digest.$2"
+  jq -n -c --arg digest "$digest" --arg member "$1" --arg provenance "$provenance" \
+    '{digest: $digest, member: $member, provenance: $provenance}' >"$ALF_ROOT/.gaia/local/audit/$marker_name"
+}
+
+# accept_brief_is <recommended> <unsatisfied-vetoes-count> <unreviewed-members-json>: the CLI brief's recommendation and blockers.
+accept_brief_is() {
+  run "$CLI/audit-loop-eval.sh" brief --root "$ALF_ROOT"
+  [ "$status" -eq 0 ] || { echo "brief exited $status: $output"; return 1; }
+  [ "$(read_json "$output" '.recommended')" = "$1" ] || { echo "recommended $(read_json "$output" '.recommended'), want $1: $(read_json "$output" '.accept_blockers')"; return 1; }
+  [ "$(read_json "$output" '.accept_blockers.unsatisfied_vetoes | length')" = "$2" ] || { echo "blockers $(read_json "$output" '.accept_blockers')"; return 1; }
+  [ "$(read_json "$output" '.accept_blockers.unreviewed_members | tojson')" = "$3" ] || { echo "blockers $(read_json "$output" '.accept_blockers')"; return 1; }
+}
+
+@test "accept recommendation: an open veto or an unreviewed head turns the trend's accept into a grant" {
+  local vetoes_file
+  cli_copy
+  stop_roster
+  echo "case: a quiet round whose member holds a marker for HEAD, with no veto, recommends accept"
+  rounds_sequence '[]'
+  head_clearance "$MEMBER" ok
+  accept_brief_is accept 0 '[]'
+  echo "case: an unsatisfied veto recommends a grant: an Accept closing round runs no fixer"
+  write_veto 11
+  accept_brief_is grant 1 '[]'
+  echo "case: a veto effective only after the latest round is open too"
+  vetoes_file="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/vetoes.json"
+  jq -c '.keys[0].effective_from_round = 2' "$vetoes_file" >"$BATS_TEST_TMPDIR/vetoes.json" && mv "$BATS_TEST_TMPDIR/vetoes.json" "$vetoes_file"
+  accept_brief_is grant 1 '[]'
+  rm -f "$vetoes_file"
+  echo "case: a commit after the round rotates the member's digest, so no member reviewed HEAD: a grant"
+  alf_set_line f.txt 3 "changed after the round"
+  alf_commit "after the round"
+  accept_brief_is grant 0 "[\"$MEMBER\"]"
+  echo "case: a refusal for the HEAD digest is a review of HEAD: accept again"
+  head_clearance "$MEMBER" refused
+  accept_brief_is accept 0 '[]'
 }
 
 # review_record_setup: the review scripts beside the scratch copy, and the run

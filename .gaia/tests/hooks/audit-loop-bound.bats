@@ -1338,6 +1338,15 @@ settings() {
   done
 }
 
+# head_marker: a one-member roster and that member's earned marker for its digest at HEAD's tree.
+head_marker() {
+  local digest
+  printf 'auditors:\n  - name: code-audit-frontend\n    globs:\n      - "**"\n    audience: adopter\n    default: true\n' >"$ALF_ROOT/.gaia/audit-ci.yml"
+  digest="$(bash "$REPO_ROOT/.gaia/scripts/audit-member-digest.sh" --root "$ALF_ROOT" --member "$FRONTEND_MEMBER" --ref "$(alf_git rev-parse 'HEAD^{tree}')")" || return 1
+  jq -n -c --arg digest "$digest" --arg member "$FRONTEND_MEMBER" '{digest: $digest, member: $member, provenance: "earned"}' \
+    >"$ALF_ROOT/.gaia/local/audit/$digest.ok"
+}
+
 # first_pinned_label: the leading option of the latest checkpoint's pinned question.
 first_pinned_label() { state_field '.history.checkpoints | last | .question.questions[0].options[0].label'; }
 
@@ -1379,6 +1388,12 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   assert_pinned rubric:nitpicky
   [ "$(first_pinned_label)" = "Continue audit in this session (Recommended)" ]
   [[ "$(state_field '.history.checkpoints | last | .question.questions[0].options[0].description')" == "Context "*" is below the checkpoint line, so this session has room: "* ]]
+  seed_rounds 6 "$(sig_snap enriching true)"
+  unit_dispatch
+  assert_pinned rubric:enriching
+  # No member reviewed HEAD, so an Accept closing round could not end clean.
+  [ "$(first_pinned_label)" = "Continue audit in this session (Recommended)" ]
+  head_marker
   seed_rounds 6 "$(sig_snap enriching true)"
   unit_dispatch
   assert_pinned rubric:enriching

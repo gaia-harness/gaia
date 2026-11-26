@@ -32,7 +32,7 @@ _gaia_loop_spend() {
 # _gaia_loop_brief <audited-root> <main-root> <state-json>: the checkpoint
 # brief.
 _gaia_loop_brief() {
-  local root="$1" main="$2" state="$3" used allowed pending snapshot findings raw spend per_round="[]" i round_snapshot
+  local root="$1" main="$2" state="$3" used allowed pending snapshot findings raw spend per_round="[]" i round_snapshot head_tree blocked_snapshot
   used="$(printf '%s' "$state" | jq -r '.history.rounds | length')"
   [ "$used" -ge 1 ] || { printf 'audit-loop-eval: no recorded round to brief for %s\n' "$(printf '%s' "$state" | jq -r '.branch')" >&2; return 2; }
   allowed="$(gaia_loop_allowed "$state")"
@@ -47,19 +47,22 @@ _gaia_loop_brief() {
     i=$((i + 1))
   done
   findings="$(gaia_loop_findings "$main" "$state" "$used")"
+  head_tree="$(_gaia_loop_git -C "$root" rev-parse 'HEAD^{tree}' 2>/dev/null)" || head_tree=""
+  blocked_snapshot="$(gaia_loop_accept_blockers "$main" "$root" "$state" "$head_tree" "$snapshot")" || blocked_snapshot=null
   raw="$(_gaia_loop_git -C "$root" branch --show-current 2>/dev/null)" || raw=""
   spend="$(_gaia_loop_spend "$raw")"
   jq -n -c --argjson state "$state" --argjson used "$used" --argjson allowed "$allowed" \
     --argjson pending "$([ -n "$pending" ] && echo true || echo false)" --argjson per_round "$per_round" \
     --argjson pending_checkpoint "${pending:-null}" --argjson cap "$_GAIA_LOOP_HARD_CAP" \
     --argjson snapshot "$snapshot" --argjson findings "$findings" --arg spend "$spend" \
-    --arg recommended "$(gaia_loop_recommended "$(printf '%s' "${pending:-null}" | jq -r '.trigger // empty')" "$snapshot")" \
+    --arg recommended "$(gaia_loop_recommended "$(printf '%s' "${pending:-null}" | jq -r '.trigger // empty')" "$blocked_snapshot")" \
+    --argjson accept_blockers "$(printf '%s' "$blocked_snapshot" | jq -c '.accept_blockers? // null')" \
     --arg grant_line "$(gaia_loop_grant_line "$(_gaia_loop_grant_rounds "$state")")" --arg accept_line "$(gaia_loop_accept_line)" '
     {branch: $state.branch, pr: $state.pr, rounds_run: $used, allowed: $allowed, pending_checkpoint: $pending,
      per_round: $per_round, verdict: $snapshot.verdict, evidence: $snapshot.evidence,
      signals: ($snapshot.signals // null), accept_eligible: ($snapshot.accept_eligible == true),
      accept_reasons: ($snapshot.accept_reasons // []), rounds_cap: $cap,
-     recommended: $recommended,
+     recommended: $recommended, accept_blockers: $accept_blockers,
      grant_line: $grant_line, accept_line: $accept_line,
      remaining_by_severity: ($findings.entries | {critical: map(select(.severity == "critical")) | length,
                                             major: map(select(.severity == "major")) | length,

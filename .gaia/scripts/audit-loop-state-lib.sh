@@ -340,7 +340,8 @@ gaia_loop_session_is_interactive() {
 # round's snapshot. The brief and the pinned question both read it from here so
 # the rule has one copy: a context checkpoint with no denying signal is a grant
 # (the session is merely full), otherwise the verdict decides, except that a
-# stalled small tail the snapshot calls accept-eligible is an accept.
+# stalled small tail the snapshot calls accept-eligible is an accept. Both
+# callers first add `accept_blockers` (RECOMMENDATION, audit-loop-eval.sh).
 gaia_loop_recommended() {
   local trigger="${1-}" snapshot="${2:-null}"
   printf '%s' "$snapshot" | jq -r --arg trigger "$trigger" '
@@ -348,10 +349,12 @@ gaia_loop_recommended() {
     | (if ($snapshot.signals | type) == "object" then $snapshot.signals
        else {enriching: ($snapshot.verdict == "enriching"), stalled: ($snapshot.verdict == "stalled")} end) as $signals
     | (any($signals | to_entries[]; .key != "quiet" and .value == true)) as $denying
+    | (any(($snapshot.accept_blockers // {}) | .[]; length > 0)) as $blocked
     | if $trigger == "context" and ($denying | not) then "grant"
       elif $snapshot.verdict == "stalled" and $signals["small-tail"] == true and $snapshot.accept_eligible == true then "accept"
       else {continue: "grant", unknown: "grant", enriching: "accept", quiet: "accept", stalled: "stop"}
-           | .[$snapshot.verdict // "unknown"] // "grant" end'
+           | .[$snapshot.verdict // "unknown"] // "grant" end
+    | if . == "accept" and ($snapshot.accept_eligible != true or $blocked) then "grant" else . end'
 }
 
 # gaia_loop_pinned_question <branch> <nonce> <rounds_used> <unit_rounds>

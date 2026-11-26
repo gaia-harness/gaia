@@ -217,7 +217,12 @@
 # round where small-tail holds and the snapshot is accept_eligible -> accept
 # (what remains is a tail the evaluator already judges acceptable, and stop
 # would leave the PR open over it); at a pending checkpoint whose trigger is
-# context, grant unless a denying signal holds.
+# context, grant unless a denying signal holds. Any accept is a grant instead
+# unless the snapshot is accept_eligible and an Accept closing round could end
+# clean at HEAD: no veto open after the latest round, and every member of that
+# round holds an earned marker or a refusal for its digest at HEAD's tree
+# (gaia_loop_accept_blockers in audit-loop-stop-lib.sh; the brief prints its
+# accept_blockers).
 # Spend is shown as information only and never changes any other field.
 
 _GAIA_LOOP_EVAL_DIRECTORY="${BASH_SOURCE[0]%/*}"

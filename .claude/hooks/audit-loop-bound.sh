@@ -843,7 +843,7 @@ run_decision() {
       fi
       nonce=$(gaia_loop_new_nonce) ||
         finish_deny 'BLOCKED: the audit loop checkpoint could not draw a checkpoint nonce. Fail-loud, not fail-open: retry the dispatch.'
-      recommended=$(gaia_loop_recommended "$trigger" "$snapshot") || recommended=''
+      recommended=$(gaia_loop_recommended "$trigger" "$(gaia_loop_accept_blockers "$main" "$root" "$WORKING_STATE" "$tree" "$snapshot")") || recommended=''
       context_line=''
       if [[ $reading =~ ^fresh\ [0-9]+\ ([0-9]+)$ ]]; then
         context_line=$(gaia_context_line "${BASH_REMATCH[1]}" "$ask_tokens" "$ask_percent") || context_line=''
