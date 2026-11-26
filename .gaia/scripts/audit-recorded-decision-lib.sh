@@ -17,17 +17,17 @@ _finding_path_owned() {
   printf '%s' "$owners" | jq 'if type == "object" then length > 0 else null end' 2>/dev/null || printf 'null\n'
 }
 
-# _repair_paths_owned: rc 0 when FINDING_FILE names no repair_paths, or the
-# roster at ROOT gives every one of them to a member, whose review is what
-# satisfies the veto there. rc 3 after naming the refusal otherwise, an
-# unreadable roster included, or a path on audit-fix-verify-state-lib.sh's
-# ENFORCEMENT_PATHS (the fixer can never land an edit there).
+# _repair_paths_owned: rc 0 when FINDING_FILE names no repair_paths, or none is
+# on audit-fix-verify-state-lib.sh's ENFORCEMENT_PATHS (the fixer can never land
+# an edit there) and the roster at ROOT gives every one to a member, whose review
+# is what satisfies the veto there. rc 3 after naming the refusal otherwise, an
+# unreadable roster included.
 _repair_paths_owned() {
   local repair_paths owners enforcement_path repair_path
   repair_paths="$(jq -c '.repair_paths // [] | if type == "array" and all(.[]; type == "string" and . != "") then . else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
     { _error "repair_paths in $FINDING_FILE must be an array of non-empty paths"; return 3; }
   [ "$repair_paths" != "[]" ] || return 0
-  # The list is read from its one owner, in a child shell so nothing else it holds leaks in.
+  # Sourced in a child shell: in this one its helpers would overwrite the caller's same-named functions.
   while IFS= read -r repair_path; do
     while IFS= read -r enforcement_path; do
       [ "$repair_path" != "$enforcement_path" ] || {
