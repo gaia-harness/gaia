@@ -13,7 +13,9 @@
 # JSON file holding the tree listing, a path and content-hash listing of the
 # local audit state and of the run folder, and HEAD's GAIA-Audit commit
 # statuses (another integration's status landing during the review is not
-# the reviewer's write).
+# the reviewer's write). The audit listing leaves out records provably keyed
+# to another branch or head, since the audit directory is shared by every
+# lane's worktree (`audit_listing` owns the rule).
 # compare captures the same state again into --after, from the root and run
 # folder the snapshot recorded, and reports the first difference in this order:
 # the tree, the audit state, the GAIA-Audit statuses. --output-file names the one
@@ -80,18 +82,98 @@ dirty_paths() {
 # <folder> to its content hash, keyed by the path relative to <main-root> when
 # inside it. An absent folder is an empty object.
 folder_listing() {
-  local main_root="$1" folder="$2" file key
+  local main_root="$1" folder="$2"
   [ -d "$folder" ] || {
     printf '{}'
     return 0
   }
-  find "$folder" -type f | LC_ALL=C sort | while IFS= read -r file; do
+  find "$folder" -type f | LC_ALL=C sort | listing_of_files "$main_root"
+}
+
+# listing_of_files <main-root>: folder_listing's JSON for the file paths on
+# stdin, one per line.
+listing_of_files() {
+  local main_root="$1" file key
+  while IFS= read -r file; do
     case "$file" in
       "$main_root"/*) key="${file#"$main_root"/}" ;;
       *) key="$file" ;;
     esac
     jq -n --arg key "$key" --arg hash "$(hash_file "$file")" '{($key): $hash}'
   done | jq -s 'add // {}'
+}
+
+# audit_listing <root> <main-root>: folder_listing's JSON for the local audit
+# directory, minus the records provably keyed to another branch or head, so a
+# concurrent lane's attributable writes do not read as the reviewer's. A record
+# is dropped only when it is one of:
+#   - a branch-keyed file (<40-hex base>.<branch slug>.*) of another branch;
+#   - a marker (<64-hex digest>[.<member>].ok|refused) or a light route record
+#     (light/<digest>.<member>.route.json) whose digest is none of this
+#     branch's own member digests and whose recorded tree and commit are both
+#     absent from HEAD's recent history.
+# Everything else stays, including any file that cannot be attributed. When the
+# own digests or HEAD's history cannot be read, no marker or route record is
+# dropped (another branch's branch-keyed files still are). Dropping a marker
+# is safe because the merge gate accepts a marker by digest alone, so only one
+# at this branch's own digest can affect this branch, and those are never
+# dropped. A marker older than the history window reads as another head's,
+# which is the safe direction to fail in.
+audit_listing() {
+  local root="$1" main_root="$2" audit_directory="$2/.gaia/local/audit"
+  local library="$_script_directory/../../.claude/hooks/lib/audit-digest.sh"
+  local scratch listing branch_slug own_digests recent file relative digest
+  [ -d "$audit_directory" ] || {
+    printf '{}'
+    return 0
+  }
+  scratch=$(mktemp -d) || usage_error 'cannot create a scratch directory'
+  find "$audit_directory" -type f | LC_ALL=C sort >"$scratch/files"
+  : >"$scratch/dropped"
+  : >"$scratch/candidates"
+
+  branch_slug=$(bash -c '. "$1"; gaia_branch_slug "$2"' _ "$_script_directory/audit-key-lib.sh" "$root" 2>/dev/null) || branch_slug=''
+  own_digests=''
+  if [ -f "$library" ]; then
+    own_digests=$(bash -c '. "$1"; audit_branch_digests_local "$2"' _ "$library" "$root" 2>/dev/null | cut -f2 | grep -E '^[0-9a-f]{64}$' || true)
+  fi
+  recent=$(git -C "$root" rev-list -n 500 --format='%H %T' HEAD 2>/dev/null | grep -Ev '^commit ' || true)
+
+  while IFS= read -r file; do
+    relative="${file#"$audit_directory"/}"
+    if [ -n "$branch_slug" ] && [[ "$relative" =~ ^[0-9a-f]{40}\.([^./]+)\. ]]; then
+      [ "${BASH_REMATCH[1]}" = "$branch_slug" ] || printf '%s\n' "$file" >>"$scratch/dropped"
+      continue
+    fi
+    [ -n "$own_digests" ] && [ -n "$recent" ] || continue
+    if [[ "$relative" =~ ^([0-9a-f]{64})(\.[^./]+)?\.(ok|refused)$ ]] ||
+      [[ "$relative" =~ ^light/([0-9a-f]{64})\.[^./]+\.route\.json$ ]]; then
+      digest="${BASH_REMATCH[1]}"
+      printf '%s\n' "$own_digests" | grep -qx -- "$digest" || printf '%s\n' "$file" >>"$scratch/candidates"
+    fi
+  done <"$scratch/files"
+
+  if [ -s "$scratch/candidates" ]; then
+    printf '%s\n' "$recent" >"$scratch/recent"
+    # shellcheck disable=SC2016 -- the jq program's $-names are jq variables.
+    tr '\n' '\0' <"$scratch/candidates" | xargs -0 jq -n -R -r --rawfile recent "$scratch/recent" '
+      ($recent | split("\n") | map(split(" ")) | flatten | map(select(. != "") | {(.): true}) | add // {}) as $known |
+      inputs |
+      input_filename as $name |
+      ((try fromjson catch null) | objects) as $body |
+      ($body.tree // "") as $tree |
+      ($body.sha // $body.head_sha // "") as $commit |
+      select($tree != "" and $commit != "" and ($known[$tree] | not) and ($known[$commit] | not)) |
+      $name' >>"$scratch/dropped" || {
+      rm -rf "$scratch"
+      usage_error 'jq could not read the audit markers'
+    }
+  fi
+
+  grep -vxFf "$scratch/dropped" "$scratch/files" >"$scratch/kept" || true
+  listing=$(listing_of_files "$main_root" <"$scratch/kept")
+  rm -rf "$scratch"
+  printf '%s' "$listing"
 }
 
 # capture_state <root> <run-folder> <pr> <output-file>: print the state JSON.
@@ -101,7 +183,7 @@ capture_state() {
   main_root=$(gaia_resolve_main_root "$root") || usage_error "cannot resolve the main checkout root from $root"
   head=$(git -C "$root" rev-parse HEAD) || usage_error "cannot read HEAD in $root"
   dirty=$(dirty_paths "$root" "$output_file" | jq -R . | jq -s .)
-  audit=$(folder_listing "$main_root" "$main_root/.gaia/local/audit")
+  audit=$(audit_listing "$root" "$main_root")
   runs=$(folder_listing "$main_root" "$run_folder")
   statuses=$( (cd "$root" && gh api "repos/{owner}/{repo}/commits/$head/statuses") 2>/dev/null | jq -S -c 'map(select(.context == "GAIA-Audit"))') ||
     usage_error "gh could not read the commit statuses for $head"
