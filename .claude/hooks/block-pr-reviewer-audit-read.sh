@@ -43,7 +43,7 @@
 # subprocess that opens the file itself. The before/after check
 # (.gaia/scripts/pr-review-guard.sh) is the backstop for writes: it compares
 # the tree, the audit state (less records provably keyed to another branch),
-# the run folders and the commit statuses around the dispatch.
+# the dispatch's run folder and HEAD's GAIA-Audit statuses around the dispatch.
 set -euo pipefail
 
 payload=$(cat)
