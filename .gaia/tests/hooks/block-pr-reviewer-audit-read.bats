@@ -27,12 +27,12 @@ payload() {
   # The reviewer reads an audit findings file.
   invoke_hook "$(payload Read '{"file_path":".gaia/local/audit/abc.findings.json"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
   assert_denied_by_json || return 1
-  grep -qF 'BLOCKED: pr-reviewer may not read audit state: .gaia/local/audit/abc.findings.json' <<<"$output" || return 1
+  grep -qF 'BLOCKED: pr-reviewer may not access audit state: .gaia/local/audit/abc.findings.json' <<<"$output" || return 1
 
   # The reviewer cats a run-folder file through Bash.
   invoke_hook "$(payload Bash '{"command":"cat .gaia/local/runs/feat+x/unit-1.json"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
   assert_denied_by_json || return 1
-  grep -qF 'BLOCKED: pr-reviewer may not read audit state: .gaia/local/runs/feat+x/unit-1.json' <<<"$output" || return 1
+  grep -qF 'BLOCKED: pr-reviewer may not access audit state: .gaia/local/runs/feat+x/unit-1.json' <<<"$output" || return 1
 
   # The reviewer reads an ordinary source file.
   invoke_hook "$(payload Read '{"file_path":".gaia/scripts/a.sh"}' pr-reviewer)" "$HOOK_ABSOLUTE_PATH"
@@ -129,7 +129,7 @@ reviewer_command() {
     "find .gaia -name '*.json'"; do
     invoke_hook "$(reviewer_command "$command" "$checkout")" "$HOOK_ABSOLUTE_PATH"
     assert_denied_by_json || { echo "Bash allowed: $command" >&2; return 1; }
-    grep -qF 'BLOCKED: pr-reviewer may not read audit state:' <<<"$output" || { echo "No BLOCKED line: $command" >&2; return 1; }
+    grep -qF 'BLOCKED: pr-reviewer may not access audit state:' <<<"$output" || { echo "No BLOCKED line: $command" >&2; return 1; }
   done
   after="$(git -C "$checkout" status --porcelain --untracked-files=all 2>/dev/null | sort | md5sum)"
   [ "$before" = "$after" ] || return 1

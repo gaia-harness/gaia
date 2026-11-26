@@ -27,9 +27,9 @@
 # `.gaia/local` (a relative read after it names no folder), and a recursive
 # grep, rg, find, ls -R or tar whose operand is `.gaia` or `.gaia/local`, or a
 # directory that contains them unless the command excludes a `.gaia` path. The deny line is
-# `BLOCKED: pr-reviewer may not <read|write> audit state: <path>`, where <path>
+# `BLOCKED: pr-reviewer may not <access|write> audit state: <path>`, where <path>
 # is the offending path or command token as the call named it, followed by one
-# sentence naming what to do instead: for a read, search the bundle's diff.patch
+# sentence naming what to do instead: for any other call, search the bundle's diff.patch
 # and the changed files (a search whose pattern merely names the folders is
 # denied too, and the reviewer has no judgement to find its way out); for a
 # Write or Edit, write only the output file the dispatch names.
@@ -89,7 +89,7 @@ confirmed_type=$(jq -r '.agent_type // "" | if type == "string" then . else "" e
 gaia_hook_payload_read "$payload" || exit 0
 
 deny() {
-  local action='read' advice="Naming those folders in any call is denied, a search pattern included; search the bundle's diff.patch or the changed files instead."
+  local action='access' advice="Naming those folders in any call is denied, a search pattern included; search the bundle's diff.patch or the changed files instead."
   case "$GAIA_HOOK_TOOL_NAME" in
     Write | Edit)
       action='write'
