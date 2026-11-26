@@ -210,7 +210,7 @@ own_scope() {
   slug=$(bash -c '. "$1"; gaia_branch_slug "$2"' _ "$_script_directory/audit-key-lib.sh" "$root" 2>/dev/null) || slug=''
   if [ -f "$library" ]; then
     digests=$(bash -c '. "$1"; audit_branch_digests_local "$2"' _ "$library" "$root" 2>/dev/null | cut -f2 || true)
-    host_base=$( (cd "$root" && gh pr view "$pr" --json baseRefName --jq .baseRefName) 2>/dev/null || true)
+    host_base=$(bash -c '. "$1"; _audit_github_query "$2" "the pull request base branch" pr view "$3" --json baseRefName --jq .baseRefName' _ "$library" "$root" "$pr" 2>/dev/null || true)
     if [[ "$host_base" =~ ^[A-Za-z0-9._/-]+$ ]]; then
       host_digests=$(bash -c '
         . "$1"

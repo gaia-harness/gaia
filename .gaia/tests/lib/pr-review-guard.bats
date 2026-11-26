@@ -28,7 +28,8 @@ setup() {
   git -C "$FIXTURE" add -A
   git -C "$FIXTURE" commit -q -m init
   # The fake gh prints whatever the test last put in the statuses file.
-  printf '#!/usr/bin/env bash\ncat "%s"\n' "$SCRATCH/statuses.json" >"$BATS_TEST_TMPDIR/bin/gh"
+  # A `pr view` answers the base branch; every other call prints the statuses file.
+  printf '#!/usr/bin/env bash\n[ "${1:-}" = pr ] && [ "${2:-}" = view ] && { echo main; exit 0; }\ncat "%s"\n' "$SCRATCH/statuses.json" >"$BATS_TEST_TMPDIR/bin/gh"
   chmod +x "$BATS_TEST_TMPDIR/bin/gh"
   printf '[{"context":"GAIA-Audit","state":"success"}]' >"$SCRATCH/statuses.json"
   export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
@@ -174,14 +175,15 @@ marker_body() {
 
 @test "compare reads the own digests the snapshot recorded, not the live refs" {
   arm_branch_digests
-  marker_body "$HEAD_TREE" "$HEAD_SHA" "$OWN_DIGEST" >"$AUDIT_DIRECTORY/$OWN_DIGEST.ok"
   take_snapshot
   printf '[]' >"$REVIEWER_OUTPUT"
-  # Moving the base reference changes the digests a live derivation would find.
+  # Moving the base reference changes the digests a live derivation would find,
+  # then a forged marker lands at this branch's recorded own digest.
   git -C "$FIXTURE" update-ref refs/remotes/origin/main HEAD
   marker_body "$FOREIGN_TREE" "$FOREIGN_SHA" "$OWN_DIGEST" >"$AUDIT_DIRECTORY/$OWN_DIGEST.ok"
   run compare_after
   [ "$status" -eq 1 ]
+  [ "$output" = "PR review changed audit state: .gaia/local/audit/$OWN_DIGEST.ok" ]
 }
 
 @test "compare stops when this branch's own rerun ledger changes" {
