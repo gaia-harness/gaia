@@ -24,6 +24,14 @@ const findingsFor = (text: string): number =>
     .length;
 
 describe('recommendation rule', () => {
+  test('a quoted bare mark beside one named option covers both questions', () => {
+    expect(
+      findingsFor(
+        'Ask with `AskUserQuestion` (header `Ruling`), the suggested reading first, its label ending ` (Recommended)`; then ask (header `Notes`) `Accept the notes (Recommended)` or `Adjust`.'
+      )
+    ).toBe(0);
+  });
+
   test('a headed site with no marked option fails', () => {
     expect(
       findingsFor('Ask with `AskUserQuestion` (header `Go`): `Yes` or `No`.')
@@ -108,6 +116,15 @@ describe('AskUserQuestion site grammar', () => {
     );
 
     expect(site.recommendedLabels.size).toBe(0);
+  });
+
+  test('a marker quoted with its leading space names no option', () => {
+    const site = only(
+      'Ask with one `AskUserQuestion` call of two questions (header `Group`, header `Data`), each recommended answer first and marked ` (Recommended)`.'
+    );
+
+    expect(site.recommendedLabels.size).toBe(0);
+    expect(site.hasMarker).toBe(true);
   });
 
   test('a block that only names the tool is mention-only, not a site', () => {
