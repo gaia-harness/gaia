@@ -47,7 +47,8 @@
 # branch back out. It prints {"branch":<b>,"worktree":<abs>,"added":<bool>},
 # naming the linked worktree that already holds the branch (added false), else
 # the one it adds under .claude/worktrees/ (added true). It fails when the main
-# checkout itself holds the branch, or the add fails.
+# checkout itself holds the branch, the branch's worktree entry is stale (its
+# folder is gone), or the add fails.
 #
 # Exit: 0 an answer; 1 a read failed (git, gh, the notebook, an input file) or
 # the worktree verb refused, with one stderr line; 2 usage, a library that will not load, or a --root
@@ -406,7 +407,7 @@ worktree() {
   local holder added=false
   holder="$(gaia_branch_worktree_holder "$branch_argument" "$tree_root")"
   if [ -n "$holder" ] && [ ! -d "$holder" ]; then
-    next_fail "the worktree entry for $branch_argument at $holder is stale; run git worktree prune"
+    next_fail "the worktree entry for $branch_argument at $holder is stale; run git worktree unlock $holder (when locked), then git worktree prune"
   fi
   [ -z "$holder" ] || gaia_is_linked_worktree "$holder" ||
     next_fail "the main checkout holds $branch_argument, so no worktree can be added for it"

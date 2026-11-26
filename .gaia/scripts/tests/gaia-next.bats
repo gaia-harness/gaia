@@ -465,6 +465,6 @@ worktree_for() {
   rm -rf "$WORK/.claude/worktrees/feat+2-pr-work"
   worktree_for feat/2-pr-work
   [ "$status" -eq 1 ]
-  [[ "$stderr" == *"is stale; run git worktree prune"* ]]
+  [[ "$stderr" == *"is stale; run git worktree unlock "*"(when locked), then git worktree prune"* ]]
   [[ "$stderr" != *"main checkout holds"* ]]
 }
