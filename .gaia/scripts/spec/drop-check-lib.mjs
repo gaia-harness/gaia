@@ -239,9 +239,9 @@ export function deferredText(specText) {
   return normalizeWhitespace(collected);
 }
 
-// The heading texts that open a decision record: `Decision`, `Decisions`,
-// `Decisions taken`, `Decisions taken here`, `Amendment`, `Amendments`, and
-// either amendment heading led by `Build` or `Spec`.
+// The heading texts that open a decision record, matched whole and in any
+// case: `Decision` or `Decisions`, optionally followed by `taken` or `taken
+// here`, and `Amendment` or `Amendments`, optionally led by `Build` or `Spec`.
 const DECISION_HEADING =
   /^(?:decisions?(?: taken(?: here)?)?|(?:build |spec )?amendments?)$/i;
 
