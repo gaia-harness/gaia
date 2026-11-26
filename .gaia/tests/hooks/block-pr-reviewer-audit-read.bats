@@ -90,7 +90,9 @@ reviewer_command() {
     'ls -R .gaia' \
     'rg stop_reason .gaia' \
     'find .gaia -name "*.json"' \
-    'grep -rn stop_reason .'; do
+    'grep -rn stop_reason .' \
+    'grep -rn --exclude-dir=node_modules locale .' \
+    'find . -not -path ./node_modules/x -name local'; do
     invoke_hook "$(reviewer_command "$command" "$checkout")" "$HOOK_ABSOLUTE_PATH"
     assert_denied_by_json || { echo "Bash allowed: $command" >&2; return 1; }
   done

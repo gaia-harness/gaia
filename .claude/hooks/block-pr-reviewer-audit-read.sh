@@ -287,7 +287,9 @@ check_state_access() {
         ;;
       grep | egrep | fgrep | rg | find | ls | tar)
         [ "$recursive" -eq 1 ] || continue
-        if [[ "$line" =~ (exclude|prune|-not|!) && "$line" =~ (\.gaia|local) ]]; then excluded=1; fi
+        # Excluded only when an exclusion flag names the state root itself, so an
+        # exclusion of an unrelated folder never waives the deny.
+        if [[ "$line" =~ (exclude[a-z-]*|-not|!|-g|--glob)[=\ ]+(-[a-z]+\ +)?[\"\'\!]*(\./)?\.gaia || "$line" =~ \.gaia[^\ ]*\ +(-o\ +)?-prune ]]; then excluded=1; fi
         for word in ${words[@]+"${words[@]}"}; do
           word=$(strip_token_wrapping "$word")
           case "$word" in "$command_name" | -* | '') continue ;; esac
