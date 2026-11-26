@@ -2,9 +2,10 @@
 #
 # The one definition of an honored triage mark, shared by the dispositions
 # check (which grades against it) and the audit loop evaluator (whose default
-# stop exempts it), and the roster owner lookup both also use for cross-remit
-# vetoes. Sourced, never executed; defines variables and functions and runs
-# nothing at source time. Bash 3.2 compatible.
+# stop exempts it), the roster owner lookup both also use for cross-remit
+# vetoes, and the repair_paths shape test the veto writer and reader share.
+# Sourced, never executed; defines variables and functions and runs nothing at
+# source time. Bash 3.2 compatible.
 #
 # A mark is honored when the member that wrote it is a triage member, the
 # roster gives that member the entry's path, the entry is security false and
@@ -23,6 +24,9 @@ _TRIAGE_MEMBERS='["code-audit-maintainer-shell","code-audit-maintainer-node"]'
 
 # shellcheck disable=SC2016
 _GAIA_TRIAGE_HONORED_JQ='def triage_honored: .triage == true and .security == false and .severity != "critical" and (.member | IN($triage_members[]));'
+
+# repair_paths shape, for a finding and a vetoes.json key.
+_GAIA_REPAIR_PATHS_SHAPED_JQ='def repair_paths_shaped: . == null or (type == "array" and all(.[]; type == "string" and . != ""));'
 
 # _roster_owned_indexes <audited-root> <scripts-directory> <lookup>: the JSON
 # array of lookup indexes whose triage-marked allowlisted entry the roster

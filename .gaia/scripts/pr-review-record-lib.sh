@@ -10,9 +10,11 @@
 #
 # The fix routing writes the audit loop's veto through _veto_recorded_fix, the
 # one writer of vetoes.json, so the key, its lock and its round arithmetic stay
-# the audit's own. _veto_recorded_fix reads the caller's ROOT (the audited
-# checkout), RUN_FOLDER and FINDING_FILE, and the _error and _evaluator below.
+# the audit's own. ROOT is the audited checkout; what _veto_recorded_fix and
+# _veto_withdraw need is in audit-recorded-decision-lib.sh's header.
 
+# shellcheck source=/dev/null
+. "$SCRIPT_DIRECTORY/audit-triage-lib.sh"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIRECTORY/audit-recorded-decision-lib.sh"
 # shellcheck source=/dev/null

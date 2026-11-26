@@ -339,6 +339,149 @@ owner_reviews() {
   [ "$(veto_state | jq -c '.satisfied | length')" = 1 ] || { echo "owner dispatched"; return 1; }
 }
 
+# fixer_result_on <round> <disposition> <identity>: fixer-<round>-audit.json with one result on the identity.
+fixer_result_on() {
+  jq -n -c --argjson identity "$3" --arg disposition "$2" \
+    '{attempt: 1, results: [{member: $identity[0], finding_class: $identity[1], path: $identity[2], line: $identity[3], disposition: $disposition, reason: "r", changed_paths: ["f.txt"]}]}' >"$RUN/fixer-$1-audit.json"
+}
+
+# pr_review_base: a pr-reviewer veto on f.txt:2 from round 2, which a
+# main-thread commit repaired (round 2 on TREE_FIXED). The roster gives f.txt to
+# code-audit-shell, which reviews rounds 2 and 3. Round 2's owner reported
+# NEIGHBOUR, two lines from the vetoed line; round 3 reports nothing. A round-3
+# tree argument other than TREE_FIXED changes f.txt there, and round 3 then
+# dispatches no member: a clean round-3 owner review would satisfy the key on
+# its own, so only the round-2 review, and what the dispositions say of its
+# NEIGHBOUR, decides the case.
+pr_review_base() {
+  local round_three_tree="${1:-TREE_FIXED}"
+  VETOED_IDENTITY='["pr-reviewer","pr-review/pr-1","f.txt",2]'
+  NEIGHBOUR='["code-audit-shell","holistic/unclassified","f.txt",4]'
+  roster_owning_vetoed_path code-audit-shell
+  inline_base TREE_FIXED || return 1
+  STATE="$(jq -c --argjson neighbour "$NEIGHBOUR" '.history.rounds[1].members = ["code-audit-shell"]
+    | .history.rounds[1].snapshot = {keys: [$neighbour]}
+    | .history.rounds += [.history.rounds[1] | .round = 3 | .snapshot = null | .tree = $round_three_tree
+      | if $undispatched then .members = [] else . end]' --arg round_three_tree "${!round_three_tree}" \
+    --argjson undispatched "$([ "$round_three_tree" = TREE_FIXED ] && echo false || echo true)" <<<"$STATE")"
+  ROUND_KEYS='[]'
+}
+
+pr_review_veto_state() {
+  gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 3 "$ROUND_KEYS" | jq -c '.satisfied | length'
+}
+
+@test "veto-state pr-reviewer: an owner finding near the repair stops counting as the vetoed one only when an earlier round fixed it under its own key; a waived one, or one in round r, still does" {
+  # fixed neighbour clears
+  pr_review_base TREE_MOVED || return 1
+  fix_entry 2 fix "$NEIGHBOUR"
+  fixer_result_on 2 fixed "$NEIGHBOUR"
+  [ "$(pr_review_veto_state)" = 1 ] || { echo "a neighbour fixed under its own key"; return 1; }
+  reset_run # a fixed claim with no change to the neighbour's path since the round does not excuse it
+  pr_review_base TREE_FIXED || return 1
+  fix_entry 2 fix "$NEIGHBOUR"
+  fixer_result_on 2 fixed "$NEIGHBOUR"
+  [ "$(pr_review_veto_state)" = 0 ] || { echo "a fixed claim with no tree change"; return 1; }
+  reset_run # waived, filed or diverted neighbour still blocks
+  local disposition
+  for disposition in waive-out-of-scope file divert; do
+    pr_review_base TREE_MOVED || return 1
+    fix_entry 2 "$disposition" "$NEIGHBOUR"
+    [ "$(pr_review_veto_state)" = 0 ] || { echo "a neighbour disposed $disposition"; return 1; }
+  done
+  reset_run # disposed fix but the fixer did not fix it
+  pr_review_base TREE_MOVED || return 1
+  fix_entry 2 fix "$NEIGHBOUR"
+  fixer_result_on 2 disputed "$NEIGHBOUR"
+  [ "$(pr_review_veto_state)" = 0 ] || { echo "a neighbour the fixer disputed"; return 1; }
+  reset_run # the same defect re-reported in round r still blocks, even with a round-r fix record for it
+  pr_review_base TREE_MOVED || return 1
+  fix_entry 2 fix "$NEIGHBOUR"
+  fixer_result_on 2 fixed "$NEIGHBOUR"
+  STATE="$(jq -c '.history.rounds[2].members = ["code-audit-shell"]' <<<"$STATE")"
+  ROUND_KEYS='[["code-audit-shell","holistic/unclassified","f.txt",3]]'
+  fix_entry 3 fix '["code-audit-shell","holistic/unclassified","f.txt",3]'
+  fixer_result_on 3 fixed '["code-audit-shell","holistic/unclassified","f.txt",3]'
+  [ "$(pr_review_veto_state)" = 0 ] || { echo "a re-report in round r"; return 1; }
+  reset_run # a cross-remit audit-member key keeps reading every owner finding nearby as its re-report
+  pr_review_base TREE_MOVED || return 1
+  VETOED_IDENTITY='["code-audit-frontend","rule/x","f.txt",2]'
+  veto 2
+  fix_entry 2 fix "$NEIGHBOUR"
+  fixer_result_on 2 fixed "$NEIGHBOUR"
+  [ "$(pr_review_veto_state)" = 0 ] || { echo "a cross-remit audit-member key"; return 1; }
+}
+
+# repair_veto <effective_from_round> <repair-paths-json>: vetoes.json holding the
+# vetoed identity with repair_paths.
+repair_veto() {
+  veto "$1"
+  jq -c --argjson repair_paths "$2" '.keys[0].repair_paths = $repair_paths' "$RUN/vetoes.json" >"$RUN/vetoes.json.new" && mv "$RUN/vetoes.json.new" "$RUN/vetoes.json"
+}
+
+# roster_owning <f.txt-member> [g.txt-member]: a roster with no default member,
+# so a path it names no member for has no owner.
+roster_owning() {
+  mkdir -p "$MAIN/.gaia"
+  {
+    printf 'auditors:\n  - name: %s\n    globs:\n      - "f.txt"\n    audience: adopter\n' "$1"
+    [ -z "${2-}" ] || printf '  - name: %s\n    globs:\n      - "g.txt"\n    audience: adopter\n' "$2"
+  } >"$MAIN/.gaia/audit-ci.yml"
+}
+
+# repair_base <round-2-tree-variable>: the key on f.txt:2 from round 2 names
+# g.txt as its repair path, which code-audit-shell owns; round 2 dispatches the
+# key's member and that owner, and both report nothing.
+repair_base() {
+  roster_owning code-audit-frontend code-audit-shell
+  inline_base "$1" || return 1
+  repair_veto 2 '["g.txt"]'
+  STATE="$(jq -c '.history.rounds[1].members = ["code-audit-frontend", "code-audit-shell"]' <<<"$STATE")"
+  ROUND_KEYS='[]'
+}
+
+@test "veto-state repair_paths: a repair landing only in the named path satisfies the key once that path's owner reviewed it clean, and never without that review, the change, an owner or the key's own clean review" {
+  local unsatisfied
+  repair_base TREE_UNRELATED || return 1
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ] || { echo "the repair path reviewed clean"; return 1; }
+  unsatisfied="{\"satisfied\":[],\"unsatisfied\":[$VETOED_IDENTITY]}"
+  veto 2
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "no repair_paths"; return 1; }
+  repair_base TREE_UNRELATED || return 1
+  STATE="$(jq -c '.history.rounds[1].members = ["code-audit-frontend"]' <<<"$STATE")"
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "the repair path's owner not dispatched"; return 1; }
+  repair_base TREE_UNRELATED || return 1
+  ROUND_KEYS='[["code-audit-shell","rule/y","g.txt",1]]'
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "the owner reported on the repair path"; return 1; }
+  repair_base TREE_UNRELATED || return 1
+  ROUND_KEYS="[$VETOED_IDENTITY]"
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "the key re-reported on its own path"; return 1; }
+  # The repair landed only in g.txt, so f.txt has no hunk: a same-class finding far from the vetoed line is another finding.
+  repair_base TREE_UNRELATED || return 1
+  ROUND_KEYS='[["code-audit-frontend","rule/x","f.txt",30]]'
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ] || { echo "a far finding on a key path with no hunk"; return 1; }
+  ROUND_KEYS='[["code-audit-frontend","rule/x","f.txt",3]]'
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "a near finding on a key path with no hunk"; return 1; }
+  # The owner's finding on the repair path far from the hunk the repair wrote is another finding.
+  repair_base TREE_UNRELATED || return 1
+  ROUND_KEYS='[["code-audit-shell","rule/y","g.txt",30]]'
+  [ "$(inline_veto_state | jq -c .)" = "{\"satisfied\":[$VETOED_IDENTITY],\"unsatisfied\":[]}" ] || { echo "a far owner finding on the repair path"; return 1; }
+  # TREE_FIXED is built on TREE_UNRELATED, so from that waiver tree only f.txt changed.
+  repair_base TREE_FIXED || return 1
+  STATE="$(jq -c --arg tree "$TREE_UNRELATED" '.history.rounds[0].tree = $tree' <<<"$STATE")"
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "the repair path never changed"; return 1; }
+  repair_base TREE_UNRELATED || return 1
+  roster_owning code-audit-frontend
+  [ "$(inline_veto_state | jq -c .)" = "$unsatisfied" ] || { echo "an unowned repair path"; return 1; }
+  printf '%s' "$(inline_veto_state)" >"$BATS_TEST_TMPDIR/state.json"
+  [ "$(gaia_veto_reviewers "$MAIN" "$BRANCH_NAME" "$MAIN" "$(cat "$BATS_TEST_TMPDIR/state.json")" | jq -c .reviewers)" = '["code-audit-frontend"]' ] || return 1
+  roster_owning code-audit-frontend code-audit-shell
+  [ "$(gaia_veto_reviewers "$MAIN" "$BRANCH_NAME" "$MAIN" "$(cat "$BATS_TEST_TMPDIR/state.json")" | jq -c .reviewers)" = '["code-audit-frontend","code-audit-shell"]' ] || { echo "the repair path's owner is not dispatched"; return 1; }
+  repair_veto 2 '[1]'
+  run gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 2 "$ROUND_KEYS"
+  [ "$status" -ne 0 ]
+}
+
 @test "roster owners: a release-skipped owner is not named on a release branch, where the resolver never dispatches it" {
   . "$REPO_ROOT/.gaia/tests/helpers/release-skip-fixture.sh"
   release_skip_init "$BATS_TEST_TMPDIR/release"
@@ -353,6 +496,14 @@ owner_reviews() {
   printf '{"version":1,"keys":"no"}\n' >"$RUN/vetoes.json"
   run gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 3 "$ROUND_KEYS"
   [ "$status" -ne 0 ]
+}
+
+@test "veto-state: a key whose repair_paths holds an empty path fails" {
+  satisfied_base
+  jq -c '.keys[0].repair_paths = [""]' "$RUN/vetoes.json" >"$RUN/vetoes.json.next"
+  mv "$RUN/vetoes.json.next" "$RUN/vetoes.json"
+  run gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 3 "$ROUND_KEYS"
+  [ "$status" -ne 0 ] || { echo "an empty repair path read as a valid vetoes file: $output"; return 1; }
 }
 
 # stop_snapshot <default_stop>: a snapshot whose stop set is the vetoed identity.

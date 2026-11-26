@@ -1,11 +1,16 @@
 # shellcheck shell=bash
 #
-# The veto write behind a human's recorded fix decision, the owner lookup that
-# gates a cross-remit one, the commit lookup behind a fixed one, and the gate
-# and veto removal behind a discard one. Sourced by audit-pr-sections-lib.sh.
-# Relies on the caller's _error, _evaluator, _round_lookup, _SECURITY_CLASS_JQ,
-# gaia_exclusive_lock_take, _roster_owners, _GAIA_DISPOSITIONS_DIRECTORY, ROOT,
-# RUN_FOLDER and FINDING_FILE. Runs nothing at source time. Never `cd`s.
+# The veto write behind a human's recorded fix decision, the owner lookups that
+# gate a cross-remit one and its repair paths, the commit lookup behind a fixed one, and the gate
+# and veto removal behind a discard one. Sourced by audit-pr-sections-lib.sh
+# and pr-review-record-lib.sh. Relies on audit-triage-lib.sh's _roster_owners
+# and _GAIA_REPAIR_PATHS_SHAPED_JQ and the caller's _error, _evaluator,
+# _round_lookup, _SECURITY_CLASS_JQ, gaia_exclusive_lock_take,
+# _GAIA_DISPOSITIONS_DIRECTORY, ROOT, RUN_FOLDER and FINDING_FILE;
+# pr-review-record-lib.sh calls only _veto_recorded_fix and _veto_withdraw,
+# which need no _round_lookup, _SECURITY_CLASS_JQ or
+# _GAIA_DISPOSITIONS_DIRECTORY. Runs
+# nothing at source time. Never `cd`s.
 
 # _finding_path_owned: true when the roster at ROOT gives FINDING_FILE's path
 # to a member (_roster_owners), whose review is what satisfies a cross-remit
@@ -15,6 +20,28 @@ _finding_path_owned() {
   local owners
   owners="$(_roster_owners "$ROOT" "$_GAIA_DISPOSITIONS_DIRECTORY" "$(jq -c '[.path]' "$FINDING_FILE" 2>/dev/null)")" || owners=null
   printf '%s' "$owners" | jq 'if type == "object" then length > 0 else null end' 2>/dev/null || printf 'null\n'
+}
+
+# _repair_paths_owned: rc 0 when FINDING_FILE names no repair_paths, or none is
+# on audit-fix-verify-state-lib.sh's ENFORCEMENT_PATHS (the fixer can never land
+# an edit there) and the roster at ROOT gives every one to a member, whose review
+# is what satisfies the veto there. rc 3 after naming the refusal otherwise, an
+# unreadable roster included.
+_repair_paths_owned() {
+  local repair_paths owners enforcement_path repair_path
+  repair_paths="$(jq -c "$_GAIA_REPAIR_PATHS_SHAPED_JQ"'.repair_paths // [] | if repair_paths_shaped then . else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
+    { _error "repair_paths in $FINDING_FILE must be an array of non-empty paths"; return 3; }
+  [ "$repair_paths" != "[]" ] || return 0
+  # Sourced in a child shell: in this one its helpers would overwrite the caller's same-named functions.
+  while IFS= read -r repair_path; do
+    while IFS= read -r enforcement_path; do
+      [ "$repair_path" != "$enforcement_path" ] || {
+        _error "fix refused: repair path $repair_path is an enforcement path the fixer can never edit; drop it from repair_paths, or repair it by hand"; return 3; }
+    done < <(bash -c '. "$1" && printf "%s\n" "${ENFORCEMENT_PATHS[@]}"' _ "$_GAIA_DISPOSITIONS_DIRECTORY/audit-fix-verify-state-lib.sh")
+  done < <(printf '%s' "$repair_paths" | jq -r '.[]')
+  owners="$(_roster_owners "$ROOT" "$_GAIA_DISPOSITIONS_DIRECTORY" "$repair_paths")" || owners="{}"
+  printf '%s' "$owners" | jq -e --argjson paths "$repair_paths" '. as $owners | type == "object" and all($paths[]; . as $path | $owners | has($path))' >/dev/null 2>&1 ||
+    { _error "fix refused: the roster gives a repair path to no member, so no review could satisfy the veto there; name only owned repair_paths"; return 3; }
 }
 
 # _veto_lock <directory>: gaia_exclusive_lock_take, so parallel record-residual
@@ -34,16 +61,23 @@ _veto_lock() {
 # never re-dispatched, so the next unit could stop clean with the fix unmade.
 # The key's direction is the reason in FINDING_FILE, never the row's: the row
 # falls back to the failure mode, which would brief the fixer with the defect
-# as if it were the human's repair. A repeat decision replaces the direction
-# on every entry for the key, whatever its effective_from_round, and a blank
-# reason clears it.
+# as if it were the human's repair. FINDING_FILE's optional repair_paths names
+# the other files the repair lands in, which the veto then reads as its fix.
+# A key keeps one entry: a repeat decision updates it in place, replacing the
+# direction and repair_paths (a blank reason or no repair_paths clears them) and
+# moving effective_from_round forward to the new start round, so the fix counts
+# from the redo; a second entry would block the clean stop on its own after a
+# review satisfied the first. Copies an older file holds collapse into one.
 # Writing the veto before the row lets a retry finish a failed call. rc 3 when
-# FINDING_FILE is unreadable, next-unit fails, the lock stays held, vetoes.json
-# is unreadable or malformed, or the write fails. A hung live call's lock is cleared by removing vetoes.json.lock.
+# FINDING_FILE is unreadable or its repair_paths is not an array of non-empty
+# strings, next-unit fails, the lock stays held, vetoes.json is unreadable or
+# malformed, or the write fails. A hung live call's lock is cleared by removing vetoes.json.lock.
 _veto_recorded_fix() {
-  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file="$RUN_FOLDER/vetoes.json.$$" direction
+  local vetoes_file="$RUN_FOLDER/vetoes.json" next_unit veto_document='{"version":1,"keys":[]}' temporary_file="$RUN_FOLDER/vetoes.json.$$" direction repair_paths
   direction="$(jq -r 'if (.reason | type) == "string" and (.reason | test("\\S")) then .reason else "" end' "$FINDING_FILE" 2>/dev/null)" ||
     { _error "unreadable finding $FINDING_FILE, so the fix decision was not recorded"; return 3; }
+  repair_paths="$(jq -c "$_GAIA_REPAIR_PATHS_SHAPED_JQ"'.repair_paths // [] | if repair_paths_shaped then unique else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
+    { _error "repair_paths in $FINDING_FILE must be an array of non-empty paths, so the fix decision was not recorded"; return 3; }
   next_unit="$(_evaluator next-unit)" && [[ "$next_unit" =~ ^([0-9]+)\ ([0-9]+)$ ]] ||
     { _error "the evaluator could not print the next unit, so the fix decision was not recorded"; return 3; }
   _veto_lock "$vetoes_file.lock" || { _error "cannot lock $vetoes_file"; return 3; }
@@ -52,14 +86,17 @@ _veto_recorded_fix() {
       { rm -rf "$vetoes_file.lock"; _error "unparseable $vetoes_file"; return 3; }
   fi
   if ! jq -n --argjson vetoes "$veto_document" --argjson row "$1" --argjson unit "${BASH_REMATCH[1]}" --argjson from "${BASH_REMATCH[2]}" \
-    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg direction "$direction" '($row | [.member, .finding_class, .path, .line]) as $key
+    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg direction "$direction" --argjson repair_paths "$repair_paths" '($row | [.member, .finding_class, .path, .line]) as $key
     | (if $direction == "" then {} else {direction: $direction} end) as $directed
+    | (if ($repair_paths | length) == 0 then {} else {repair_paths: $repair_paths} end) as $repaired
     | def samekey: [.member, .finding_class, .path, .line] == $key;
-    def same: samekey and .effective_from_round == $from;
-    def redirect: (del(.direction)) + $directed;
-    ($vetoes | .keys |= map(if samekey then redirect else . end)) as $redirected
-    | if any($vetoes.keys[]; same) then $redirected
-      else $redirected | .keys += [$row | {member, finding_class, path, line, vetoed_at: $now, unit: $unit, effective_from_round: $from} + $directed] end' \
+    [$vetoes.keys[] | select(samekey)] as $existing
+    | (if ($existing | length) == 0
+       then $row | {member, finding_class, path, line, vetoed_at: $now, unit: $unit, effective_from_round: $from}
+       else $existing | max_by(.effective_from_round) | if .effective_from_round < $from then .effective_from_round = $from | .unit = $unit else . end end
+       | del(.direction, .repair_paths) + $directed + $repaired) as $entry
+    | $vetoes | .keys = (if ($existing | length) == 0 then .keys + [$entry]
+        else reduce .keys[] as $kept ([]; if ($kept | samekey | not) then . + [$kept] elif any(.[]; samekey) then . else . + [$entry] end) end)' \
     >"$temporary_file" 2>/dev/null || ! mv "$temporary_file" "$vetoes_file"; then
     rm -f "$temporary_file"; rm -rf "$vetoes_file.lock"; _error "cannot write $vetoes_file"; return 3
   fi

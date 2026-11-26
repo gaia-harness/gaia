@@ -37,6 +37,7 @@
     ".gaia/cli/src/update-deps/advisory-model.ts": 731,
     ".gaia/cli/src/wiki/chain.ts": 524,
     ".gaia/cli/src/wiki/commit-classify.ts": 639,
+    ".gaia/scripts/audit-fix-verify.sh": 402,
     ".gaia/scripts/audit-light-route.sh": 663,
     ".gaia/scripts/audit-light-telemetry.sh": 576,
     ".gaia/scripts/audit-loop-state-lib.sh": 559,
