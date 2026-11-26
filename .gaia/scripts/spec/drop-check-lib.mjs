@@ -239,11 +239,16 @@ export function deferredText(specText) {
   return normalizeWhitespace(collected);
 }
 
+// The heading texts that open a decision record: `Decision`, `Decisions`,
+// `Decisions taken`, `Decisions taken here`, `Amendment`, `Amendments`, and
+// either amendment heading led by `Build` or `Spec`.
+const DECISION_HEADING =
+  /^(?:decisions?(?: taken(?: here)?)?|(?:build |spec )?amendments?)$/i;
+
 // The normalized text of every decision-record section of a SPEC: a heading of
-// level 2 or deeper whose text names a decision or an amendment (`## Build
-// amendment`, `## Decisions taken here`), up to the next heading at the same
-// depth or shallower. Matching the heading keeps the check from reading a behavior or a
-// note as a decision.
+// level 2 or deeper whose whole text is in DECISION_HEADING, up to the next
+// heading at the same depth or shallower. Matching the whole heading keeps the
+// check from reading a behavior or a note as a decision.
 export function decisionRecordText(specText) {
   const collected = [];
   let level = 0;
@@ -253,7 +258,7 @@ export function decisionRecordText(specText) {
       const depth = heading[1].length;
       if (level && depth > level) continue;
       level =
-        depth > 1 && /decision|amendment/i.test(heading[2]) ? depth : 0;
+        depth > 1 && DECISION_HEADING.test(heading[2]) ? depth : 0;
     } else if (level) {
       collected.push(line);
     }

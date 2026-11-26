@@ -51,8 +51,10 @@
 //     destination is not still-stated, restored, refusal, deferred or
 //     feature-dropped (deferred: the fragment sits in the post-fix SPEC's
 //     clarifications.deferred[] text; feature-dropped: a maintainer decision
-//     dropped the whole feature, and the fragment sits under a heading of the
-//     post-fix SPEC that names a decision or an amendment);
+//     dropped the whole feature: the drop's behavior is gone from the post-fix
+//     SPEC, and the fragment sits under a decision-record heading (see
+//     DECISION_HEADING in drop-check-lib.mjs) of the pre-fix SPEC in spec mode
+//     or of the SPEC in plan mode, so the record predates the fixer's edit);
 //   - a compared line removed or changed between pre and post that no
 //     edits[].quote matches (six or more words found in the pre-fix line);
 //   - a case removed beyond any it replaced with fewer `drops` entries than
@@ -70,7 +72,11 @@
 import {existsSync, realpathSync, statSync} from 'node:fs';
 import {basename} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {normalizeWhitespace, SECURITY_KINDS} from './behaviors.mjs';
+import {
+  normalizeWhitespace,
+  parseBehaviors,
+  SECURITY_KINDS,
+} from './behaviors.mjs';
 import {
   behaviorKinds,
   comparedLines,
@@ -193,9 +199,13 @@ function dropRefusals(fix, context) {
       continue;
     }
     if (drop.destination === 'feature-dropped') {
-      if (!decisionRecordText(context.specText).includes(fragment)) {
+      if (context.liveBehaviorIds.has(drop.behavior)) {
         refuse(
-          `fragment is not in a decision record of the SPEC (the text under a heading naming a decision or an amendment): "${fragment}"`,
+          `is feature-dropped but ${drop.behavior} is still a behavior of the post-fix SPEC; feature-dropped means the whole behavior is gone`,
+        );
+      } else if (!decisionRecordText(context.decisionSourceText).includes(fragment)) {
+        refuse(
+          `fragment is not in a decision record that predates the fix (the text under a Decision or Amendment heading): "${fragment}"`,
         );
       }
       continue;
@@ -276,8 +286,13 @@ export function checkFixes(settings) {
   const kindSources = [specText];
   if (settings.mode === 'spec') kindSources.unshift(readText(settings.pre));
   const context = {
+    decisionSourceText:
+      settings.mode === 'spec' ? readText(settings.pre) : specText,
     destinations,
     kinds: behaviorKinds(kindSources),
+    liveBehaviorIds: new Set(
+      parseBehaviors(specText).behaviors.map((behavior) => behavior.id),
+    ),
     requirementsText: settings.requirements
       ? readText(settings.requirements)
       : '',
