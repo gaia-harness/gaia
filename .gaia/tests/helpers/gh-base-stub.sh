@@ -37,6 +37,8 @@
 
 gh_base_stub_install() {
   local bin_directory="$1"
+  GH_STUB_PLANT_HELPER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/plant-review-record.sh"
+  export GH_STUB_PLANT_HELPER
   mkdir -p "$bin_directory"
   cat > "$bin_directory/gh" <<'STUB_EOF'
 #!/usr/bin/env bash
@@ -106,7 +108,15 @@ case "$first $second" in
     jq -n \
       --arg base "${GH_STUB_BASE_BRANCH:-main}" \
       --argjson extra "$extra_json" \
-      '{baseRefName: $base, isCrossRepository: false, isDraft: false} + $extra' | emit
+      '{baseRefName: $base, isCrossRepository: false, isDraft: false} + $extra' > "${TMPDIR:-/tmp}/gh-base-stub-pr.$$"
+    # A record body carrying a finding-free PR review section gets the local
+    # record the merge gates require beside it: the section never stands in.
+    if jq -e '(.body // "") | contains("No findings.")' "${TMPDIR:-/tmp}/gh-base-stub-pr.$$" >/dev/null 2>&1; then
+      . "$GH_STUB_PLANT_HELPER"
+      plant_review_record "$(jq -r '.headRefName' "${TMPDIR:-/tmp}/gh-base-stub-pr.$$")" "$(jq -r '.number' "${TMPDIR:-/tmp}/gh-base-stub-pr.$$")" "$(jq -r '.headRefOid' "${TMPDIR:-/tmp}/gh-base-stub-pr.$$")" "$PWD"
+    fi
+    emit < "${TMPDIR:-/tmp}/gh-base-stub-pr.$$"
+    rm -f "${TMPDIR:-/tmp}/gh-base-stub-pr.$$"
     exit 0
     ;;
   "pr ready")

@@ -318,14 +318,26 @@ golden_setup() {
   cp "$REPO_ROOT/.claude/hooks/lib/audit-base-provenance.sh" "$GREPO/.claude/hooks/lib/audit-base-provenance.sh"
 
   # A gh that answers the gate's fork query (`--json isCrossRepository`) with
-  # `false` and fails everything else, so the table never reaches the
-  # developer's own gh and a pull-request record stays unresolvable, which is
-  # what the golden_run_hook comment below relies on.
+  # `false`, and the pull-request record read with a record naming the
+  # sandbox's head and carrying a complete PR review section (the gate denies
+  # an allow that has none), and fails everything else, so the table never
+  # reaches the developer's own gh.
   GOLDEN_GH_BIN="$GREPO.bin"
+  PLANT_REVIEW_HELPER="$REPO_ROOT/.gaia/tests/helpers/plant-review-record.sh"
+  export PLANT_REVIEW_HELPER
   mkdir -p "$GOLDEN_GH_BIN"
-  cat > "$GOLDEN_GH_BIN/gh" <<'EOF'
+  cat > "$GOLDEN_GH_BIN/gh" <<EOF
 #!/usr/bin/env bash
+golden_repository="$GREPO"
+EOF
+  cat >> "$GOLDEN_GH_BIN/gh" <<'EOF'
 case "$*" in *isCrossRepository*) printf 'false\n'; exit 0 ;; esac
+if [ "$1 ${2-}" = "pr view" ]; then
+  . "$PLANT_REVIEW_HELPER"; plant_review_record feature 30 "$(git -C "$golden_repository" rev-parse HEAD)" "$golden_repository"
+  jq -n --arg head "$(git -C "$golden_repository" rev-parse HEAD)" \
+    '{title:"", baseRefName:"main", number:30, headRefOid:$head, headRefName:"feature", body:("<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: " + $head + "\nNo findings.\n<!-- gaia:pr-review:end -->")}'
+  exit 0
+fi
 exit 1
 EOF
   chmod +x "$GOLDEN_GH_BIN/gh"

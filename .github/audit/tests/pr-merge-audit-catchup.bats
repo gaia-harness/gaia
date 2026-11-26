@@ -22,6 +22,7 @@
 bats_require_minimum_version 1.5.0
 
 setup() {
+  export MGF_PLANT_REVIEW=1
   REPO_ROOT_DIRECTORY="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   . "$REPO_ROOT_DIRECTORY/.gaia/tests/hooks/helpers/run-hook.sh"
   . "$REPO_ROOT_DIRECTORY/.gaia/tests/helpers/audit-roster.sh"

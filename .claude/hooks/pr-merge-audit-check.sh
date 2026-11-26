@@ -94,6 +94,17 @@
 # denies as well. .claude/hooks/lib/cross-repo-refusal.sh holds the check and
 # the message.
 #
+# PR REVIEW. On every path that would allow, before any bypass stamp, the gate
+# also requires the pull request's review record (pr-review.json under the run
+# folder, found through the PR's head branch) to be complete: present, keyed to
+# this pull request, unchanged since its outcome, run, with every finding
+# disposed and every fix fixed, and a `## PR review` section in the PR body that
+# matches it. A wholly out-of-scope or chore(deps) pull request is also denied
+# for a commit after the reviewed head that the review did not make. The check
+# reads only presence and completeness (.claude/hooks/lib/pr-review-verdict.sh),
+# never a finding's content or severity. To unblock a deny that names the PR
+# review, run the PR review (wiki/concepts/PR Merge Workflow.md, #### PR review).
+#
 # Without every dispatched member's clearance, the hook denies the gh pr merge
 # call. To unblock:
 #   1. Dispatch the audit-loop-unit agent on the current branch; it runs the

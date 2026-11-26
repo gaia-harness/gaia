@@ -37,6 +37,11 @@ Every command below runs from `RESOLVED_ROOT`, on `<CLEANSE_BRANCH>`, whichever 
    git push -u origin <CLEANSE_BRANCH>
    gh pr create --draft --title "<commit subject>" --body-file <report-summary-file>
    bash .gaia/scripts/pr-body-stamp.sh write --pr <N>
+   ```
+
+   Then run the PR review per `wiki/concepts/PR Merge Workflow.md` `#### PR review`, then the merge:
+
+   ```bash
    gh pr merge <N> --squash --delete-branch --auto
    ```
 

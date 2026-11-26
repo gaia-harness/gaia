@@ -54,6 +54,7 @@ teardown() {
 # queued, PR still open); `pr view` reports MERGED only after a merge, and answers
 # the stamp precondition query with the branch's own file list, head, and base.
 write_stub_gh() {
+  export GAIA_TEST_REPO_ROOT="$REPO_ROOT"
   cat > "$1" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$GH_LOG"
@@ -61,7 +62,7 @@ case "$1" in
   release) printf 'v0.0.0\n' ;;
   pr)
     case "$2" in
-      create) printf 'https://example.test/pull/1\n' ;;
+      create) printf 'https://github.com/example/repo/pull/7\n' ;;
       merge)
         [ "${MOCK_GH_MERGE:-merge}" = "defer" ] && exit 0
         branch=$(git rev-parse --abbrev-ref HEAD)
@@ -70,6 +71,22 @@ case "$1" in
         ;;
       view)
         case "$*" in
+          *headRefName,headRefOid,baseRefName,body*)
+            head=$(git rev-parse HEAD)
+            branch=$(git rev-parse --abbrev-ref HEAD)
+            # The gate reads the local review record, never the body alone: plant a
+            # complete one (no findings) for this branch under the main checkout.
+            main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+            record=$(. "$GAIA_TEST_REPO_ROOT/.gaia/scripts/pr-body-sections-lib.sh"; . "$GAIA_TEST_REPO_ROOT/.claude/hooks/lib/pr-review-verdict.sh"
+              r=$(jq -n -c --arg head "$head" '{pr: 7, reviewed_head: $head, spec: "present", outcome: "ran", findings: []}')
+              jq -c --arg digest "$(pr_review_findings_digest "$r")" '.findings_sha256 = $digest' <<<"$r")
+            mkdir -p "$main_root/.gaia/local/runs/$branch"
+            printf '%s\n' "$record" > "$main_root/.gaia/local/runs/$branch/pr-review.json"
+            body=$(. "$GAIA_TEST_REPO_ROOT/.gaia/scripts/pr-body-sections-lib.sh"; . "$GAIA_TEST_REPO_ROOT/.claude/hooks/lib/pr-review-verdict.sh"; pr_review_render_section "$record")
+            jq -n --arg branch "$branch" --arg head "$head" --arg body "$body" \
+              '{headRefName: $branch, headRefOid: $head, baseRefName: "main", body: $body}'
+            exit 0
+            ;;
           *files,headRefOid,baseRefName*)
             files=$(git diff --name-only main...HEAD | jq -R '{path: .}' | jq -s .)
             jq -n --argjson files "$files" --arg head "$(git rev-parse HEAD)" \
@@ -196,6 +213,11 @@ make_repo() {
   cp "$CHECK_UPDATES_SOURCE" "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
   cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/exclusive-lock-lib.sh"
   cp "$MAIN_ROOT_LIBRARY_SOURCE" "$REPOSITORY_FIXTURE/.gaia/scripts/main-root-lib.sh"
+  mkdir -p "$REPOSITORY_FIXTURE/.claude/hooks/lib"
+  cp "$REPO_ROOT/.claude/hooks/lib/pr-review-verdict.sh" "$REPOSITORY_FIXTURE/.claude/hooks/lib/pr-review-verdict.sh"
+  for review_gate_file in pr-review-gate.sh audit-loop-state-lib.sh branch-name-lib.sh audit-key-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh pr-body-sections-lib.sh; do
+    cp "$REPO_ROOT/.gaia/scripts/$review_gate_file" "$REPOSITORY_FIXTURE/.gaia/scripts/$review_gate_file"
+  done
   cp "$STATUSLINE_SOURCE" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline.sh"
   cp "$STATUSLINE_RIGHT_SOURCE" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline-right.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$REPOSITORY_FIXTURE/.gaia/scripts/resolve-audit-members.sh"

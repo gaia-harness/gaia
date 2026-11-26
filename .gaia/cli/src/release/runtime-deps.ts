@@ -154,6 +154,11 @@ const PATH_PREFIXES = ['.gaia/', '.claude/', '.github/'] as const;
  *     never sources or executes it, and it can have no manifest entry.
  *     This module has no inline-ignore channel, so the allowlist is the
  *     documented one.
+ *   - `.github/pull_request_template.md` and `.github/PULL_REQUEST_TEMPLATE.md`:
+ *     the adopter's own pull request template candidates. The PR review bundle
+ *     script probes them only with `git ls-files --error-unmatch` and treats a
+ *     missing one as absent; they are never sourced or executed and are
+ *     adopter-owned, so they have no manifest entry.
  */
 const PROSE_PATH_ALLOWLIST: ReadonlySet<string> = new Set([
   '.claude/agents/code-audit-frontend/cn.md',
@@ -190,6 +195,8 @@ const PROSE_PATH_ALLOWLIST: ReadonlySet<string> = new Set([
   '.claude/skills/tailwind',
   '.claude/skills/typescript',
   '.gaia/packages',
+  '.github/PULL_REQUEST_TEMPLATE.md',
+  '.github/pull_request_template.md',
   '.github/workflows',
 ]);
 

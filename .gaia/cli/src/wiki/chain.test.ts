@@ -113,6 +113,8 @@ const matches = (
   );
 };
 
+const PR_URL = 'https://github.com/gaia/example/pull/42';
+
 const buildRunner =
   (
     scripted: {
@@ -126,6 +128,12 @@ const buildRunner =
     const match = scripted.find((entry) => matches(entry.argv, command, args));
 
     if (match !== undefined) return match.result;
+
+    // A land opens its pull request with `gh pr create`, which prints the URL
+    // the review check reads the number from.
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'create') {
+      return okResult(`${PR_URL}\n`);
+    }
 
     return okResult('');
   };
@@ -183,6 +191,39 @@ const statusCalls = (recorded: RecordedCall[]): RecordedCall[] =>
 const mergeCalls = (recorded: RecordedCall[]): RecordedCall[] =>
   ghCalls(recorded).filter(
     (entry) => entry.args[0] === 'pr' && entry.args[1] === 'merge'
+  );
+
+const gateArgv = (root: string, pr: string): string[] => [
+  '.gaia/scripts/pr-review-gate.sh',
+  'check',
+  '--root',
+  root,
+  '--pr',
+  pr,
+  '--out-of-scope',
+];
+const gateCalls = (recorded: RecordedCall[]): RecordedCall[] =>
+  recorded.filter(
+    (entry) =>
+      entry.command === 'bash' &&
+      entry.args[0] === '.gaia/scripts/pr-review-gate.sh'
+  );
+// The out-of-scope stamp's first call. These cases script no PR record, so a
+// stamp that ran ahead of the review gate would refuse right here, before any
+// status post or ready flip; seeing no such read is what proves it never began.
+const stampBeganCalls = (recorded: RecordedCall[]): RecordedCall[] =>
+  ghCalls(recorded).filter(
+    (entry) =>
+      entry.args[0] === 'pr' &&
+      entry.args[1] === 'view' &&
+      entry.args.includes('files,headRefOid,baseRefName')
+  );
+const refusedBeforeMerge = (recorded: RecordedCall[]): boolean =>
+  mergeCalls(recorded).length === 0 &&
+  statusCalls(recorded).length === 0 &&
+  stampBeganCalls(recorded).length === 0 &&
+  !ghCalls(recorded).some(
+    (entry) => entry.args[0] === 'pr' && entry.args[1] === 'ready'
   );
 
 describe('wiki chain', () => {
@@ -701,6 +742,157 @@ describe('wiki chain', () => {
       expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
       expect(recorded.find((c) => c.args[0] === 'pull')).toBeUndefined();
       expect(recorded.find((c) => c.args[0] === 'branch')).toBeUndefined();
+    });
+
+    describe('the PR review gate before auto-merge', () => {
+      const chainBranch = 'wiki/2026-05-07-0532';
+      const branchScript = [
+        {
+          argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+          result: okResult(`${chainBranch}\n`),
+        },
+        {
+          argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
+          result: okResult('origin/main\n'),
+        },
+        {
+          argv: ['rev-list', '--count', 'origin/main..HEAD'],
+          result: okResult('3\n'),
+        },
+      ];
+      test('an incomplete review prints the gate line, exits non-zero, and runs no ready, stamp or merge', () => {
+        sandbox = setupSandbox();
+        const recorded: RecordedCall[] = [];
+        const runner = buildRunner(
+          [
+            ...branchScript,
+            {
+              argv: gateArgv(realpathSync(sandbox.root), '42'),
+              result: {
+                ...okResult('PR review: no review record.\n'),
+                status: 1,
+              },
+            },
+          ],
+          recorded
+        );
+
+        const exit = finishLanding(sandbox.root, runner);
+
+        expect(exit).toBe(1);
+        expect(stdio.errors.join('')).toContain('PR review: no review record.');
+        expect(gateCalls(recorded)).toHaveLength(1);
+        expect(refusedBeforeMerge(recorded)).toBe(true);
+      });
+
+      test('a gate that could not run prints the could-not-be-checked line and queues no merge', () => {
+        sandbox = setupSandbox();
+        const recorded: RecordedCall[] = [];
+        const runner = buildRunner(
+          [
+            ...branchScript,
+            {
+              argv: gateArgv(realpathSync(sandbox.root), '42'),
+              result: failResult(2, 'jq missing'),
+            },
+          ],
+          recorded
+        );
+
+        const exit = finishLanding(sandbox.root, runner);
+
+        expect(exit).toBe(2);
+        expect(stdio.errors.join('')).toContain(
+          'PR review: could not be checked on PR #42 (jq missing).'
+        );
+        expect(refusedBeforeMerge(recorded)).toBe(true);
+      });
+
+      test('a created pull request on a host outside github.com is read back by number and reaches the gate', () => {
+        sandbox = setupSandbox();
+        const recorded: RecordedCall[] = [];
+        const inner = buildRunner(
+          [
+            ...branchScript,
+            {
+              argv: gateArgv(realpathSync(sandbox.root), '42'),
+              result: {...okResult('PR review: incomplete.\n'), status: 1},
+            },
+          ],
+          recorded
+        );
+        let viewCount = 0;
+
+        const runner: CommandRunner = (command, args, options) => {
+          if (command === 'gh' && args[0] === 'pr' && args[1] === 'view') {
+            viewCount += 1;
+            recorded.push({args: [...args], command});
+
+            return viewCount === 1 ?
+                okResult('')
+              : okResult(
+                  JSON.stringify({
+                    number: 42,
+                    state: 'OPEN',
+                    url: 'https://ghe.example.com/gaia/example/pull/42',
+                  })
+                );
+          }
+
+          if (command === 'gh' && args[0] === 'pr' && args[1] === 'create') {
+            recorded.push({args: [...args], command});
+
+            return okResult('https://ghe.example.com/gaia/example/pull/42\n');
+          }
+
+          return inner(command, args, options);
+        };
+
+        const exit = finishLanding(sandbox.root, runner);
+
+        expect(exit).toBe(1);
+        expect(gateCalls(recorded)).toHaveLength(1);
+        expect(stdio.errors.join('')).not.toContain(
+          'could not read the pull request number'
+        );
+      });
+
+      test('an already open pull request is reused: no gh pr create, and the gate runs with its number', () => {
+        sandbox = setupSandbox();
+        const recorded: RecordedCall[] = [];
+        const runner = buildRunner(
+          [
+            ...branchScript,
+            {
+              argv: ['pr', 'view', chainBranch, '--json', 'number,url,state'],
+              result: okResult(
+                JSON.stringify({
+                  number: 77,
+                  state: 'OPEN',
+                  url: 'https://github.com/gaia/example/pull/77',
+                })
+              ),
+            },
+            {
+              argv: gateArgv(realpathSync(sandbox.root), '77'),
+              result: {...okResult('PR review: incomplete.\n'), status: 1},
+            },
+          ],
+          recorded
+        );
+
+        const exit = finishLanding(sandbox.root, runner);
+
+        expect(exit).not.toBe(0);
+        expect(
+          ghCalls(recorded).some(
+            (entry) => entry.args[0] === 'pr' && entry.args[1] === 'create'
+          )
+        ).toBe(false);
+        expect(gateCalls(recorded)).toHaveLength(1);
+        expect(gateCalls(recorded)[0]?.args[5]).toBe('77');
+        expect(refusedBeforeMerge(recorded)).toBe(true);
+      });
     });
 
     test.each(

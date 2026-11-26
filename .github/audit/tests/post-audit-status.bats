@@ -73,6 +73,8 @@
 #      leaves it pending, and a frontend refusal still outranks the waiver.
 
 setup() {
+  PLANT_REVIEW_HELPER="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/plant-review-record.sh"
+  export PLANT_REVIEW_HELPER
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../../../.claude/hooks/post-audit-status.sh"
@@ -153,6 +155,7 @@ remote="$REMOTE"
 pushed_head_file="$PUSHED_HEAD_FILE"
 pr_title_file="$BATS_TEST_TMPDIR/pr-title"
 pr_files_file="$BATS_TEST_TMPDIR/pr-files"
+pr_body_file="$BATS_TEST_TMPDIR/pr-body"
 EOF
   cat >> "$GH_BIN/gh" <<'EOF'
 case "$1" in
@@ -166,6 +169,18 @@ case "$1" in
     case " $* " in
       *" baseRefName "*)
         printf 'main\n'
+        exit 0
+        ;;
+      *" number,headRefName,body "*)
+        [ -f "$pushed_head_file" ] || exit 1
+        printf '7\nfeat/review-fixture\n'
+        if [ -f "$pr_body_file" ]; then
+          cat "$pr_body_file"
+        else
+          . "$PLANT_REVIEW_HELPER"; plant_review_record feat/review-fixture 7 "$(cat "$pushed_head_file")"
+          printf '<!-- gaia-pr-body-head: %s -->\n' "$(cat "$pushed_head_file")"
+          printf '<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: %s\nNo findings.\n<!-- gaia:pr-review:end -->\n' "$(cat "$pushed_head_file")"
+        fi
         exit 0
         ;;
       *" body "*)
@@ -356,7 +371,7 @@ commit_mixed_diff() {
 
 # Clear the member markers and the POST log between cases of one fixture.
 reset_case() {
-  rm -rf "$SANDBOX/.gaia/local/audit" "$BATS_TEST_TMPDIR/pr-title" "$BATS_TEST_TMPDIR/pr-files"
+  rm -rf "$SANDBOX/.gaia/local/audit" "$BATS_TEST_TMPDIR/pr-title" "$BATS_TEST_TMPDIR/pr-files" "$BATS_TEST_TMPDIR/pr-body"
   rm -f "$POST_LOG"
   mkdir -p "$SANDBOX/.gaia/local/audit"
 }
@@ -476,6 +491,8 @@ a frontend refusal keeps frontend pending under a dep-bump title|chore(deps): bu
     cases=$((cases + 1))
     reset_case
     [ -z "$title" ] || printf '%s' "$title" > "$BATS_TEST_TMPDIR/pr-title"
+    # A waived PR is reviewed like any other, so the mock's default body carries
+    # the head stamp and a complete PR review section.
     # shellcheck disable=SC2086 # the paths column is a space-separated list
     [ -z "$files" ] || install_pr_files $files
     [ "$refused" = no ] || write_refusal_body "$SANDBOX/.gaia/local/audit/${frontend_digest}.refused" code-audit-frontend
@@ -500,6 +517,24 @@ a frontend refusal keeps frontend pending under a dep-bump title|chore(deps): bu
     fi
   done <<<"$CHORE_DEPS_CASES"
   [ "$cases" -eq 8 ]
+}
+
+# A dep-bump pull request waives the frontend marker only, never the PR review:
+# GitHub auto-merge completes on this status alone, so a manifest-only PR whose
+# branch has no local review record is declined with the verdict's own reason.
+@test "chore(deps) waiver: a waived dep-bump with no PR review record is declined for the missing review" {
+  install_gh_mock ok
+  install_resolver
+  install_chore_deps_predicate
+  commit_mixed_diff
+  reset_case
+  printf '%s' 'chore(deps): bump vite to 8.3.0' > "$BATS_TEST_TMPDIR/pr-title"
+  install_pr_files package.json pnpm-lock.yaml
+  printf '<!-- gaia-pr-body-head: %s -->\n' "$PUSHED_HEAD" > "$BATS_TEST_TMPDIR/pr-body"
+  run_shell_member_handshake
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "status: declined: PR review: no review record for PR #7; GAIA-Audit not posted." ] || return 1
+  [ ! -f "$POST_LOG" ] || return 1
 }
 
 # The order-independence the helper's header promises, and that a commit key
@@ -736,8 +771,10 @@ ABSENT_TIP=0123456789abcdef0123456789abcdef01234567
 # $1 (default: the sandbox's origin/main). Call again after HEAD or the base moves.
 refresh_stub() {
   GH_STUB_BASE_TIP="${1:-$(git -C "$SANDBOX" rev-parse refs/remotes/origin/main)}"
-  GH_STUB_PR_JSON="$(jq -n --arg head "$(git -C "$SANDBOX" rev-parse HEAD)" '{headRefOid: $head, title: "", files: [], body: "<!-- gaia-pr-body-head: \($head) -->"}')"
+  GH_STUB_PR_JSON="$(jq -n --arg head "$(git -C "$SANDBOX" rev-parse HEAD)" '{headRefOid: $head, number: 7, headRefName: "feat/review-fixture", title: "", files: [], body: "<!-- gaia-pr-body-head: \($head) -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: \($head)\nNo findings.\n<!-- gaia:pr-review:end -->"}')"
   export GH_STUB_BASE_TIP GH_STUB_PR_JSON
+  . "$THIS_DIRECTORY/../../../.gaia/tests/helpers/plant-review-record.sh"
+  plant_review_record feat/review-fixture 7 "$(git -C "$SANDBOX" rev-parse HEAD)" "$SANDBOX"
 }
 
 install_base_stub() {

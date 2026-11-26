@@ -18,6 +18,7 @@
 bats_require_minimum_version 1.5.0
 
 setup() {
+  export MGF_PLANT_REVIEW=1
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   # GAIA_REVIEW_SCRIPTS points the suite at a scratch copy of the scripts tree (its
   # .gaia/scripts, with .claude/hooks/lib two levels up), which is how a mutant is run.

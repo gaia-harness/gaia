@@ -40,6 +40,8 @@
 # coverage list up here only drifts behind them.
 
 setup() {
+  PLANT_REVIEW_HELPER="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/plant-review-record.sh"
+  export PLANT_REVIEW_HELPER
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/catchup-fixture.sh"
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
@@ -133,9 +135,12 @@ case "$args" in
     # always empty, so the chore(deps) bypass never fires; the base ref is
     # empty unless a test declared one, which makes the hook fall back to the
     # remote's advertised default exactly as it does with no PR at all. The
-    # head is the sandbox HEAD the hook runs in, with a body stamped for it.
+    # head is the sandbox HEAD the hook runs in, with a body stamped for it and
+    # carrying a complete PR review section for that head, so the review gate
+    # passes and each row is decided by the reason it tests.
+    . "$PLANT_REVIEW_HELPER"; plant_review_record feature 12 "$(git rev-parse HEAD)" "$PWD"
     jq -n --arg base_reference "$(cat "$base_reference_file")" --arg head "$(git rev-parse HEAD)" \
-      '{title:"", baseRefName:$base_reference, number:12, headRefOid:$head, body:"<!-- gaia-pr-body-head: \($head) -->"}'
+      '{title:"", baseRefName:$base_reference, number:12, headRefOid:$head, headRefName:"feature", body:"<!-- gaia-pr-body-head: \($head) -->\n<!-- gaia:pr-review:start -->\n## PR review\n\nReviewed head: \($head)\nNo findings.\n<!-- gaia:pr-review:end -->"}'
     ;;
   "repo view"*)
     printf 'gaia-react/gaia\n'
