@@ -659,8 +659,8 @@ assert_reaper_denied() {
   printf '%s' '{"audit_loop":{"round_cap":4},"version":1}' >"$OVERRIDE"
   rm -f "$CONTEXT_FILE"
 
-  # Each attempt runs only when the guard allows it, so the checks below fail
-  # if the guard stops denying.
+  # Each write is carried out for real only when the guard allows it, so the
+  # checks below fail if the guard stops denying.
   run_edit Write "$OVERRIDE"
   if ! grep -qF -- '"permissionDecision": "deny"' <<<"$output"; then
     printf '%s' '{"audit_loop":{"round_cap":9},"version":1}' >"$OVERRIDE"
