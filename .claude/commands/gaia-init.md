@@ -24,7 +24,7 @@ State plainly what you are doing and make no claim about why the user paused or 
 
 ### Run mode, the first gate
 
-Before Step 0's pnpm check, ask this as the **very first** AskUserQuestion (in the user's language):
+Before Step 0's pnpm check, ask this as the **very first** AskUserQuestion (header `Setup mode`, in the user's language):
 
 > How do you want to handle the setup questions?
 >
@@ -151,7 +151,7 @@ Ask the two language questions one at a time (Q2 interpolates Q1's answer), then
 
 _Non-response: HARD-BLOCK. Re-ask; never auto-pick. Automatic mode: the detected user language._
 
-Use AskUserQuestion with this single question:
+Use AskUserQuestion (header `UI language`) with this single question:
 
 > What should be the primary language for this app's UI?
 >
@@ -175,7 +175,7 @@ Do not add an "Other" option: the tool adds its own, and a hand-added one is an 
 
 Interpret a typed reply yourself: resolve it to an ISO 639-1 code plus English name. Only ask again if it's genuinely ambiguous or you can't identify the language.
 
-Then confirm a typed reply with an AskUserQuestion so the user can catch a misread before anything runs, e.g. `Primary language: French (fr). Look right?`, options `Looks right (Recommended)` and `Change it`. A correction typed through Other, or `Change it`, resolves the language again and re-confirms.
+Then confirm a typed reply with an AskUserQuestion (header `Language`) so the user can catch a misread before anything runs, e.g. `Primary language: French (fr). Look right?`, options `Looks right (Recommended)` and `Change it`. A correction typed through Other, or `Change it`, resolves the language again and re-confirms.
 
 Hold the resolved choice as `{primary}` (ISO code + English name); the next batch interpolates it into its labels, which is why Q1 is asked first and alone.
 
@@ -183,7 +183,7 @@ Hold the resolved choice as `{primary}` (ISO code + English name); the next batc
 
 _Non-response: HARD-BLOCK. Re-ask; the i18n teardown (`STRIP_I18N=true`) is never auto-selected. Automatic mode: primary-only, keep scaffolding (`STRIP_I18N=false`)._
 
-The primary is now known, so its name can appear in the labels below. Ask this as its own AskUserQuestion. The localize-later choice is an option of the no-additional-languages branch, so it needs no round-trip of its own:
+The primary is now known, so its name can appear in the labels below. Ask this as its own AskUserQuestion (header `Languages`). The localize-later choice is an option of the no-additional-languages branch, so it needs no round-trip of its own:
 
 > Primary language is {primary}. Any additional languages?
 >
@@ -199,7 +199,7 @@ If the user picks "Add more languages now", ask for the languages as a plain cha
 
 Interpret the reply yourself: resolve each entry to an ISO 639-1 code, dedupe, and drop any that match {primary}. Only ask again about an entry you genuinely can't identify, don't make the user learn code syntax.
 
-Then confirm the resolved list with an AskUserQuestion so the user can catch a misread before anything runs, e.g. `Adding: German (de), Japanese (ja), Spanish (es). Look right?`, options `Looks right (Recommended)` and `Change it`. Corrections typed through Other, or `Change it`, resolve the list again and re-confirm before moving to Step 3.
+Then confirm the resolved list with an AskUserQuestion (header `Locales`) so the user can catch a misread before anything runs, e.g. `Adding: German (de), Japanese (ja), Spanish (es). Look right?`, options `Looks right (Recommended)` and `Change it`. Corrections typed through Other, or `Change it`, resolve the list again and re-confirm before moving to Step 3.
 
 Resolve two values from the answer:
 
@@ -210,16 +210,16 @@ Resolve two values from the answer:
 
 _Non-response: title is HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. The slug is never asked: it is derived from the chosen title. Automatic mode: title-cased folder name (title), the slug derived from the folder name or `app` when that derives nothing (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 10 follow-up._
 
-Ask Q3 and Q4 in a single AskUserQuestion call. Each question carries exactly the two real options below, its default first and marked ` (Recommended)`; the tool's own Other takes a typed value. Never add an option that only points at Other (such as "Enter another" or "Type a value"): the tool adds its own, and a hand-added one is an inert button that returns no value.
+Ask Q3 and Q4 in a single AskUserQuestion call. Each question carries exactly the two real options below, its default first; the tool's own Other takes a typed value. Never add an option that only points at Other (such as "Enter another" or "Type a value"): the tool adds its own, and a hand-added one is an inert button that returns no value.
 
-**Q3, GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, ask with these options:
+**Q3, GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, the call's AskUserQuestion question (header `CODEOWNERS`) has these options:
 
 - `@{handle} (Recommended)`, description: `your authenticated GitHub login`. A gh-detected handle is the user's own identity, not a guess, so it is safe to default to.
 - `Set it later`: writes the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder to `.github/CODEOWNERS` and flags it as a required Step 10 follow-up.
 
 A different handle arrives through Other. Suggest `@username` format; store the bare handle. If detection fails there is no default, so this stays a free-text identity value that is **never fabricated**: leave Q3 out of the call and ask for the handle as a plain chat message (its answer is open-ended free text), and on interactive non-response HARD-BLOCK and re-ask rather than guessing; in automatic mode, use the loud placeholder so a wrong owner never ships.
 
-**Q4, Project title.** Options:
+**Q4, Project title.** The call's AskUserQuestion question (header `Title`) has these options:
 
 - `{title-cased folder name} (Recommended)`, description: `slug {the slug it derives}`.
 - `{folder name as-is}`, description: `slug {the slug it derives}`. When the folder name already equals its title-cased form (e.g. `Convene`), offer the folder name lowercased instead.
@@ -230,7 +230,7 @@ A different handle arrives through Other. Suggest `@username` format; store the 
 
 _Non-response: SAFE-DEFAULT. Re-ask once, then `camelCase` (`CASING=camel`). Automatic mode: `camelCase`._
 
-Ask this as its own AskUserQuestion:
+Ask this as its own AskUserQuestion (header `JSON casing`):
 
 > How does your API name JSON fields?
 >
@@ -244,7 +244,7 @@ Map the answer to `CASING`: `camelCase` is `camel`, `snake_case` is `snake`, `No
 
 _Non-response: SAFE-DEFAULT. Re-ask once, then `No` (`QUERY=false`). Automatic mode: `No`._
 
-Ask this as its own AskUserQuestion:
+Ask this as its own AskUserQuestion (header `Data layer`):
 
 > Add TanStack Query for client-owned data?
 >
@@ -443,7 +443,7 @@ Read `.claude/commands/setup-gaia.md` now, the whole file, and run it from its `
 If any `gaia init <step>` invocation exits non-zero, the structured-error JSON on stderr explains the cause. Claude recovers the run itself; the user only fixes a cause Claude cannot (a credential, a system package, a disk or network problem):
 
 1. Name the cause from the error. When Claude can fix it within the project, fix it and go to item 3.
-2. Otherwise say what the user needs to change, and ask with `AskUserQuestion` whether it is fixed: `Fixed, resume (Recommended)` and `Stop here`. On `Stop here`, end the run and say that asking Claude to resume `/gaia-init` later continues from the failed step.
+2. Otherwise say what the user needs to change, and ask with `AskUserQuestion` (header `Init failed`) whether it is fixed: `Fixed, resume (Recommended)` and `Stop here`. On `Stop here`, end the run and say that asking Claude to resume `/gaia-init` later continues from the failed step.
 3. Resume. A failed `gaia init <step>` is replayed by the resume itself:
 
 ```bash

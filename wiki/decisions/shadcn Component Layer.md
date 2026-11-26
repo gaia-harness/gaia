@@ -39,7 +39,7 @@ Two replacements worth naming:
 
 ## Theme files
 
-Token values live in `apps/web/app/styles/theme.css` (`:root`, `.dark`, `color-scheme`), imported by `apps/web/app/styles/tailwind.css`, which keeps `@theme inline` and the base layer. The split exists so `/update-gaia` can treat the token file as adopter-editable while GAIA keeps owning the plumbing. `components.json` names `tailwind.css` as its CSS file, not `theme.css`: naming `theme.css` degrades `@shadcn/lint`'s token discovery, because that file does not import Tailwind. `shadcn add` leaves both theme files untouched.
+The token values live in `theme.css` and the plumbing in `tailwind.css` ([[Styles]]). The split exists so `/update-gaia` can treat the token file as adopter-editable while GAIA keeps owning the plumbing. `components.json` names `tailwind.css` as its CSS file, not `theme.css`: naming `theme.css` degrades `@shadcn/lint`'s token discovery, because that file does not import Tailwind. `shadcn add` leaves both theme files untouched.
 
 Rebranding means editing token values in `theme.css` or regenerating them with shadcn's theming tools. The role-token contract is `apps/web/.claude/rules/tailwind.md`.
 

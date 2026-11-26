@@ -265,6 +265,6 @@ For each later chunk the orchestrator dispatches a judgment-only agent with thes
 
 - Use `WORK_DIR="$RUN_DIR/work-<k>"`, `<k>` being the number in its chunk file's name, emptied first. Chunk agents can run at the same time, so each keeps to its own scratch directory.
 - For each path: choose B as Step 6 does (deferred entries included), run the three-way merge, and run the judgment pass. A declared region path goes through the region oracle first (`merge-generated.md`); a normalized verdict other than `conflict` is recorded as the row it names, except that `no-adopter-drift` becomes `auto-merged` with the latest copy as its `.auto` candidate, since this agent never writes A.
-- **Never write A.** For each independent clean merge, copy the merged content to `candidates/<path>.auto` and set `autoCandidate: "candidates/<path>.auto"` on the `auto-merged` entry; the orchestrator copies it with `update-gaia-report.sh apply-auto` after validating.
+- **Never write A.** See `.claude/skills/update-gaia/references/merge-report.md` (File entries and statuses).
 - Build every open item and candidate exactly as above, including `changelogReason` and `earlierDecision`.
 - Write `judgment-<k>.json` with Bash as a top-level JSON array of file entries, one per path in the chunk (`jq -s '.' "$WORK_DIR/entries.jsonl" > "<judgment path>"`), check that its length equals the chunk file's line count, and return a thin digest: the judgment path, counts per status, the open item count.

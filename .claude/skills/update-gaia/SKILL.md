@@ -174,7 +174,7 @@ GAIA 2.0.0 moved the React app out of the repository root, and every 2.x release
 bash .gaia/scripts/update-gaia-preflight.sh refuse-1x --baseline <BASELINE>
 ```
 
-On `REFUSED`, stop and relay the message: no worktree, no branch, no prune, no download. For a 1.x baseline, offer to run the printed command with `AskUserQuestion` (`Run it` (Recommended) or `Stop`), and only after `Run it` run it and follow the note it extracts, in this session.
+On `REFUSED`, stop and relay the message: no worktree, no branch, no prune, no download. For a 1.x baseline, offer to run the printed command with `AskUserQuestion` (header `1.x baseline`, `Run it` (Recommended) or `Stop`), and only after `Run it` run it and follow the note it extracts, in this session.
 
 ## Step 3c: Download and verify the bundles
 
@@ -221,7 +221,7 @@ It prints `AFTER_MERGE <version> <path>` for each after-merge note in version or
 
 - **`NOTES_FAILED`**: stop and relay the lines. Nothing was branched, pruned or merged, and no worktree was created.
 - **No `BLOCKING` line**: persist the `AFTER_MERGE` lines (possibly none) and continue to Step 4.
-- **`BLOCKING <version> <path>`**: stop here, before the Proceed question. Tell the user the update crosses a blocking migration note, name its path inside the verified bundle, and list each `AFTER_MERGE` note as a note to follow after the blocking note's merge step and before its version write. Then ask with `AskUserQuestion` whether to follow the blocking note in this session. On yes, read the note from that path and follow it: it owns the hop to its own version, including its own merge and its `.gaia/VERSION` and manifest write at that version, and the user re-runs `/update-gaia` afterwards for any later notes and the setup drift. On no, stop: nothing was branched, pruned or merged, no worktree was created, `.gaia/VERSION` is unchanged, and only the verified update cache remains. Its options are `Follow it now` (Recommended) and `Stop`.
+- **`BLOCKING <version> <path>`**: stop here, before the Proceed question. Tell the user the update crosses a blocking migration note, name its path inside the verified bundle, and list each `AFTER_MERGE` note as a note to follow after the blocking note's merge step and before its version write. Then ask with `AskUserQuestion` (header `Blocking`) whether to follow the blocking note in this session. On yes, read the note from that path and follow it: it owns the hop to its own version, including its own merge and its `.gaia/VERSION` and manifest write at that version, and the user re-runs `/update-gaia` afterwards for any later notes and the setup drift. On no, stop: nothing was branched, pruned or merged, no worktree was created, `.gaia/VERSION` is unchanged, and only the verified update cache remains. Its options are `Follow it now` (Recommended) and `Stop`.
 
 ## Step 4: Show the release notes and confirm
 
@@ -235,6 +235,7 @@ bash .gaia/scripts/update-gaia-preflight.sh changelog --baseline <BASELINE> --la
 
 It reads GAIA's own `CHANGELOG.md` at `<LATEST_TAG>` and prints every `## [x.y.z]` section strictly newer than `<BASELINE>` through `<LATEST>`, without the `[Unreleased]` block or the bottom link-reference list, or the single-tag GitHub release body when the fetch fails. It saves the range as `changelog-range.md` beside the target's `tree/` for the execution agent's CHANGELOG reasons and documented adopter actions, since the release bundle withholds `CHANGELOG.md`; with `--save-from` the saved file starts at the oldest deferred baseline, so a deferred item's reason can come from a release older than `<BASELINE>`. A failed fetch removes the file, so the agent reports the range as unavailable rather than reading a stale one. Print the range to the user. When Step 3d printed `AFTER_MERGE` lines, name each `AFTER_MERGE` note (its version and its path) as a note this run follows after the merge. Then use `AskUserQuestion`:
 
+- **Header**: `Update`
 - **Question**: "Update GAIA from v$BASELINE to $LATEST_TAG?"
 - **Options**: `Proceed` (Recommended) / `Abort`.
 
@@ -392,7 +393,7 @@ Keep this addendum for the review summary:
 
 Run the quality gate per `wiki/decisions/Quality Gate.md` in the acting tree, applying its auto-fixes. Green: continue to the review point.
 
-Red: ask with `AskUserQuestion` whether to fix it, options `Fix it now (Recommended)` and `Stop here`, with the failing output in the question. On `Fix it now`, the orchestrator fixes the failures and runs the gate again, at most two fix attempts in all. Still red after the second: ask once more with only `Stop here`, showing the failing output. `Stop here` ends the run per the stop rule: the worktree is kept, the update stays uncommitted with its version written, the worktree notice is printed, and the next step is re-running `/update-gaia` inside the worktree, which resumes at this gate.
+Red: ask with `AskUserQuestion` (header `Gate red`) whether to fix it, options `Fix it now (Recommended)` and `Stop here`, with the failing output in the question. On `Fix it now`, the orchestrator fixes the failures and runs the gate again, at most two fix attempts in all. Still red after the second: ask once more with only `Stop here`, showing the failing output. `Stop here` ends the run per the stop rule: the worktree is kept, the update stays uncommitted with its version written, the worktree notice is printed, and the next step is re-running `/update-gaia` inside the worktree, which resumes at this gate.
 
 ## Review point
 
@@ -433,6 +434,7 @@ git -C <acting tree> diff
 
 The status lists the untracked files the merge added, which `git diff` never shows. Then ask once with `AskUserQuestion`:
 
+- **Header**: `Commit`
 - **Question**: "Commit this update?"
 - **Options**: `Commit` (Recommended) / `Not yet`.
 

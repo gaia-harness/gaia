@@ -30,7 +30,9 @@ export type RouteCalls = {
   query: string;
 };
 
-export type RouteShape = 'detail' | 'list';
+export const ROUTE_SHAPES = ['list', 'detail'] as const;
+
+export type RouteShape = (typeof ROUTE_SHAPES)[number];
 
 export type ServiceBinding = {
   derived: ReturnType<typeof deriveNames>;

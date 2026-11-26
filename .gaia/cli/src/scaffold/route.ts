@@ -46,6 +46,7 @@ import {
   DATA_VARIANTS,
   deriveRouteCalls,
   readServiceBinding,
+  ROUTE_SHAPES,
 } from './route-service.js';
 import type {DataVariant, RouteShape} from './route-service.js';
 import {renderTemplate, templatePath} from './template.js';
@@ -53,7 +54,6 @@ import type {TemplateVars} from './template.js';
 import type {ScaffoldResult} from './types.js';
 
 const VALID_GROUPS = new Set(['_public', '_session']);
-const ROUTE_SHAPES: readonly RouteShape[] = ['list', 'detail'];
 
 /** Folder names the page layout reserves for its own subfolders. */
 const RESERVED_PAGE_NAME_LIST = ['assets', 'hooks', 'state', 'tests', 'utils'];

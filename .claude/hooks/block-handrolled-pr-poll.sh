@@ -91,10 +91,7 @@ fi
 gaia_hook_payload_read "$payload" || exit 0
 
 tool=$GAIA_HOOK_TOOL_NAME
-case "$tool" in
-  Bash | Monitor) ;;
-  *) exit 0 ;;
-esac
+gaia_hook_is_command_tool "$tool" || exit 0
 
 command=$GAIA_HOOK_COMMAND
 [ -n "$command" ] || exit 0

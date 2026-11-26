@@ -10,6 +10,7 @@ import path from 'node:path';
 const PAGE_BACKED_FIXTURES = ['makeAxeBuilder'];
 
 export const BROWSER_FIXTURES = new Set(['page', 'context', 'browser']);
+export const TEST_FUNCTION_NAMES = new Set(['test', 'it']);
 // A fixtures chain is a base module plus a layer or two; the cap only keeps a
 // pathological import graph from walking the whole tree.
 const MAXIMUM_IMPORT_DEPTH = 8;
@@ -123,7 +124,7 @@ const testImportsOf = (ts, sourceFile) => {
     const bindings = statement.importClause?.namedBindings;
     if (bindings === undefined || !ts.isNamedImports(bindings)) continue;
     const suppliesTest = bindings.elements.some((specifier) =>
-      ['test', 'it'].includes((specifier.propertyName ?? specifier.name).text),
+      TEST_FUNCTION_NAMES.has((specifier.propertyName ?? specifier.name).text),
     );
     if (suppliesTest) specifiers.push(statement.moduleSpecifier.text);
   }
