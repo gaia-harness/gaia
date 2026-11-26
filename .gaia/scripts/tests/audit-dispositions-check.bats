@@ -1723,6 +1723,17 @@ decide() {
   [ "$(jq -c '.keys[0].repair_paths' "$RUN_FOLDER/vetoes.json")" = '["lib/s.sh"]' ]
 }
 
+@test "needs-human: a fix decision naming an enforcement repair path is refused and writes no veto" {
+  local enforcement_path
+  stop_rounds "$(minor_rows f.txt 1 1)"
+  enforcement_path="$(bash -c '. "$1" && printf "%s" "${ENFORCEMENT_PATHS[0]}"' _ "$SCRIPTS/audit-fix-verify-state-lib.sh")"
+  [ -n "$enforcement_path" ] || return 1
+  with_f_txt_ownerless decide 1 fix "$(jq -n -c --arg path "$enforcement_path" '{repair_paths: ["lib/s.sh", $path]}')"
+  [ "$status" -eq 3 ] || { echo "an enforcement repair path recorded: $status $output"; return 1; }
+  grep -qF -- 'enforcement path the fixer can never edit' <<<"$output" || { echo "the refusal names no cause: $output"; return 1; }
+  [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+}
+
 # race_shims <directory>: a forced interleave of two fix decisions. Its mkdir
 # exits 0 even when the directory exists, as uutils mkdir does for two racing
 # creators, and counts attempts on the veto lock. Its date holds the first

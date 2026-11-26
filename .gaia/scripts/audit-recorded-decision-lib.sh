@@ -20,12 +20,20 @@ _finding_path_owned() {
 # _repair_paths_owned: rc 0 when FINDING_FILE names no repair_paths, or the
 # roster at ROOT gives every one of them to a member, whose review is what
 # satisfies the veto there. rc 3 after naming the refusal otherwise, an
-# unreadable roster included.
+# unreadable roster included, or a path on audit-fix-verify-state-lib.sh's
+# ENFORCEMENT_PATHS (the fixer can never land an edit there).
 _repair_paths_owned() {
-  local repair_paths owners
+  local repair_paths owners enforcement_path repair_path
   repair_paths="$(jq -c '.repair_paths // [] | if type == "array" and all(.[]; type == "string" and . != "") then . else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
     { _error "repair_paths in $FINDING_FILE must be an array of non-empty paths"; return 3; }
   [ "$repair_paths" != "[]" ] || return 0
+  # The list is read from its one owner, in a child shell so nothing else it holds leaks in.
+  while IFS= read -r repair_path; do
+    while IFS= read -r enforcement_path; do
+      [ "$repair_path" != "$enforcement_path" ] || {
+        _error "fix refused: repair path $repair_path is an enforcement path the fixer can never edit; drop it from repair_paths, or repair it by hand"; return 3; }
+    done < <(bash -c '. "$1" && printf "%s\n" "${ENFORCEMENT_PATHS[@]}"' _ "$_GAIA_DISPOSITIONS_DIRECTORY/audit-fix-verify-state-lib.sh")
+  done < <(printf '%s' "$repair_paths" | jq -r '.[]')
   owners="$(_roster_owners "$ROOT" "$_GAIA_DISPOSITIONS_DIRECTORY" "$repair_paths")" || owners="{}"
   printf '%s' "$owners" | jq -e --argjson paths "$repair_paths" '. as $owners | type == "object" and all($paths[]; . as $path | $owners | has($path))' >/dev/null 2>&1 ||
     { _error "fix refused: the roster gives a repair path to no member, so no review could satisfy the veto there; name only owned repair_paths"; return 3; }
