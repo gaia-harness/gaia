@@ -531,7 +531,7 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   [ "$(gaia_loop_recommended context '{"verdict":"stalled"}')" = stop ]
   [ "$(gaia_loop_recommended context '{"verdict":"quiet","signals":{"quiet":true}}')" = grant ]
   [ "$(gaia_loop_recommended context '{"verdict":"stalled","signals":{"stalled":true}}')" = stop ]
-  [ "$(gaia_loop_recommended cap '{"verdict":"enriching"}')" = accept ]
+  [ "$(gaia_loop_recommended cap '{"verdict":"enriching","accept_eligible":true}')" = accept ]
   [ "$(gaia_loop_recommended fallback '{"verdict":"continue"}')" = grant ]
   [ "$(gaia_loop_recommended cap null)" = grant ]
   true
@@ -543,6 +543,16 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   [ "$(gaia_loop_recommended rubric:stalled '{"verdict":"stalled","signals":{"stalled":true,"small-tail":true},"accept_eligible":false}')" = stop ]
   [ "$(gaia_loop_recommended rubric:stalled '{"verdict":"stalled","signals":{"stalled":true,"small-tail":false},"accept_eligible":true}')" = stop ]
   true
+}
+
+@test "recommended: an accept the trend picks is a grant when the snapshot is ineligible or an accept blocker holds" {
+  local quiet='{"verdict":"quiet","signals":{"quiet":true},"accept_eligible":true}'
+  [ "$(gaia_loop_recommended cap "$(jq -c '. + {accept_blockers: {unsatisfied_vetoes: [], unreviewed_members: []}}' <<<"$quiet")")" = accept ]
+  [ "$(gaia_loop_recommended cap "$(jq -c '. + {accept_blockers: {unsatisfied_vetoes: [["m","rule/x","f.txt",3]], unreviewed_members: []}}' <<<"$quiet")")" = grant ]
+  [ "$(gaia_loop_recommended cap "$(jq -c '. + {accept_blockers: {unsatisfied_vetoes: [], unreviewed_members: ["m"]}}' <<<"$quiet")")" = grant ]
+  [ "$(gaia_loop_recommended rubric:stalled '{"verdict":"stalled","signals":{"stalled":true,"small-tail":true},"accept_eligible":true,"accept_blockers":{"unsatisfied_vetoes":[],"unreviewed_members":["m"]}}')" = grant ]
+  [ "$(gaia_loop_recommended cap '{"verdict":"enriching","accept_eligible":false}')" = grant ]
+  [ "$(gaia_loop_recommended rubric:stalled '{"verdict":"stalled","signals":{"stalled":true},"accept_blockers":{"unsatisfied_vetoes":[],"unreviewed_members":["m"]}}')" = stop ]
 }
 
 @test "pinned question: an enriching trigger says the new finding sits on changed lines, and that accepting keeps them only when Accept is offered" {
