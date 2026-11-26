@@ -341,7 +341,7 @@ _command_undecided() {
 # refused on a cross_remit finding whose path the roster gives to no member,
 # since no review could satisfy that veto, and on any finding whose
 # repair_paths names a path the roster gives to no member, for the same
-# reason. A fixed records a cross_remit finding of the open round that the main thread fixed, with no veto, since its member
+# reason, or a path spelled other than git reports a changed file. A fixed records a cross_remit finding of the open round that the main thread fixed, with no veto, since its member
 # never reviews that file; a security-class one only on such an unowned path,
 # where fixed is its one exit. It is refused unless the finding's path differs
 # between the open round's tree (round-history) and HEAD's, and it stores the

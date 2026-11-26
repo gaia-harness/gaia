@@ -21,23 +21,21 @@ _finding_path_owned() {
   printf '%s' "$owners" | jq 'if type == "object" then length > 0 else null end' 2>/dev/null || printf 'null\n'
 }
 
-# _repair_paths_owned: rc 0 when FINDING_FILE names no repair_paths, or none is
-# on audit-fix-verify-state-lib.sh's ENFORCEMENT_PATHS (the fixer can never land
-# an edit there) and the roster at ROOT gives every one to a member, whose review
-# is what satisfies the veto there. rc 3 after naming the refusal otherwise, an
-# unreadable roster included.
+# _repair_paths_owned: rc 0 when FINDING_FILE names no repair_paths, or every
+# one is spelled the way git reports a changed file (audit-veto-lib.sh matches
+# the diff by that exact string, so ./a, /a, a//b, a/./b, a/../b or a/ never
+# matches) and the roster at ROOT gives it to a member, whose review is what
+# satisfies the veto there. An ENFORCEMENT_PATHS entry passes: the fixer only
+# drafts it and the unit stops at its enforcement-draft stop, so only a human
+# lands it. rc 3 after naming the refusal otherwise, an unreadable roster included.
 _repair_paths_owned() {
-  local repair_paths owners enforcement_path repair_path
+  local repair_paths owners unnormalized
   repair_paths="$(jq -c "$_GAIA_REPAIR_PATHS_SHAPED_JQ"'.repair_paths // [] | if repair_paths_shaped then . else error("bad") end' "$FINDING_FILE" 2>/dev/null)" ||
     { _error "repair_paths in $FINDING_FILE must be an array of non-empty paths"; return 3; }
   [ "$repair_paths" != "[]" ] || return 0
-  # Sourced in a child shell: in this one its helpers would overwrite the caller's same-named functions.
-  while IFS= read -r repair_path; do
-    while IFS= read -r enforcement_path; do
-      [ "$repair_path" != "$enforcement_path" ] || {
-        _error "fix refused: repair path $repair_path is an enforcement path the fixer can never edit; drop it from repair_paths, or repair it by hand"; return 3; }
-    done < <(bash -c '. "$1" && printf "%s\n" "${ENFORCEMENT_PATHS[@]}"' _ "$_GAIA_DISPOSITIONS_DIRECTORY/audit-fix-verify-state-lib.sh")
-  done < <(printf '%s' "$repair_paths" | jq -r '.[]')
+  unnormalized="$(printf '%s' "$repair_paths" | jq -r 'map(select(test("^/|//|/$|(^|/)\\.\\.?(/|$)"))) | first // empty')"
+  [ -z "$unnormalized" ] ||
+    { _error "fix refused: repair path $unnormalized is not a repo-relative path; write it without a leading ./ or /, and with no . or .. or empty segment (src/b.sh)"; return 3; }
   owners="$(_roster_owners "$ROOT" "$_GAIA_DISPOSITIONS_DIRECTORY" "$repair_paths")" || owners="{}"
   printf '%s' "$owners" | jq -e --argjson paths "$repair_paths" '. as $owners | type == "object" and all($paths[]; . as $path | $owners | has($path))' >/dev/null 2>&1 ||
     { _error "fix refused: the roster gives a repair path to no member, so no review could satisfy the veto there; name only owned repair_paths"; return 3; }

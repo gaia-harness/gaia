@@ -1733,7 +1733,7 @@ decide() {
   [ "$(jq -c '[.keys[] | [.direction, has("repair_paths")]]' "$RUN_FOLDER/vetoes.json")" = '[["in place after all",false]]' ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
 }
 
-@test "needs-human: a fix decision's repair_paths is refused when the roster gives one to no member or cannot be read, or when it is not a list of paths" {
+@test "needs-human: a fix decision's repair_paths is refused when the roster gives one to no member or cannot be read, when it is not a list of paths, or when a path is not spelled the way git reports it" {
   stop_rounds "$(minor_rows f.txt 1 1)"
   with_f_txt_ownerless decide 1 fix '{"repair_paths":["lib/s.sh","g.txt"]}'
   [ "$status" -eq 3 ] || { echo "an unowned repair path recorded: $status $output"; return 1; }
@@ -1746,21 +1746,27 @@ decide() {
     [ "$status" -eq 3 ] || { echo "repair_paths $malformed recorded: $status $output"; return 1; }
     grep -qF -- 'must be an array of non-empty paths' <<<"$output" || { echo "repair_paths $malformed refused for another cause: $output"; return 1; }
   done
+  local unnormalized
+  for unnormalized in ./lib/s.sh /lib/s.sh lib//s.sh lib/./s.sh lib/../s.sh lib/ . ..; do
+    decide 1 fix "$(jq -n -c --arg path "$unnormalized" '{repair_paths: [$path]}')"
+    [ "$status" -eq 3 ] || { echo "repair path $unnormalized recorded: $status $output"; return 1; }
+    grep -qF -- "repair path $unnormalized is not a repo-relative path" <<<"$output" || { echo "repair path $unnormalized refused for another cause: $output"; return 1; }
+  done
   [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
   with_f_txt_ownerless decide 1 fix '{"repair_paths":["lib/s.sh"]}'
   [ "$status" -eq 0 ] || { echo "an owned repair path was refused: $output"; return 1; }
   [ "$(jq -c '.keys[0].repair_paths' "$RUN_FOLDER/vetoes.json")" = '["lib/s.sh"]' ]
 }
 
-@test "needs-human: a fix decision naming an enforcement repair path is refused and writes no veto" {
-  local enforcement_path
+@test "needs-human: a fix decision naming an owned enforcement repair path records it, for the unit to draft and stop on" {
+  local enforcement_path roster="$ALF_ROOT/.gaia/audit-ci.yml"
   stop_rounds "$(minor_rows f.txt 1 1)"
   enforcement_path="$(bash -c '. "$1" && printf "%s" "${ENFORCEMENT_PATHS[0]}"' _ "$SCRIPTS/audit-fix-verify-state-lib.sh")"
   [ -n "$enforcement_path" ] || return 1
-  with_f_txt_ownerless decide 1 fix "$(jq -n -c --arg path "$enforcement_path" '{repair_paths: ["lib/s.sh", $path]}')"
-  [ "$status" -eq 3 ] || { echo "an enforcement repair path recorded: $status $output"; return 1; }
-  grep -qF -- 'enforcement path the fixer can never edit' <<<"$output" || { echo "the refusal names no cause: $output"; return 1; }
-  [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
+  printf '  - name: %s\n    globs:\n      - "%s"\n    audience: adopter\n' "$SHELL_MAINTAINER" "$enforcement_path" >>"$roster"
+  decide 1 fix "$(jq -n -c --arg path "$enforcement_path" '{repair_paths: [$path]}')"
+  [ "$status" -eq 0 ] || { echo "an owned enforcement repair path was refused: $status $output"; return 1; }
+  [ "$(jq -c --arg path "$enforcement_path" '.keys | map(.repair_paths == [$path])' "$RUN_FOLDER/vetoes.json")" = '[true]' ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
 }
 
 # race_shims <directory>: a forced interleave of two fix decisions. Its mkdir

@@ -135,6 +135,29 @@ review_round() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
+# bats test_tags=protected
+@test "drafted repair in an enforcement repair path: record-residual records the path, the human's commit of the draft lands it with the key's own path untouched, and the owner's clean review clears check-all" {
+  local settings=.claude/settings.json
+  alf_fill "$settings" 4 settings
+  alf_git add -f "$settings"
+  alf_commit "add the settings file"
+  jq -c --arg path "$settings" '. + {reason: "add the allow entry", repair_paths: [$path]}' "$BATS_TEST_TMPDIR/finding.json" >"$BATS_TEST_TMPDIR/repair.json"
+  run bash "$SCRIPTS/audit-dispositions-check.sh" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" \
+    --finding "$BATS_TEST_TMPDIR/repair.json" --decision fix
+  [ "$status" -eq 0 ] || { printf 'the enforcement repair path was refused: %s\n' "$output" >&2; return 1; }
+  [ "$(jq -c '.keys | map(.repair_paths)' "$RUN_FOLDER/vetoes.json")" = "[[\"$settings\"]]" ] || return 1
+  dispatch audit-loop-unit
+  allowed || return 1
+  alf_dispositions 2 "[{\"member\":\"$MEMBER\",\"finding_class\":\"holistic/unclassified\",\"path\":\"$ENFORCED\",\"line\":140,\"disposition\":\"fix\",\"reason\":\"vetoed\",\"repair_paths\":[\"$settings\"],\"enforcement_draft\":true}]"
+  alf_set_line "$settings" 2 allowed
+  veto unsatisfied 2 || return 1
+  alf_commit "fix(audit): commit the drafted settings repair"
+  review_round '[]' || return 1
+  veto satisfied 3 || return 1
+  check_all
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+}
+
 @test "drafted repair red twin: with no human commit the member wave joins the reopened round and the veto stays unsatisfied" {
   veto_key
   dispatch audit-loop-unit

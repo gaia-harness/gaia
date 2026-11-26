@@ -74,8 +74,9 @@
 #     enforcement_paths_allowed lists an enforcement path only when an entry
 #     marked fix names that path. basis is required on waive-out-of-scope
 #     entries; this verifier does not read it, the dispositions check does.
-#     enforcement_draft marks a vetoed key's fix entry on an enforcement path:
-#     the fixer may draft that edit, and this verifier still fails it as
+#     enforcement_draft marks a vetoed key's fix entry whose path or one of
+#     whose repair_paths is an enforcement path: the fixer may draft that
+#     edit, and this verifier still fails it as
 #     enforcement-path, so the round never commits it.
 #
 #   vetoes.json (Bash at the main-checkout path, or record-residual --decision fix):

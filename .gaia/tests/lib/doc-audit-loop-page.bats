@@ -223,8 +223,8 @@ in_round_worthiness_passes() {
 enforcement_draft_passes() {
   local fix_round row
   fix_round="$(section "$FIXROUND" "$1" | sentences)" || return 1
-  grep -qF -- 'unless the dispositions file names it in enforcement_paths_allowed or a fix entry on that path carries enforcement_draft: true' <<<"$fix_round" || return 1
-  grep -qF -- 'a failure whose every error is `enforcement-path` on such an entry'"'"'s path gets no continuation: the edits stay uncommitted and the round stops `needs-human` with `enforcement-draft`' <<<"$fix_round" || return 1
+  grep -qF -- 'unless the dispositions file names it in enforcement_paths_allowed or a fix entry on that path, or naming it in repair_paths, carries enforcement_draft: true' <<<"$fix_round" || return 1
+  grep -qF -- 'a failure whose every error is `enforcement-path` on such an entry'"'"'s path or repair path gets no continuation: the edits stay uncommitted and the round stops `needs-human` with `enforcement-draft`' <<<"$fix_round" || return 1
   row="$(grep -F -- '| `dispositions-check-failed`, `needs-human`, `failure` |' "$2")" || return 1
   grep -qF -- 'then explain the change in plain language a reader with no harness knowledge can decide from, neutral, stating in this order what the guard is for in one line, whether the edit makes it stricter or looser (before versus after), which finding asked for it and what that finding said, and anything the edit touches beyond what the finding asked.' <<<"$row" || return 1
   grep -qF -- 'ask one `AskUserQuestion` that recommends nothing, its options in this order: `Keep` (run the Quality Gate, commit' <<<"$row" || return 1

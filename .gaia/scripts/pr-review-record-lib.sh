@@ -22,7 +22,7 @@
 . "$SCRIPT_DIRECTORY/../../.claude/hooks/lib/audit-scope.sh"
 # shellcheck source=/dev/null
 . "$SCRIPT_DIRECTORY/../../.claude/hooks/lib/audit-base-provenance.sh"
-# _repair_paths_owned reads the roster and ENFORCEMENT_PATHS from here.
+# _repair_paths_owned reads the roster from here.
 _GAIA_DISPOSITIONS_DIRECTORY="$SCRIPT_DIRECTORY"
 
 _error() { printf 'pr-review-record: %s\n' "$*" >&2; }
@@ -279,16 +279,9 @@ cmd_route_fix() {
   require_finding
   [ "$(finding_field '.disposition')" = fix ] || refuse "$FINDING_ID is not disposed fix"
   [ "$(finding_field '.fix_state')" != fixed ] || refuse "$FINDING_ID is already fixed"
-  local file summary route first_time=1 finding_file row repair_path_list refusal repair_path
+  local file summary route first_time=1 finding_file row repair_path_list refusal
   file="$(finding_field '.file')"
   [ "$(finding_field '.fix_state')" != routed ] || first_time=0
-  while IFS= read -r repair_path; do
-    # An empty line is left to _repair_paths_owned's non-empty refusal.
-    case "$repair_path" in
-      '' | /* | ./* | ../* | */. | */.. | . | .. | */./* | */../* | */ | *//*)
-        [ -z "$repair_path" ] || refuse "--repair-path $repair_path is not a repo-relative path; write it without a leading ./ or /, and with no . or .. or empty segment (src/b.sh)" ;;
-    esac
-  done <<<"$REPAIR_PATHS"
   repair_path_list="$(printf '%s' "$REPAIR_PATHS" | jq -R -s -c 'split("\n") | .[:-1]')"
   ROOT="$(audited_root)"
   route="$(decide_route "$ROOT" "$file")"
