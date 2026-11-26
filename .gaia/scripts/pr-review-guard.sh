@@ -103,7 +103,7 @@ listing_of_files() {
   done | jq -s 'add // {}'
 }
 
-# audit_listing <root> <main-root>: folder_listing's JSON for the local audit
+# audit_listing <root> <main-root> <branch-slug> <own-digests>: folder_listing's JSON for the local audit
 # directory, minus the records provably keyed to another branch or head, so a
 # concurrent lane's attributable writes do not read as the reviewer's. A record
 # is dropped only when it is one of:
@@ -184,8 +184,9 @@ audit_listing() {
 # own_scope <root> <pr>: print the JSON {slug, digests} that decides which audit
 # records are this branch's own: the branch slug and every member digest
 # measured against the local base reference and against the base tip GitHub
-# reports for the pull request, the one the merge gate measures from. A part
-# that cannot be read is left empty, which drops fewer records, never more.
+# reports for the pull request, the one the merge gate measures from. An
+# unreadable slug or digest set is left empty and audit_listing then drops no
+# record of that kind.
 own_scope() {
   local root="$1" pr="$2" library="$_script_directory/../../.claude/hooks/lib/audit-digest.sh"
   local slug='' digests='' host_base host_digests

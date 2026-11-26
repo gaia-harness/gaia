@@ -3,7 +3,7 @@
 # `pr-reviewer` agent away from audit state, so its review of a pull request
 # stays unanchored by what the audit loop already found and cannot change what
 # gates the merge. Its tool grant (Bash, Read, Write) can still reach audit
-# state; this makes "unanchored" and "read-only" structural rather than a
+# state; this makes "unanchored" and "no audit-state writes" structural rather than a
 # promise in its prompt.
 #
 # WHO IT BINDS. Only a call whose payload carries `agent_type` exactly
@@ -42,7 +42,7 @@
 # subprocess that opens the file itself. The before/after check
 # (.gaia/scripts/pr-review-guard.sh) is the backstop for writes: it compares
 # the tree, this branch's own audit state and the commit statuses around the
-# dispatch, and leaves out records another lane keys to another branch or head.
+# dispatch.
 set -euo pipefail
 
 payload=$(cat)
