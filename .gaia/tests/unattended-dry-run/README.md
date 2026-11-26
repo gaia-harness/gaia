@@ -3,6 +3,7 @@
 Maintainer-only (all of `.gaia/tests` is release-excluded). One `/gaia-next` iteration runs with the [autonomy switch](../../../wiki/concepts/Autonomy%20Switch.md) on, as a headless `claude -p` session in an adopter fixture. The check proves that the iteration ends without stalling, that the question gate wrote its decision-log entry, and that a forced audit checkpoint parked the run.
 
 It spends model usage and needs Claude auth, so it is a manual check: run it by hand after a change to the gate, the park procedure, the audit budget, the merge policy, `/gaia-next` or `.claude/loop.md`.
+
 ## Files
 
 - `run-dry-run.sh`: builds the fixture, runs the session, asserts, and writes the evidence.
