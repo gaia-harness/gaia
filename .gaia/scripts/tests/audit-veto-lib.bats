@@ -498,6 +498,14 @@ repair_base() {
   [ "$status" -ne 0 ]
 }
 
+@test "veto-state: a key whose repair_paths holds an empty path fails" {
+  satisfied_base
+  jq -c '.keys[0].repair_paths = [""]' "$RUN/vetoes.json" >"$RUN/vetoes.json.next"
+  mv "$RUN/vetoes.json.next" "$RUN/vetoes.json"
+  run gaia_veto_keys_state "$MAIN" "$BRANCH_NAME" "$STATE" 3 "$ROUND_KEYS"
+  [ "$status" -ne 0 ] || { echo "an empty repair path read as a valid vetoes file: $output"; return 1; }
+}
+
 # stop_snapshot <default_stop>: a snapshot whose stop set is the vetoed identity.
 stop_snapshot() {
   jq -n -c --argjson default_stop "$1" --argjson identity "$VETOED_IDENTITY" '{round: 3, verdict: "enriching", signals: {enriching: true},

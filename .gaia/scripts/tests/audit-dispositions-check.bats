@@ -1715,8 +1715,12 @@ decide() {
   grep -qF -- 'repair path to no member' <<<"$output" || { echo "the refusal names no cause: $output"; return 1; }
   with_roster_unreadable decide 1 fix '{"repair_paths":["lib/s.sh"]}'
   [ "$status" -eq 3 ] || { echo "a repair path under an unreadable roster recorded: $status $output"; return 1; }
-  decide 1 fix '{"repair_paths":"lib/s.sh"}'
-  [ "$status" -eq 3 ] || { echo "a repair_paths string recorded: $status $output"; return 1; }
+  local malformed
+  for malformed in '"lib/s.sh"' '[""]' '[1]'; do
+    decide 1 fix "{\"repair_paths\":$malformed}"
+    [ "$status" -eq 3 ] || { echo "repair_paths $malformed recorded: $status $output"; return 1; }
+    grep -qF -- 'must be an array of non-empty paths' <<<"$output" || { echo "repair_paths $malformed refused for another cause: $output"; return 1; }
+  done
   [ ! -e "$RUN_FOLDER/vetoes.json" ] || { cat "$RUN_FOLDER/vetoes.json"; return 1; }
   with_f_txt_ownerless decide 1 fix '{"repair_paths":["lib/s.sh"]}'
   [ "$status" -eq 0 ] || { echo "an owned repair path was refused: $output"; return 1; }
