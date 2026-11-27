@@ -37,7 +37,7 @@ At fire and skull, always recommend `Clear and resume`, whatever the remaining w
 ## Answers
 
 - `Continue here`: keep working until the next band. Inside a `/gaia-next` run it keeps the current job going but takes no new one: the next pick at or past the red band still hands off.
-- `Clear and resume`: print one instruction line (run `/clear`, then paste the prompt below) and a continuation prompt naming the state file path, the goal and the next step. Inside a `/loop` running `/gaia-next`, the prompt is the loop restart prompt that `.claude/commands/gaia-next.md` `## 2. Pick the job` gives for `handoff` (same interval), not the job's continuation prompt, because the next pick resumes the job in tier order. There, first end the old loop (`## 3. End the run`), then print both. Then end the turn with no further tool calls.
+- `Clear and resume`: print one instruction line (run `/clear`, then paste the prompt below) and a continuation prompt naming the state file path, the goal and the next step. Inside a `/loop` running `/gaia-next`, the prompt is the loop restart prompt that `.claude/commands/gaia-next.md` `## 2. Pick the job` gives for `handoff`, not the job's continuation prompt, because the next pick resumes the job in tier order. There, first end the old loop (`## 3. End the run`), then print both. Then end the turn with no further tool calls.
 
 ## Carry the run's cost across
 
