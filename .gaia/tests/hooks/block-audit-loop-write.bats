@@ -614,6 +614,9 @@ assert_reaper_denied() {
     ". .gaia/scripts/context-checkpoint-lib.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
     ". .gaia/scripts/context-any-age-lib.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
     ". .gaia/scripts/gaia-next-handoff-lib.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
+    ". .gaia/scripts/audit-loop-eval.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
+    ". .gaia/scripts/rate-limits-lib.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
+    ". .gaia/scripts/usage.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
     ". .gaia/statusline/context-reading.sh && gaia_statusline_write_context /x 1 1"
     "echo hi${nl}bash $MAIN/.gaia/statusline/gaia-statusline.sh"
   )
@@ -1012,4 +1015,18 @@ assert_recorder_run_denied_and_staging_allowed() {
   PATH="$shim_directory:$PATH" invoke_hook "$(command_payload Bash "ls -la" "$MAIN")" "$HOOK_ABSOLUTE_PATH"
   assert_allowed_by_json
   [ ! -s "$BATS_TEST_TMPDIR/calls.log" ]
+}
+
+# bats test_tags=whole-tree
+@test "every script that sources the context checkpoint library is named by the context-writer matcher" {
+  local scripts_directory="$BATS_TEST_DIRNAME/../../scripts"
+  local matcher_file="$HOOKS_SOURCE_DIRECTORY/lib/hook-only-scripts-guard.sh"
+  local sourcing_file base_name checked=0 missing=""
+  while IFS= read -r sourcing_file; do
+    base_name=${sourcing_file##*/}
+    checked=$((checked + 1))
+    grep -qF -- "| $base_name |" "$matcher_file" || missing="$missing $base_name"
+  done < <(grep -lE '^[[:space:]]*(if )?\. "[^"]*/context-checkpoint-lib\.sh"' "$scripts_directory"/*.sh)
+  [ "$checked" -ge 4 ] || return 1
+  [ -z "$missing" ] || { echo "unlisted:$missing"; return 1; }
 }
