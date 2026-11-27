@@ -38,7 +38,7 @@ They answer in that order, and the order is by how much of the verdict each mess
 
 ## 4. Approved by a classifier, bounded by hooks
 
-`.claude/settings.json` carries no blanket `Bash(git *)` rule, and must not: git runs programs named in its config, so a blanket rule is an unprompted shell (`git -c 'alias.x=!cmd' x` runs `cmd`). Its narrower `git ...` allow entries stay as they are. Instead `classify-git-command.sh`, a PreToolUse Bash hook, approves the git commands it can vouch for, so a session, interactive or driven unattended by `/loop`, does not stall on an ordinary commit, push, rebase or merge. It returns an allow or nothing. Nothing leaves the normal permission flow: a settings rule, else the prompt.
+`.claude/settings.json` carries no blanket `Bash(git *)` rule, and must not: git runs programs named in its config, so a blanket rule is an unprompted shell (`git -c 'alias.x=!cmd' x` runs `cmd`). Its narrower `git ...` allow entries stay as they are. Instead `classify-git-command.sh`, a PreToolUse Bash hook, approves the git commands it can vouch for, so a session, interactive or unattended, does not stall on an ordinary commit, push, rebase or merge. It returns an allow or nothing. Nothing leaves the normal permission flow: a settings rule, else the prompt.
 
 It approves a command only when all of these hold, and falls through otherwise:
 
