@@ -274,8 +274,8 @@ command_baseline() {
     printf 'audit-fix-verify: baseline refused: the member wave left the tree dirty in %s\n' "$ROOT" >&2
     exit 4
   fi
-  # The wave has returned and the repair commit has not landed, the one moment
-  # an unspent capture is provably stale-to-be rather than a running review's.
+  # The wave has returned and the fixer has not run, so no review is in flight:
+  # every unspent capture is from a round that ended without a conclusion.
   # A failed release costs one forfeited round later, so it warns and goes on.
   bash "$_here/audit-scope-digest.sh" --release-unspent --root "$ROOT" ||
     printf 'audit-fix-verify: warning: could not release the unspent scope captures; the next round may forfeit once\n' >&2

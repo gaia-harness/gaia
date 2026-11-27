@@ -400,8 +400,7 @@ _scope_capture_is_spent() {
 
 # Safe only between rounds: a running review's capture is unspent too, and
 # releasing it would let a resolver re-run hand that member a digest it never
-# reviewed. The one caller, `audit-fix-verify.sh baseline`, runs after the
-# whole member wave has returned and before the fixer starts. Captures under
+# reviewed. Captures under
 # an older key base are released too: no resolver reads them again, so
 # removing one changes nothing.
 if [ "$MODE" = "release-unspent" ]; then
@@ -420,9 +419,10 @@ if [ "$MODE" = "release-unspent" ]; then
     [ -f "$scope_file" ] || continue
     MEMBER="$(jq -r '.member // empty' "$scope_file" 2>/dev/null)" || MEMBER=""
     [ -n "$MEMBER" ] || continue
-    # The slug percent-encodes every dot, so whatever precedes it is the key
-    # base: a hex-only base proves the file is this branch's and not one whose
-    # slug merely ends in this one.
+    # The slug percent-encodes every dot, so a name that fits
+    # <base>.<slug>.<member> leaves only the hex key base after the strip;
+    # anything else (a recorded member that disagrees with the file name, a
+    # stray file) leaves dots and is skipped.
     key_base="${scope_file##*/}"
     key_base="${key_base%".${branch_slug}.${MEMBER}.scope.json"}"
     case "$key_base" in

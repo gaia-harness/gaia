@@ -112,7 +112,7 @@ reset_case() { rm -rf "$ROOT/.gaia/local"; }
   grep -qF "usage: audit-scope-digest.sh" <<<"$output" || return 1
 }
 
-@test "usage errors exit non-zero with a stderr diagnostic: neither --capture, --read nor --release, a missing --root, --member or --base, an unrecognized argument" {
+@test "usage errors exit non-zero with a stderr diagnostic: no mode flag, a missing --root, --member or --base, an unrecognized argument" {
   run "$SCRIPT" --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
   grep -qF "one of --capture, --read, --release, or --release-unspent" <<<"$output" || return 1
