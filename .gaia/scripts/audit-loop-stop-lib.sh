@@ -40,17 +40,20 @@ gaia_loop_stop_override() {
 # tree <tree> (its header, THE REOPENED ROUND), else false. A new veto reopens
 # on a moved tree too: commits outside its member's scope leave that member's
 # clearance standing, so no member wave would open the round its fix needs.
-# A reopened round on HEAD's tree is not reopened for a veto until its fixer
-# has run (fixer-<r>-audit.json exists): a dead unit's successor runs that
-# round rather than stacking an empty one. Once the fixer has run, a veto due
+# A reopened round on HEAD's tree is not reopened for a veto until it has been
+# served (dispositions-<r>.json exists: the unit writes it before the fixer, so
+# a fixer that stopped without a result still counts): a dead unit's successor
+# runs that round rather than stacking an empty one. Once served, a veto due
 # at the next round reopens even when the fix committed nothing, since the
-# next unit cannot fix into a round whose dispositions, baseline and fixer
-# files are already written. A gate failure never reopens
-# twice on one tree, so an owed step the fixer cannot repair cannot loop.
+# next unit cannot fix into a round whose dispositions and baseline files are
+# already written. A gate failure is blocked by a reopened round on HEAD's
+# tree unless a veto opened that round (a veto with effective_from_round == r),
+# so a gate-opened round never reopens for the same gate again and an owed
+# step the fixer cannot repair cannot loop.
 # rc 1 on an unreadable or malformed vetoes.json or gate-failure.json: reading
 # either as absent would leave its repair no round.
 gaia_loop_reopen_due() {
-  local run vetoes="[]" failure="{}" used fixer_ran=false
+  local run vetoes="[]" failure="{}" used round_served=false
   run="$(gaia_loop_run_directory "$1" "$2")"
   if [ -e "$run/vetoes.json" ]; then
     vetoes="$(jq -c -s 'if length == 1 and .[0].version == 1 and (.[0].keys | type) == "array" then .[0].keys else error("malformed") end' <"$run/vetoes.json" 2>/dev/null)" || return 1
@@ -59,13 +62,13 @@ gaia_loop_reopen_due() {
     failure="$(jq -c -s 'if length == 1 and (.[0] | type) == "object" then .[0] else error("malformed") end' <"$run/gate-failure.json" 2>/dev/null)" || return 1
   fi
   used="$(printf '%s' "$3" | jq -r '.history.rounds | length' 2>/dev/null)"
-  gaia_loop_is_uint "$used" && [ -f "$run/fixer-$used-audit.json" ] && fixer_ran=true
-  printf '%s' "$3" | jq -r --arg tree "$4" --argjson vetoes "$vetoes" --argjson failure "$failure" --argjson fixer_ran "$fixer_ran" '
+  gaia_loop_is_uint "$used" && [ -f "$run/dispositions-$used.json" ] && round_served=true
+  printf '%s' "$3" | jq -r --arg tree "$4" --argjson vetoes "$vetoes" --argjson failure "$failure" --argjson round_served "$round_served" '
     (.history.rounds | length) as $used | (.history.rounds | last) as $latest
     | ($latest.reopened == true and $latest.tree == $tree) as $reopened_here
     | $used > 0
-      and ((any($vetoes[]; .effective_from_round == $used + 1) and (($reopened_here and ($fixer_ran | not)) | not))
-           or ($failure.after_round == $used and $failure.tree == $tree and ($reopened_here | not)))' 2>/dev/null
+      and ((any($vetoes[]; .effective_from_round == $used + 1) and (($reopened_here and ($round_served | not)) | not))
+           or ($failure.after_round == $used and $failure.tree == $tree and (($reopened_here and (any($vetoes[]; .effective_from_round == $used) | not)) | not)))' 2>/dev/null
 }
 
 # _gaia_loop_fixed_triples <main-root> <B> <r>: the (member, finding_class,
