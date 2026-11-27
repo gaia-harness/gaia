@@ -107,7 +107,7 @@ Read `.claude/skills/gaia/references/worthiness-step.md` and run it, with the dr
 
 ## 6. Audit
 
-Read `wiki/concepts/PR Merge Workflow.md` and run it, not a remembered version of it, to a posted `GAIA-Audit` success status. The full gate applies to an ad-hoc PR; there is no lighter path. The success post (`.claude/hooks/post-audit-status.sh`) marks the draft ready for review, so the session runs no `gh pr ready`.
+Read `wiki/concepts/PR Merge Workflow.md` and run it, not a remembered version of it, to a posted `GAIA-Audit` success status. The full gate applies to an ad-hoc PR; there is no lighter path. The success post (`.claude/hooks/post-audit-status.sh`) marks the draft ready for review, so the session runs no `gh pr ready`. At the workflow's `#### PR review` step, follow `.claude/skills/gaia/references/pr-review.md`.
 
 When the request did not ask to merge, stop here. Report the PR URL as ready to merge, and leave the branch, the worktree and the PR in place. Merging a PR the request did not ask to merge waits for the user to ask; a later message asking to merge counts.
 

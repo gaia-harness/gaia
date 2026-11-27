@@ -278,7 +278,7 @@ Warning: --force discards any uncommitted changes in the worktree.
 
 **Baseline check.** On a fresh run, run `cat .gaia/VERSION` in the worktree. The worktree is cut from the default branch on `origin`, so when it does not print `<BASELINE>` (the local default branch lags or leads `origin`), stop: print what each holds, the worktree notice, and the next step (pull or push the main checkout's default branch, then re-run). Skip it on a resume: classification already placed the branch at the baseline.
 
-**Provisioning wait.** Before Step 4b and the merge agent, wait for the worktree's background `pnpm install --frozen-lockfile`: the merge agent rewrites `package.json` and the lockfile in the same tree, and a slow install would read a half-merged pair.
+**Provisioning wait.** Before Step 4b and the execution agent, wait for the worktree's background `pnpm install --frozen-lockfile`: the execution agent rewrites `package.json` and the lockfile in the same tree, and a slow install would read a half-merged pair.
 
 ```bash
 bash <main checkout path>/.gaia/scripts/provision-wait.sh --tree <worktree path>
