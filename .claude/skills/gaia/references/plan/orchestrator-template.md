@@ -1,5 +1,7 @@
 # Orchestrator template
 
+Contents: Header; Marker grammar; Fixed blocks; Maintenance notes; the `ORCHESTRATOR.md` region; the `KICKOFF.md` region.
+
 The one source of the text every generated `ORCHESTRATOR.md` and `KICKOFF.md` shares: the ten fixed step blocks and the generic sections around them. `.gaia/scripts/spec/orchestrator-render.sh` renders a plan's two files from this template and the plan's `orchestrator-parts.md`; `.gaia/scripts/spec/plan-verify.sh` checks the fixed blocks of a rendered `ORCHESTRATOR.md` against this file's copy. Those two scripts, and the suites that pin this file, are its only readers: a planner or a session never reads it. Everything from the first region marker on is rendered text a cold orchestrator executes, not instructions to a planner.
 
 ## Header
