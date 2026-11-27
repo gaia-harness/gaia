@@ -152,6 +152,43 @@ ROWS
   true
 }
 
+@test "a skill digest larger than one part keeps every digest part in one group, each declaring it" {
+  local name
+  for name in a b c d; do
+    mkdir -p "$PROJECT/.claude/skills/$name"
+    printf -- '---\nname: %s\ndescription: %s\n---\nbody %s\n' "$name" "$(printf 'trigger words for %s ' "$name" | head -c 200)" "$name" >"$PROJECT/.claude/skills/$name/SKILL.md"
+  done
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/skills/a/SKILL.md skill adopter false),$(entry .claude/skills/b/SKILL.md skill adopter false),$(entry .claude/skills/c/SKILL.md skill adopter false),$(entry .claude/skills/d/SKILL.md skill adopter false)"
+  build --part-bytes 800 --group-bytes 600
+  [ "$status" -eq 0 ]
+  run bash -c "grep -l '^This part is the skill-descriptions digest' '$OUT'/part-*.md"
+  [ "${#lines[@]}" -gt 1 ]
+  run bash -c "grep -h '^This part is the skill-descriptions digest' '$OUT'/part-*.md | sort -u"
+  [ "${#lines[@]}" -eq 1 ]
+  [[ "$output" == *"across all of this group's digest parts"* ]]
+  run bash -c "grep -l '^This part is the skill-descriptions digest' '$OUT'/part-*.md | while read -r part; do jq -r --arg part \"\$part\" '.groups[] | select(any(.parts[]; .path == \$part)) | .group' '$OUT/manifest.json'; done | sort -u"
+  [ "${#lines[@]}" -eq 1 ]
+  [ "$(jq '.groups | length' "$OUT/manifest.json")" -gt 1 ]
+}
+
+@test "a skill's SKILL.md and reference file land in the same group when the pair straddles a group boundary" {
+  local line
+  mkdir -p "$PROJECT/.claude/agents" "$PROJECT/.claude/skills/s/references"
+  for line in $(seq 1 20); do printf 'agent line %s\n' "$line"; done >"$PROJECT/.claude/agents/x.md"
+  for line in $(seq 1 20); do printf 'skill line %s\n' "$line"; done >"$PROJECT/.claude/skills/s/SKILL.md"
+  for line in $(seq 1 20); do printf 'ref line %s\n' "$line"; done >"$PROJECT/.claude/skills/s/references/ref.md"
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/agents/x.md agent adopter false),$(entry .claude/skills/s/SKILL.md skill adopter false),$(entry .claude/skills/s/references/ref.md skill adopter false)"
+  build --group-bytes 1400
+  [ "$status" -eq 0 ]
+  [ "$(jq '.groups | length' "$OUT/manifest.json")" -eq 2 ]
+  run bash -c "grep -l '^<<<GAIA-FITNESS-FILE-BEGIN .claude/skills/s/' '$OUT'/part-*.md | while read -r part; do jq -r --arg part \"\$part\" '.groups[] | select(any(.parts[]; .path == \$part)) | .group' '$OUT/manifest.json'; done | sort -u"
+  [ "${#lines[@]}" -eq 1 ]
+  run bash -c "cat '$OUT'/part-*.md | grep -c '^<<<GAIA-FITNESS-FILE-BEGIN .claude/skills/s/'"
+  [ "$output" = "2" ]
+}
+
 @test "every part fits its budget, ends with its own token, and every judged line appears exactly once" {
   local file line expected actual part budget=600
   mkdir -p "$PROJECT/.claude/agents"
