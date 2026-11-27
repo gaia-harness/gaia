@@ -61,7 +61,13 @@ pick_as() {
   [ "$status" -eq 0 ] || return 1
   [ "$(jq -r '.history.checkpoints | last | [.handoff, .session_id] | map(tostring) | join(" ")' "$ALF_STATE")" = "true $SESSION_A" ] || return 1
 
-  # Session A skips the pull request and parks nothing.
+  # Still at the line, session A is handed off before any tier is read.
+  pick_as "$SESSION_A"
+  [ "$status" -eq 0 ] || return 1
+  jq -e '.job == "handoff" and .band == "red"' <<<"$output" >/dev/null || return 1
+
+  # After a compaction its reading is below the line; it skips the pull request and parks nothing.
+  gaia_context_write "$ALF_ROOT" "$SESSION_A" 10 100000 1000000 "$(date +%s)"
   pick_as "$SESSION_A"
   [ "$status" -eq 0 ] || return 1
   jq -e --arg reason "$reason" '.job == "backlog" and .skipped == [{item: "pr #12", reason: $reason}]' <<<"$output" >/dev/null || return 1

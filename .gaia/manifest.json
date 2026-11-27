@@ -353,6 +353,7 @@
     ".gaia/scripts/classifier/classify-determinism.mjs": "owned",
     ".gaia/scripts/cleanse/cross-file-blocks.mjs": "owned",
     ".gaia/scripts/cleanse/cross-file-candidates.mjs": "owned",
+    ".gaia/scripts/context-any-age-lib.sh": "owned",
     ".gaia/scripts/context-checkpoint-lib.sh": "owned",
     ".gaia/scripts/debt-backlog.sh": "owned",
     ".gaia/scripts/debt-batch-budget-offer-lib.sh": "owned",
@@ -954,7 +955,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-26T18:13:16.736Z",
+  "generated": "2026-11-27T04:28:38.423Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

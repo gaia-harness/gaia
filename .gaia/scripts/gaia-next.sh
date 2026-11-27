@@ -13,7 +13,12 @@
 # --root names the checkout to read, default the one holding the working
 # directory; plans and run folders are read from its main checkout.
 #
-# pick walks the first four tiers in order and prints one JSON object:
+# pick first checks this session's context band, before every tier and whatever
+# the autonomy switch says (gaia-next-handoff-lib.sh owns the rule); at the red
+# band or past it, it prints
+#   {"job":"handoff","band":<band>,"used_tokens":<n>,"context_window_size":<n>,"save_path":<abs>,...}
+# and takes no job. Otherwise it walks the first four tiers in order and prints
+# one JSON object:
 #   {"job":"plan","plan_dir":<abs>,"branch":<b>,...}  a plan whose RUNNING sentinel stands
 #   {"job":"pr","pr":<n>,"branch":<b>,...}            an open PR you authored whose branch is local
 #   {"job":"debt-resume","issue":<n>,"branch":<b>,...} a claimed debt fix whose local branch has no PR
@@ -30,8 +35,9 @@
 #
 # Skips apply under autonomy (autonomy_active in autonomy-lib.sh) only, except
 # a branch another live Claude session holds and a branch whose pending audit
-# checkpoint is a hand-off from this session, which are skipped always; the
-# skip rules are in wiki/concepts/GAIA Next.md (## Skips under autonomy, ## Skips in every run).
+# checkpoint is a hand-off from this session once its reading has dropped below
+# the line (at or past it the band handoff answers first), which are skipped
+# always; the skip rules are in wiki/concepts/GAIA Next.md (## Skips under autonomy, ## Skips in every run).
 #
 # comments prints
 #   {"pr":<n>,"comments":[{kind,author,permission,created_at,url,body}],
@@ -246,7 +252,8 @@ running_plans() {
 }
 
 pick() {
-  local plans plan_directory branch reason hit plan_branches="" prs number spec item holder stuck issue_body_file
+  local plans plan_directory branch reason hit plan_branches="" prs number spec item holder stuck issue_body_file band_job
+  band_job="$(gaia_next_band_handoff "$main_root")" && answer "$band_job"
   read_park_marker_name
   plans="$(running_plans)" || next_fail "cannot list the notebook's plan folders"
   while IFS=$'\t' read -r plan_directory branch; do

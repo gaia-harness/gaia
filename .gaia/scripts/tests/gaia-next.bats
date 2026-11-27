@@ -540,3 +540,166 @@ handoff_state() {
   CLAUDE_CODE_SESSION_ID=session-a pick
   jq -e '.job == "plan" and .branch == "feat/../x"' <<<"$output"
 }
+
+# band_reading <session> <used> <window> <age-seconds> [root]: this session's
+# context file under the root, written <age> seconds ago (negative: in the future).
+band_reading() {
+  local percent=0
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
+  [ "$3" -eq 0 ] || percent=$(($2 * 100 / $3))
+  gaia_context_write "${5:-$WORK}" "$1" "$percent" "$2" "$3" "$(($(date +%s) - $4))"
+}
+
+# pick_as <session> [root]: the picker run as that session.
+pick_as() {
+  run --separate-stderr env CLAUDE_CODE_SESSION_ID="$1" bash "$NEXT" pick --root "${2:-$WORK}"
+}
+
+# context_file <root> <session>: the path of that session's context file.
+context_file() {
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
+  gaia_context_file "$1" "$2"
+}
+
+# assert_band <band|none>: the last pick handed off at that band, or took a job (none).
+assert_band() {
+  [ "$status" -eq 0 ] || return 1
+  [ "$(jq -r '.band // "none"' <<<"$output")" = "$1" ] || { echo "wanted $1: $output"; return 1; }
+}
+
+@test "pick: at or past the red band it returns a handoff with the save path and reads no queue tier" {
+  local session=0a1b2c3d-1111-4222-8333-444455556666 case_row used band expected quoted
+  running_plan PLAN-001 feat/1-plan-work
+  GH_PRS='2\tfeat/2-pr-work\n'
+  for case_row in "320000 red" "380000 fire" "460000 skull" "1100000 skull"; do
+    read -r used band <<<"$case_row"
+    band_reading "$session" "$used" 1000000 10
+    pick_as "$session"
+    expected="$(jq -cn --arg band "$band" --argjson used "$used" --arg path "$WORK/.gaia/local/runs/session-$session/STATE.md" \
+      '{job: "handoff", band: $band, used_tokens: $used, context_window_size: 1000000, save_path: $path, skipped: []}')"
+    [ "$status" -eq 0 ] || return 1
+    [ "$output" = "$expected" ] || { echo "$case_row: $output"; return 1; }
+    [ "$stderr" = "gaia-next: context at the $band band ($used tokens); no new job this session" ] || { echo "$case_row: $stderr"; return 1; }
+  done
+  # used above the window
+  band_reading "$session" 1200000 1000000 10
+  pick_as "$session"
+  assert_band skull || return 1
+  # autonomy on, and a gh that fails on any call and is never invoked
+  band_reading "$session" 320000 1000000 10
+  autonomy_on
+  printf '%s\n' '#!/usr/bin/env bash' 'echo invoked >> "$BATS_TEST_TMPDIR/gh-calls"' 'exit 1' > "$BIN/gh"
+  pick_as "$session"
+  assert_band red || return 1
+  [ ! -e "$BATS_TEST_TMPDIR/gh-calls" ] || return 1
+  # a hand-off checkpoint recorded by this session: the band check answers first, nothing skipped
+  mkdir -p "$WORK/.gaia/local/runs/feat/2-pr-work"
+  printf '{"history":{"checkpoints":[{"handoff":true,"session_id":"%s"}]}}\n' "$session" \
+    > "$WORK/.gaia/local/runs/feat/2-pr-work/audit-loop.json"
+  pick_as "$session"
+  jq -e '.job == "handoff" and .skipped == []' <<<"$output" >/dev/null || return 1
+  # a linked worktree --root reads and saves under the main checkout
+  git -C "$WORK" worktree add -q "$WORK/.claude/worktrees/side" -b feat/side
+  pick_as "$session" "$WORK/.claude/worktrees/side"
+  [ "$(jq -r .save_path <<<"$output")" = "$WORK/.gaia/local/runs/session-$session/STATE.md" ] || return 1
+  # a context file only under the linked worktree is not read
+  rm -f "$(context_file "$WORK" "$session")"
+  band_reading "$session" 320000 1000000 10 "$WORK/.claude/worktrees/side"
+  pick_as "$session" "$WORK/.claude/worktrees/side"
+  assert_band none || return 1
+  # refinement of the exact save_path output, not a separate behavior: a root whose path holds a double quote
+  quoted="$BATS_TEST_TMPDIR/we\"ird"
+  mkdir -p "$quoted"
+  git -C "$quoted" init -q -b main
+  quoted="$(cd "$quoted" && pwd -P)"
+  band_reading "$session" 320000 1000000 10 "$quoted"
+  pick_as "$session" "$quoted"
+  [ "$(jq -r .save_path <<<"$output")" = "$quoted/.gaia/local/runs/session-$session/STATE.md" ] || return 1
+}
+
+@test "pick: a same-session reading older than the freshness window still hands off" {
+  local session=0a1b2c3d-1111-4222-8333-444455556666
+  band_reading "$session" 320000 1000000 3600
+  pick_as "$session"
+  assert_band red || return 1
+  band_reading "$session" 320000 1000000 -30
+  pick_as "$session"
+  assert_band red || return 1
+  band_reading "$session" 200000 1000000 3600
+  pick_as "$session"
+  assert_band none || return 1
+}
+
+@test "pick: without a usable reading or with the checkpoint off it picks exactly as today" {
+  local session=0a1b2c3d-1111-4222-8333-444455556666 file label
+  running_plan PLAN-001 feat/1-plan-work
+  file="$(context_file "$WORK" "$session")"
+  # a usable 320000 reading everywhere a row below leaves it intact, so a row refuses for its one defect alone
+  refused() {
+    [ "$status" -eq 0 ] || return 1
+    jq -e '.job == "plan" and (has("band") | not) and (has("save_path") | not)' <<<"$output" >/dev/null || return 1
+    [ -z "$stderr" ] || return 1
+  }
+  band_reading "$session" 250000 1000000 10
+  pick_as "$session"; refused || return 1
+  band_reading "$session" 320000 1000000 10
+  env -u CLAUDE_CODE_SESSION_ID bash "$NEXT" pick --root "$WORK" > "$BATS_TEST_TMPDIR/unset.json" 2> "$BATS_TEST_TMPDIR/unset.err"
+  jq -e '.job == "plan" and (has("band") | not)' "$BATS_TEST_TMPDIR/unset.json" >/dev/null || return 1
+  [ ! -s "$BATS_TEST_TMPDIR/unset.err" ] || return 1
+  for label in "" "not-a-uuid"; do
+    pick_as "$label"; refused || return 1
+  done
+  # the file a `../x` id would name holds a 320000 reading
+  printf '{"version":1,"used_tokens":320000,"context_window_size":1000000,"written_at":%s}\n' "$(date +%s)" > "${file%/*}/../x.json"
+  pick_as "../x"; refused || return 1
+  rm -f "$file"
+  pick_as "$session"; refused || return 1
+  printf 'not json' > "$file"
+  pick_as "$session"; refused || return 1
+  printf '{"version":2,"used_tokens":320000,"context_window_size":1000000,"written_at":%s}\n' "$(date +%s)" > "$file"
+  pick_as "$session"; refused || return 1
+  printf '{"version":1,"used_tokens":3.5,"context_window_size":1000000,"written_at":%s}\n' "$(date +%s)" > "$file"
+  pick_as "$session"; refused || return 1
+  band_reading "$session" 320000 1000000 -600
+  pick_as "$session"; refused || return 1
+  band_reading "$session" 320000 0 10
+  pick_as "$session"; refused || return 1
+  band_reading "$session" 900000 1000000 10
+  mkdir -p "$WORK/.gaia/local/protected"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":0}}\n' > "$WORK/.gaia/local/protected/checkpoint-override.json"
+  pick_as "$session"; refused || return 1
+  # red-proof: with the one defect removed, the same fixture hands off
+  rm "$WORK/.gaia/local/protected/checkpoint-override.json"
+  pick_as "$session"
+  assert_band skull || return 1
+  # the exact 61-second future edge, proved at the lib level with an explicit now
+  . "$REPO_ROOT/.gaia/scripts/context-any-age-lib.sh"
+  printf '{"version":1,"used_tokens":320000,"context_window_size":1000000,"written_at":1000060}\n' > "$file"
+  run gaia_context_read_any_age "$WORK" "$session" 1000000
+  [ "$status" -eq 0 ] && [ "$output" = "320000 1000000" ] || return 1
+  printf '{"version":1,"used_tokens":320000,"context_window_size":1000000,"written_at":1000061}\n' > "$file"
+  run gaia_context_read_any_age "$WORK" "$session" 1000000
+  [ "$status" -eq 1 ] && [ -z "$output" ] || return 1
+}
+
+@test "pick: the band line honors the override and the window cap" {
+  local session=0a1b2c3d-1111-4222-8333-444455556666 override="$WORK/.gaia/local/protected/checkpoint-override.json"
+  mkdir -p "$WORK/.gaia/local/protected"
+  printf '{"version":1,"context_checkpoint":{"ask_tokens":350000}}\n' > "$override"
+  band_reading "$session" 320000 1000000 10
+  pick_as "$session"
+  assert_band none || return 1
+  band_reading "$session" 360000 1000000 10
+  pick_as "$session"
+  assert_band red || return 1
+  rm "$override"
+  band_reading "$session" 120000 200000 10
+  pick_as "$session"
+  assert_band red || return 1
+  printf 'not json' > "$override"
+  band_reading "$session" 320000 1000000 10
+  pick_as "$session"
+  assert_band red || return 1
+}

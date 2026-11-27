@@ -310,7 +310,9 @@ esac
 if [ -n "$key" ] && [ -n "$run_directory" ] && [ "$key" != "$default_branch" ]; then
   save_path="$run_directory/STATE.md"
 else
-  save_path="$main_root/.gaia/local/runs/session-$session_id/STATE.md"
+  # shellcheck source=/dev/null
+  . "$scripts/context-any-age-lib.sh" || exit 0
+  save_path=$(gaia_context_session_save_path "$main_root" "$session_id") || exit 0
 fi
 
 text="Context checkpoint: $band band reached ($summary)."$'\n'"Session id: $session_id"$'\n'"Save path: $save_path"$'\n'"$doctrine"
