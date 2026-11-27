@@ -1018,7 +1018,7 @@ assert_recorder_run_denied_and_staging_allowed() {
 }
 
 # bats test_tags=whole-tree
-@test "every script that sources the context checkpoint library is named by the context-writer matcher" {
+@test "every .gaia/scripts script that sources context-checkpoint-lib.sh directly is named by the context-writer source matcher" {
   local scripts_directory="$BATS_TEST_DIRNAME/../../scripts"
   local matcher_file="$HOOKS_SOURCE_DIRECTORY/lib/hook-only-scripts-guard.sh"
   local sourcing_file base_name checked=0 missing=""
