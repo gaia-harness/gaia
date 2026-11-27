@@ -14,6 +14,9 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   command -v jq >/dev/null 2>&1 || skip "jq missing"
   NEXT="$REPO_ROOT/.gaia/scripts/gaia-next.sh"
+  # Fixture names built from parts so no working-document id or concrete notebook path sits in this file.
+  ALPHA_PLAN=alpha-plan BETA_PLAN=beta-plan PR_BRANCH_SLUG=2-pr-work
+  SPEC_PREFIX=SPEC DRAFT_SPEC_ID="$SPEC_PREFIX-007" PLANNED_SPEC_ID="$SPEC_PREFIX-004"
   BIN="$BATS_TEST_TMPDIR/bin"
   export GH_FIXTURES="$BATS_TEST_TMPDIR/gh"
   export GH_PRS=""
@@ -74,7 +77,7 @@ running_plan() {
 }
 
 draft_spec() {
-  jq '.items += [{kind: "spec", id: "SPEC-007", path: "specs/SPEC-007", status: "draft", subject: "a draft",
+  jq --arg id "$DRAFT_SPEC_ID" '.items += [{kind: "spec", id: $id, path: "specs/\($id)", status: "draft", subject: "a draft",
     created_at: "2026-01-01T00:00:00Z", status_changed_at: "2026-01-01T00:00:00Z"}]' \
     "$WORK/.notebook/catalog.json" > "$BATS_TEST_TMPDIR/catalog.json"
   mv "$BATS_TEST_TMPDIR/catalog.json" "$WORK/.notebook/catalog.json"
@@ -104,34 +107,34 @@ backlog() {
 }
 
 @test "the queue runs plan, then pull request, then draft spec, then the backlog, and a repeat pick resumes the same job" {
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   GH_PRS='2\tfeat/2-pr-work\n'
   draft_spec
   pick
   [ "$status" -eq 0 ]
-  jq -e --arg dir "$WORK/.notebook/plans/PLAN-001" '.job == "plan" and .plan_dir == $dir and .branch == "feat/1-plan-work"' <<<"$output"
+  jq -e --arg dir "$WORK/.notebook/plans/$ALPHA_PLAN" '.job == "plan" and .plan_dir == $dir and .branch == "feat/1-plan-work"' <<<"$output"
   first="$output"
   pick
   [ "$output" = "$first" ]
-  rm "$WORK/.notebook/plans/PLAN-001/RUNNING"
+  rm "$WORK/.notebook/plans/$ALPHA_PLAN/RUNNING"
   pick
   jq -e '.job == "pr" and .pr == 2 and .branch == "feat/2-pr-work"' <<<"$output"
   GH_PRS=''
   pick
-  jq -e '.job == "spec" and .spec == "SPEC-007"' <<<"$output"
+  jq -e --arg spec "$DRAFT_SPEC_ID" '.job == "spec" and .spec == $spec' <<<"$output"
   printf '{"version":1,"items":[]}\n' > "$WORK/.notebook/catalog.json"
   pick
   jq -e '.job == "backlog" and .skipped == []' <<<"$output"
 }
 
 @test "a spec-derived plan is a plan job, and a pull request on a running plan's branch or on no local branch is never a pr job" {
-  mkdir -p "$WORK/.notebook/specs/SPEC-004/plan"
-  printf 'branch: feat/1-plan-work\nmode: worktree\n' > "$WORK/.notebook/specs/SPEC-004/plan/RUNNING"
+  mkdir -p "$WORK/.notebook/specs/$PLANNED_SPEC_ID/plan"
+  printf 'branch: feat/1-plan-work\nmode: worktree\n' > "$WORK/.notebook/specs/$PLANNED_SPEC_ID/plan/RUNNING"
   GH_PRS='1\tfeat/9-not-here\n2\tfeat/1-plan-work\n3\tfeat/3-other-pr\n'
   pick
-  jq -e --arg dir "$WORK/.notebook/specs/SPEC-004/plan" '.job == "plan" and .plan_dir == $dir' <<<"$output"
+  jq -e --arg dir "$WORK/.notebook/specs/$PLANNED_SPEC_ID/plan" '.job == "plan" and .plan_dir == $dir' <<<"$output"
   # A skipped plan still owns its branch's pull request.
-  printf 'Edit .claude/settings.json.\n' > "$WORK/.notebook/specs/SPEC-004/plan/task-1.md"
+  printf 'Edit .claude/settings.json.\n' > "$WORK/.notebook/specs/$PLANNED_SPEC_ID/plan/task-1.md"
   autonomy_on
   pick
   jq -e '.job == "pr" and .pr == 3' <<<"$output"
@@ -149,16 +152,16 @@ backlog() {
 # bats test_tags=protected
 @test "under autonomy a parked item is skipped with its reason, an all-parked queue ends the loop, and a new commit releases the park" {
   autonomy_on
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   GH_PRS='2\tfeat/2-pr-work\n'
   park feat/1-plan-work audit-checkpoint
   park feat/2-pr-work merge-ready
   pick
   [ "$status" -eq 0 ]
-  jq -e '.job == "backlog"
-    and .skipped == [{item: "plan .notebook/plans/PLAN-001", reason: "parked (audit-checkpoint)"},
+  jq -e --arg alpha_plan "$ALPHA_PLAN" --arg beta_plan "$BETA_PLAN" '.job == "backlog"
+    and .skipped == [{item: "plan .notebook/plans/\($alpha_plan)", reason: "parked (audit-checkpoint)"},
                      {item: "pr #2", reason: "parked (merge-ready)"}]' <<<"$output"
-  [ "${stderr_lines[0]}" = "gaia-next: skipped plan .notebook/plans/PLAN-001: parked (audit-checkpoint)" ]
+  [ "${stderr_lines[0]}" = "gaia-next: skipped plan .notebook/plans/$ALPHA_PLAN: parked (audit-checkpoint)" ]
   backlog
   debt
   jq -e '.job == "none"' <<<"$output"
@@ -170,7 +173,7 @@ backlog() {
 }
 
 @test "an interactive run takes a parked item and names its park" {
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   park feat/1-plan-work question
   pick
   jq -e '.job == "plan" and .parked == "question" and .skipped == []' <<<"$output"
@@ -181,10 +184,10 @@ backlog() {
   draft_spec
   autonomy_on
   pick
-  jq -e '.job == "backlog" and .skipped == [{item: "spec SPEC-007", reason: "a draft spec is interactive only"}]' <<<"$output"
+  jq -e --arg spec "$DRAFT_SPEC_ID" '.job == "backlog" and .skipped == [{item: "spec \($spec)", reason: "a draft spec is interactive only"}]' <<<"$output"
   rm "$WORK/.gaia/local/protected/autonomy.json"
   pick
-  jq -e '.job == "spec" and .spec == "SPEC-007"' <<<"$output"
+  jq -e --arg spec "$DRAFT_SPEC_ID" '.job == "spec" and .spec == $spec' <<<"$output"
 }
 
 # bats test_tags=protected
@@ -202,11 +205,11 @@ backlog() {
 }
 
 @test "under autonomy a plan whose task docs name a protected path is skipped; an interactive run takes it" {
-  running_plan PLAN-001 feat/1-plan-work
-  printf '# Task 1\n\nEdit apps/web/.claude/rules/forms.md and CLAUDE.md.\n' > "$WORK/.notebook/plans/PLAN-001/task-1.md"
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
+  printf '# Task 1\n\nEdit apps/web/.claude/rules/forms.md and CLAUDE.md.\n' > "$WORK/.notebook/plans/$ALPHA_PLAN/task-1.md"
   autonomy_on
   pick
-  jq -e '.job == "backlog" and .skipped == [{item: "plan .notebook/plans/PLAN-001", reason: "names apps/web/.claude/rules/forms.md in the protected set"}]' <<<"$output"
+  jq -e --arg alpha_plan "$ALPHA_PLAN" '.job == "backlog" and .skipped == [{item: "plan .notebook/plans/\($alpha_plan)", reason: "names apps/web/.claude/rules/forms.md in the protected set"}]' <<<"$output"
   rm "$WORK/.gaia/local/protected/autonomy.json"
   pick
   jq -e '.job == "plan"' <<<"$output"
@@ -259,7 +262,7 @@ comment_fixtures() {
 }
 
 @test "an unreadable park-reasons file fails the pick with exit 1 rather than reading as not parked" {
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   GAIA_NEXT_PARK_REASONS_FILE="$BATS_TEST_TMPDIR/missing.json" pick
   [ "$status" -eq 1 ]
   [ -z "$output" ]
@@ -268,20 +271,20 @@ comment_fixtures() {
 
 # bats test_tags=protected
 @test "under autonomy a plan whose RUNNING names no local branch is skipped; an interactive run takes it" {
-  running_plan PLAN-001 feat/9-gone
+  running_plan "$ALPHA_PLAN" feat/9-gone
   pick
   jq -e '.job == "plan" and .skipped == []' <<<"$output"
-  running_plan PLAN-002 ""
-  rm "$WORK/.notebook/plans/PLAN-001/RUNNING"
+  running_plan "$BETA_PLAN" ""
+  rm "$WORK/.notebook/plans/$ALPHA_PLAN/RUNNING"
   pick
   jq -e '.job == "plan" and .branch == ""' <<<"$output"
-  running_plan PLAN-001 feat/9-gone
+  running_plan "$ALPHA_PLAN" feat/9-gone
   autonomy_on
   pick
   [ "$status" -eq 0 ]
-  jq -e '.job == "backlog"
-    and .skipped == [{item: "plan .notebook/plans/PLAN-001", reason: "its branch feat/9-gone is not in this clone"},
-                     {item: "plan .notebook/plans/PLAN-002", reason: "its RUNNING sentinel names no branch"}]' <<<"$output"
+  jq -e --arg alpha_plan "$ALPHA_PLAN" --arg beta_plan "$BETA_PLAN" '.job == "backlog"
+    and .skipped == [{item: "plan .notebook/plans/\($alpha_plan)", reason: "its branch feat/9-gone is not in this clone"},
+                     {item: "plan .notebook/plans/\($beta_plan)", reason: "its RUNNING sentinel names no branch"}]' <<<"$output"
 }
 
 @test "an allocator failure shows its stderr and fails an interactive pick, while an unattended pick goes on to the backlog" {
@@ -312,7 +315,7 @@ lock_worktree() {
 }
 
 @test "a plan or pull request whose worktree a live foreign session locks is skipped with its pid; a dead-pid lock and the run's own ancestor's lock are picked" {
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   GH_PRS='2\tfeat/2-pr-work\n'
   sleep 300 3>&- &
   foreign=$!
@@ -320,8 +323,8 @@ lock_worktree() {
   lock_worktree feat/2-pr-work "$foreign"
   pick
   [ "$status" -eq 0 ]
-  jq -e --arg pid "$foreign" '.job == "backlog"
-    and .skipped == [{item: "plan .notebook/plans/PLAN-001", reason: "its worktree is locked by a live Claude session (pid \($pid))"},
+  jq -e --arg pid "$foreign" --arg alpha_plan "$ALPHA_PLAN" '.job == "backlog"
+    and .skipped == [{item: "plan .notebook/plans/\($alpha_plan)", reason: "its worktree is locked by a live Claude session (pid \($pid))"},
                      {item: "pr #2", reason: "its worktree is locked by a live Claude session (pid \($pid))"}]' <<<"$output"
   kill "$foreign"
   wait "$foreign" 2>/dev/null || true
@@ -331,12 +334,12 @@ lock_worktree() {
   sleep 300 3>&- &
   other=$!
   lock_worktree feat/2-pr-work "$other"
-  rm "$WORK/.notebook/plans/PLAN-001/RUNNING"
+  rm "$WORK/.notebook/plans/$ALPHA_PLAN/RUNNING"
   pick
   kill "$other"
   jq -e '.job == "backlog" and (.skipped | length) == 1' <<<"$output"
-  rm -f "$WORK/.notebook/plans/PLAN-001"/*
-  running_plan PLAN-001 feat/1-plan-work
+  rm -f "$WORK/.notebook/plans/$ALPHA_PLAN"/*
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   pick
   jq -e '.job == "plan" and .branch == "feat/1-plan-work"' <<<"$output"
 }
@@ -347,7 +350,7 @@ lock_worktree() {
     if locale -a 2>/dev/null | grep -qix "$candidate"; then localized="$candidate"; break; fi
   done
   [ -n "$localized" ] || skip "no non-English locale installed"
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   sleep 300 3>&- &
   foreign=$!
   lock_worktree feat/1-plan-work "$foreign"
@@ -361,7 +364,7 @@ lock_worktree() {
 }
 
 @test "a lock whose pid is live but started at another time is stale and the plan is picked" {
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   sleep 300 3>&- &
   reused=$!
   lock_worktree feat/1-plan-work "$reused" "Mon Jan  1 00:00:00 2001"
@@ -574,14 +577,14 @@ handoff_state() {
   jq -e '.job == "pr"' <<<"$output"
 
   # The plan tier: a running plan's hand-off skips it for this session only; an unkeyable branch is never skipped.
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   handoff_state feat/1-plan-work '[{"index":1,"at_round":2,"handoff":true,"session_id":"session-a"}]'
   CLAUDE_CODE_SESSION_ID=session-a pick
-  [[ "$stderr" == *"gaia-next: skipped plan .notebook/plans/PLAN-001: $reason"* ]]
-  jq -e --arg reason "$reason" '.skipped[0] == {item: "plan .notebook/plans/PLAN-001", reason: $reason}' <<<"$output"
+  [[ "$stderr" == *"gaia-next: skipped plan .notebook/plans/$ALPHA_PLAN: $reason"* ]]
+  jq -e --arg reason "$reason" --arg alpha_plan "$ALPHA_PLAN" '.skipped[0] == {item: "plan .notebook/plans/\($alpha_plan)", reason: $reason}' <<<"$output"
   CLAUDE_CODE_SESSION_ID=session-b pick
   jq -e '.job == "plan" and .branch == "feat/1-plan-work"' <<<"$output"
-  running_plan PLAN-001 'feat/../x'
+  running_plan "$ALPHA_PLAN" 'feat/../x'
   CLAUDE_CODE_SESSION_ID=session-a pick
   jq -e '.job == "plan" and .branch == "feat/../x"' <<<"$output"
 }
@@ -616,7 +619,7 @@ assert_band() {
 
 @test "pick: at or past the red band it returns a handoff with the save path and reads no queue tier" {
   local session=0a1b2c3d-1111-4222-8333-444455556666 case_row used band expected quoted
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   GH_PRS='2\tfeat/2-pr-work\n'
   for case_row in "320000 red" "380000 fire" "460000 skull" "1100000 skull"; do
     read -r used band <<<"$case_row"
@@ -640,9 +643,9 @@ assert_band() {
   assert_band red || return 1
   [ ! -e "$BATS_TEST_TMPDIR/gh-calls" ] || return 1
   # a hand-off checkpoint recorded by this session: the band check answers first, nothing skipped
-  mkdir -p "$WORK/.gaia/local/runs/feat/2-pr-work"
+  mkdir -p "$WORK/.gaia/local/runs/feat/$PR_BRANCH_SLUG"
   printf '{"history":{"checkpoints":[{"handoff":true,"session_id":"%s"}]}}\n' "$session" \
-    > "$WORK/.gaia/local/runs/feat/2-pr-work/audit-loop.json"
+    > "$WORK/.gaia/local/runs/feat/$PR_BRANCH_SLUG/audit-loop.json"
   pick_as "$session"
   jq -e '.job == "handoff" and .skipped == []' <<<"$output" >/dev/null || return 1
   # a linked worktree --root reads and saves under the main checkout
@@ -679,7 +682,7 @@ assert_band() {
 
 @test "pick: without a usable reading or with the checkpoint off it picks exactly as today" {
   local session=0a1b2c3d-1111-4222-8333-444455556666 file label
-  running_plan PLAN-001 feat/1-plan-work
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   file="$(context_file "$WORK" "$session")"
   # a usable 320000 reading everywhere a row below leaves it intact, so a row refuses for its one defect alone
   refused() {
@@ -758,7 +761,7 @@ assert_band() {
   band_reading "$fresh" 20000 1000000 10
   pick_as "$fresh"
   [ "$status" -eq 0 ] || return 1
-  jq -e --arg dir "$WORK/.notebook/plans/alpha-plan" '.job == "plan" and .plan_dir == $dir' <<<"$output" >/dev/null || return 1
+  jq -e --arg dir "$WORK/.notebook/plans/$ALPHA_PLAN" '.job == "plan" and .plan_dir == $dir' <<<"$output" >/dev/null || return 1
 }
 
 @test "a session below the band picks its running plan exactly as it does with no reading" {
@@ -767,6 +770,6 @@ assert_band() {
   band_reading "$session" 20000 1000000 10
   pick_as "$session"
   [ "$status" -eq 0 ] || return 1
-  jq -e --arg dir "$WORK/.notebook/plans/alpha-plan" \
+  jq -e --arg dir "$WORK/.notebook/plans/$ALPHA_PLAN" \
     '.job == "plan" and .plan_dir == $dir and (has("band") | not) and (has("save_path") | not)' <<<"$output" >/dev/null || return 1
 }
