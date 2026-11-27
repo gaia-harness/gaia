@@ -45,10 +45,10 @@ gaia_loop_stop_override() {
 # a fixer that stopped without a result still counts): a dead unit's successor
 # runs that round rather than stacking an empty one. Once served, a veto due
 # at the next round reopens even when the fix committed nothing, since the
-# next unit cannot fix into a round whose dispositions and baseline files are
-# already written. A gate failure is blocked by a reopened round on HEAD's
+# next unit cannot fix into a round whose dispositions file is already
+# written. A gate failure is blocked by a reopened round on HEAD's
 # tree unless a veto opened that round (a veto with effective_from_round == r),
-# so a gate-opened round never reopens for the same gate again and an owed
+# so a gate-opened round never reopens for a gate failure again and an owed
 # step the fixer cannot repair cannot loop.
 # rc 1 on an unreadable or malformed vetoes.json or gate-failure.json: reading
 # either as absent would leave its repair no round.
