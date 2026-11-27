@@ -40,12 +40,12 @@ gaia_loop_stop_override() {
 # tree <tree> (its header, THE REOPENED ROUND), else false. A new veto reopens
 # on a moved tree too: commits outside its member's scope leave that member's
 # clearance standing, so no member wave would open the round its fix needs.
-# A reopened round on HEAD's tree is not reopened again until its fixer has
-# run (fixer-<r>-audit.json exists): a dead unit's successor runs that round
-# rather than stacking an empty one. Once the fixer has run, a veto due at the
-# next round reopens even when the fix committed nothing and left the tree
-# unmoved, since the successor cannot fix into a round whose dispositions,
-# baseline and fixer files are already written. A gate failure never reopens
+# A reopened round on HEAD's tree is not reopened for a veto until its fixer
+# has run (fixer-<r>-audit.json exists): a dead unit's successor runs that
+# round rather than stacking an empty one. Once the fixer has run, a veto due
+# at the next round reopens even when the fix committed nothing, since the
+# next unit cannot fix into a round whose dispositions, baseline and fixer
+# files are already written. A gate failure never reopens
 # twice on one tree, so an owed step the fixer cannot repair cannot loop.
 # rc 1 on an unreadable or malformed vetoes.json or gate-failure.json: reading
 # either as absent would leave its repair no round.
