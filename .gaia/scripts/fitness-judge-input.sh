@@ -325,7 +325,7 @@ collect() {
     replies+=("$reply")
   done < <(jq -r '.groups[].reply' "$manifest")
   [ "${#replies[@]}" -gt 0 ] || usage_error "$manifest names no group"
-  jq -n '[inputs[] | select(.judgment != "input-read")]' "${replies[@]}" >"$out"
+  jq -n '[inputs[] | select(.judgment != "input-read")]' ${replies[@]+"${replies[@]}"} >"$out"
 }
 
 [ "$#" -ge 1 ] || usage_error "missing subcommand"
