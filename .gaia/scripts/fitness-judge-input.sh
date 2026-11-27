@@ -15,13 +15,14 @@
 #   fitness-judge-input.sh prompt --manifest <manifest.json> --group <g> --rule <path>
 #   fitness-judge-input.sh collect --manifest <manifest.json> --out <judgment.json>
 #
-#   build    Judges the paths the dispatch filter prints, plus every tracked
-#            Markdown file under a `.claude/` folder or `wiki/` that names
-#            AskUserQuestion, minus third-party and ignored paths. Writes the
-#            parts and <dir>/manifest.json, and prints one line per group:
-#            `group <g> reply <reply path>`. The first part is a digest of
-#            every judged skill's frontmatter, so trigger-overlap compares all
-#            skills even when their files land in different groups. A skill's
+#   build    Builds the input from the paths the dispatch filter prints,
+#            plus every tracked Markdown file under a `.claude/` folder or
+#            `wiki/` that names AskUserQuestion, minus third-party and ignored
+#            paths. Writes the parts and <dir>/manifest.json, and prints one
+#            line per group: `group <g> reply <reply path>`. When a judged
+#            skill has frontmatter, the first part is a digest of every such
+#            skill's, so trigger-overlap compares all skills even when their
+#            files land in different groups. A skill's
 #            files stay in one group unless together they exceed a group;
 #            the slices of one oversized file always share a group.
 #   prompt   Prints the dispatch prompt for one group: an `Input:` line per
@@ -37,9 +38,10 @@
 #   1  collect: at least one group is a no-op, each named on stdout as
 #      `no-op group <g>: <reason>`; <judgment.json> is not written
 #   2  usage error
-#   3  build: nothing to judge (the dispatch filter matched no entry)
+#   3  build: nothing to judge (the dispatch filter matched no entry, or no
+#      listed path is a regular file)
 #
-# Honest limit: a single line longer than a part is kept whole, so its part
+# Limit: a single line longer than a part is kept whole, so its part
 # can exceed one Read. The receipt token still catches the partial read.
 
 set -euo pipefail
@@ -277,7 +279,8 @@ prompt() {
     usage_error "no group $group in $manifest"
 }
 
-# A finding, a receipt, or a could-not-read element; anything else is a no-op.
+# A finding's shape. collect also accepts a receipt or a could-not-read
+# element; anything else is a no-op.
 ELEMENT_SHAPE='(.judgment | IN("description-substance","trigger-overlap","rule-scope-fit","terminology","recommendation-authority")) and (.file | type == "string") and (.line | type == "number") and (.message | type == "string") and (.remediation | type == "string")'
 
 collect() {
