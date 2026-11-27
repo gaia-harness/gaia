@@ -50,8 +50,8 @@
 #   --release  Removes this member's stored capture and exits 0, or exits 0
 #              when none is stored. On a capture that cannot be removed:
 #              a diagnostic on stderr, exits non-zero. The clearance
-#              writer's member-refusal accounting-failure recovery calls
-#              this before re-running the resolver; see the SPENT-capture
+#              writer's member-refusal accounting-failure recovery tells
+#              the member to run this before re-running the resolver; see the SPENT-capture
 #              block below for why the dispatch-tree binding cannot replace
 #              the capture there.
 #
@@ -132,9 +132,10 @@ usage: audit-scope-digest.sh --capture [--recapture] [--base-reason <token>] [--
        audit-scope-digest.sh --read    --root <path> --member <name> --base <key-base>
        audit-scope-digest.sh --release --root <path> --member <name> --base <key-base>
 
-  --release    remove this member's stored capture, so the next round recaptures
-               fresh. For a dispatch that re-runs the resolver after the
-               writer's accounting-failure recovery names it.
+  --release    remove this member's stored capture, so the next resolver run
+               recaptures fresh. For a dispatch that re-runs the resolver
+               after the clearance writer's member-refusal accounting-failure
+               recovery names it.
   --recapture  valid only with --capture; replace an existing capture for this
                audit key and member instead of returning it unchanged. For a
                caller that legitimately changed the content its review ends on
