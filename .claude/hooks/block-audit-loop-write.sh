@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse Edit/Write/MultiEdit + Bash/Monitor hook: deny Claude any write,
 # edit, move or delete of the audit loop gate inputs, and any execution of the
-# two audit loop recorders or of the local-state reaper scripts. The gate
+# two audit loop recorders, of the local-state reaper scripts, or of the
+# statusline and the context writers. The gate
 # inputs are
 #   <main>/.gaia/local/protected/                       hook-only and human-only state
 #     protected/audit-loop/                             state: history + allowance
@@ -116,6 +117,17 @@
 #     zsh, dash, ksh, `source`, `.` or `exec`; quoted or not). `rate-limits.sh
 #     read`, `cat` and `jq .` of a reading, and `git add`, `git diff`,
 #     `shellcheck` or `bash -n` naming either script stay allowed.
+#   Context writer execution: the same reading, with its own deny message, over
+#     two criteria. A command that EXECUTES gaia-statusline.sh or
+#     context-reading.sh (matched by exact base name, so gaia-statusline-left.sh,
+#     gaia-statusline-right.sh and a bats suite path never match), or that
+#     SOURCES context-checkpoint-lib.sh or context-reading.sh (`source` or `.`
+#     script argument) and names gaia_context_write or
+#     gaia_statusline_write_context as a whole word anywhere in the command, is
+#     denied: either mints the context reading the checkpoint trusts. Naming the
+#     files (`git add`, `git diff`, `grep`, `cat`, `shellcheck`, `bash -n`),
+#     sourcing the library to call a reader or `gaia_context_yield_limit`, and a
+#     data heredoc line naming a statusline script stay allowed.
 #   Plan tier: an Edit, Write or MultiEdit of a `.claude.json` whose new text
 #     (`content`, `new_string`, any `edits[].new_string`) names
 #     `organizationRateLimitTier`, and a command that writes a `.claude.json`
@@ -148,18 +160,20 @@
 # through `<elsewhere>/protected/...`, or a `mv` or `ln` through the alias),
 # since the `ln -s` that names the folder is denied but the parent alias is not;
 # `mkdir`, which is not a write verb, so creating the folder or a directory
-# inside it stays allowed; a context reading minted by a command that never
-# names the context directory, by running .gaia/statusline/gaia-statusline.sh
-# with a crafted stdin payload or by sourcing
-# .gaia/scripts/context-checkpoint-lib.sh and calling gaia_context_write, directly or
-# through a wrapper such as .gaia/statusline/context-reading.sh's
-# gaia_statusline_write_context (such a reading stands until the next real
-# statusline render overwrites it). A rate-limit reading has the same
-# residuals: a crafted payload piped into .gaia/statusline/gaia-statusline.sh,
-# sourcing .gaia/scripts/rate-limits-lib.sh and calling its writer (directly or
-# through .gaia/statusline/rate-limits-reading.sh), and a write spelled through
-# the wrappers above, a path in a variable or a `cd` followed by a relative
-# name; such a reading stands until a higher real reading or the window's reset.
+# inside it stays allowed; a context reading minted through a spelling the
+# context writer execution match misses (the wrappers, variables, substitutions
+# and quoting tricks listed above for the recorders, a copy of the statusline
+# or the library under another name, a script Claude writes that never names
+# them). A name match is bypassable, so the residual stays, bounded: a minted
+# low reading yields automatic units on the fallback and the enriching, stalled,
+# nitpicky and small-tail signals, up to the effective round cap (10 when none is set);
+# reintroduced, waiver-drift, an Accept, Stop or State-the-rule recommendation
+# and the cap still ask whatever the reading. Such a reading stands until the
+# next real statusline render overwrites it. A rate-limit reading has the same
+# residuals: sourcing .gaia/scripts/rate-limits-lib.sh and calling its writer
+# (directly or through .gaia/statusline/rate-limits-reading.sh), and a write
+# spelled through the wrappers above, a path in a variable or a `cd` followed
+# by a relative name; such a reading stands until a higher real reading or the window's reset.
 # With jq absent, a quoted `'write'` or a doubled space before it passes the
 # jq-absent refusal, which matches the unquoted single-space literal only.
 #
@@ -188,11 +202,12 @@ fi
 
 # Raw pre-filter. Every call this guard can bind carries one of these literals
 # in its payload (JSON never escapes those characters; both recorder names
-# contain `audit-loop` and every reaper script name contains `state-reaper`), so
+# contain `audit-loop`, every reaper script name contains `state-reaper`, and the
+# context writers are named by the three literals after it), so
 # a payload without any is outside the remit with no
 # jq read at all. This is the path every ordinary Bash call takes.
 case "$payload" in
-  *audit-loop* | *state-reaper* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits* | *cache/rate-limit-checkpoint* | *organizationRateLimitTier* | *CLAUDE_CONFIG_DIR*rate-limits.sh* | *rate-limits-lib.sh* | *rate-limits.sh*write*) ;;
+  *audit-loop* | *state-reaper* | *gaia-statusline.sh* | *context-reading.sh* | *context-checkpoint-lib.sh* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits* | *cache/rate-limit-checkpoint* | *organizationRateLimitTier* | *CLAUDE_CONFIG_DIR*rate-limits.sh* | *rate-limits-lib.sh* | *rate-limits.sh*write*) ;;
   *) exit 0 ;;
 esac
 
@@ -205,7 +220,7 @@ if ! type gaia_require_jq >/dev/null 2>&1; then
   printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/jq-availability.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
-gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits' 'cache/rate-limit-checkpoint' 'organizationRateLimitTier' 'CLAUDE_CONFIG_DIR' 'rate-limits-lib.sh' 'rate-limits.sh write'
+gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'gaia-statusline.sh' 'context-reading.sh' 'context-checkpoint-lib.sh' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits' 'cache/rate-limit-checkpoint' 'organizationRateLimitTier' 'CLAUDE_CONFIG_DIR' 'rate-limits-lib.sh' 'rate-limits.sh write'
 
 set +e
 # shellcheck source=lib/hook-payload.sh
@@ -251,7 +266,7 @@ fi
 
 DENY_BASH_TRIGGER="Trigger: the command names that path and either redirects into it or carries a write, move or delete verb (rm, mv, cp, tee, ln, touch, sed -i, an interpreter given -c or -e, and the like) outside quotes; in a command holding a heredoc, an unclosed quote, a command substitution inside double quotes, or a redirect target built from a variable or a glob, any redirect or such verb anywhere counts. A command that names the path only as quoted text and redirects elsewhere is allowed, so stage a note that mentions it with printf and a quoted string, no heredoc, or leave the literal path out of the command."
 
-# deny <state|override|folder|context|recorder|reaper|rate-limits|rate-limits-tier> [bash]
+# deny <state|override|folder|context|recorder|reaper|context-writer|rate-limits|rate-limits-tier> [bash]
 deny() {
   local message
   case "$1" in
@@ -260,6 +275,7 @@ deny() {
     folder) message="$DENY_FOLDER_MESSAGE" ;;
     recorder) message="$DENY_RECORDER_MESSAGE" ;;
     reaper) message="$DENY_REAPER_MESSAGE" ;;
+    context-writer) message="$DENY_CONTEXT_WRITER_MESSAGE" ;;
     rate-limits) message="$DENY_RATE_LIMITS_MESSAGE" ;;
     rate-limits-tier) message="$DENY_RATE_LIMITS_TIER_MESSAGE" ;;
     *) message="$DENY_STATE_MESSAGE" ;;
@@ -329,6 +345,10 @@ case "$tool_name" in
     [[ -n "$command_line" ]] || exit 0
 
     runs_guarded_script "$command_line" && deny "$SCRIPT_KIND"
+    runs_guarded_script "$command_line" context_writer_execute_matcher && deny context-writer
+    if names_context_writer "$command_line" && runs_guarded_script "$command_line" context_writer_source_matcher; then
+      deny context-writer
+    fi
 
     # Pre-filter per class: does the command name the path at all?
     protected_names_re='\.gaia/local/protected(/|[[:space:]"'\'';|&)<>]|$)'

@@ -18,7 +18,7 @@
 #   <!-- gaia:audit-rounds:start -->
 #   ## Audit rounds
 #
-#   Total rounds: <int>; per member: <member> <int>, <member> <int>; light reviews: <member> <int>, <member> <int>; quick review, no full member: <member>, <member>; human grants: <int>; budget grants: <int>.
+#   Total rounds: <int>; per member: <member> <int>, <member> <int>; light reviews: <member> <int>, <member> <int>; quick review, no full member: <member>, <member>; human grants: <int>; budget grants: <int>; automatic grants: <int>.
 #   <!-- gaia:audit-rounds:end -->
 #
 # The block is rewritten in place between the markers and appended after one
@@ -38,7 +38,9 @@
 # Values without `light` or `quick`, or with one empty or all zero, render the
 # line without that clause. An optional `budget_grants` integer, the units the
 # autonomy budget answered, renders as `budget grants:` and reads 0 when
-# absent; `grants` counts human grants only.
+# absent; `grants` counts human grants only. An optional `automatic_grants`
+# integer, the units the bound hook admitted on its own, renders as
+# `automatic grants:` right after it and reads 0 when absent.
 #
 # `review` (optional, the object `audit-code-review-record.sh publish-values`
 # prints) appends one code-review clause after the grants count and is left out
@@ -176,10 +178,11 @@ fi
 if ! jq -e '
     def uint: type == "number" and . >= 0 and . == floor and . < 1000000000;
     type == "object"
-    and ((keys - ["total", "members", "grants", "budget_grants", "light", "quick", "review"]) | length) == 0
+    and ((keys - ["total", "members", "grants", "budget_grants", "automatic_grants", "light", "quick", "review"]) | length) == 0
     and (.total | uint)
     and (.grants | uint)
     and ((has("budget_grants") | not) or (.budget_grants | uint))
+    and ((has("automatic_grants") | not) or (.automatic_grants | uint))
     and (.members | type) == "object"
     and (.members | to_entries | all(.key | test("\\Acode-audit-[a-z0-9-]+\\z")))
     and (.members | to_entries | all(.value | uint))
@@ -236,6 +239,7 @@ fi
 TOTAL="$(jq -r '.total' "$WORK/values.json")"
 GRANTS="$(jq -r '.grants' "$WORK/values.json")"
 BUDGET_GRANTS="$(jq -r '.budget_grants // 0' "$WORK/values.json")"
+AUTOMATIC_GRANTS="$(jq -r '.automatic_grants // 0' "$WORK/values.json")"
 MEMBERS="$(jq -r '.members | to_entries | sort_by(.key) | map("\(.key) \(.value)") | join(", ")' "$WORK/values.json")"
 [ -n "$MEMBERS" ] || MEMBERS="none"
 LIGHT_CLAUSE=""
@@ -269,7 +273,7 @@ REVIEW_CLAUSE="$(jq -r '
 printf '%s\n%s\n\n%s\n%s\n' \
   "$START_MARKER" \
   "$PR_BODY_HEADING_AUDIT_ROUNDS" \
-  "Total rounds: ${TOTAL}; per member: ${MEMBERS};${LIGHT_CLAUSE}${QUICK_CLAUSE} human grants: ${GRANTS}; budget grants: ${BUDGET_GRANTS}${GRANTS_END}" \
+  "Total rounds: ${TOTAL}; per member: ${MEMBERS};${LIGHT_CLAUSE}${QUICK_CLAUSE} human grants: ${GRANTS}; budget grants: ${BUDGET_GRANTS}; automatic grants: ${AUTOMATIC_GRANTS}${GRANTS_END}" \
   "$END_MARKER" > "$WORK/section.md"
 
 # ---------------------------------------------------------------------------

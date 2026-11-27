@@ -2,7 +2,7 @@
 #
 # The allowance and the gate decision for audit-loop-eval.sh: the knobs frozen
 # at round 1, the allowance fold, gaia_loop_decide, and the context-line config
-# frozen at round 1 and in effect. Sourced only by audit-loop-eval.sh, which
+# frozen at round 1 and in effect, and the effective round cap. Sourced only by audit-loop-eval.sh, which
 # sets the defaults these read. That script's header owns the formulas.
 
 # _gaia_loop_live <knob-name>: the live value when set and valid, else rc 1.
@@ -92,13 +92,38 @@ gaia_loop_decide() {
 }
 
 # gaia_loop_context_config_initial <main-root>: the line config a branch
-# freezes, as {"ask_tokens","ask_window_pct"}; ask_tokens is the override's
-# clamped value, 0 when it turns the checkpoint off.
+# freezes, as {"ask_tokens","ask_window_pct","round_cap"}; ask_tokens is the
+# override's clamped value, 0 when it turns the checkpoint off. round_cap is
+# the cap in use, left out when the live cap is invalid so a cap fixed later
+# applies to the branch.
 gaia_loop_context_config_initial() {
-  local tokens percent
+  local tokens percent cap_status cap
   read -r tokens percent <<<"$(gaia_context_override "$1")"
   percent="$(_gaia_loop_minimum "$percent" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT")"
-  printf '{"ask_tokens":%s,"ask_window_pct":%s}\n' "$tokens" "$percent"
+  read -r cap_status cap _ <<<"$(gaia_loop_round_cap_state "$1")"
+  if [ "$cap_status" = invalid ]; then
+    printf '{"ask_tokens":%s,"ask_window_pct":%s}\n' "$tokens" "$percent"
+  else
+    printf '{"ask_tokens":%s,"ask_window_pct":%s,"round_cap":%s}\n' "$tokens" "$percent" "$cap"
+  fi
+}
+
+# gaia_loop_round_cap_effective <main-root> <state-json>: prints `<C> <valid>`,
+# valid false exactly when the live cap is invalid; rc 5 when the state cannot
+# be read. A frozen cap only lowers the live one: a raise waits for the next
+# branch and a lowering applies live: the next member dispatch of a unit that
+# started at or below the lowered C is denied at it, while a unit an answer
+# admitted past the cap keeps its window. With none frozen, C is the live cap.
+gaia_loop_round_cap_effective() {
+  local cap_status live_cap frozen cap valid=true
+  read -r cap_status live_cap _ <<<"$(gaia_loop_round_cap_state "$1")"
+  [ "$cap_status" != invalid ] || valid=false
+  frozen="$(printf '%s' "$2" | jq -r --argjson hard "$_GAIA_LOOP_HARD_CAP" '
+    (.history.context_config | if type == "object" then .round_cap else null end)
+    | if type == "number" and . == floor and . >= 1 and . <= $hard then . else "" end' 2>/dev/null)" || return 5
+  cap="$live_cap"
+  [ -z "$frozen" ] || cap="$(_gaia_loop_minimum "$frozen" "$live_cap")"
+  printf '%s %s\n' "$cap" "$valid"
 }
 
 # gaia_loop_context_config_effective <main-root> <state-json>: prints

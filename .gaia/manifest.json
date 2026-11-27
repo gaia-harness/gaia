@@ -315,6 +315,7 @@
     ".gaia/scripts/audit-light-mark.sh": "owned",
     ".gaia/scripts/audit-light-route.sh": "owned",
     ".gaia/scripts/audit-loop-allowance-lib.sh": "owned",
+    ".gaia/scripts/audit-loop-automatic-lib.sh": "owned",
     ".gaia/scripts/audit-loop-eval.sh": "owned",
     ".gaia/scripts/audit-loop-record.sh": "owned",
     ".gaia/scripts/audit-loop-report-lib.sh": "owned",
@@ -372,6 +373,7 @@
     ".gaia/scripts/fitness-ownership.sh": "owned",
     ".gaia/scripts/fitness-publish.sh": "owned",
     ".gaia/scripts/frontend-lint-delta.sh": "owned",
+    ".gaia/scripts/gaia-next-handoff-lib.sh": "owned",
     ".gaia/scripts/gaia-next.sh": "owned",
     ".gaia/scripts/gate-member-warnings.sh": "owned",
     ".gaia/scripts/gh-artifact-lib.sh": "owned",
@@ -810,6 +812,7 @@
     "wiki/concepts/API Service Pattern.md": "wiki-owned",
     "wiki/concepts/Audit Disposition and Debt Fix.md": "wiki-owned",
     "wiki/concepts/Audit Gate Reference.md": "wiki-owned",
+    "wiki/concepts/Audit Loop Continues On Its Own Unless A Human Decision Is At Stake.md": "wiki-owned",
     "wiki/concepts/Audit Round Procedure.md": "wiki-owned",
     "wiki/concepts/Autonomy Switch.md": "wiki-owned",
     "wiki/concepts/Claude Hooks.md": "wiki-owned",
@@ -951,7 +954,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-26T09:11:01.136Z",
+  "generated": "2026-11-26T18:13:16.736Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

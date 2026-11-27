@@ -47,14 +47,21 @@ gaia_review_release_signal() {
 }
 
 # The loop's own hard cap, read from where its script defines it: a literal here
-# would drift from the bound it stands for. Empty when the source fails, which
-# leaves the unit window's closing flag as the only reading.
+# would drift from the bound it stands for. It is the branch's round cap C, the
+# hard cap when the state or the cap cannot be read, and empty when the source
+# itself fails, which leaves the unit window's closing flag as the only reading.
 loop_hard_cap() {
   (
     set +eu
     # shellcheck source=/dev/null
     . "$SCRIPT_DIRECTORY/audit-loop-eval.sh" >/dev/null 2>&1
-    printf '%s' "${_GAIA_LOOP_HARD_CAP:-}"
+    local main branch_key state cap_fields round_cap=""
+    if main="$(gaia_resolve_main_root "$1" 2>/dev/null)" && branch_key="$(gaia_loop_key "$1" 2>/dev/null)" &&
+      state="$(gaia_loop_read_state "$(gaia_loop_state_file "$main" "$branch_key")" 2>/dev/null)" &&
+      cap_fields="$(gaia_loop_round_cap_effective "$main" "$state" 2>/dev/null)"; then
+      read -r round_cap _ <<<"$cap_fields"
+    fi
+    printf '%s' "${round_cap:-${_GAIA_LOOP_HARD_CAP:-}}"
   )
 }
 
@@ -95,7 +102,7 @@ cmd_decide() {
   window="$(bash "$SCRIPT_DIRECTORY/audit-loop-eval.sh" unit-window --root "$root" 2>/dev/null)" || window=""
   closing="${window##* }"
   used="$(printf '%s' "$round_history" | jq 'length')"
-  cap="$(loop_hard_cap)"
+  cap="$(loop_hard_cap "$root")"
   local closing_or_cap=no
   if [ "$closing" = true ] || { [ -n "$cap" ] && [ "$used" -ge "$cap" ]; }; then
     closing_or_cap=yes

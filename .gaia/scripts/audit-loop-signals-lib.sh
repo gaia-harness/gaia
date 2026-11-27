@@ -1,7 +1,8 @@
 # shellcheck shell=bash
 #
 # Rubric signals and gate decisions for the audit loop, sourced by
-# audit-loop-eval.sh only. The formulas, their order and every default are
+# audit-loop-eval.sh and, for _GAIA_LOOP_HARD_CAP, by the session-start hook
+# that reports the round cap. The formulas, their order and every default are
 # stated once, in audit-loop-eval.sh's header (SIGNALS, DECISION); this file
 # is their implementation and restates none of them.
 #
@@ -26,7 +27,7 @@ unset _gaia_loop_reasons_jq
 
 # The signal block of the snapshot program. It runs inside
 # audit-loop-round-lib.sh's verdict program, after $counted, $authored_count, $previous_authored_count, $second_previous_authored_count, $verdict and
-# $round are bound, and reads $previous_snapshot and $second_previous_snapshot (the stored snapshots of rounds r-1 and
+# $round and $round_cap (the effective round cap C) are bound, and reads $previous_snapshot and $second_previous_snapshot (the stored snapshots of rounds r-1 and
 # r-2), $history_snapshots ([{round, members, counted_keys}] for rounds 1..r-1, counted_keys null when legacy),
 # $fixed_triples, $stop_inputs (null, or _gaia_loop_stop_inputs' object), $members, $is_maintainer_repo, $waivedkeys
 # and $findings. A legacy stored snapshot is one without
@@ -67,7 +68,7 @@ def honored_in($honored_keys): identity_key as $entry_key | any($honored_keys[];
      | ($previous_round_lines | length) > 0 and ($second_previous_round_lines | length) > 0
        and (($round_lines - $previous_round_lines) | length) > 0 and (($previous_round_lines - $second_previous_round_lines) | length) > 0)) as $moved
 | (any($round_triples[]; . as $triple | any($fixed_triples[]; . == $triple))) as $refixed
-| {cap: ($round >= 10),
+| {cap: ($round >= $round_cap),
    quiet: ($verdict == "quiet"),
    enriching: ($verdict == "enriching"),
    stalled: ($verdict == "stalled"),
@@ -171,9 +172,16 @@ _gaia_loop_used() {
   printf '%s\n' "$used"
 }
 
-# _gaia_loop_decide_unit_with_unit_rounds <state> <snapshot> <reading> <ask_tokens> <ask_window_pct> <unit_rounds>
+# _gaia_loop_cap_argument <cap>: rc 0 for an integer from 1 to the hard cap.
+_gaia_loop_cap_argument() {
+  gaia_loop_is_uint "$1" && [ "$1" -ge 1 ] && [ "$1" -le "$_GAIA_LOOP_HARD_CAP" ]
+}
+
+# _gaia_loop_decide_unit_with_unit_rounds <state> <snapshot> <reading> <ask_tokens> <ask_window_pct> <unit_rounds> [<cap>]
 _gaia_loop_decide_unit_with_unit_rounds() {
-  local state="$1" snapshot="${2:-null}" reading="$3" tokens="$4" percent="$5" unit_rounds="$6"
+  local state="$1" snapshot="${2:-null}" reading="$3" tokens="$4" percent="$5" unit_rounds="$6" cap="$_GAIA_LOOP_HARD_CAP"
+  [ $# -lt 7 ] || cap="$7"
+  _gaia_loop_cap_argument "$cap" || return 2
   local integer_pattern='^[0-9]{1,12}$' fresh='^fresh (0|[1-9][0-9]{0,11}) (0|[1-9][0-9]{0,11})$'
   local used eligible denying_signal start_round answer spent line allowed reading_tokens reading_window stop_override window_through
   [[ $tokens =~ $integer_pattern && $percent =~ $integer_pattern && $unit_rounds =~ $integer_pattern ]] && [ "$unit_rounds" -ge 1 ] || return 2
@@ -198,7 +206,7 @@ _gaia_loop_decide_unit_with_unit_rounds() {
   if [ -z "$answer" ] && [ "$(gaia_loop_next_closing "$state")" = true ]; then
     answer=accept
   fi
-  if [ "$used" -ge "$_GAIA_LOOP_HARD_CAP" ]; then
+  if [ "$used" -ge "$cap" ]; then
     # Past the cap neither the context line nor the fallback fold admits a
     # unit: each one needs a human answer to the checkpoint the cap pins. A
     # grant buys a whole unit rather than one round, so a loop that is still
@@ -217,7 +225,7 @@ _gaia_loop_decide_unit_with_unit_rounds() {
   fi
   case "$answer" in
     grant)
-      printf 'allow grant %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$_GAIA_LOOP_HARD_CAP")"
+      printf 'allow grant %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$cap")"
       return 0
       ;;
     accept)
@@ -229,7 +237,7 @@ _gaia_loop_decide_unit_with_unit_rounds() {
   # window to the next dispatch, admitted on the same grant.
   window_through="$(_gaia_loop_grant_window_through "$state" "$used")" || return 5
   if [ -n "$window_through" ]; then
-    printf 'allow grant %s %s\n' "$start_round" "$(_gaia_loop_minimum "$window_through" $((start_round + unit_rounds - 1)))"
+    printf 'allow grant %s %s\n' "$start_round" "$(_gaia_loop_minimum "$window_through" $((start_round + unit_rounds - 1)) "$cap")"
     return 0
   fi
   # The inverse of gaia_loop_next_closing: the accepted closing round is
@@ -253,7 +261,7 @@ _gaia_loop_decide_unit_with_unit_rounds() {
     if [ "$reading_tokens" -ge "$line" ]; then
       printf 'deny context %s false\n' "$eligible"
     else
-      printf 'allow context %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$_GAIA_LOOP_HARD_CAP")"
+      printf 'allow context %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$cap")"
     fi
     return 0
   fi
@@ -261,37 +269,41 @@ _gaia_loop_decide_unit_with_unit_rounds() {
   gaia_loop_is_uint "$allowed" || return 5
   stop_override="$(_gaia_loop_stop_override_set "$snapshot")"
   if [ "$stop_override" = true ]; then
-    printf 'allow fallback %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$_GAIA_LOOP_HARD_CAP")"
+    printf 'allow fallback %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$cap")"
   elif [ "$used" -ge "$allowed" ]; then
     printf 'deny fallback %s false\n' "$eligible"
   else
-    printf 'allow fallback %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$_GAIA_LOOP_HARD_CAP" "$allowed")"
+    printf 'allow fallback %s %s\n' "$start_round" "$(_gaia_loop_minimum $((start_round + unit_rounds - 1)) "$cap" "$allowed")"
   fi
 }
 
-# gaia_loop_decide_unit <state-json> <snapshot-json> <reading-line> <ask_tokens> <ask_window_pct>:
+# gaia_loop_decide_unit <state-json> <snapshot-json> <reading-line> <ask_tokens> <ask_window_pct> [<cap>]:
 # `allow <admitted_on> <start_round> <through_round>` or
 # `deny <trigger> <accept_eligible> <cap>`. rc 2 bad arguments, 5 unreadable state.
 gaia_loop_decide_unit() {
-  _gaia_loop_decide_unit_with_unit_rounds "$1" "$2" "$3" "$4" "$5" "$GAIA_CONTEXT_UNIT_ROUNDS"
+  _gaia_loop_decide_unit_with_unit_rounds "$1" "$2" "$3" "$4" "$5" "$GAIA_CONTEXT_UNIT_ROUNDS" ${6+"$6"}
 }
 
-# gaia_loop_decide_member <state-json> <snapshot-json> <in-unit:true|false> <reading-line> <ask_tokens> <ask_window_pct>:
+# gaia_loop_decide_member <state-json> <snapshot-json> <in-unit:true|false> <reading-line> <ask_tokens> <ask_window_pct> [<cap>]:
 # in a unit, `allow` or `deny <trigger> <accept_eligible> <cap>`; inline, what
 # gaia_loop_decide_unit prints with k = 1.
 gaia_loop_decide_member() {
-  local state="$1" snapshot="${2:-null}" used eligible through denying_signal
+  local state="$1" snapshot="${2:-null}" used eligible through start denying_signal cap="$_GAIA_LOOP_HARD_CAP"
+  [ $# -lt 7 ] || cap="$7"
+  _gaia_loop_cap_argument "$cap" || return 2
   case "$3" in
-    false) _gaia_loop_decide_unit_with_unit_rounds "$state" "$snapshot" "$4" "$5" "$6" 1; return $? ;;
+    false) _gaia_loop_decide_unit_with_unit_rounds "$state" "$snapshot" "$4" "$5" "$6" 1 "$cap"; return $? ;;
     true) ;;
     *) return 2 ;;
   esac
   used="$(_gaia_loop_used "$state")" || return 5
   eligible="$(_gaia_loop_snapshot_eligible "$snapshot")"
   through="$(printf '%s' "$state" | jq -r '((.history.units // []) | last | .through_round?) // empty' 2>/dev/null)" || return 5
-  # Past the cap a member runs only inside a unit an answer admitted there; a
-  # unit admitted below the cap ends at it.
-  if [ "$used" -ge "$_GAIA_LOOP_HARD_CAP" ] && { ! gaia_loop_is_uint "$through" || [ "$through" -le "$_GAIA_LOOP_HARD_CAP" ]; }; then
+  start="$(printf '%s' "$state" | jq -r '((.history.units // []) | last | .start_round?) // empty' 2>/dev/null)" || return 5
+  # Past the cap a member runs only inside a unit an answer admitted there,
+  # one that started past the cap; a unit that started at or below the cap ends
+  # at it, so a cap lowered while it runs stops it, whatever its through_round.
+  if [ "$used" -ge "$cap" ] && { ! gaia_loop_is_uint "$through" || ! gaia_loop_is_uint "$start" || [ "$start" -le "$cap" ]; }; then
     printf 'deny cap %s true\n' "$eligible"
     return 0
   fi

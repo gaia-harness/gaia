@@ -41,7 +41,7 @@ The bound hook records the reopened round `r` when it admits this unit, on HEAD'
 - Gate failure: `<run>/gate-failure.json` stands in for the fix entries. `dispositions-<r>.json` holds `entries: []`. The fixer's briefing is `gate-failure.json` and the log it names. Its `fixer-<r>-audit.json` holds one result `{"member":"gate-repair","finding_class":"gate/<step>","path":"apps/web","line":0,"disposition":"fixed","reason":"...","changed_paths":[...]}`, so classify it with `--expect-count 1`. The verifier runs unchanged, since it bounds the declared paths. The page allows two repairs per round; a third failure stops `needs-human`, naming the step. The commit subject is `fix(audit): repair the owed gate steps at round <r>`.
 - Both run the full gate: `audit-gate-owed.sh choose` prints `full` for them.
 - After the push, both run `## Per round`'s record updates and publish the record.
-- Then open the next round's wave on the new tree. A window that ends first stops `window-end`; round 10 stays the cap.
+- Then open the next round's wave on the new tree. A window that ends first stops `window-end`; the effective round cap stays the cap (`.gaia/scripts/audit-loop-eval.sh`'s header, `DECISION`).
 
 ## Deny classes
 
@@ -53,6 +53,8 @@ A member dispatch is denied with text that carries a `BLOCKED:` marker after a h
 | `BLOCKED: audit window` | `window-end` |
 | `BLOCKED: audit dispositions` | `dispositions-check-failed` (no commit for the round) |
 | any other `BLOCKED:` | `failure` |
+
+The `BLOCKED: audit checkpoint` row covers the hand-off checkpoint too: stop `checkpoint-deny` and return, and the main thread dispatches the next unit, at which the bound hook continues it, hands off, or asks.
 
 A nested Agent call that errors with no `BLOCKED:` anywhere is `failure`.
 

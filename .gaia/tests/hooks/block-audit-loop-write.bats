@@ -10,7 +10,7 @@
 # alongside a write, move or delete verb, while allowing reads, quoted notes
 # that mention it redirected elsewhere, and the audit loop scripts, which never
 # name the folder. A path segment that merely ends in `audit-loop` (a worktree
-# named like `spec-091-audit-loop`) or merely starts with `protected` does not
+# named like `feature-audit-loop`) or merely starts with `protected` does not
 # arm it.
 #
 # Most tests are case tables: one fixture, one row per spelling. A row is
@@ -162,7 +162,7 @@ assert_row_allowed() {
     "Bash~# don't do this lightly${nl}echo '{}' > $STATE${nl}# it's fine now~~"
     "Bash~D=$MAIN/.gaia/local/protected/audit-loop/feat; echo x > \"\$D/x.json\"~~"
     "Bash~for f in $MAIN/.gaia/local/protected/audit-loop/feat/*.json; do echo '{}' > \"\$f\"; done~~"
-    "Bash~rm -f $FIX/spec-091-audit-loop/.gaia/local/protected/audit-loop/feat/x.json~~"
+    "Bash~rm -f $FIX/feature-audit-loop/.gaia/local/protected/audit-loop/feat/x.json~~"
     "Bash~rm -rf $MAIN/.gaia/local/protected/audit-loop/feat~~state"
   )
   for row in "${rows[@]}"; do
@@ -190,12 +190,12 @@ assert_row_allowed() {
     "Bash~cat $STATE > /dev/null~~"
     "Bash~bash .gaia/scripts/audit-loop-eval.sh brief --root /x~~"
     "Bash~bash .gaia/scripts/audit-loop-record.sh --pr 1 --values-json -~~"
-    "Bash~rm -f $FIX/spec-091-audit-loop/notes.txt~~"
-    "Bash~echo x > $FIX/spec-091-audit-loop/app/file.ts~~"
+    "Bash~rm -f $FIX/feature-audit-loop/notes.txt~~"
+    "Bash~echo x > $FIX/feature-audit-loop/app/file.ts~~"
     "Bash~rm /tmp/z~~"
     "Bash~echo x > /tmp/z~~"
     "Read~$STATE~~"
-    "Bash~git -C $FIX/spec-093-audit-loop-unit status --short~~"
+    "Bash~git -C $FIX/feature-audit-loop-unit status --short~~"
     "Bash~printf '%s\n' \"never rm or mv $STATE by hand\" >> $BATS_TEST_TMPDIR/note.txt~~"
   )
   for guarded_path in "$STATE" "$CONTEXT_FILE" "$OVERRIDE" "$NEW_STATE"; do
@@ -592,6 +592,93 @@ assert_reaper_denied() {
   assert_recorder_denied "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF' && $ASK_RECORDER${nl}data${nl}EOF"
 }
 
+# --- context writer execution ---
+
+# The writers mint the reading the checkpoint trusts, so running the statusline
+# or sourcing a writer and calling it is denied; naming the files is not.
+@test "context writer: Claude's write to the cap and its Bash or Monitor run of the context writers are denied, while naming them is allowed" {
+  local row nl=$'\n'
+  echo "case: Write of the override file"
+  run_edit Write "$OVERRIDE"
+  assert_denied_by_json
+  echo "case: Edit of the override file"
+  run_edit Edit "$OVERRIDE"
+  assert_denied_by_json
+  local denied=(
+    "bash .gaia/statusline/gaia-statusline.sh < payload.json"
+    ".gaia/statusline/gaia-statusline.sh"
+    "sh .gaia/statusline/context-reading.sh"
+    "source .gaia/statusline/context-reading.sh"
+    "exec .gaia/statusline/gaia-statusline.sh"
+    "FOO=1 bash \".gaia/statusline/gaia-statusline.sh\""
+    ". .gaia/scripts/context-checkpoint-lib.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
+    ". .gaia/statusline/context-reading.sh && gaia_statusline_write_context /x 1 1"
+    "echo hi${nl}bash $MAIN/.gaia/statusline/gaia-statusline.sh"
+  )
+  local allowed=(
+    "grep -rn gaia_context_write .gaia"
+    "git add .gaia/statusline/gaia-statusline.sh"
+    "bash -n .gaia/statusline/gaia-statusline.sh"
+    "cat $OVERRIDE"
+    "shellcheck .gaia/statusline/context-reading.sh"
+    ". .gaia/scripts/context-checkpoint-lib.sh; gaia_context_read /x id 1"
+    ". .gaia/scripts/context-checkpoint-lib.sh; gaia_context_effort_write /x id 1"
+    "bash -c '. .gaia/scripts/context-checkpoint-lib.sh && gaia_context_yield_limit'"
+    "cat > $BATS_TEST_TMPDIR/notes.md <<'EOF'${nl}bash .gaia/statusline/gaia-statusline.sh${nl}EOF"
+    "bash .gaia/scripts/bats5.sh .gaia/tests/statusline/context-reading.bats < /dev/null"
+    "bash .gaia/statusline/gaia-statusline-left.sh"
+    "bash .gaia/statusline/gaia-statusline-right.sh"
+  )
+  for row in "${denied[@]}"; do
+    echo "case denied (Bash): $row"
+    run_bash "$row"
+    assert_pins_only_class context-writer
+    grep -qiF -- "context reading" <<<"$output" || return 1
+    echo "case denied (Monitor): $row"
+    run_monitor "$row"
+    assert_pins_only_class context-writer
+    grep -qiF -- "context reading" <<<"$output" || return 1
+  done
+  for row in "${allowed[@]}"; do
+    echo "case allowed: $row"
+    run_bash "$row"
+    assert_row_allowed
+    echo "case allowed (Monitor): $row"
+    run_monitor "$row"
+    assert_row_allowed
+  done
+}
+
+# The journey: a human sets the cap outside Claude's tools, Claude's attempts to
+# overwrite it and to mint a reading through the statusline are each denied, and
+# the human's cap is still what the loop reads.
+@test "a human-set round cap stands after Claude's write to it and its run of the context writer are denied" {
+  local repo_root="$BATS_TEST_DIRNAME/../../.."
+  local reading_dir="$MAIN/.gaia/local/cache/shared/context"
+  local session_id=0a1b2c3d-1111-4222-8333-444455556666
+  printf '%s' '{"audit_loop":{"round_cap":4},"version":1}' >"$OVERRIDE"
+  rm -f "$CONTEXT_FILE"
+
+  # Each attempt's effect is replayed only when the guard allows it, so the
+  # checks below fail if the guard stops denying.
+  run_edit Write "$OVERRIDE"
+  if ! grep -qF -- '"permissionDecision": "deny"' <<<"$output"; then
+    printf '%s' '{"audit_loop":{"round_cap":9},"version":1}' >"$OVERRIDE"
+  fi
+  assert_denied_by_json
+
+  run_bash ". .gaia/statusline/context-reading.sh && gaia_statusline_write_context $MAIN $session_id 10 200000 20000"
+  if ! grep -qF -- '"permissionDecision": "deny"' <<<"$output"; then
+    bash -c '. "$1/.gaia/scripts/context-checkpoint-lib.sh"; . "$1/.gaia/statusline/context-reading.sh"; gaia_statusline_write_context "$2" "$3" 10 200000 20000' _ "$repo_root" "$MAIN" "$session_id"
+  fi
+  assert_pins_only_class context-writer
+  [ -z "$(find "$reading_dir" -type f)" ]
+
+  run bash -c '. "$1/.gaia/scripts/audit-loop-signals-lib.sh"; . "$1/.gaia/scripts/audit-loop-automatic-lib.sh"; gaia_loop_round_cap_state "$2"' _ "$repo_root" "$MAIN"
+  [ "$status" -eq 0 ]
+  [ "$output" = "ok 4 4" ]
+}
+
 # --- deny text, every class ---
 
 @test "each deny message names the guard, its class and both answer channels" {
@@ -668,11 +755,12 @@ class_pin() {
     context) printf '%s' 'the context readings (<main>/.gaia/local/cache/shared/context/)' ;;
     recorder) printf '%s' 'run only as hooks' ;;
     reaper) printf '%s' 'the local-state reaper scripts' ;;
+    context-writer) printf '%s' 'mints the context reading' ;;
   esac
 }
 
 # assert_pins_only_class <class>: the last run is a deny carrying that class's
-# pin and none of the other five classes' pins.
+# pin and none of the other classes' pins.
 assert_pins_only_class() {
   local expected_class="$1" other_class
   assert_denied_by_json
@@ -680,7 +768,7 @@ assert_pins_only_class() {
     printf 'class %s: its pin is missing from: %s\n' "$expected_class" "$output" >&2
     return 1
   }
-  for other_class in state override folder context recorder reaper; do
+  for other_class in state override folder context recorder reaper context-writer; do
     if [ "$other_class" != "$expected_class" ]; then
       if grep -qF -- "$(class_pin "$other_class")" <<<"$output"; then
         printf 'class %s: carries the %s pin: %s\n' "$expected_class" "$other_class" "$output" >&2

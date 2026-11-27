@@ -138,6 +138,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 
 ## Concepts
 
+- [[Audit Loop Continues On Its Own Unless A Human Decision Is At Stake|Audit loop continues on its own unless a human decision is at stake]]
 - [[GAIA Philosophy]]
 - [[Coding Guidelines]]
 - [[Design System]]

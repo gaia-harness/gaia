@@ -118,10 +118,12 @@ def unit_ok:
   type == "object" and (.unit | is_integer) and .unit >= 1 and (.start_round | is_integer)
   and (.k | is_integer) and (.through_round | is_integer) and (.after_checkpoint | is_integer)
   and (.admitted_on == "context" or .admitted_on == "grant" or .admitted_on == "accept" or .admitted_on == "fallback")
-  and optional("budget"; . == true);
+  and optional("budget"; . == true) and optional("automatic"; . == true)
+  and ((has("automatic") and has("budget")) | not);
 def config_ok:
   type == "object" and (.ask_tokens | is_integer) and .ask_tokens >= 0
-  and (.ask_window_pct | is_integer) and .ask_window_pct >= 1 and .ask_window_pct <= 100;
+  and (.ask_window_pct | is_integer) and .ask_window_pct >= 1 and .ask_window_pct <= 100
+  and optional("round_cap"; is_integer and . >= 1);
 def ok:
   type == "object" and .schema == 1
   and (.key | type == "string") and (.branch | type == "string")
@@ -143,6 +145,7 @@ def ok:
           type == "object" and (.index | type == "number") and (.at_round | type == "number")
           and optional("nonce"; hex16) and optional("trigger"; type == "string")
           and optional("accept_eligible"; type == "boolean")
+          and optional("handoff"; . == true)
           and optional("question"; type == "object" and (.questions | type == "array" and length == 1))
           and optional("disputes"; type == "array" and all(.[]; type == "object")))
   and (.allowance | optional("accepted_keys"; type == "array" and all(.[]; type == "object" and (.checkpoint | type == "number")

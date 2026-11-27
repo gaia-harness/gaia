@@ -28,7 +28,7 @@ Act only at a stopping point: no background task, sub-agent or monitor is runnin
 
 ## Recommending
 
-At red, recommend `Continue here` only when the remaining work is a few steps, runs mostly in sub-agents, or a handoff now would be riskier than finishing (mid-sequence, state hard to capture). Otherwise, and when unsure, recommend `Clear and resume`. A pending pre-merge audit counts toward `Clear and resume`: the audit loop asks at the same line.
+At red, recommend `Continue here` only when the remaining work is a few steps, runs mostly in sub-agents, or a handoff now would be riskier than finishing (mid-sequence, state hard to capture). Otherwise, and when unsure, recommend `Clear and resume`. A pending pre-merge audit counts toward `Clear and resume`: the audit loop hands off at the same line.
 
 Never skip the save and ask because the work is nearly done; a nearly-done session gets `Continue here` as its recommendation.
 
@@ -45,4 +45,4 @@ Before printing any continuation prompt, run `bash .gaia/scripts/usage.sh handof
 
 ## Unattended
 
-With no human in the session, never ask. At red and fire, save and continue. At skull, save, print the continuation prompt in a bare fenced block, report, and stop; the next `/loop` iteration resumes from the saved state, as a fresh session would. Headless and scheduled runs render no statusline, so they have no reading and never fire.
+With no human in the session, never ask. At red and fire, save and continue. At skull, save, print the continuation prompt in a bare fenced block, report, and stop; the next `/loop` iteration resumes from the saved state, as a fresh session would. An audit hand-off checkpoint saves and hands off with no question (`wiki/concepts/PR Merge Workflow.md`, `#### The branch checkpoint`), and a `/loop`'s next `/gaia-next` iteration in the same session skips that pull request (`wiki/concepts/GAIA Next.md`, `## Skips in every run`). Headless and scheduled runs render no statusline, so they have no reading and never fire.

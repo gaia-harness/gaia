@@ -444,7 +444,9 @@ mark_band() {
 # Both rows share the fixture's doctrine file, each with a fresh session id; the
 # over-cap row restores the shipped file when done.
 @test "a missing doctrine or one a byte over the cap is silent and unmarked; the shipped file, or one exactly at the cap, emits" {
-  local label size
+  local label size budget
+  budget="$(sed -n 's/^maximum_doctrine_bytes=\([0-9][0-9]*\)$/\1/p' "$HOOK_SOURCE_PATH")"
+  [ -n "$budget" ]
   for label in missing over-cap; do
     new_session
     write_reading "$RED"
@@ -459,15 +461,15 @@ mark_band() {
         ;;
       over-cap)
         size="$(wc -c <"$REAL_DOCTRINE" | tr -d ' ')"
-        [ "$size" -lt 3584 ] || { echo "case $label: shipped doctrine is $size bytes, not under the cap"; return 1; }
+        [ "$size" -lt "$budget" ] || { echo "case $label: shipped doctrine is $size bytes, not under the cap"; return 1; }
         cp "$REAL_DOCTRINE" "$DOCTRINE"
-        printf '%*s' $((3585 - size)) '' | tr ' ' x >>"$DOCTRINE"
-        [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -eq 3585 ] || { echo "case $label: padding missed 3585"; return 1; }
+        printf '%*s' $((budget + 1 - size)) '' | tr ' ' x >>"$DOCTRINE"
+        [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -eq "$((budget + 1))" ] || { echo "case $label: padding missed $((budget + 1))"; return 1; }
         invoke "$(payload)"
         silent_unmarked_ok || { echo "case $label: over the cap not silent and unmarked"; return 1; }
         cp "$REAL_DOCTRINE" "$DOCTRINE"
-        printf '%*s' $((3584 - size)) '' | tr ' ' x >>"$DOCTRINE"
-        [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -eq 3584 ] || { echo "case $label: padding missed 3584"; return 1; }
+        printf '%*s' $((budget - size)) '' | tr ' ' x >>"$DOCTRINE"
+        [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -eq "$budget" ] || { echo "case $label: padding missed $budget"; return 1; }
         invoke "$(payload)"
         fires_ok red "$RED" || { echo "case $label: exactly at the cap did not emit"; return 1; }
         cp "$REAL_DOCTRINE" "$DOCTRINE"
@@ -625,7 +627,7 @@ mark_band() {
   printf '"q" b\\s \\\n' >>"$DOCTRINE"
   grep -qF '"q"' "$DOCTRINE"
   grep -qF 'b\s' "$DOCTRINE"
-  [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -le 3584 ]
+  [ "$(wc -c <"$DOCTRINE" | tr -d ' ')" -le "$(sed -n 's/^maximum_doctrine_bytes=\([0-9][0-9]*\)$/\1/p' "$HOOK_SOURCE_PATH")" ]
   write_reading "$RED"
   invoke "$(payload "$MAIN_ROOT")"
   fires_ok red "$RED"

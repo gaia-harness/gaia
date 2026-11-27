@@ -293,9 +293,9 @@ ORDINARY_TOOLS='Edit Write MultiEdit'
     .claude/commands/c.md apps/web/.claude/agents/a.md apps/web/.claude/skills/s/SKILL.md \
     apps/web/.claude/commands/c.md .gaia/local/protected/autonomy.json CLAUDE.md apps/web/CLAUDE.md \
     .gaia/autonomy-protected-paths.json .gaia/autonomy-human-only-headers.json .gaia/scripts/autonomy-lib.sh \
-    .gaia/scripts/autonomy-park.sh .gaia/scripts/main-root-lib.sh .gaia/scripts/audit-loop-state-lib.sh .gaia/scripts/audit-budget-lib.sh \
+    .gaia/scripts/autonomy-park.sh .gaia/scripts/main-root-lib.sh .gaia/scripts/audit-loop-state-lib.sh .gaia/scripts/audit-budget-lib.sh .gaia/scripts/audit-loop-automatic-lib.sh \
     CLAUDE.local.md apps/web/CLAUDE.local.md apps/web/.claude/settings.local.json \
-    .claude/loop.md .gaia/scripts/gaia-next.sh .gaia/scripts/branch-worktree-lib.sh; do
+    .claude/loop.md .gaia/scripts/gaia-next.sh .gaia/scripts/branch-worktree-lib.sh .gaia/scripts/gaia-next-handoff-lib.sh; do
     autonomy_protected_match "$path" "$globs" || { echo "unmatched: $path"; return 1; }
   done
   for path in src/CLAUDE.md .claude/settings.jsonx .claude/doctrine/x.md .gaia/local/runs/x apps/web/src/a.ts README.md .gaia/scripts/other.sh; do

@@ -11,6 +11,7 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-11-27 PROMOTED: wiki/concepts/Audit Loop Continues On Its Own Unless A Human Decision Is At Stake.md (PR #3876)
 - 2026-11-25 PROMOTED: wiki/decisions/PR Review Step.md (PR #3841)
 - 2026-11-25 PROMOTED: wiki/decisions/Rendered Plan Orchestrator And Test-stage Lens Digest.md (PR #3821)
 - 2026-11-24 PROMOTED: wiki/concepts/Per-session Rate-limit Reading And Dispatch Checkpoint.md (PR #3805)

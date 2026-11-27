@@ -150,15 +150,21 @@ def isnew: key as $entry_key | any(($previous_keys // [])[]; . == $entry_key) | 
    evaluated_at: $now}
 '
 
-# gaia_loop_evaluate_round <main-root> <state-json> <r> [<audited-root>]: round
-# r's snapshot; without the audited root no marker is provable, so
-# default_stop is false. rc 2 no such round, 5 a bad round record or an
+# gaia_loop_evaluate_round <main-root> <state-json> <r> [<audited-root> [<round-cap>]]:
+# round r's snapshot; without the audited root no marker is provable, so
+# default_stop is false. The cap signal compares r to the effective round cap C:
+# the fifth argument, else gaia_loop_round_cap_effective's value for the state,
+# else the hard cap. rc 2 no such round, 5 a bad round record or an
 # unreadable vetoes.json. Every failure writes one `audit-loop-eval: <reason>`
 # line to stderr, which the bound hook relays in its deny.
 gaia_loop_evaluate_round() {
-  local main="$1" state="$2" round="$3" audited_root="${4-}" branch_key round_context tree commit previous_tree authorship enriching_hunks="null" findings disposed vetoed waived is_maintainer_repo=false snapshot_status stop_inputs
+  local main="$1" state="$2" round="$3" audited_root="${4-}" round_cap="${5-}" branch_key round_context tree commit previous_tree authorship enriching_hunks="null" findings disposed vetoed waived is_maintainer_repo=false snapshot_status stop_inputs
   gaia_loop_is_uint "$round" && [ "$round" -ge 1 ] ||
     { printf 'audit-loop-eval: round %s is not a positive integer\n' "$round" >&2; return 2; }
+  if [ -z "$round_cap" ]; then
+    read -r round_cap _ <<<"$(gaia_loop_round_cap_effective "$main" "$state" 2>/dev/null)" || round_cap=""
+  fi
+  gaia_loop_is_uint "$round_cap" && [ "$round_cap" -ge 1 ] || round_cap="$_GAIA_LOOP_HARD_CAP"
   round_context="$(printf '%s' "$state" | jq -c --argjson round "$round" '
     .history.rounds as $rounds
     | if $round > ($rounds | length) then error("no round") else
@@ -208,7 +214,7 @@ gaia_loop_evaluate_round() {
     --argjson members "$(printf '%s' "$round_context" | jq -c '.members')" \
     --argjson previous_snapshot "$(printf '%s' "$round_context" | jq -c '.previous_snapshot')" --argjson second_previous_snapshot "$(printf '%s' "$round_context" | jq -c '.second_previous_snapshot')" \
     --argjson waivedkeys "$waived" --argjson is_maintainer_repo "$is_maintainer_repo" \
-    --argjson granted_round "$(printf '%s' "$round_context" | jq -r '.granted_round')" --argjson round "$round" \
+    --argjson granted_round "$(printf '%s' "$round_context" | jq -r '.granted_round')" --argjson round "$round" --argjson round_cap "$round_cap" \
     --arg merge_base "$(printf '%s' "$authorship" | jq -r '.mb')" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     "$_GAIA_LOOP_AUTHORED_JQ $_GAIA_LOOP_STOP_DEFS_JQ $_GAIA_LOOP_VERDICT_JQ" ||
     { snapshot_status=$?; printf 'audit-loop-eval: could not compute the snapshot for round %s\n' "$round" >&2; return "$snapshot_status"; }

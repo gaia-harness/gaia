@@ -1,7 +1,7 @@
 {
   "ceilings": {
     ".claude/hooks/audit-loop-ask-grant.sh": 403,
-    ".claude/hooks/audit-loop-bound.sh": 945,
+    ".claude/hooks/audit-loop-bound.sh": 1006,
     ".claude/hooks/block-main-destructive-git.sh": 583,
     ".claude/hooks/block-rm-rf.sh": 821,
     ".claude/hooks/lib/audit-base-provenance.sh": 417,
@@ -40,7 +40,7 @@
     ".gaia/scripts/audit-fix-verify.sh": 403,
     ".gaia/scripts/audit-light-route.sh": 663,
     ".gaia/scripts/audit-light-telemetry.sh": 576,
-    ".gaia/scripts/audit-loop-state-lib.sh": 559,
+    ".gaia/scripts/audit-loop-state-lib.sh": 562,
     ".gaia/scripts/audit-noop-detect.sh": 702,
     ".gaia/scripts/audit-resolve-scope.sh": 656,
     ".gaia/scripts/audit-scope-digest.sh": 465,
@@ -51,7 +51,7 @@
     ".gaia/scripts/check-updates.sh": 950,
     ".gaia/scripts/classifier/classify-determinism.mjs": 591,
     ".gaia/scripts/file-tech-debt.sh": 806,
-    ".gaia/scripts/gaia-next.sh": 428,
+    ".gaia/scripts/gaia-next.sh": 439,
     ".gaia/scripts/guard-awk-lib.sh": 788,
     ".gaia/scripts/kept-worktrees.sh": 432,
     ".gaia/scripts/lint-errexit-status-read.sh": 464,

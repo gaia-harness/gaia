@@ -1163,6 +1163,27 @@ assert_pinned() {
   printf '%s\n' "$denial_reason" | grep -qF -- audit-grant
 }
 
+# assert_handoff <trigger>: the last run is a hand-off checkpoint deny; the
+# latest checkpoint carries a nonce, a pinned question for <trigger> and
+# `handoff: true`, and the deny prints the hand-off lines and both typed lines
+# in place of the question, with no park line.
+assert_handoff() {
+  local denial_reason
+  assert_denied
+  denial_reason="$(reason)"
+  case "$denial_reason" in "BLOCKED: audit checkpoint"*) ;; *) printf 'not a checkpoint deny: %s\n' "$denial_reason" >&2; return 1 ;; esac
+  [ "$(state_field '.history.checkpoints | last | [.trigger, .reason, .handoff] | map(tostring) | join(" ")')" = "$1 $1 true" ]
+  [[ "$(state_field '.history.checkpoints | last | .nonce')" =~ ^[0-9a-f]{16}$ ]] || return 1
+  [ "$(state_field '.history.checkpoints | last | .question.questions[0].options | length')" -ge 2 ]
+  [ "$(gaia_loop_handoff_instructions | wc -l | tr -d ' ')" -eq 4 ]
+  [ "$(grep -cxFf <(gaia_loop_handoff_instructions) <<<"$denial_reason")" -eq 4 ]
+  printf '%s\n' "$denial_reason" | grep -qxF -- "Grant (type exactly as the whole prompt): $(gaia_loop_grant_line "$GAIA_CONTEXT_UNIT_ROUNDS")"
+  printf '%s\n' "$denial_reason" | grep -qxF -- "Accept (type exactly as the whole prompt): $(gaia_loop_accept_line)"
+  ! printf '%s\n' "$denial_reason" | grep -qF -- 'Unattended run' || return 1
+  ! printf '%s\n' "$denial_reason" | grep -qF -- 'AskUserQuestion' || return 1
+  ! printf '%s\n' "$denial_reason" | grep -qxF -- "$(state_field '.history.checkpoints | last | .question | tojson')" || return 1
+}
+
 # deny_prefix <prefix>: the last run denied with a reason starting <prefix>.
 deny_prefix() {
   assert_denied
@@ -1176,7 +1197,7 @@ scratch_copy() {
   rm -rf "$scratch_directory"
   mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
   for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
-    audit-loop-eval.sh audit-loop-signals-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-dispositions-check.sh audit-dispositions-grade-lib.sh audit-dispositions-snapshot-lib.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh audit-decided-unattended-lib.sh pr-body-sections-lib.sh autonomy-lib.sh audit-member-digest.sh; do
+    audit-loop-eval.sh audit-loop-signals-lib.sh audit-loop-automatic-lib.sh audit-triage-lib.sh audit-veto-lib.sh audit-loop-stop-lib.sh audit-loop-allowance-lib.sh audit-loop-round-lib.sh audit-loop-report-lib.sh audit-budget-lib.sh audit-dispositions-check.sh audit-dispositions-grade-lib.sh audit-dispositions-snapshot-lib.sh audit-pr-sections-lib.sh audit-recorded-decision-lib.sh audit-decided-unattended-lib.sh pr-body-sections-lib.sh autonomy-lib.sh audit-member-digest.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$scratch_directory/.gaia/scripts/$script_name"
   done
   ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
@@ -1277,18 +1298,18 @@ settings() {
     fresh_fixture
     case "$row" in
       reading-at-the-line)
-        # A reading at the line denies the unit with a pinned context checkpoint and the unattended rule.
+        # A reading at the line denies the unit with a hand-off context
+        # checkpoint: the question is pinned for a typed line, never asked.
         alf_sequence 6 5
         above
         unit_dispatch
-        assert_pinned context
+        assert_handoff context
         nonce="$(state_field '.history.checkpoints[-1].nonce')"
         elig="$(state_field '.history.rounds[1].snapshot.accept_eligible // false')"
         want="$(gaia_loop_pinned_question feat/loop "$nonce" 2 "$GAIA_CONTEXT_UNIT_ROUNDS" "$elig" false context "fresh $GAIA_CONTEXT_ASK_TOKENS_DEFAULT 1000000" grant "$(gaia_context_line 1000000 "$GAIA_CONTEXT_ASK_TOKENS_DEFAULT" "$GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT")")"
         [ "$(state_field '.history.checkpoints[-1].question | tojson')" = "$want" ]
         [[ "$(state_field '.history.checkpoints[-1].question.questions[0].question')" == *"(context), context "[0-9]*"% ("[0-9]*"k of 1000k). How should"* ]]
         [ "$(state_field '.history.checkpoints[-1].at_round')" -eq 2 ]
-        reason | grep -qF -- "/autonomy-park.sh --reason audit-checkpoint --pr <n> --root $ALF_ROOT\`; when the park exits non-zero, print the Grant line above before stopping"
         [ "$(state_field '.history.units // [] | length')" -eq 0 ]
         ;;
       unusable-reading-falls-back)
@@ -1312,15 +1333,25 @@ settings() {
           unit_dispatch
           assert_pinned fallback
         done
+        reason | grep -qF -- "/autonomy-park.sh --reason audit-checkpoint --pr <n> --root $ALF_ROOT\`; when the park exits non-zero, print the Grant line above before stopping"
         ;;
       signals-below-the-line)
-        # Below the line each denying signal denies the unit and quiet alone
-        # does not; the cap pins both grants, accept or type-accept, and stop.
+        # Below the line each denying signal denies the unit's decision and
+        # quiet alone does not: a signal whose recommendation is the in-session
+        # grant continues automatically, the rest pin; the cap pins both
+        # grants, accept or type-accept, and stop.
         below
-        for signal in enriching stalled nitpicky reintroduced small-tail waiver-drift; do
+        for signal in stalled reintroduced waiver-drift; do
           seed_rounds 6 "$(sig_snap "$signal" true)"
           unit_dispatch
           assert_pinned "rubric:$signal"
+        done
+        for signal in enriching nitpicky small-tail; do
+          seed_rounds 6 "$(sig_snap "$signal" true)"
+          unit_dispatch
+          assert_allowed
+          [ "$(state_field '.history.units[-1] | [.admitted_on, .automatic, .start_round] | map(tostring) | join(" ")')" = "grant true 7" ]
+          [ "$(state_field '.history.checkpoints | length')" -eq 0 ]
         done
         seed_rounds 6 "$(sig_snap quiet true)"
         unit_dispatch
@@ -1383,13 +1414,15 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
 @test "the pinned question leads with the evaluator's recommendation, and the band picks the grant when it is a grant" {
   local unit_rounds="$GAIA_CONTEXT_UNIT_ROUNDS"
   below
+  # A unit dispatch would continue automatically where the in-session grant
+  # leads below the line, so a main-thread member, which never does, pins it.
   seed_rounds 6 "$(sig_snap nitpicky true)"
-  unit_dispatch
+  main_member
   assert_pinned rubric:nitpicky
   [ "$(first_pinned_label)" = "Continue audit in this session (Recommended)" ]
   [[ "$(state_field '.history.checkpoints | last | .question.questions[0].options[0].description')" == "Context "*" is below the checkpoint line, so this session has room: "* ]]
   seed_rounds 6 "$(sig_snap enriching true)"
-  unit_dispatch
+  main_member
   assert_pinned rubric:enriching
   # No member reviewed HEAD, so an Accept closing round could not end clean.
   [ "$(first_pinned_label)" = "Continue audit in this session (Recommended)" ]
@@ -1402,17 +1435,17 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   above
   seed_rounds 6 "$(sig_snap quiet true)"
   unit_dispatch
-  assert_pinned context
+  assert_handoff context
   [ "$(first_pinned_label)" = "Continue audit in a new session (Recommended)" ]
   [[ "$(state_field '.history.checkpoints | last | .question.questions[0].options[0].description')" == "Context "*" is at or above the checkpoint line: "* ]]
 }
 
-@test "an ask grant admits a K-round window over the line, resumed by the next unit until spent; then the next unit asks again; a new session below the line continues" {
+@test "an ask grant admits a K-round window over the line, resumed by the next unit until spent; then the next unit hands off again; a new session below the line continues" {
   local unit_rounds="$GAIA_CONTEXT_UNIT_ROUNDS" checkpoint_index nonce through
   alf_sequence 6 5
   above
   unit_dispatch
-  assert_pinned context
+  assert_handoff context
   checkpoint_index="$(state_field '.history.checkpoints[-1].index')"
   nonce="$(state_field '.history.checkpoints[-1].nonce')"
   alf_state_edit '.allowance.answers += [{checkpoint: $checkpoint_index, kind: "grant", n: $unit_rounds, source: "ask", option: "Continue audit in this session",
@@ -1425,11 +1458,11 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   unit_dispatch
   assert_allowed
   [ "$(state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round, .after_checkpoint] | map(tostring) | join(" ")')" = "grant 3 $through $checkpoint_index" ]
-  # Once the window's rounds are recorded, the next unit asks again.
+  # Once the window's rounds are recorded, the next unit hands off again.
   alf_state_edit '.history.rounds += [range(3; $through + 1) as $round | .history.rounds[-1] | .round = $round
     | .tree = ("c" * 39 + ($round | tostring)) | .commit = .tree | .snapshot = {verdict: "continue", A: 1}]' --argjson through "$through"
   unit_dispatch
-  assert_pinned context
+  assert_handoff context
   [ "$(state_field '.history.checkpoints[-1].nonce')" != "$nonce" ]
   below "$SIDV"
   unit_dispatch "$SIDV"
@@ -1449,10 +1482,10 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
         # The next unit is denied again with a new nonce.
         above
         unit_dispatch
-        assert_pinned context
+        assert_handoff context
         first="$(state_field '.history.checkpoints[-1].nonce')"
         unit_dispatch
-        assert_pinned context
+        assert_handoff context
         [ "$(state_field '.history.checkpoints | length')" -eq 2 ]
         [ "$(state_field '.history.checkpoints[-1].nonce')" != "$first" ]
         ;;
@@ -1461,7 +1494,7 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
         alf_add_checkpoint 2 allowance
         above
         unit_dispatch
-        assert_pinned context
+        assert_handoff context
         [ "$(state_field '.history.checkpoints | length')" -eq 2 ]
         [ "$(state_field '.history.checkpoints[0].nonce // "none"')" = none ]
         ;;
@@ -1646,22 +1679,22 @@ veto_rounds() {
   settings 600000 50
   write_context_reading 350000 1000000
   unit_dispatch
-  assert_pinned context
+  assert_handoff context
   settings 250000 50
   write_context_reading 260000 1000000
   unit_dispatch
-  assert_pinned context
+  assert_handoff context
   write_context_reading 240000 1000000
   unit_dispatch
   assert_allowed
   rm -f "$ALF_ROOT/.gaia/local/protected/checkpoint-override.json"
   write_context_reading 120000 200000
   unit_dispatch
-  assert_pinned context
+  assert_handoff context
   alf_state_edit '.history.context_config = {ask_tokens: 250000, ask_window_pct: 50}'
   write_context_reading 260000 1000000
   unit_dispatch
-  assert_pinned context
+  assert_handoff context
   write_context_reading 240000 1000000
   unit_dispatch
   assert_allowed
@@ -1683,7 +1716,7 @@ veto_rounds() {
     [ "$(state_field '.history.context_config | "\(.ask_tokens) \(.ask_window_pct)"')" = "$frozen $GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT" ]
     write_context_reading "$frozen" 1000000
     unit_dispatch
-    assert_pinned context
+    assert_handoff context
   done
 }
 
@@ -1696,14 +1729,14 @@ veto_rounds() {
   [ "$(state_field '.history.context_config.ask_tokens')" -eq 0 ]
   [ "$(state_field '.history.units | last | .admitted_on')" = fallback ]
 
-  echo "case: live off never lifts a branch frozen at the default, so a reading over it pins context"
+  echo "case: live off never lifts a branch frozen at the default, so a reading over it hands off on context"
   fresh_fixture
   seed_rounds 2 '{"verdict":"continue","A":1}'
   alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}'
   settings 0 50
   write_context_reading 900000 1000000
   unit_dispatch
-  assert_pinned context
+  assert_handoff context
 
   echo "case: a branch frozen off takes a live number, so the bound context-denies again"
   fresh_fixture
@@ -1712,7 +1745,7 @@ veto_rounds() {
   settings 300000 50
   write_context_reading 900000 1000000
   unit_dispatch
-  assert_pinned context
+  assert_handoff context
 }
 
 @test "the round cap pins a checkpoint, and an answer runs its rounds instead of re-asking" {
@@ -2045,7 +2078,7 @@ earn_markers() {
         veto_at 3
         above
         unit_dispatch
-        assert_pinned context || return 1
+        assert_handoff context || return 1
         [ "$(nrounds)" -eq 2 ] || return 1
         below
         new_tree
@@ -2246,7 +2279,7 @@ decision_log_lines() {
         alf_sequence 6 5
         above
         unit_dispatch
-        assert_pinned context
+        assert_handoff context
         ;;
       reintroduced | waiver-drift)
         below
@@ -2356,4 +2389,563 @@ decision_log_lines() {
   [ "$(state_field '.history.units[-1].budget')" = true ]
   [ "$(budget_records | wc -l | tr -d ' ')" -eq 2 ]
   [ "$(decision_log_lines)" -eq 2 ]
+}
+
+# --- the human-set round cap ----------------------------------------------------
+
+# cap_override <audit-loop-json> [ask-tokens]: the machine-local override with
+# an audit_loop object, optionally beside an ask_tokens line.
+cap_override() {
+  mkdir -p "$ALF_ROOT/.gaia/local/protected"
+  jq -n -c --argjson audit_loop "$1" --argjson ask_tokens "${2:-null}" \
+    '{version: 1, audit_loop: $audit_loop} + (if $ask_tokens == null then {} else {context_checkpoint: {ask_tokens: $ask_tokens}} end)' \
+    >"$ALF_ROOT/.gaia/local/protected/checkpoint-override.json"
+}
+
+# unit_row: the latest unit's admission, `<admitted_on> <start> <through>`.
+unit_row() {
+  state_field '.history.units[-1] | [.admitted_on, .start_round, .through_round] | map(tostring) | join(" ")'
+}
+
+# session_start_message: the systemMessage the session-start hook shows, empty when silent.
+session_start_message() {
+  local result
+  result="$(printf '%s' "$(jq -n -c --arg cwd "$ALF_ROOT" '{cwd: $cwd}')" |
+    bash "$REPO_ROOT/.claude/hooks/context-override-session-start.sh")" || return 1
+  [ -z "$result" ] || jq -r '.systemMessage' <<<"$result"
+}
+
+# bats test_tags=protected
+@test "round cap: a human-set cap bounds every admission no human answered, the budget excepted, with its freeze, range and notices" {
+  local hard="$_GAIA_LOOP_HARD_CAP" row override_file value expected
+  override_file="$ALF_ROOT/.gaia/local/protected/checkpoint-override.json"
+
+  echo "case: at the cap with enriching the unit dispatch pins cap, whatever the reading"
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 "$(sig_snap enriching true)"
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_pinned cap
+
+  echo "case: below the cap with no checkpoint a unit is admitted on the context line and ends at the cap"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "context 3 4" ]
+
+  echo "case: a context checkpoint pending at the cap is not a way past it for another session"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  alf_add_checkpoint 4 context
+  write_context_reading 40000 1000000 0 "$SIDV"
+  unit_dispatch "$SIDV"
+  assert_pinned cap
+
+  echo "case: a grant answering the cap checkpoint buys a whole unit past it, and the next unit asks again"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  alf_add_checkpoint 4 cap
+  alf_add_answer 1 grant 3
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "grant 5 7" ]
+  seed_rounds 7 '{"verdict":"continue","A":1}'
+  alf_add_checkpoint 4 cap
+  alf_add_answer 1 grant 3
+  alf_state_edit '.history.units = [{unit: 1, start_round: 5, k: 3, through_round: 7, after_checkpoint: 1, admitted_on: "grant"}]'
+  unit_dispatch
+  assert_pinned cap
+
+  echo "case: a grant answered below the cap ends at it, and a member opening the next round inside that unit is denied"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 3 '{"verdict":"continue","A":1}'
+  alf_add_checkpoint 3 fallback
+  alf_add_answer 1 grant 3
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "grant 4 4" ]
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.units = [{unit: 1, start_round: 4, k: 3, through_round: 4, after_checkpoint: 1, admitted_on: "grant"}]'
+  new_tree
+  nested
+  assert_pinned cap
+
+  echo "case: a cap frozen at 6 is lowered live and never raised"
+  fresh_fixture
+  cap_override '{"round_cap":8}'
+  seed_rounds 5 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50, round_cap: 6}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "context 6 6" ]
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50, round_cap: 6}'
+  unit_dispatch
+  assert_pinned cap
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50, round_cap: 6}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_pinned cap
+
+  echo "case: a branch frozen before the cap existed takes the live cap"
+  fresh_fixture
+  cap_override '{"round_cap":5}'
+  seed_rounds 5 "$(sig_snap enriching true)"
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_pinned cap
+
+  echo "case: with no cap set the cap in use is the hard cap and is frozen"
+  fresh_fixture
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.context_config.round_cap')" -eq "$hard" ]
+
+  echo "case: an invalid cap is not frozen and the decisions use the hard cap"
+  fresh_fixture
+  cap_override '{"round_cap":"4"}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "context 5 7" ]
+  [ "$(state_field '.history.context_config | has("round_cap")')" = false ]
+
+  echo "case: the autonomy budget is bounded by the hard cap, not the cap"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  write_switch '{"audit_extra_units_per_pr":3,"audit_units_pool":3}'
+  seed_rounds 4 "$(sig_snap enriching true)"
+  write_context_reading 320000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "grant 5 $(minimum_of $((4 + GAIA_CONTEXT_UNIT_ROUNDS)) "$hard")" ]
+  [ "$(state_field '.history.units[-1].budget')" = true ]
+  [ "$(budget_field '.pool_spent')" -eq 1 ]
+
+  echo "case: the budget answers a cap checkpoint the hard cap would allow, still bounded by the hard cap"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  write_switch '{"audit_extra_units_per_pr":3,"audit_units_pool":3}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "grant 5 $(minimum_of $((4 + GAIA_CONTEXT_UNIT_ROUNDS)) "$hard")" ]
+  [ "$(state_field '.history.units[-1].budget')" = true ]
+  [ "$(budget_field '.pool_spent')" -eq 1 ]
+
+  echo "case: a cap lowered while a unit admitted below it runs stops that unit at the new cap"
+  fresh_fixture
+  cap_override '{"round_cap":5}'
+  seed_rounds 5 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.units = [{unit: 1, start_round: 5, k: 3, through_round: 7, after_checkpoint: 0, admitted_on: "context"}]'
+  new_tree
+  nested
+  assert_pinned cap
+
+  echo "case: the code-review decider reads the cap as the loop's end"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  run bash -c 'SCRIPT_DIRECTORY="$1/.gaia/scripts"; . "$SCRIPT_DIRECTORY/audit-code-review-decide.sh"; loop_hard_cap "$2"' _ "$REPO_ROOT" "$ALF_ROOT"
+  [ "$output" = 4 ]
+  rm -f "$override_file"
+  run bash -c 'SCRIPT_DIRECTORY="$1/.gaia/scripts"; . "$SCRIPT_DIRECTORY/audit-code-review-decide.sh"; loop_hard_cap "$2"' _ "$REPO_ROOT" "$ALF_ROOT"
+  [ "$output" = "$hard" ]
+
+  echo "case: the cap is parsed beside ask_tokens, never changing what it reads"
+  fresh_fixture
+  mkdir -p "$ALF_ROOT/.gaia/local/protected"
+  printf '%s\n' '{"version":1,"context_checkpoint":{"ask_tokens":350000}}' >"$override_file"
+  [ "$(gaia_loop_round_cap_state "$ALF_ROOT")" = "absent $hard -" ]
+  [ "$(gaia_context_override_state "$ALF_ROOT")" = 'ok 350000 350000' ]
+  [ -z "$(session_start_message)" ]
+  cap_override '{"round_cap":"4"}' 350000
+  [ "$(gaia_context_override_state "$ALF_ROOT")" = 'ok 350000 350000' ]
+  [ "$(gaia_loop_round_cap_state "$ALF_ROOT")" = "invalid $hard \"4\"" ]
+
+  echo "case: a cap above the hard cap reads as the hard cap with a notice"
+  fresh_fixture
+  cap_override '{"round_cap":15}'
+  [ "$(gaia_loop_round_cap_state "$ALF_ROOT")" = "capped $hard 15" ]
+  [ "$(session_start_message)" = "WARNING: GAIA audit loop round cap capped: $override_file sets audit_loop.round_cap to 15, above the $hard limit, so $hard is used." ]
+  [ "$(gaia_loop_round_cap_effective "$ALF_ROOT" '{"history":{}}')" = "$hard true" ]
+
+  echo "case: a cap that is not a whole number from 1 to the hard cap is invalid, with a notice"
+  for value in 0 -1 4.5 '"4"'; do
+    fresh_fixture
+    cap_override "{\"round_cap\":$value}"
+    [ "$(gaia_loop_round_cap_state "$ALF_ROOT")" = "invalid $hard $value" ]
+    [ "$(gaia_loop_round_cap_effective "$ALF_ROOT" '{"history":{}}')" = "$hard false" ]
+    expected="WARNING: GAIA audit loop round cap is invalid: $override_file sets audit_loop.round_cap to $value, not a whole number from 1 to $hard, so automatic continue and the hand-off are off and every checkpoint asks. Fix or delete the key."
+    [ "$(session_start_message)" = "$expected" ]
+  done
+
+  echo "case: an ask_tokens warning and a cap notice share one message; a whole-file-invalid override prints only the file warning"
+  fresh_fixture
+  mkdir -p "$ALF_ROOT/.gaia/local/protected"
+  printf '%s\n' '{"version":1,"context_checkpoint":{"ask_tokens":"x"},"audit_loop":{"round_cap":15}}' >"$override_file"
+  row="$(session_start_message)"
+  case "$row" in "WARNING: GAIA context checkpoint override is invalid: "*". Fix or delete the file. WARNING: GAIA audit loop round cap capped: "*) ;; *) printf 'got: %s\n' "$row" >&2; return 1 ;; esac
+  printf '%s\n' '{"version":2,"audit_loop":{"round_cap":15}}' >"$override_file"
+  row="$(session_start_message)"
+  case "$row" in "WARNING: GAIA context checkpoint override is invalid: "*) ;; *) printf 'got: %s\n' "$row" >&2; return 1 ;; esac
+  grep -qF -- 'round cap' <<<"$row" && return 1
+  true
+}
+
+# --- automatic continue and hand-off -------------------------------------------
+
+# assert_asks <trigger>: an ordinary pinned checkpoint, no hand-off, no unit.
+assert_asks() {
+  assert_pinned "$1"
+  [ "$(state_field '.history.checkpoints | last | has("handoff")')" = false ]
+  [ "$(state_field '.history.units // [] | length')" -eq 0 ]
+}
+
+# automatic_row: the latest unit as `<admitted_on> <automatic> <start> <through> <after_checkpoint>`.
+automatic_row() {
+  state_field '.history.units[-1] | [.admitted_on, .automatic, .start_round, .through_round, .after_checkpoint] | map(tostring) | join(" ")'
+}
+
+# compact <jq-filter>: one compact read of the state file.
+compact() {
+  jq -c "$1" "$ALF_STATE"
+}
+
+# type_line <prompt> <session>: the human types <prompt> as the whole prompt
+# in an interactive session; the grant hook records it.
+type_line() {
+  local transcript="$BATS_TEST_TMPDIR/transcript-$2.jsonl" payload_json
+  printf '%s\n' "{\"type\":\"mode\",\"sessionId\":\"$2\"}" "{\"type\":\"user\",\"entrypoint\":\"cli\",\"sessionId\":\"$2\"}" >"$transcript"
+  payload_json="$("$BATS_TEST_DIRNAME/helpers/mock-hook-input.sh" user-prompt-submit "$2" "$1" |
+    jq -c --arg cwd "$ALF_ROOT" --arg transcript_path "$transcript" '.cwd = $cwd | .transcript_path = $transcript_path')"
+  run env CLAUDE_CODE_ENTRYPOINT=cli bash -c 'printf %s "$1" | bash "$2"' _ "$payload_json" "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh"
+}
+
+@test "automatic continue: an eligible checkpoint below a live line admits one automatic unit with no question" {
+  local checkpoints_before allowance_before row
+  echo "case: enriching at 4 rounds with 2 checkpoints recorded continues through round 7 and writes no answer"
+  seed_rounds 4 "$(sig_snap enriching false)"
+  alf_add_checkpoint 2 fallback
+  alf_add_checkpoint 3 fallback
+  write_context_reading 150000 1000000
+  checkpoints_before="$(compact '.history.checkpoints')"
+  allowance_before="$(compact '.allowance')"
+  unit_dispatch
+  assert_allowed
+  [ "$(automatic_row)" = "grant true 5 7 2" ]
+  [ "$(state_field '.history.units[-1] | has("budget")')" = false ]
+  [ "$(compact '.history.checkpoints')" = "$checkpoints_before" ]
+  [ "$(compact '.allowance')" = "$allowance_before" ]
+
+  echo "case: inside that unit the automatic window lifts enriching as a human grant's does"
+  new_tree
+  nested
+  assert_allowed
+  alf_state_edit '.history.rounds[4].snapshot = $snapshot' --argjson snapshot "$(sig_snap enriching false)"
+  new_tree
+  nested
+  assert_allowed
+  [ "$(nrounds)" -eq 6 ]
+
+  echo "case: stalled with small-tail holding and its accept blocked continues through round 6"
+  fresh_fixture
+  # Accept-eligible, but no member reviewed HEAD, so the accept becomes the in-session grant.
+  seed_rounds 3 '{"verdict":"stalled","A":1,"signals":{"stalled":true,"small-tail":true},"accept_eligible":true}'
+  write_context_reading 90000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(automatic_row)" = "grant true 4 6 0" ]
+
+  echo "case: an automatic unit that cannot be written records the ordinary checkpoint and admits nothing"
+  fresh_fixture
+  scratch_copy
+  printf '%s\n' 'eval "_unwritten_$(declare -f gaia_loop_write_state)"' \
+    'gaia_loop_write_state() { case "${2-}" in *"\"automatic\":true"*) return 1 ;; esac; _unwritten_gaia_loop_write_state "$@"; }' \
+    >>"$SCRATCH_SCRIPTS/audit-loop-state-lib.sh"
+  seed_rounds 4 "$(sig_snap enriching false)"
+  write_context_reading 150000 1000000
+  unit_dispatch
+  assert_asks rubric:enriching
+
+  echo "case: a unit whose automatic flag is not true, or sits beside budget, fails the schema"
+  for row in '{automatic: "yes"}' '{automatic: true, budget: true}'; do
+    fresh_fixture
+    seed_rounds 4 "$(sig_snap enriching false)"
+    alf_state_edit ".history.units = [{unit: 1, start_round: 1, k: 3, through_round: 3, admitted_on: \"grant\", after_checkpoint: 0} + $row]"
+    cp "$ALF_STATE" "$BATS_TEST_TMPDIR/corrupt.json"
+    write_context_reading 150000 1000000
+    unit_dispatch
+    deny_prefix "BLOCKED: the audit loop state file for branch"
+    reason | grep -qF -- 'fails the schema 1 shape check'
+    cmp -s "$BATS_TEST_TMPDIR/corrupt.json" "$ALF_STATE"
+  done
+}
+
+# bats test_tags=protected
+@test "automatic continue: a checkpoint where a human decision is at stake still pins and asks whatever the reading" {
+  local run_folder fixtures
+  echo "case: an accept-eligible enriching round leads with Accept"
+  head_marker
+  seed_rounds 4 "$(sig_snap enriching true)"
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_asks rubric:enriching
+  [ "$(first_pinned_label)" = "Accept the remainder (Recommended)" ]
+
+  echo "case: stalled without small-tail leads with Stop"
+  fresh_fixture
+  seed_rounds 4 "$(sig_snap stalled false)"
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_asks rubric:stalled
+  [ "$(first_pinned_label)" = "Stop and file the remainder (Recommended)" ]
+
+  echo "case: a disputed fix offers State the rule"
+  fresh_fixture
+  run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
+  fixtures="$REPO_ROOT/.gaia/scripts/tests/fixtures/audit-loop-disputes"
+  alf_sequence 6 5 4 3 2
+  mkdir -p "$run_folder"
+  cp "$fixtures/fixer-6-audit.json" "$run_folder/fixer-5-audit.json"
+  jq '.round = 5 | .entries += [1, 2 | {member: "code-audit-frontend", finding_class: "rule/x", path: "f.txt", line: ., disposition: "fix", reason: "fixed"}]' \
+    "$fixtures/dispositions-6.json" >"$run_folder/dispositions-5.json"
+  alf_state_edit '.history.rounds[4].snapshot = $snapshot' --argjson snapshot "$(sig_snap enriching false)"
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_asks rubric:enriching
+  [ "$(state_field '[.history.checkpoints | last | .question.questions[0].options[].label | sub(" \\(Recommended\\)$"; "")] | index("State the rule, then continue") != null')" = true ]
+
+  echo "case: reintroduced and waiver-drift pin"
+  for row in reintroduced waiver-drift; do
+    fresh_fixture
+    seed_rounds 4 "$(sig_snap "$row" false)"
+    write_context_reading 50000 1000000
+    unit_dispatch
+    assert_asks "rubric:$row"
+  done
+
+  echo "case: the fallback with no reading leads with a new session"
+  fresh_fixture
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  unit_dispatch
+  assert_asks fallback
+  [ "$(first_pinned_label)" = "Continue audit in a new session (Recommended)" ]
+
+  echo "case: a stale reading pins"
+  fresh_fixture
+  seed_rounds 4 "$(sig_snap enriching false)"
+  write_context_reading 50000 1000000 $((GAIA_CONTEXT_FRESH_SECONDS + 60))
+  unit_dispatch
+  assert_asks rubric:enriching
+
+  echo "case: a line frozen off pins"
+  fresh_fixture
+  settings 0 50
+  seed_rounds 4 "$(sig_snap enriching false)"
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_asks rubric:enriching
+  [ "$(state_field '.history.context_config.ask_tokens')" -eq 0 ]
+
+  echo "case: a live 0 never lifts a frozen line, so the same round continues automatically"
+  fresh_fixture
+  seed_rounds 4 "$(sig_snap enriching false)"
+  alf_state_edit '.history.context_config = {ask_tokens: 300000, ask_window_pct: 50}'
+  settings 0 50
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(automatic_row)" = "grant true 5 7 0" ]
+
+  echo "case: a spent accept pins the fallback"
+  fresh_fixture
+  seed_rounds 6 '{"verdict":"continue","A":1}'
+  alf_add_checkpoint 5 fallback
+  alf_add_answer 1 accept
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_pinned fallback
+  [ "$(state_field '.history.checkpoints | last | has("handoff")')" = false ]
+  [ "$(state_field '.history.units // [] | length')" -eq 0 ]
+
+  echo "case: an invalid cap pins"
+  fresh_fixture
+  cap_override '{"round_cap":"4"}'
+  seed_rounds 4 "$(sig_snap enriching false)"
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_asks rubric:enriching
+}
+
+@test "hand-off checkpoint: at or above the line the hook records a hand-off and denies with the hand-off message" {
+  echo "case: a context checkpoint at 2 rounds hands off with this session's id"
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  write_context_reading 320000 1000000
+  unit_dispatch
+  assert_handoff context
+  [ "$(state_field '.history.checkpoints | length')" -eq 1 ]
+  [ "$(state_field '.history.checkpoints[-1].session_id')" = "$SIDU" ]
+  [ "$(state_field '.history.units // [] | length')" -eq 0 ]
+  reason | grep -qxF -- 'Otherwise: print the continuation prompt and its instruction line, then stop.'
+  reason | grep -qF -- 'a grant is already recorded' && return 1
+
+  echo "case: the typed grant still answers it, and the next unit is admitted on the grant"
+  type_line 'audit-grant 3' "$SIDU"
+  [ "$status" -eq 0 ]
+  [ "$(state_field '.allowance.answers[-1] | [.checkpoint, .kind] | map(tostring) | join(" ")')" = "1 grant" ]
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "grant 3 5" ]
+  [ "$(state_field '.history.units[-1] | has("automatic")')" = false ]
+
+  echo "case: an enriching checkpoint at 4 rounds over the line hands off"
+  fresh_fixture
+  seed_rounds 4 "$(sig_snap enriching false)"
+  write_context_reading 320000 1000000
+  unit_dispatch
+  assert_handoff rubric:enriching
+
+  echo "case: with Accept on the table the typed accept answers a context hand-off for one closing round"
+  fresh_fixture
+  head_marker
+  seed_rounds 2 "$(sig_snap quiet true)"
+  write_context_reading 320000 1000000
+  unit_dispatch
+  assert_handoff context
+  type_line 'audit-accept' "$SIDU"
+  [ "$status" -eq 0 ]
+  [ "$(state_field '.allowance.answers[-1] | [.checkpoint, .kind] | map(tostring) | join(" ")')" = "1 accept" ]
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "accept 3 3" ]
+}
+
+@test "hand-off checkpoint: a fresh session's unit dispatch continues past it with no answer recorded" {
+  echo "case: a fresh session below the line is admitted on the context line past a context hand-off"
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  write_context_reading 320000 1000000
+  unit_dispatch
+  assert_handoff context
+  write_context_reading 40000 1000000 0 "$SIDV"
+  unit_dispatch "$SIDV"
+  assert_allowed
+  [ "$(unit_row)" = "context 3 5" ]
+  [ "$(state_field '.allowance.answers | length')" -eq 0 ]
+
+  echo "case: a fresh session continues automatically past an enriching hand-off"
+  fresh_fixture
+  seed_rounds 4 "$(sig_snap enriching false)"
+  write_context_reading 320000 1000000
+  unit_dispatch
+  assert_handoff rubric:enriching
+  write_context_reading 40000 1000000 0 "$SIDV"
+  unit_dispatch "$SIDV"
+  assert_allowed
+  [ "$(automatic_row)" = "grant true 5 7 1" ]
+  [ "$(state_field '.allowance.answers | length')" -eq 0 ]
+
+  echo "case: a headless session with no reading resumes on the fallback and pins the next enriching round"
+  fresh_fixture
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  write_context_reading 320000 1000000
+  unit_dispatch
+  assert_handoff context
+  unit_dispatch "$SIDV"
+  assert_allowed
+  [ "$(unit_row)" = "fallback 3 5" ]
+  alf_state_edit '.history.rounds += [range(3; 6) as $round | .history.rounds[-1] | .round = $round
+    | .tree = ("c" * 39 + ($round | tostring)) | .commit = .tree | .snapshot = {verdict: "continue", A: 1}]
+    | .history.rounds[4].snapshot = $snapshot' --argjson snapshot "$(sig_snap enriching false)"
+  unit_dispatch "$SIDV"
+  assert_pinned rubric:enriching
+  [ "$(state_field '.history.checkpoints | last | has("handoff")')" = false ]
+  [ "$(state_field '.history.units | length')" -eq 1 ]
+  [ "$(state_field '[.history.units[] | select(.automatic == true)] | length')" -eq 0 ]
+}
+
+# bats test_tags=protected
+@test "autonomy budget: the automatic continue is tried first and the budget spends nothing where it admits" {
+  echo "case: below the line the automatic continue admits and the pool is untouched"
+  write_switch '{"audit_extra_units_per_pr":3,"audit_units_pool":3}'
+  seed_rounds 4 "$(sig_snap enriching false)"
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(automatic_row)" = "grant true 5 7 0" ]
+  [ -z "$(budget_records)" ]
+  [ "$(decision_log_lines)" -eq 0 ]
+
+  echo "case: over the line the budget spends one unit and admits as before"
+  fresh_fixture
+  write_switch '{"audit_extra_units_per_pr":3,"audit_units_pool":3}'
+  seed_rounds 4 "$(sig_snap enriching false)"
+  write_context_reading 320000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.units[-1] | [.admitted_on, .budget, has("automatic")] | map(tostring) | join(" ")')" = "grant true false" ]
+  [ "$(budget_field '.pool_spent')" -eq 1 ]
+  [ "$(decision_log_lines)" -eq 1 ]
+  [ "$(jq -r '.header' "$ALF_ROOT/.gaia/local/protected/autonomy-log.jsonl")" = 'Audit budget' ]
+}
+
+# bats test_tags=protected
+@test "automatic continue and hand-off write no answer, and a Claude-sent typed line through a guarded route records none" {
+  local allowance_before grants_before tool_name sent_line
+  echo "case: after an automatic continue the allowance is byte-identical and the human grant count is unchanged"
+  seed_rounds 4 "$(sig_snap enriching false)"
+  alf_add_checkpoint 2 fallback
+  alf_add_checkpoint 3 fallback
+  write_context_reading 150000 1000000
+  allowance_before="$(compact '.allowance')"
+  grants_before="$(_gaia_loop_cli record-values --root "$ALF_ROOT" | jq -r '.grants')"
+  unit_dispatch
+  assert_allowed
+  [ "$(state_field '.history.units[-1].automatic')" = true ]
+  [ "$(compact '.allowance')" = "$allowance_before" ]
+  [ "$(_gaia_loop_cli record-values --root "$ALF_ROOT" | jq -r '.grants')" = "$grants_before" ]
+
+  echo "case: after a hand-off the allowance is byte-identical and the human grant count is unchanged"
+  fresh_fixture
+  seed_rounds 2 '{"verdict":"continue","A":1}'
+  write_context_reading 320000 1000000
+  allowance_before="$(compact '.allowance')"
+  grants_before="$(_gaia_loop_cli record-values --root "$ALF_ROOT" | jq -r '.grants')"
+  unit_dispatch
+  assert_handoff context
+  [ "$(compact '.allowance')" = "$allowance_before" ]
+  [ "$(state_field '.allowance.answers | length')" -eq 0 ]
+  [ "$(_gaia_loop_cli record-values --root "$ALF_ROOT" | jq -r '.grants')" = "$grants_before" ]
+
+  echo "case: a Claude-authored audit-grant 3 sent through a guarded tool is denied and records no answer"
+  for tool_name in ScheduleWakeup SendMessage; do
+    case "$tool_name" in
+      ScheduleWakeup) sent_line='{"delaySeconds":60,"reason":"r","prompt":"audit-grant 3"}' ;;
+      SendMessage) sent_line='{"to":"peer","message":"audit-grant 3"}' ;;
+    esac
+    run bash -c 'jq -cn --arg tool_name "$1" --argjson tool_input "$2" --arg cwd "$3" \
+      "{session_id: \"s1\", cwd: \$cwd, hook_event_name: \"PreToolUse\", tool_name: \$tool_name, tool_input: \$tool_input}" |
+      bash "$4"' _ "$tool_name" "$sent_line" "$ALF_ROOT" "$REPO_ROOT/.claude/hooks/block-scheduled-audit-line.sh"
+    assert_denied
+    reason | grep -qF -- 'only a human types an audit checkpoint answer'
+    [ "$(state_field '.allowance.answers | length')" -eq 0 ]
+  done
+  [ "$(compact '.allowance')" = "$allowance_before" ]
 }

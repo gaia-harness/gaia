@@ -32,10 +32,11 @@ _gaia_loop_spend() {
 # _gaia_loop_brief <audited-root> <main-root> <state-json>: the checkpoint
 # brief.
 _gaia_loop_brief() {
-  local root="$1" main="$2" state="$3" used allowed pending snapshot findings raw spend per_round="[]" i round_snapshot head_tree blocked_snapshot
+  local root="$1" main="$2" state="$3" used allowed pending snapshot findings raw spend per_round="[]" i round_snapshot head_tree blocked_snapshot round_cap
   used="$(printf '%s' "$state" | jq -r '.history.rounds | length')"
   [ "$used" -ge 1 ] || { printf 'audit-loop-eval: no recorded round to brief for %s\n' "$(printf '%s' "$state" | jq -r '.branch')" >&2; return 2; }
   allowed="$(gaia_loop_allowed "$state")"
+  read -r round_cap _ <<<"$(gaia_loop_round_cap_effective "$main" "$state")" || round_cap="$_GAIA_LOOP_HARD_CAP"
   pending="$(gaia_loop_pending_checkpoint "$state")"
   snapshot="$(printf '%s' "$state" | jq -c '.history.rounds | last | .snapshot')"
   [ "$snapshot" = null ] && { snapshot="$(gaia_loop_evaluate_round "$main" "$state" "$used" "$root")" || return $?; }
@@ -53,7 +54,7 @@ _gaia_loop_brief() {
   spend="$(_gaia_loop_spend "$raw")"
   jq -n -c --argjson state "$state" --argjson used "$used" --argjson allowed "$allowed" \
     --argjson pending "$([ -n "$pending" ] && echo true || echo false)" --argjson per_round "$per_round" \
-    --argjson pending_checkpoint "${pending:-null}" --argjson cap "$_GAIA_LOOP_HARD_CAP" \
+    --argjson pending_checkpoint "${pending:-null}" --argjson cap "${round_cap:-$_GAIA_LOOP_HARD_CAP}" \
     --argjson snapshot "$snapshot" --argjson findings "$findings" --arg spend "$spend" \
     --arg recommended "$(gaia_loop_recommended "$(printf '%s' "${pending:-null}" | jq -r '.trigger // empty')" "$blocked_snapshot")" \
     --argjson accept_blockers "$(printf '%s' "$blocked_snapshot" | jq -c '.accept_blockers? // null')" \

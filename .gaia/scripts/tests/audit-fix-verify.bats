@@ -335,6 +335,7 @@ spec093_enforcement_paths() {
     '.gaia/scripts/context-checkpoint-lib.sh' \
     '.gaia/scripts/audit-dispositions-check.sh' \
     '.gaia/scripts/audit-loop-signals-lib.sh' \
+    '.gaia/scripts/audit-loop-automatic-lib.sh' \
     '.claude/agents/audit-loop-unit.md' \
     '.gaia/statusline/gaia-statusline.sh' \
     '.gaia/statusline/context-reading.sh' \
@@ -370,7 +371,7 @@ spec093_enforcement_paths() {
       return 1
     }
   done < <(spec093_enforcement_paths)
-  [ "$listed" -eq 10 ] || return 1
+  [ "$listed" -eq 11 ] || return 1
   # row: a fixer edit to every moved library with no allowance fails
   # enforcement-path, one repository and one check for all of them
   while IFS= read -r file_path; do
