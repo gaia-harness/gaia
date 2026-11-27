@@ -1974,6 +1974,18 @@ gate_failure() {
     >"$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/gate-failure.json"
 }
 
+# disputed_fixer <round>: round <round>'s dispositions file (written before its
+# fixer) and fixer artifact, finding X disputed as already absent, so the fix
+# committed nothing.
+disputed_fixer() {
+  jq -n -c --argjson finding "$FINDING_X" \
+    '{schema: 1, entries: [$finding + {severity: "minor", title: "x", failure_mode: "x", disposition: "fix", reason: "unsatisfied veto"}]}' \
+    >"$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/dispositions-$1.json"
+  jq -n -c --argjson finding "$FINDING_X" \
+    '{results: [$finding + {disposition: "disputed", reason: "defect already absent"}]}' \
+    >"$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/fixer-$1-audit.json"
+}
+
 # round_shape <index>: round <index>'s reopened flag, members, closing flag,
 # snapshot and whether its tree is HEAD's.
 round_shape() {
@@ -2014,7 +2026,8 @@ earn_markers() {
 @test "reopen: each cause records a reopened round or declines to" {
   local row ending used run_folder
   local rows=(veto-next-round-unmoved-tree gate-failure-after-latest-round gate-failure-on-unrecorded-tree
-    no-cause-later-veto-stale-failure-checkpoint-deny accept-admission dead-unit-successor)
+    no-cause-later-veto-stale-failure-checkpoint-deny accept-admission dead-unit-successor
+    fixer-ran-new-veto fixer-ran-refailed-gate dispositions-only-new-veto veto-round-disputed-gate-failure)
   for row in "${rows[@]}"; do
     echo "case: $row"
     fresh_fixture
@@ -2113,6 +2126,63 @@ earn_markers() {
         unit_dispatch
         assert_allowed
         [ "$(nrounds)" -eq 3 ]
+        ;;
+      fixer-ran-new-veto)
+        # A reopened round whose fixer disputed its entry, committing nothing,
+        # and whose member wave then ran on the unmoved tree, reopens for a
+        # new veto at the next round.
+        veto_at 3
+        below
+        unit_dispatch
+        assert_reopened 3 || return 1
+        disputed_fixer 3
+        nested
+        assert_allowed
+        veto_at 4
+        unit_dispatch
+        assert_allowed
+        assert_reopened 4
+        ;;
+      fixer-ran-refailed-gate)
+        # A reopened round whose fixer ran never reopens for a gate that fails
+        # again on its tree.
+        gate_failure 2
+        below
+        unit_dispatch
+        assert_reopened 3 || return 1
+        disputed_fixer 3
+        gate_failure 3
+        unit_dispatch
+        assert_allowed
+        [ "$(nrounds)" -eq 3 ]
+        ;;
+      dispositions-only-new-veto)
+        # A reopened round that wrote dispositions and no fixer artifact
+        # (zero fix entries, or a fixer that stopped) is served: a veto at the
+        # next round reopens.
+        veto_at 3
+        below
+        unit_dispatch
+        assert_reopened 3 || return 1
+        printf '{"entries":[]}\n' >"$run_folder/dispositions-3.json"
+        veto_at 4
+        unit_dispatch
+        assert_allowed
+        assert_reopened 4
+        ;;
+      veto-round-disputed-gate-failure)
+        # A veto opened round 3 and its fixer disputed the entry, committing
+        # nothing; a gate failure after round 3 on the same tree still gets
+        # its repair round.
+        veto_at 3
+        below
+        unit_dispatch
+        assert_reopened 3 || return 1
+        disputed_fixer 3
+        gate_failure 3
+        unit_dispatch
+        assert_allowed
+        assert_reopened 4
         ;;
     esac
   done
