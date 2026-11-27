@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 #
 # The any-age context reader and the session save target, split from
-# context-checkpoint-lib.sh to keep that lib under the line limit.
+# context-checkpoint-lib.sh.
 #
 # Owns: gaia_context_read_any_age (the reading of a session whatever its age,
 # for a reader that treats an old reading from the same session as still

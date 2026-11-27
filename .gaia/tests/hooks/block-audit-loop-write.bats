@@ -1018,14 +1018,24 @@ assert_recorder_run_denied_and_staging_allowed() {
 }
 
 # bats test_tags=whole-tree
-@test "every .gaia/scripts script that sources context-checkpoint-lib.sh directly is named by the context-writer source matcher" {
+@test "every .gaia/scripts script that sources context-checkpoint-lib.sh directly is named by every context-writer list" {
   local scripts_directory="$BATS_TEST_DIRNAME/../../scripts"
   local matcher_file="$HOOKS_SOURCE_DIRECTORY/lib/hook-only-scripts-guard.sh"
+  local hook_file="$HOOKS_SOURCE_DIRECTORY/block-audit-loop-write.sh"
+  local scan_file="$HOOKS_SOURCE_DIRECTORY/lib/audit-loop-write-scan.sh"
   local sourcing_file base_name checked=0 missing=""
   while IFS= read -r sourcing_file; do
     base_name=${sourcing_file##*/}
     checked=$((checked + 1))
-    grep -qF -- "| $base_name |" "$matcher_file" || missing="$missing $base_name"
+    grep -qF -- "| $base_name |" "$matcher_file" || missing="$missing matcher:$base_name"
+    grep -qF -- "'$base_name'" "$hook_file" || missing="$missing needle:$base_name"
+    grep -qF -- "*$base_name*" "$scan_file" || missing="$missing scan:$base_name"
+    # The pre-filter case may rely on a broader literal such as *audit-loop*.
+    case "$base_name" in
+      audit-loop*) ;;
+      *) grep -qF -- "*$base_name*" "$hook_file" || missing="$missing prefilter:$base_name" ;;
+    esac
+    grep -F 'DENY_CONTEXT_WRITER_MESSAGE=' "$matcher_file" | grep -qF -- "$base_name" || missing="$missing message:$base_name"
   done < <(grep -lE '^[[:space:]]*(if )?\. "[^"]*/context-checkpoint-lib\.sh"' "$scripts_directory"/*.sh)
   [ "$checked" -ge 4 ] || return 1
   [ -z "$missing" ] || { echo "unlisted:$missing"; return 1; }
