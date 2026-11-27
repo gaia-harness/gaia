@@ -143,16 +143,16 @@ ROWS
   build
   [ "$status" -eq 0 ]
   [ "$(jq -r '.groups[0].parts[0].path' "$OUT/manifest.json")" = "$OUT/part-001.md" ]
-  grep -q '^This part is the skill-descriptions digest' "$OUT/part-001.md"
+  grep -q '^This part is a skill-descriptions digest part' "$OUT/part-001.md"
   run grep -c '^<<<GAIA-FITNESS-FILE-BEGIN ' "$OUT/part-001.md"
   [ "$output" = "1" ]
   grep -qF 'description: does a' "$OUT/part-001.md"
   grep -qF 'first a' "$OUT/part-001.md" && return 1
-  grep -q '^This part is the skill-descriptions digest' "$OUT/part-002.md" && return 1
+  grep -q '^This part is a skill-descriptions digest part' "$OUT/part-002.md" && return 1
   true
 }
 
-@test "a skill digest larger than one part keeps every digest part in one group, each declaring it" {
+@test "a skill digest larger than one part keeps every digest part in one group, each carrying the digest declaration" {
   local name
   for name in a b c d; do
     mkdir -p "$PROJECT/.claude/skills/$name"
@@ -162,12 +162,12 @@ ROWS
   write_report "$(entry .claude/skills/a/SKILL.md skill adopter false),$(entry .claude/skills/b/SKILL.md skill adopter false),$(entry .claude/skills/c/SKILL.md skill adopter false),$(entry .claude/skills/d/SKILL.md skill adopter false)"
   build --part-bytes 800 --group-bytes 600
   [ "$status" -eq 0 ]
-  run bash -c "grep -l '^This part is the skill-descriptions digest' '$OUT'/part-*.md"
+  run bash -c "grep -l '^This part is a skill-descriptions digest part' '$OUT'/part-*.md"
   [ "${#lines[@]}" -gt 1 ]
-  run bash -c "grep -h '^This part is the skill-descriptions digest' '$OUT'/part-*.md | sort -u"
+  run bash -c "grep -h '^This part is a skill-descriptions digest part' '$OUT'/part-*.md | sort -u"
   [ "${#lines[@]}" -eq 1 ]
-  [[ "$output" == *"across all of this group's digest parts"* ]]
-  run bash -c "grep -l '^This part is the skill-descriptions digest' '$OUT'/part-*.md | while read -r part; do jq -r --arg part \"\$part\" '.groups[] | select(any(.parts[]; .path == \$part)) | .group' '$OUT/manifest.json'; done | sort -u"
+  [[ "$output" == *"across all digest parts together"* ]]
+  run bash -c "grep -l '^This part is a skill-descriptions digest part' '$OUT'/part-*.md | while read -r part; do jq -r --arg part \"\$part\" '.groups[] | select(any(.parts[]; .path == \$part)) | .group' '$OUT/manifest.json'; done | sort -u"
   [ "${#lines[@]}" -eq 1 ]
   [ "$(jq '.groups | length' "$OUT/manifest.json")" -gt 1 ]
 }

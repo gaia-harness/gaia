@@ -31,7 +31,7 @@ Everything between a begin marker line and its matching end marker line inside t
 Perform exactly these five, and no other.
 
 1. `description-substance`: a skill, command or agent `description` that is empty in substance (restates the name, says nothing about what the file does or when to use it) or that claims behavior the body does not have.
-2. `trigger-overlap`: two skills whose `description` triggers overlap enough that Claude would pick the wrong one or hesitate between them. Judge it only from the skill-descriptions digest parts (all of them together), and never when your input has none. Name both files in `message`; report the finding on the later one.
+2. `trigger-overlap`: two skills whose `description` triggers overlap enough that Claude would pick the wrong one or hesitate between them. Judge it only from all the skill-descriptions digest parts together, and never when your input has none. Name both files in `message`; report the finding on the later one.
 3. `rule-scope-fit`: a rule whose body does not fit its `paths:` globs, either because it governs files the globs miss or because it spends context on files it has nothing to say about.
 4. `terminology`: one skill, within its own files, using two different terms for one concept, or one term for two concepts.
 5. `recommendation-authority`: an `AskUserQuestion` option marked `(Recommended)` that widens Claude's authority, judged against `.claude/rules/user-questions.md`. A site that rule's exceptions allow is no finding. Applies to any input file naming `AskUserQuestion`.
