@@ -24813,19 +24813,19 @@ var isValidFindingClass = (value, vocabulary = EMPTY_FINDING_CLASS_VOCABULARY) =
   return CLOSED_VOCABULARY.has(value) || vocabulary.classes.includes(value);
 };
 var FindingClassSchema = external_exports.string().refine(isValidFindingClass, {
-  message: "finding_class must match the per-bucket convention (oracle id or controlled vocabulary)"
+  error: "finding_class must match the per-bucket convention (oracle id or controlled vocabulary)"
 });
 var KEBAB_SEGMENT = "[a-z0-9]+(?:-[a-z0-9]+)*";
 var PROJECT_PREFIX_PATTERN = new RegExp(`^${KEBAB_SEGMENT}$`);
 var PROJECT_CLASS_PATTERN = new RegExp(`^${KEBAB_SEGMENT}/${KEBAB_SEGMENT}$`);
 var ProjectClassSchema = external_exports.string().regex(PROJECT_CLASS_PATTERN, "class must be <prefix>/<slug>, kebab-case").refine((value) => value !== OUT_OF_SCOPE_FALLBACK_FINDING_CLASS, {
-  message: `${OUT_OF_SCOPE_FALLBACK_FINDING_CLASS} is the classless fallback, never a class`
+  error: `${OUT_OF_SCOPE_FALLBACK_FINDING_CLASS} is the classless fallback, never a class`
 }).refine((value) => !isOracleFindingClass(value), {
-  message: "a built-in oracle prefix already accepts any id"
+  error: "a built-in oracle prefix already accepts any id"
 });
 var ProjectOraclePrefixSchema = external_exports.string().regex(PROJECT_PREFIX_PATTERN, "oracle prefix must be kebab-case").refine(
   (value) => !FINDING_CLASS_PREFIXES.includes(value),
-  { message: "oracle prefix must not be a built-in prefix" }
+  { error: "oracle prefix must not be a built-in prefix" }
 );
 var ProjectFindingClassesSchema = external_exports.object({
   classes: external_exports.array(ProjectClassSchema),
@@ -36093,7 +36093,7 @@ var SetupFeatureSchema = external_exports.object({
   admin: external_exports.boolean(),
   id: external_exports.string().regex(KEBAB_CASE_PATTERN),
   reference: external_exports.string().min(1).refine(isRepoRelativePath, {
-    message: 'reference must be repo-relative with no ".." segment'
+    error: 'reference must be repo-relative with no ".." segment'
   }),
   required: external_exports.boolean(),
   scope: external_exports.literal(SETUP_SCOPES),

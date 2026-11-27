@@ -223,7 +223,7 @@ export const isValidFindingClass = (
 };
 
 export const FindingClassSchema = z.string().refine(isValidFindingClass, {
-  message:
+  error:
     'finding_class must match the per-bucket convention (oracle id or controlled vocabulary)',
 });
 
@@ -235,10 +235,10 @@ const ProjectClassSchema = z
   .string()
   .regex(PROJECT_CLASS_PATTERN, 'class must be <prefix>/<slug>, kebab-case')
   .refine((value) => value !== OUT_OF_SCOPE_FALLBACK_FINDING_CLASS, {
-    message: `${OUT_OF_SCOPE_FALLBACK_FINDING_CLASS} is the classless fallback, never a class`,
+    error: `${OUT_OF_SCOPE_FALLBACK_FINDING_CLASS} is the classless fallback, never a class`,
   })
   .refine((value) => !isOracleFindingClass(value), {
-    message: 'a built-in oracle prefix already accepts any id',
+    error: 'a built-in oracle prefix already accepts any id',
   });
 
 const ProjectOraclePrefixSchema = z
@@ -246,7 +246,7 @@ const ProjectOraclePrefixSchema = z
   .regex(PROJECT_PREFIX_PATTERN, 'oracle prefix must be kebab-case')
   .refine(
     (value) => !(FINDING_CLASS_PREFIXES as readonly string[]).includes(value),
-    {message: 'oracle prefix must not be a built-in prefix'}
+    {error: 'oracle prefix must not be a built-in prefix'}
   );
 
 // Unknown keys such as `$comment` are stripped, so the parsed data is the

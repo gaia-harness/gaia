@@ -1,8 +1,10 @@
 ### Transitive refresh instructions
 
-Operate on the root workspace and its `web` package (`apps/web`) only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C apps/web` is the one allowed path argument. Frozen names: `{FROZEN_NAMES}`.
+Operate on the root workspace and its `web` package (`apps/web`) only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C apps/web` is the one allowed path argument. Frozen names: `{FROZEN_NAMES}`. Baseline: `{BASELINE}`, the `<baseline>` of steps 2 to 5.
 
-1. **Snapshot** the files the refresh could touch, and the direct dependencies' resolved versions. Run each command below as its own call, in order. **If any of them exits non-zero or is refused, stop here:** do not run step 2 or anything after it, change nothing, and report `Not run (snapshot failed: <command>: <first error line>)`. A refresh with no baseline can only be undone by resetting to HEAD, which also throws away the run's uncommitted Wave A and Wave B edits.
+**Who runs what.** The orchestrating session runs step 1 before it dispatches the agent, and step 6 when that step says to: both run git that changes state, which a sub-agent is refused. The dispatched agent runs steps 2 to 5 only.
+
+1. **Snapshot** the files the refresh could touch, and the direct dependencies' resolved versions. Run each command below as its own call, in order. **If any of them exits non-zero or is refused, stop here:** dispatch no agent, change nothing, and report `Not run (snapshot failed: <command>: <first error line>)`. A refresh with no baseline can only be undone by resetting to HEAD, which also throws away the run's uncommitted Wave A and Wave B edits.
 
    The baseline is a git commit object, never a file copy. The project's settings deny editing `pnpm-lock.yaml`, and Claude Code refuses a `cp` of the lockfile in either direction, wherever its other path points, and a redirect that writes to it. git commands that read the lockfile or restore it are not refused.
    ```bash
@@ -12,7 +14,7 @@ Operate on the root workspace and its `web` package (`apps/web`) only: run every
    ```bash
    git rev-parse HEAD
    ```
-   Carry the id that was printed as the literal `<baseline>` in every later step: shell variables do not survive between calls. Then:
+   Carry the id that was printed as the literal `<baseline>` in the dispatch and in step 6: shell variables do not survive between calls. Then:
    ```bash
    git cat-file -e <baseline>:pnpm-lock.yaml
    mkdir -p /tmp/update-deps-refresh
@@ -23,14 +25,14 @@ Operate on the root workspace and its `web` package (`apps/web`) only: run every
    pnpm cache delete '*'
    pnpm -C apps/web update --no-save
    ```
-   The first line drops pnpm's cached package metadata. pnpm treats metadata it cached within the release-age window as complete, which holds for every version the window admits but not for one a `minimumReleaseAgeExclude` entry admits early: a release published since that fetch is otherwise invisible to the refresh, which then exits 0 having moved nothing. pnpm's metadata cache is per machine, not per project, so this clears it for every project on the machine. That is safe: the cache holds only registry metadata, never packages or lockfiles, so the cost is a refetch on each project's next resolve, and the whole-tree refresh here measures no slower with an empty cache. `--no-save` leaves every range in `package.json` as declared, so direct specs stay with Waves A and B; pnpm's default depth is unlimited, so this re-resolves the whole tree. Do not pass `--depth Infinity`: pnpm takes only an integer depth and exits on that value. Do not use `pnpm update --latest` (it ignores ranges) or `pnpm dedupe` (it moves a transitive only when that removes a duplicate). pnpm applies `minimumReleaseAge` while it resolves, so no version younger than the window lands; never add a `minimumReleaseAgeExclude` entry or change any setting to get a version through. If the command exits non-zero, revert (step 6) with reason `install error: <first error line>`.
+   The first line drops pnpm's cached package metadata. pnpm treats metadata it cached within the release-age window as complete, which holds for every version the window admits but not for one a `minimumReleaseAgeExclude` entry admits early: a release published since that fetch is otherwise invisible to the refresh, which then exits 0 having moved nothing. pnpm's metadata cache is per machine, not per project, so this clears it for every project on the machine. That is safe: the cache holds only registry metadata, never packages or lockfiles, so the cost is a refetch on each project's next resolve, and the whole-tree refresh here measures no slower with an empty cache. `--no-save` leaves every range in `package.json` as declared, so direct specs stay with Waves A and B; pnpm's default depth is unlimited, so this re-resolves the whole tree. Do not pass `--depth Infinity`: pnpm takes only an integer depth and exits on that value. Do not use `pnpm update --latest` (it ignores ranges) or `pnpm dedupe` (it moves a transitive only when that removes a duplicate). pnpm applies `minimumReleaseAge` while it resolves, so no version younger than the window lands; never add a `minimumReleaseAgeExclude` entry or change any setting to get a version through. If the command exits non-zero, report `Revert needed (install error: <first error line>)` and stop.
 3. **Check what it touched.**
    - `package.json`, `apps/web/package.json`, and `pnpm-workspace.yaml` must be byte-identical to the baseline:
      ```bash
      git diff --quiet <baseline> -- package.json apps/web/package.json pnpm-workspace.yaml
      ```
-     Exit 1 means pnpm rewrote a range or recorded a release-age exemption: revert with reason `rewrote <file>`, naming the file `git diff --stat <baseline> -- package.json apps/web/package.json pnpm-workspace.yaml` lists.
-   - Re-run the step 1 `pnpm -C apps/web ls` line into `/tmp/update-deps-refresh/direct-after.json` and compare each frozen name's version with `direct.json`. A frozen name whose version changed means the refresh moved a held or snoozed package inside its range: revert with reason `moved frozen <name> (<from> -> <to>); pin it to an exact version in package.json to let the refresh run`.
+     Exit 1 means pnpm rewrote a range or recorded a release-age exemption: report `Revert needed (rewrote <file>)`, naming the file `git diff --stat <baseline> -- package.json apps/web/package.json pnpm-workspace.yaml` lists, and stop.
+   - Re-run the step 1 `pnpm -C apps/web ls` line into `/tmp/update-deps-refresh/direct-after.json` and compare each frozen name's version with `direct.json`. A frozen name whose version changed means the refresh moved a held or snoozed package inside its range: report `Revert needed (moved frozen <name> (<from> -> <to>); pin it to an exact version in package.json to let the refresh run)` and stop.
 4. **List what moved**, from the lockfile's `packages:` keys before and after. Write out the baseline's lockfile first, as its own call:
    ```bash
    git show <baseline>:pnpm-lock.yaml > /tmp/update-deps-refresh/lock-before.yaml
@@ -55,7 +57,7 @@ Operate on the root workspace and its `web` package (`apps/web`) only: run every
    pnpm pw
    pnpm build
    ```
-   On any failure, revert (step 6) with reason `quality gate failed: <step>`. No remediation pass: one gate run cannot say which of the moved packages broke it.
-6. **Revert** restores the whole refresh, never part of it, from the baseline. See `.claude/skills/update-deps/references/security.md` (3. Snapshots), its Revert paragraph only: `<baseline>` is this refresh's own baseline from step 1, and there are no snapshot directories to remove.
+   On any failure, report `Revert needed (quality gate failed: <step>)` and stop. No remediation pass: one gate run cannot say which of the moved packages broke it.
+6. **Revert** restores the whole refresh, never part of it, from the baseline. Run it on `Revert needed (<reason>)`, and, with reason `no agent outcome`, when the agent ends reporting neither that nor `landed` nor `Nothing moved`. See `.claude/skills/update-deps/references/security.md` (3. Snapshots), its Revert paragraph only: `<baseline>` is this refresh's own baseline from step 1, and there are no snapshot directories to remove. The outcome is then `Reverted (<reason>)`.
 
-Report back: the outcome (`landed`, `Nothing moved`, `Reverted (<reason>)`, or `Not run (snapshot failed: <reason>)`), the step 4 rows (for a revert, the rows that would have moved, when step 4 ran), and the quality gate results.
+The agent reports back its outcome (`landed`, `Nothing moved`, or `Revert needed (<reason>)`), the step 4 rows (for a needed revert, the rows that would have moved, when step 4 ran), and the quality gate results. The phase's outcome is `landed`, `Nothing moved`, `Reverted (<reason>)`, or `Not run (snapshot failed: <reason>)`.

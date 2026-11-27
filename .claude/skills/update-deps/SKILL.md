@@ -441,11 +441,11 @@ Spawn one agent per group, on its model above (or sequentially if resource-const
 
 Waves A and B move direct specs only, and pnpm keeps a transitive dependency's locked version for as long as its parent's range still admits it, so a vulnerable transitive whose patched release is already in range survives every earlier phase. This phase asks pnpm for the newest in-range version of every transitive dependency. It runs before Phase 6 so the post-update override audit reads the refreshed tree.
 
-Skip it when the human skipped `transitive-refresh` in the preview (report `Declined in preview`), under `--scope` (report `Not run (--scope)`), or under `--security` (report `Not run (--security)`). An advisory this refresh clears (its `advisory-landed` check exits 0 afterwards) is resolved by `in-range refresh` and gets no further resolution. Otherwise spawn a **Haiku agent** (`model: "haiku"`). Its prompt tells it to read `.claude/skills/update-deps/references/transitive-refresh.md` and follow it exactly, with the frozen names as FROZEN_NAMES. The **frozen names** are every package in `skipped[]` with `reason: "held"`, plus every member of a group in the skip set (empty when nothing was held or skipped).
+Skip it when the human skipped `transitive-refresh` in the preview (report `Declined in preview`), under `--scope` (report `Not run (--scope)`), or under `--security` (report `Not run (--security)`). An advisory this refresh clears (its `advisory-landed` check exits 0 afterwards) is resolved by `in-range refresh` and gets no further resolution. Otherwise run step 1 (the snapshot) of `.claude/skills/update-deps/references/transitive-refresh.md` yourself, and when it passes spawn a **Haiku agent** (`model: "haiku"`). Its prompt tells it to read that file and run steps 2 to 5 exactly as written, with the frozen names as FROZEN_NAMES and the step 1 baseline id as BASELINE. Run step 6 (the revert) yourself when that step says to. The **frozen names** are every package in `skipped[]` with `reason: "held"`, plus every member of a group in the skip set (empty when nothing was held or skipped).
 
 ## Phase 5c: Security resolutions
 
-Resolve the advisories the security plan still owes by following `.claude/skills/update-deps/references/security.md` (`### Security resolutions`): in-range refresh and security-floor override resolutions, gated as a batch with a per-resolution revert, then acceptance. It runs after Phase 5b and before Phase 6, so Phase 6 audits every override it adds. The orchestrating session runs it itself, because acceptance asks the human; the resolution steps may be delegated to an agent only while no question is pending. In a report-only run it only records every advisory as still open with `report-only run`.
+Resolve the advisories the security plan still owes by following `.claude/skills/update-deps/references/security.md` (`### Security resolutions`): in-range refresh and security-floor override resolutions, gated as a batch with a per-resolution revert, then acceptance. It runs after Phase 5b and before Phase 6, so Phase 6 audits every override it adds. The orchestrating session runs it itself, because acceptance asks the human; that page says what it may delegate. In a report-only run it only records every advisory as still open with `report-only run`.
 
 ## Phase 6: Post-update override audit
 
@@ -468,7 +468,7 @@ In this checkout `run --emit-updates` also lists `.gaia/cli` member entries carr
 
 ## Phase 7: Final report
 
-The orchestrating session builds and prints the report itself, from the agent reports, the Phase 1 decisions, the Phase 5c result, and a final-tree `pnpm audit` it runs inline: read `.claude/skills/update-deps/references/final-report.md` and follow it exactly. It never commits.
+The orchestrating session builds and prints the report itself, from the agent reports, the Phase 1 decisions, the Phase 5b and Phase 5c results, and a final-tree `pnpm audit` it runs inline: read `.claude/skills/update-deps/references/final-report.md` and follow it exactly. It never commits.
 
 ## Phase 8: Publish
 

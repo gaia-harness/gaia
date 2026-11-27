@@ -15,9 +15,15 @@
 # has no baseline, and one that does not stop on a failed snapshot then
 # rewrites the lockfile with nothing to revert to.
 #
-# What these checks cannot see: whether the executing agent obeys the stop
-# sentence. They pin that the sentence is there and comes before the first
-# command that changes the tree.
+# Why the split: a sub-agent is refused git that changes state, so a dispatched
+# agent can take no baseline and revert to none.
+#
+# What these checks cannot see: whether the executing session obeys the stop and
+# role sentences. They pin that the sentences are there, that the stop comes
+# before the first command that changes the tree, and that the refresh steps an
+# agent runs hold no git command the sub-agent rule denies and no `(step 6)`
+# pointer to the revert. The denied-command match reads literal
+# `git <subcommand>` spellings, with at most one `-C <path>`, only.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -28,8 +34,9 @@ setup() {
   REFRESH="${SKILL_DIR}/references/transitive-refresh.md"
   SECURITY="${SKILL_DIR}/references/security.md"
   FINAL_REPORT="${SKILL_DIR}/references/final-report.md"
+  GIT_POLICY="${REPO_ROOT}/.claude/hooks/lib/subagent-git-policy.sh"
   local file
-  for file in "$SKILL" "$REFRESH" "$SECURITY" "$FINAL_REPORT"; do
+  for file in "$SKILL" "$REFRESH" "$SECURITY" "$FINAL_REPORT" "$GIT_POLICY"; do
     [ -f "$file" ] || {
       echo "an audited page is absent: ${file}" >&2
       return 1
@@ -48,13 +55,17 @@ BASELINE_CREATE='git stash create'
 BASELINE_FALLBACK='git rev-parse HEAD'
 BASELINE_HOLDS_LOCKFILE='git cat-file -e <'
 BASELINE_RESTORE='git restore --source=<'
-REFRESH_STOP='**If any of them exits non-zero or is refused, stop here:** do not run step 2'
+REFRESH_STOP='**If any of them exits non-zero or is refused, stop here:** dispatch no agent'
 REFRESH_STEP='2. **Refresh:**'
 REFRESH_OUTCOME='`Not run (snapshot failed: <reason>)`'
 SECURITY_STOP='**A snapshot that fails stops what it guards.**'
 SECURITY_BATCH_STOP='a failed batch snapshot applies no resolution'
 SECURITY_FIRST_APPLY='#### 4. Methods'
 SECURITY_OUTCOME='`snapshot failed (<command>: <first error line>)`'
+REFRESH_REVERT_STEP='6. **Revert**'
+REFRESH_ROLES='The dispatched agent runs steps 2 to 5 only.'
+SKILL_ROLES='Run step 6 (the revert) yourself'
+SECURITY_ROLES='**The orchestrating session takes every snapshot and runs every revert**'
 
 # ---------------------------------------------------------------------------
 # 1. No recipe copies the lockfile
@@ -170,4 +181,66 @@ check_outcome_carried() {
 
 @test "SKILL.md and the final report carry the failed-snapshot outcome" {
   check_outcome_carried "$SKILL" "$FINAL_REPORT"
+}
+
+# ---------------------------------------------------------------------------
+# 6. The dispatched agent is handed no state-changing git
+# ---------------------------------------------------------------------------
+
+# agent_steps <recipe>: the lines from the refresh step up to the revert step.
+agent_steps() {
+  awk -v first="$REFRESH_STEP" -v end="$REFRESH_REVERT_STEP" '
+    index($0, first) == 1 { inside = 1 }
+    index($0, end) == 1 { inside = 0 }
+    inside { print }
+  ' "$1"
+}
+
+check_agent_steps_change_no_git_state() {
+  local steps denied
+  grep -qF -- "$REFRESH_REVERT_STEP" "$1" || {
+    echo "the refresh recipe has no revert step to bound the agent's steps" >&2
+    return 1
+  }
+  steps="$(agent_steps "$1")"
+  grep -qF -- '5. **Quality gate**' <<<"$steps" || {
+    echo "the agent's step range does not reach the quality gate step" >&2
+    return 1
+  }
+  # shellcheck source=../../../.claude/hooks/lib/subagent-git-policy.sh
+  . "$GIT_POLICY"
+  [ "${#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS[@]}" -gt 0 ] || {
+    echo "the sub-agent rule lists no denied git subcommand" >&2
+    return 1
+  }
+  denied="$(
+    IFS='|'
+    printf '%s' "${GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS[*]}"
+  )"
+  if grep -En -- "git( -C [^ ]+)? (${denied})($|[^[:alnum:]-])" <<<"$steps" >&2; then
+    echo "a step the dispatched agent runs holds git a sub-agent is refused" >&2
+    return 1
+  fi
+  if grep -nF -- '(step 6)' <<<"$steps" >&2; then
+    echo "a step the dispatched agent runs sends it to the revert step" >&2
+    return 1
+  fi
+}
+
+@test "the refresh steps the dispatched agent runs change no git state" {
+  check_agent_steps_change_no_git_state "$REFRESH"
+}
+
+check_roles_stated() {
+  local file="$1" sentence="$2"
+  grep -qF -- "$sentence" "$file" || {
+    echo "${file} does not keep the state-changing git with the orchestrating session: ${sentence}" >&2
+    return 1
+  }
+}
+
+@test "the refresh and security dispatches keep snapshots and reverts with the orchestrator" {
+  check_roles_stated "$REFRESH" "$REFRESH_ROLES"
+  check_roles_stated "$SKILL" "$SKILL_ROLES"
+  check_roles_stated "$SECURITY" "$SECURITY_ROLES"
 }
