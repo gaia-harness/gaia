@@ -2538,6 +2538,27 @@ session_start_message() {
   [ "$(state_field '.history.units[-1].budget')" = true ]
   [ "$(budget_field '.pool_spent')" -eq 1 ]
 
+  echo "case: the budget answers a cap checkpoint the hard cap would allow, still bounded by the hard cap"
+  fresh_fixture
+  cap_override '{"round_cap":4}'
+  write_switch '{"audit_extra_units_per_pr":3,"audit_units_pool":3}'
+  seed_rounds 4 '{"verdict":"continue","A":1}'
+  write_context_reading 50000 1000000
+  unit_dispatch
+  assert_allowed
+  [ "$(unit_row)" = "grant 5 $(minimum_of $((4 + GAIA_CONTEXT_UNIT_ROUNDS)) "$hard")" ]
+  [ "$(state_field '.history.units[-1].budget')" = true ]
+  [ "$(budget_field '.pool_spent')" -eq 1 ]
+
+  echo "case: a cap lowered while a unit admitted below it runs stops that unit at the new cap"
+  fresh_fixture
+  cap_override '{"round_cap":5}'
+  seed_rounds 5 '{"verdict":"continue","A":1}'
+  alf_state_edit '.history.units = [{unit: 1, start_round: 5, k: 3, through_round: 7, after_checkpoint: 0, admitted_on: "context"}]'
+  new_tree
+  nested
+  assert_pinned cap
+
   echo "case: the code-review decider reads the cap as the loop's end"
   fresh_fixture
   cap_override '{"round_cap":4}'

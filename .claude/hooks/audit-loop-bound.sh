@@ -41,7 +41,9 @@
 # hard cap (the budget's bound is never C, the effective round cap the eval
 # header's DECISION owns), and the latest answer is not an accept. Never from the budget: the
 # context trigger (its answer is a new session), reintroduced, waiver-drift,
-# the cap, a member dispatch, and an accept, which only a human gives. Every
+# the hard cap, a member dispatch, and an accept, which only a human gives. A
+# deny at a lowered C that the hard cap would allow is answered as a fallback
+# spend, so the budget is bounded by the hard cap on every path. Every
 # spend is appended to the decision log (autonomy_log_decision) before the
 # unit is recorded; the unit carries `budget: true` and admitted_on `grant`,
 # so its window lifts the same signals a human grant's does. Anything else
@@ -897,7 +899,10 @@ run_decision() {
       hard_decision=$(gaia_loop_decide_unit "$view" "$snapshot" "$reading" "$ask_tokens" "$ask_percent") ||
         finish_deny 'BLOCKED: the audit loop checkpoint could not compute its decision. Fail-loud, not fail-open: retry the dispatch.'
       read -r hard_verb budget_trigger _ budget_cap_field _ <<<"$hard_decision"
-      [ "$hard_verb" = deny ] || budget_trigger=''
+      # The hard cap would allow this dispatch, so C alone pinned the
+      # checkpoint: the budget answers it as a fallback spend, still bounded
+      # by the hard cap.
+      [ "$hard_verb" = deny ] || { budget_trigger=fallback; budget_cap_field=false; }
     fi
     [ -z "$budget_trigger" ] || budget_answer "$budget_trigger" "$budget_cap_field" "$used"
   fi

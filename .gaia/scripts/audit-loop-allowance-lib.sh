@@ -111,7 +111,9 @@ gaia_loop_context_config_initial() {
 # gaia_loop_round_cap_effective <main-root> <state-json>: prints `<C> <valid>`,
 # valid false exactly when the live cap is invalid; rc 5 when the state cannot
 # be read. A frozen cap only lowers the live one: a raise waits for the next
-# branch and a lowering applies live. With none frozen, C is the live cap.
+# branch and a lowering applies live: the next member dispatch of a unit that
+# started at or below the lowered C is denied at it, while a unit an answer
+# admitted past the cap keeps its window. With none frozen, C is the live cap.
 gaia_loop_round_cap_effective() {
   local cap_status live_cap frozen cap valid=true
   read -r cap_status live_cap _ <<<"$(gaia_loop_round_cap_state "$1")"

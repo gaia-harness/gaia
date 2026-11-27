@@ -288,7 +288,7 @@ gaia_loop_decide_unit() {
 # in a unit, `allow` or `deny <trigger> <accept_eligible> <cap>`; inline, what
 # gaia_loop_decide_unit prints with k = 1.
 gaia_loop_decide_member() {
-  local state="$1" snapshot="${2:-null}" used eligible through denying_signal cap="$_GAIA_LOOP_HARD_CAP"
+  local state="$1" snapshot="${2:-null}" used eligible through start denying_signal cap="$_GAIA_LOOP_HARD_CAP"
   [ $# -lt 7 ] || cap="$7"
   _gaia_loop_cap_argument "$cap" || return 2
   case "$3" in
@@ -299,9 +299,11 @@ gaia_loop_decide_member() {
   used="$(_gaia_loop_used "$state")" || return 5
   eligible="$(_gaia_loop_snapshot_eligible "$snapshot")"
   through="$(printf '%s' "$state" | jq -r '((.history.units // []) | last | .through_round?) // empty' 2>/dev/null)" || return 5
-  # Past the cap a member runs only inside a unit an answer admitted there; a
-  # unit admitted below the cap ends at it.
-  if [ "$used" -ge "$cap" ] && { ! gaia_loop_is_uint "$through" || [ "$through" -le "$cap" ]; }; then
+  start="$(printf '%s' "$state" | jq -r '((.history.units // []) | last | .start_round?) // empty' 2>/dev/null)" || return 5
+  # Past the cap a member runs only inside a unit an answer admitted there,
+  # one that started past the cap; a unit that started at or below the cap ends
+  # at it, so a cap lowered while it runs stops it, whatever its through_round.
+  if [ "$used" -ge "$cap" ] && { ! gaia_loop_is_uint "$through" || ! gaia_loop_is_uint "$start" || [ "$start" -le "$cap" ]; }; then
     printf 'deny cap %s true\n' "$eligible"
     return 0
   fi

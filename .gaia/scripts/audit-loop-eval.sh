@@ -105,8 +105,10 @@
 # grant window (latest unit admitted on a grant, no checkpoint since, through_round
 # >= s): a grant of K buys up to K rounds. stop_override also makes gaia_loop_decide
 # skip its allowance and verdict steps, and step 6 allow `fallback s min(s+k-1, C)`.
-#   gaia_loop_decide (a new-tree dispatch outside the unit protocol): deny
-#   `cap` when used >= C; deny `allowance` when used >= allowed; else deny
+#   gaia_loop_decide (a new-tree dispatch outside the unit protocol; it takes
+#   no cap argument and has no production caller, so it compares the hard cap
+#   10, and C applies in gaia_loop_decide_unit and gaia_loop_decide_member):
+#   deny `cap` when used >= 10; deny `allowance` when used >= allowed; else deny
 #   `stalled` or `enriching` when that is round r = used's verdict and no
 #   answer exists for a checkpoint at round >= r; else allow.
 #   gaia_loop_decide_unit, first match wins:
@@ -128,7 +130,8 @@
 #     6. any other reading, or ask_tokens 0: the fallback fold, `deny fallback <eligible> false`
 #        when used >= allowed, else `allow fallback s min(s+k-1, C, allowed)`.
 #   gaia_loop_decide_member, in a unit: used >= C denies `cap` first unless
-#   the latest unit runs past round C (an answer admitted it there); then
+#   the latest unit started past round C (an answer admitted it there, so a
+#   cap lowered while a unit runs stops it at the new C); then
 #   the latest unit's through_round must reach s, else `deny window`; then a
 #   denying signal unanswered denies as in step 2; else `allow`. A member
 #   dispatched outside a unit is judged by gaia_loop_decide_unit with k = 1, a
