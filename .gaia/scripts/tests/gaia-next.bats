@@ -478,6 +478,51 @@ worktree_for() {
   [[ "$step" == *'detached checkout (empty branch name, which skips the pull request query)'* ]]
 }
 
+@test "gaia-next.md: the handoff bullet saves, prints the restart prompt, ends the loop and takes no job" {
+  local command_file="$REPO_ROOT/.claude/commands/gaia-next.md"
+  local doctrine_file="$REPO_ROOT/.claude/doctrine/context-checkpoint.md"
+  local bullet end_step answers
+  bullet=$(awk '/^- \*\*`handoff`\*\*/{f=1} f&&/^A job that carries/{exit} f' "$command_file")
+  end_step=$(awk '/^## 3\. End the run/{f=1;next} f' "$command_file")
+  answers=$(grep -m1 '^- `Clear and resume`' "$doctrine_file")
+  [ -n "$bullet" ]
+  # Saves to the object's save path, with the goal and the NEXT line, and carries the run's cost.
+  [[ "$bullet" == *'`save_path`'* ]]
+  [[ "$bullet" == *'NEXT: paste the continuation prompt in a fresh session'* ]]
+  [[ "$bullet" == *'goal'* ]]
+  [[ "$bullet" == *'bash .gaia/scripts/usage.sh handoff'* ]]
+  [[ "$bullet" == *'close line goes into STATE.md only, never into the prompt'* ]]
+  [[ "$bullet" == *'Write the restart prompt into STATE.md'* ]]
+  # Prints the line and the three restart forms, plus the two-step join form.
+  [[ "$bullet" == *'Run /clear, then paste the prompt below.'* ]]
+  [[ "$bullet" == *'`/loop` for a self-paced loop'* ]]
+  [[ "$bullet" == *'`/loop <interval>`'* ]]
+  [[ "$bullet" == *'`/gaia-next` for a one-off run'* ]]
+  [[ "$bullet" == *'run the join line verbatim, once'* ]]
+  [[ "$bullet" == *'invoke the `loop` skill with the same interval'* ]]
+  # Both failure cases never block the handoff.
+  [[ "$bullet" == *'A failed `usage.sh handoff`'* ]]
+  [[ "$bullet" == *'a failed STATE.md write (report it)'* ]]
+  [[ "$bullet" == *'never blocks the handoff'* ]]
+  # Takes no job: no park call, no label change, no branch or worktree change.
+  [[ "$bullet" == *'Take no job'* ]]
+  [[ "$bullet" == *'change no issue label'* ]]
+  [[ "$bullet" == *'change no branch or worktree state'* ]]
+  [[ "$bullet" != *autonomy-park.sh* ]]
+  # Points at the loop ending and the two doctrine owners.
+  [[ "$bullet" == *'`## 3. End the run`'* ]]
+  [[ "$bullet" == *'`## Save first, then ask`'* ]]
+  [[ "$bullet" == *'`## Carry the run'*'s cost across`'* ]]
+  # Step 3 ends the loop for handoff beside none, and keeps the no-work line on none only.
+  [[ "$end_step" == *'**`none` or `handoff`:**'*'`ScheduleWakeup` with `stop: true`'*'`CronDelete`'* ]]
+  [[ "$end_step" == *'**`none` outside a loop:** say that no work remains'* ]]
+  [ "$(grep -c 'say that no work remains' <<<"$end_step")" -eq 1 ]
+  # The doctrine's attended answer prints the loop restart inside a /loop, by pointer.
+  [[ "$answers" == *'Inside a `/loop` running `/gaia-next`'* ]]
+  [[ "$answers" == *'.claude/commands/gaia-next.md` `## 2. Pick the job`'* ]]
+  [[ "$answers" != *'two numbered'* ]]
+}
+
 # handoff_state <branch> <checkpoints-json> [answers-json]: a valid state file whose checkpoints are given.
 handoff_state() {
   local file="$WORK/.gaia/local/protected/audit-loop/$1.json"

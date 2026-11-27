@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-11-24
-updated: 2026-11-26
+updated: 2026-11-27
 tags: [concepts, autonomy, commands]
 ---
 
@@ -12,7 +12,7 @@ tags: [concepts, autonomy, commands]
 
 ## The queue
 
-`.gaia/scripts/gaia-next.sh pick` picks the job, reading state and changing none; its header owns the output shapes. The order:
+`.gaia/scripts/gaia-next.sh pick` picks the job, reading state and changing none; its header owns the output shapes. The context band check runs before every tier below (`## Ending`). The order:
 
 1. **A running plan**: a plan folder whose `RUNNING` sentinel stands. The plan's own `KICKOFF.md` resumes it.
 2. **An open pull request** you authored whose branch exists in this clone, unless a running plan owns the branch. Tending it means fixing failing checks and acting on review comments, then driving it through [[PR Merge Workflow]]. The job runs in the linked worktree holding the branch, or one `gaia-next.sh worktree` adds, never in the main checkout: the main-checkout hop guard would deny checking the default branch back out.
@@ -36,7 +36,7 @@ While the [[Autonomy Switch]] is live, the picker skips, printing one `gaia-next
 
 A plan, pull request or stopped debt fix whose branch's worktree `git worktree list --porcelain` reports as `locked claude session <branch> (pid N ...)` is skipped, interactive or not, with the pid in the skip line, so two sessions never drive one branch. It applies only while that pid is alive and is not this run's own process or one of its ancestors; a dead-pid lock is stale and does not skip the item, nor does a lock whose recorded `start` time differs from the live pid's own start time (the OS reused the pid).
 
-A plan or pull request whose branch's latest checkpoint is an unanswered audit hand-off recorded by this session is skipped in that session only, interactive or not, autonomy-gated or not, with `gaia-next: skipped pr #<n>: a hand-off checkpoint from this session; it continues in a fresh session` (a plan's line names `plan <plan folder>`). The session identity compared is `CLAUDE_CODE_SESSION_ID`; any other session takes the item, and `gaia_next_handoff_skip` in `.gaia/scripts/gaia-next-handoff-lib.sh` owns the test. What a hand-off checkpoint is: [[PR Merge Workflow#The branch checkpoint]].
+A plan or pull request whose branch's latest checkpoint is an unanswered audit hand-off recorded by this session is skipped in that session only once that session's reading has dropped below the line (after a compaction), interactive or not, autonomy-gated or not, with `gaia-next: skipped pr #<n>: a hand-off checkpoint from this session; it continues in a fresh session` (a plan's line names `plan <plan folder>`). The session identity compared is `CLAUDE_CODE_SESSION_ID`; any other session takes the item, and `gaia_next_handoff_skip` in `.gaia/scripts/gaia-next-handoff-lib.sh` owns the test. What a hand-off checkpoint is: [[PR Merge Workflow#The branch checkpoint]].
 
 ## Untrusted input
 
@@ -46,6 +46,11 @@ A plan or pull request whose branch's latest checkpoint is an unanswered audit h
 
 - One job per run: when it finishes or stops partway, the run ends.
 - A park ends the run, and the next run skips the parked item.
+- A run in a session whose context reading is at or past the red band takes no job and hands off, and a `/loop` ends there too. The run saves its restart prompt at the session's save target (`.gaia/local/runs/session-<session id>/STATE.md` under the main checkout), so any launcher finds it by the ending session's id, and prints it for the human's `/clear` and paste. `.claude/commands/gaia-next.md` `## 2. Pick the job` owns the steps and the prompt; `gaia_next_band_handoff` in `.gaia/scripts/gaia-next-handoff-lib.sh` owns the rule. Edge cases:
+  - The check runs only at `pick`, so the iteration that crosses the band ends normally and the handoff prints at the next one.
+  - A session with no reading (headless, scheduled) or with the checkpoint off never hands off.
+  - When a job's skull stop and the loop handoff both print in one session, the later loop handoff prompt is the one to paste: it restarts the loop, and the stopped job resumes from its own saved state.
+  - The check runs at `pick`, after step 1's checkout checks, so a run that step 1 ends (the main checkout dirty or on another branch) never reaches it and does not hand off.
 - The loop ends when no work remains that the run may take: an empty queue, or one where every item is parked or skipped. The command's step 3 owns how it stops each kind of `/loop`.
 
 ## Permission mode for an unattended run
