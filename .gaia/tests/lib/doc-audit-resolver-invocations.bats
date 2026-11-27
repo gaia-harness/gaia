@@ -4,7 +4,8 @@
 # carries. Only the frontend member asks the resolver for its specialist
 # triggers, so the `--specialists` flag appears in that one definition's line,
 # once, at the end, and nowhere else under the agents directory or in the
-# shared protocol.
+# shared protocol. It also pins the dispatch tree on the protocol's earned
+# write call, which must match the tree the resolver line captured with.
 #
 # Every assertion is about the tree as it stands (never a comparison with
 # another revision's copy), so the suite holds on the default branch and on every later branch.
@@ -87,7 +88,31 @@ assert_only_frontend_names_flag() {
   return 0
 }
 
+# earned_write_block <protocol file>: the fenced writer call that carries
+# `--provenance earned`, from its opening line to its last continuation line.
+# Fails unless exactly one such call exists.
+earned_write_block() {
+  local block count
+  block="$(awk '
+    /^bash <root>\/\.gaia\/scripts\/audit-write-clearance\.sh / { collecting = 1; current = "" }
+    collecting { current = current $0 "\n" }
+    collecting && !/\\$/ { collecting = 0; if (current ~ /--provenance earned/) printf "%s\034", current }
+  ' "$1")"
+  count="$(tr -cd '\034' <<<"$block" | wc -c | tr -d ' ')"
+  [ "$count" -eq 1 ] || { echo "$1 carries $count earned writer calls" >&2; return 1; }
+  printf '%s' "${block%$'\034'}"
+}
+
 # --- live tree ----------------------------------------------------------------
+
+# The member captures with a dispatch tree (its resolver line above), so its
+# earned write must name the same tree: a write without it is refused and the
+# capture is kept, so every re-dispatch on that tree is refused the same way.
+@test "the protocol's earned write call passes --dispatch-tree '<expected-tree>'" {
+  local block
+  block="$(earned_write_block "$PROTOCOL")" || return 1
+  grep -qE -- "^  --dispatch-tree '<expected-tree>'( \\\\)?$" <<<"$block" || { echo "case failed: $block" >&2; return 1; }
+}
 
 # bats test_tags=whole-tree
 @test "each definition's resolver line equals its row" {

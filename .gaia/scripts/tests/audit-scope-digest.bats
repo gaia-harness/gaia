@@ -740,6 +740,10 @@ head_tree() { git -C "$ROOT" rev-parse 'HEAD^{tree}'; }
   captured="$("$SCRIPT" --capture --dispatch-tree "$round_one_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
   scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
   [ "$(jq -r '.dispatch_tree' "$scope_file")" = "$round_one_tree" ]
+  # Its handed-only end: a findings sidecar through the real writer, no marker.
+  printf '%s' '[{"finding_class":"holistic/unclassified","severity":"minor","path":"app/x.ts","line":1,"title":"round-one finding","failure_mode":"the value is unchecked","verified_by":"read the line","suggested_fix":"check the value"}]' \
+    | bash "$THIS_DIRECTORY/../audit-write-findings.sh" --root "$ROOT" --member "$MEMBER" --base "$BASE" --findings - >/dev/null
+  [ -n "$(find "$ROOT/.gaia/local/audit" -name "*.${MEMBER}.findings.json" 2>/dev/null)" ]
   [ -z "$(find "$ROOT/.gaia/local/audit" -name '*.ok' -o -name '*.refused' 2>/dev/null)" ]
 
   # --- the repair commit rotates the member digest ---
