@@ -2,7 +2,7 @@
 
 Operate on the root workspace and its `web` package (`apps/web`) only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C apps/web` is the one allowed path argument. Frozen names: `{FROZEN_NAMES}`. Baseline: `{BASELINE}`, the `<baseline>` of steps 2 to 5.
 
-**Who runs what.** The orchestrating session runs step 1 before it dispatches the agent, and step 6 after the agent reports a needed revert: both run git that changes state, which a sub-agent is refused. The dispatched agent runs steps 2 to 5 only.
+**Who runs what.** The orchestrating session runs step 1 before it dispatches the agent, and step 6 when that step says to: both run git that changes state, which a sub-agent is refused. The dispatched agent runs steps 2 to 5 only.
 
 1. **Snapshot** the files the refresh could touch, and the direct dependencies' resolved versions. Run each command below as its own call, in order. **If any of them exits non-zero or is refused, stop here:** dispatch no agent, change nothing, and report `Not run (snapshot failed: <command>: <first error line>)`. A refresh with no baseline can only be undone by resetting to HEAD, which also throws away the run's uncommitted Wave A and Wave B edits.
 
@@ -60,4 +60,4 @@ Operate on the root workspace and its `web` package (`apps/web`) only: run every
    On any failure, report `Revert needed (quality gate failed: <step>)` and stop. No remediation pass: one gate run cannot say which of the moved packages broke it.
 6. **Revert** restores the whole refresh, never part of it, from the baseline. Run it on `Revert needed (<reason>)`, and, with reason `no agent outcome`, when the agent ends reporting neither that nor `landed` nor `Nothing moved`. See `.claude/skills/update-deps/references/security.md` (3. Snapshots), its Revert paragraph only: `<baseline>` is this refresh's own baseline from step 1, and there are no snapshot directories to remove. The outcome is then `Reverted (<reason>)`.
 
-The agent reports back: `landed`, `Nothing moved`, or `Revert needed (<reason>)`, the step 4 rows (for a needed revert, the rows that would have moved, when step 4 ran), and the quality gate results. The phase's outcome is `landed`, `Nothing moved`, `Reverted (<reason>)`, or `Not run (snapshot failed: <reason>)`.
+The agent reports back its outcome (`landed`, `Nothing moved`, or `Revert needed (<reason>)`), the step 4 rows (for a needed revert, the rows that would have moved, when step 4 ran), and the quality gate results. The phase's outcome is `landed`, `Nothing moved`, `Reverted (<reason>)`, or `Not run (snapshot failed: <reason>)`.

@@ -21,8 +21,9 @@
 # What these checks cannot see: whether the executing session obeys the stop and
 # role sentences. They pin that the sentences are there, that the stop comes
 # before the first command that changes the tree, and that the refresh steps an
-# agent runs hold no git command the sub-agent rule denies. The denied-command
-# match reads literal `git <subcommand>` spellings only.
+# agent runs hold no git command the sub-agent rule denies and no `(step 6)`
+# pointer to the revert. The denied-command match reads literal
+# `git <subcommand>` spellings, with at most one `-C <path>`, only.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -63,7 +64,7 @@ SECURITY_FIRST_APPLY='#### 4. Methods'
 SECURITY_OUTCOME='`snapshot failed (<command>: <first error line>)`'
 REFRESH_REVERT_STEP='6. **Revert**'
 REFRESH_ROLES='The dispatched agent runs steps 2 to 5 only.'
-SKILL_ROLES='Steps 1 and 6 (the revert) stay with this session'
+SKILL_ROLES='Run step 6 (the revert) yourself'
 SECURITY_ROLES='**The orchestrating session takes every snapshot and runs every revert**'
 
 # ---------------------------------------------------------------------------
