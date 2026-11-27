@@ -236,7 +236,7 @@ commit_in_worktree() {
   printf '%s\n' "$denial_reason" | grep -qxF -- "Grant (type exactly as the whole prompt): $(gaia_loop_grant_line 3)"
   printf '%s\n' "$denial_reason" | grep -qxF -- "Accept (type exactly as the whole prompt): $(gaia_loop_accept_line)"
   printf '%s\n' "$denial_reason" | grep -qF -- "Interactive run: on the main thread of this session, ask this question with AskUserQuestion exactly as printed"
-  printf '%s\n' "$denial_reason" | grep -qF -- "Unattended run (no human can answer: the autonomy switch is live, or the run is headless; a /loop in an interactive session with the switch off is an interactive run): never ask; park with \`bash "
+  printf '%s\n' "$denial_reason" | grep -qF -- "Unattended run (no human can answer: the autonomy switch is live, or the run is headless (claude -p, or a scheduled task that starts its own session); a /loop in an interactive session with the switch off is an interactive run): never ask; park with \`bash "
   printf '%s\n' "$denial_reason" | grep -qF -- "/autonomy-park.sh --reason audit-checkpoint --pr <n> --root $ALF_ROOT\`; when the park exits non-zero, print the Grant line above before stopping so the grant still reaches the human; print no continuation prompt."
   printf '%s\n' "$denial_reason" | grep -qF -- "or CI" && return 1
   printf '%s\n' "$denial_reason" | grep -qF -- "never types or simulates"

@@ -377,7 +377,7 @@ checkpoint_message() {
   [ -z "${BUDGET_NOTE-}" ] || printf 'Autonomy budget: no unit spent, because %s.\n' "$BUDGET_NOTE"
   # A hand-off parks nothing: the fresh session it hands to continues the loop.
   # shellcheck disable=SC2016 # the backticks are literal text in the message
-  [ "$handoff" = true ] || printf 'Unattended run (no human can answer: the autonomy switch is live, or the run is headless; a /loop in an interactive session with the switch off is an interactive run): never ask; park with `bash %s/autonomy-park.sh --reason audit-checkpoint --pr <n> --root %s`; when the park exits non-zero, print the Grant line above before stopping so the grant still reaches the human; print no continuation prompt.\n' "$scripts" "$root"
+  [ "$handoff" = true ] || printf 'Unattended run (no human can answer: the autonomy switch is live, or the run is headless (claude -p, or a scheduled task that starts its own session); a /loop in an interactive session with the switch off is an interactive run): never ask; park with `bash %s/autonomy-park.sh --reason audit-checkpoint --pr <n> --root %s`; when the park exits non-zero, print the Grant line above before stopping so the grant still reaches the human; print no continuation prompt.\n' "$scripts" "$root"
   printf '\nClaude never writes the state file and never types or simulates these lines. A dispatch on an already-audited tree is still allowed.\n'
   # shellcheck disable=SC2016 # the backticks are literal text in the message
   printf 'Evidence and recommendation: `bash %s/audit-loop-eval.sh brief --root %s`.\n' "$scripts" "$root"

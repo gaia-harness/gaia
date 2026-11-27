@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-11-25
+updated: 2026-11-27
 tags: [concept, ci, review]
 ---
 

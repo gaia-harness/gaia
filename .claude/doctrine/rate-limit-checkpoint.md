@@ -1,6 +1,6 @@
 # Rate-limit checkpoint
 
-The header above names a usage window that reached a band, then prints the reading: one line per window from `bash .gaia/scripts/rate-limits.sh read`. The checkpoint acts on this session's own reading, and the reader prints each window's band word (`warning` or `critical`) on its line when the window is in a band. The hook cannot see whether a human is present, so you judge that yourself. The dispatch that triggered the hook already ran; this policy governs your next dispatches.
+The header above names a usage window that reached a band, then prints the reading: one line per window from `bash .gaia/scripts/rate-limits.sh read`. The checkpoint acts on this session's own reading, and the reader prints each window's band word (`warning` or `critical`) on its line when the window is in a band. The hook cannot see whether a human is present, so judge it by `wiki/concepts/Autonomy Switch.md`: a `/loop` in an interactive session with the autonomy switch off has one. The dispatch that triggered the hook already ran; this policy governs your next dispatches.
 
 Bands are `warning` and `critical`. The 5-hour window uses one set of bands; the 7-day bands follow the account's plan tier. Every value and the tier sets live in `.gaia/scripts/rate-limits-lib.sh`; this file spells none.
 
