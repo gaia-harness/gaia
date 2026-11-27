@@ -34,7 +34,7 @@ export const SetupFeatureSchema = z.object({
   admin: z.boolean(),
   id: z.string().regex(KEBAB_CASE_PATTERN),
   reference: z.string().min(1).refine(isRepoRelativePath, {
-    message: 'reference must be repo-relative with no ".." segment',
+    error: 'reference must be repo-relative with no ".." segment',
   }),
   required: z.boolean(),
   scope: z.literal(SETUP_SCOPES),

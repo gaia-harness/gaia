@@ -101,7 +101,7 @@ const JsonStripArrayElementSchema = z.object({
         match: z
           .record(z.string(), z.string())
           .refine((entries) => Object.keys(entries).length > 0, {
-            message: 'match requires at least one key',
+            error: 'match requires at least one key',
           }),
         path: z.string().min(1),
       })
