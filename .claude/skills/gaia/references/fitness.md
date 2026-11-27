@@ -70,7 +70,7 @@ One read-only pass makes the five judgments no script can: description substance
    bash .gaia/scripts/fitness-judge-input.sh build --check <SCRATCH>/check.json --out-dir <SCRATCH>/judge
    ```
 
-   Exit 3 is **nothing to judge**: dispatch nothing; the report (Step 5) says the judgment pass had nothing to judge. Exit 0 prints one `group <g> reply <path>` line per group. The script's header owns what enters the input and how it splits into groups of parts that each fit one Read.
+   Exit 3 is **nothing to judge**: dispatch nothing; the report (Step 5) says the judgment pass had nothing to judge. Any exit other than 0 and 3 stops Step 4 as could-not-run, reported with the stderr line, never as clean or skipped; the failed build leaves its output folder empty, so a retry into the same `--out-dir` runs. Exit 0 prints one `group <g> reply <path>` line per group. The script's header owns what enters the input and how it splits into groups of parts that each fit one Read.
 
 2. Dispatch one `Agent(subagent_type: "fitness-judge")` per group, all in one message. Each prompt is what this prints for its group:
 

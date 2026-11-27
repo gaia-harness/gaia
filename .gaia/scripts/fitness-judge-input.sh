@@ -41,8 +41,10 @@
 #   3  build: nothing to judge (the dispatch filter matched no entry, or
 #      no listed path is a regular file that is not a symlink)
 #
-# Limit: a single line longer than a part is kept whole, so its part
-# can exceed one Read. The receipt token still catches the partial read.
+# Read cuts a line over 2000 characters and the receipt token sits on its own
+# short line, so the receipt could not catch that cut. A content line over
+# 1900 bytes is therefore written as continuation lines that repeat its line
+# number, each under that limit.
 
 set -euo pipefail
 
@@ -116,11 +118,15 @@ slice_file() {
     }
     BEGIN { tail = "<<<GAIA-FITNESS-FILE-END " path "\n"; count = 0; open_block() }
     {
-      line = sprintf("%6d\t%s\n", FNR, $0)
-      if (lines > 0 && size + length(line) > budget) { close_block(); open_block() }
-      printf "%s", line > name
-      size += length(line)
-      lines++
+      rest = $0
+      do {
+        line = sprintf("%6d\t%s\n", FNR, substr(rest, 1, 1900))
+        rest = substr(rest, 1901)
+        if (lines > 0 && size + length(line) > budget) { close_block(); open_block() }
+        printf "%s", line > name
+        size += length(line)
+        lines++
+      } while (rest != "")
     }
     END { close_block() }
   ' "$1"
@@ -134,6 +140,19 @@ digest_file() {
   [ -n "$frontmatter" ] || return 0
   printf '<<<GAIA-FITNESS-FILE-BEGIN %s\n%s\n<<<GAIA-FITNESS-FILE-END %s\n' "$1" "$frontmatter" "$1" >"$2/$3"
   printf '%s\t%d\n' "$2/$3" "$(LC_ALL=C wc -c <"$2/$3" | tr -d ' ')"
+}
+
+# regular_project_file <path>: a regular file, not a symlink, whose physical
+# directory lies under the project root (the working directory), so a
+# symlinked parent folder cannot pull in content from outside the project.
+regular_project_file() {
+  local directory
+  [ -f "$1" ] && [ ! -L "$1" ] || return 1
+  directory="$(cd "$(dirname "$1")" && pwd -P)" || return 1
+  case "$directory/" in
+    "$PROJECT_ROOT"/*) return 0 ;;
+  esac
+  return 1
 }
 
 skill_unit() {
@@ -157,6 +176,7 @@ build() {
   mkdir -p "$out_dir"
   [ -z "$(ls -A "$out_dir")" ] || usage_error "$out_dir is not empty"
   out_dir="$(cd "$out_dir" && pwd)"
+  PROJECT_ROOT="$(pwd -P)"
 
   jq -e "$DISPATCH_FILTER" "$check" >/dev/null 2>&1 || {
     echo "fitness-judge-input: nothing to judge" >&2
@@ -165,6 +185,10 @@ build() {
 
   local work="$out_dir/.blocks" overhead budget
   mkdir "$work"
+  # A failed build leaves nothing behind, so a retry into the same folder is
+  # not refused: the folder was empty when this build started.
+  # shellcheck disable=SC2064,SC2154 # out_dir expands now, the local is gone at exit; status is set inside the trap
+  trap "status=\$?; [ \"\$status\" -eq 0 ] || find $(printf '%q' "$out_dir") -mindepth 1 -delete; exit \$status" EXIT
   overhead=$(($(printf '%s\n%s\n<<<GAIA-FITNESS-PART-END %s\n' "$DIGEST_DECLARATION" "$DATA_DECLARATION" "$(new_token)" | LC_ALL=C wc -c)))
   budget=$((part_bytes - overhead))
   [ "$budget" -gt 0 ] || usage_error "--part-bytes is smaller than a part's own markers"
@@ -174,7 +198,7 @@ build() {
   local list="$work/list.tsv" index=0 judged_path block bytes unit
   : >"$list"
   while IFS= read -r judged_path; do
-    [ -f "$judged_path" ] && [ ! -L "$judged_path" ] || continue
+    regular_project_file "$judged_path" || continue
     case "$judged_path" in
       */SKILL.md | SKILL.md)
         index=$((index + 1))
@@ -186,7 +210,7 @@ build() {
   done < <(judged_paths "$check")
   index=0
   while IFS= read -r judged_path; do
-    [ -f "$judged_path" ] && [ ! -L "$judged_path" ] || continue
+    regular_project_file "$judged_path" || continue
     index=$((index + 1))
     unit="$(skill_unit "$judged_path")"
     while IFS="$(printf '\t')" read -r block bytes; do
@@ -259,6 +283,7 @@ build() {
     | map({group: (.[0][0] | tonumber), reply: "\($out)/reply-\(.[0][0]).json", parts: map({path: .[1], token: .[2]})})
     | {groups: .}' <"$rows" >"$out_dir/manifest.json"
   rm -rf "$work" "$rows"
+  trap - EXIT
   jq -r '.groups[] | "group \(.group) reply \(.reply)"' "$out_dir/manifest.json"
 }
 

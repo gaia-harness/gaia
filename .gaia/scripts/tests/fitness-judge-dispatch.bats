@@ -280,3 +280,51 @@ ROWS
   [ "$status" -eq 0 ]
   [ "$(jq -c 'map(.judgment)' "$BATS_TEST_TMPDIR/judgment.json")" = '["recommendation-authority"]' ]
 }
+
+@test "a content line over 1900 bytes is split into continuation lines that keep its line number" {
+  local tab=$'\t'
+  mkdir -p "$PROJECT/.claude/agents"
+  { printf 'short\n'; head -c 4500 /dev/zero | tr '\0' 'x'; printf '\n'; } >"$PROJECT/.claude/agents/long.md"
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/agents/long.md agent adopter false)"
+  build
+  [ "$status" -eq 0 ]
+  run bash -c "cat '$OUT'/part-*.md | grep -cE '^ *2${tab}x+\$'"
+  [ "$output" = "3" ]
+  [ "$(cat "$OUT"/part-*.md | LC_ALL=C awk '{ if (length($0) > 1999) bad = 1 } END { print bad + 0 }')" = "0" ]
+}
+
+@test "a listed path under a symlinked folder that points outside the project is skipped" {
+  mkdir -p "$PROJECT/.claude" "$BATS_TEST_TMPDIR/outside"
+  printf 'outside secret\n' >"$BATS_TEST_TMPDIR/outside/a.md"
+  ln -s "$BATS_TEST_TMPDIR/outside" "$PROJECT/.claude/agents"
+  write_report "$(entry .claude/agents/a.md agent adopter false)"
+  build
+  [ "$status" -eq 3 ]
+}
+
+@test "build never copies a file reached through a symlinked parent folder that points outside the project" {
+  small_project
+  sentinel="OUTSIDE-SENTINEL-7f3a9c1e"
+  mkdir -p "$BATS_TEST_TMPDIR/outside"
+  printf '%s\n' "$sentinel" >"$BATS_TEST_TMPDIR/outside/a.md"
+  ln -s "$BATS_TEST_TMPDIR/outside" "$PROJECT/.claude/agents"
+  write_report "$(entry .claude/skills/a/SKILL.md skill adopter false),$(entry .claude/agents/a.md agent adopter false)"
+  build
+  [ "$status" -eq 0 ]
+  ls "$OUT"/part-*.md >/dev/null
+  grep -rqF -- "$sentinel" "$OUT" && return 1
+  grep -qF -- "first a" "$OUT"/part-*.md
+}
+
+@test "a failed build leaves the output folder empty so a retry is not refused" {
+  small_project
+  mkdir -p "$BATS_TEST_TMPDIR/broken-bin"
+  printf '#!/bin/sh\nexit 1\n' >"$BATS_TEST_TMPDIR/broken-bin/od"
+  chmod +x "$BATS_TEST_TMPDIR/broken-bin/od"
+  PATH="$BATS_TEST_TMPDIR/broken-bin:$PATH" build
+  [ "$status" -ne 0 ]
+  [ -z "$(ls -A "$OUT")" ]
+  build
+  [ "$status" -eq 0 ]
+}
