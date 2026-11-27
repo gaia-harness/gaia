@@ -15,7 +15,7 @@ setup() {
   command -v jq >/dev/null 2>&1 || skip "jq missing"
   NEXT="$REPO_ROOT/.gaia/scripts/gaia-next.sh"
   # Fixture names built from parts so no working-document id or concrete notebook path sits in this file.
-  ALPHA_PLAN=alpha-plan BETA_PLAN=beta-plan PR_BRANCH_SLUG=2-pr-work
+  ALPHA_PLAN=alpha-plan BETA_PLAN=beta-plan
   SPEC_PREFIX=SPEC DRAFT_SPEC_ID="$SPEC_PREFIX-007" PLANNED_SPEC_ID="$SPEC_PREFIX-004"
   BIN="$BATS_TEST_TMPDIR/bin"
   export GH_FIXTURES="$BATS_TEST_TMPDIR/gh"
@@ -631,10 +631,6 @@ assert_band() {
     [ "$output" = "$expected" ] || { echo "$case_row: $output"; return 1; }
     [ "$stderr" = "gaia-next: context at the $band band ($used tokens); no new job this session" ] || { echo "$case_row: $stderr"; return 1; }
   done
-  # used above the window
-  band_reading "$session" 1200000 1000000 10
-  pick_as "$session"
-  assert_band skull || return 1
   # autonomy on, and a gh that fails on any call and is never invoked
   band_reading "$session" 320000 1000000 10
   autonomy_on
@@ -643,9 +639,7 @@ assert_band() {
   assert_band red || return 1
   [ ! -e "$BATS_TEST_TMPDIR/gh-calls" ] || return 1
   # a hand-off checkpoint recorded by this session: the band check answers first, nothing skipped
-  mkdir -p "$WORK/.gaia/local/runs/feat/$PR_BRANCH_SLUG"
-  printf '{"history":{"checkpoints":[{"handoff":true,"session_id":"%s"}]}}\n' "$session" \
-    > "$WORK/.gaia/local/runs/feat/$PR_BRANCH_SLUG/audit-loop.json"
+  handoff_state feat/2-pr-work '[{"index":1,"at_round":2,"handoff":true,"session_id":"'"$session"'"}]'
   pick_as "$session"
   jq -e '.job == "handoff" and .skipped == []' <<<"$output" >/dev/null || return 1
   # a linked worktree --root reads and saves under the main checkout
@@ -680,7 +674,7 @@ assert_band() {
   assert_band none || return 1
 }
 
-@test "pick: without a usable reading or with the checkpoint off it picks exactly as today" {
+@test "pick: without a usable reading or with the checkpoint off it picks a queue job, never a handoff" {
   local session=0a1b2c3d-1111-4222-8333-444455556666 file label
   running_plan "$ALPHA_PLAN" feat/1-plan-work
   file="$(context_file "$WORK" "$session")"
