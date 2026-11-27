@@ -35,7 +35,7 @@ Run it once, as its own Bash call, with the dispatched `AUDIT_ROOT=` assignment 
 **Before the scope resolver, Read `<root>/.claude/hooks/lib/audit-member-protocol.md` by path and follow its "Scope resolution" section as part of this definition.** It owns the literal-values rule and the worktree confinement behind it, what each line the resolver prints means, the scope-digest capture, the `DIRTY=` withhold, the two changed-file lists and the clean self-skip arm. Then resolve your review scope with one command:
 
 ```bash
-<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-shell --root <root>
+<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-shell --root <root> --dispatch-tree <expected-tree>
 ```
 
 Read your own definition again only when the resolver prints `DEFINITION=reread <path>`; on `DEFINITION=unchanged` the copy you were dispatched with is current. Apply the protocol's "Scope resolution" section to everything else it prints, filtering both changed-file lists against the remit globs above.

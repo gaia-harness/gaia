@@ -20,11 +20,11 @@ setup() {
 # definition carries.
 expected_line() {
   case "$1" in
-    code-audit-frontend) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-frontend --root <root> --skip-full-base --eligibility --review-path '*.ts' --review-path '*.tsx' --specialists" ;;
-    code-audit-github-workflows) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-github-workflows --root <root>" ;;
-    code-audit-maintainer-node) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-maintainer-node --root <root>" ;;
-    code-audit-maintainer-shell) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-maintainer-shell --root <root>" ;;
-    code-audit-shell) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-shell --root <root>" ;;
+    code-audit-frontend) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-frontend --root <root> --dispatch-tree <expected-tree> --skip-full-base --eligibility --review-path '*.ts' --review-path '*.tsx' --specialists" ;;
+    code-audit-github-workflows) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-github-workflows --root <root> --dispatch-tree <expected-tree>" ;;
+    code-audit-maintainer-node) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-maintainer-node --root <root> --dispatch-tree <expected-tree>" ;;
+    code-audit-maintainer-shell) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-maintainer-shell --root <root> --dispatch-tree <expected-tree>" ;;
+    code-audit-shell) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-shell --root <root> --dispatch-tree <expected-tree>" ;;
     *) return 1 ;;
   esac
 }

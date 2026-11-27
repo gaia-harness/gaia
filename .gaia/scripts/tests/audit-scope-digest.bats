@@ -721,3 +721,99 @@ rotate_machinery() {
   [ "$status" -eq 0 ]
   [ -f "$ROOT/.gaia/local/audit/${fresh}.ok" ]
 }
+
+# The dispatch-tree binding. Each round's dispatch names the tree it audits
+# (`Expected HEAD tree`), and the capture stores it. A capture call that names
+# the current HEAD tree under a different stored tree is a NEW dispatch, so a
+# capture the last round left unspent (it published nothing) is replaced
+# instead of making the post-repair round forfeit once. A straggler from the old
+# dispatch names the old tree, which no longer equals HEAD's, so it keeps.
+
+head_tree() { git -C "$ROOT" rev-parse 'HEAD^{tree}'; }
+
+@test "END TO END: an unspent capture from round 1 does not make the post-repair round forfeit; round 2's dispatch tree replaces it and its write clears on the first try" {
+  writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
+  [ -x "$writer" ]
+
+  # --- round 1: dispatched on tree one, ends with findings and no conclusion ---
+  round_one_tree="$(head_tree)"
+  captured="$("$SCRIPT" --capture --dispatch-tree "$round_one_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
+  [ "$(jq -r '.dispatch_tree' "$scope_file")" = "$round_one_tree" ]
+  [ -z "$(find "$ROOT/.gaia/local/audit" -name '*.ok' -o -name '*.refused' 2>/dev/null)" ]
+
+  # --- the repair commit rotates the member digest ---
+  rotate_in_scope
+
+  # --- round 2: dispatched on the new tree ---
+  round_two_tree="$(head_tree)"
+  [ "$round_two_tree" != "$round_one_tree" ]
+  fresh="$("$SCRIPT" --capture --dispatch-tree "$round_two_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$fresh" != "$captured" ]
+  [ "$(jq -r '.dispatch_tree' "$scope_file")" = "$round_two_tree" ]
+  # Round 2's own fence re-run keeps its capture whole: a different
+  # --base-reason would show in the file had it been replaced.
+  before="$(cat "$scope_file")"
+  again="$("$SCRIPT" --capture --base-reason member-refusal --dispatch-tree "$round_two_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$again" = "$fresh" ]
+  [ "$(cat "$scope_file")" = "$before" ]
+  run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
+    --base "$BASE" --scope-digest "$fresh"
+  [ "$status" -eq 0 ]
+  [ -f "$ROOT/.gaia/local/audit/${fresh}.ok" ]
+}
+
+@test "a straggler from the old dispatch re-running after the repair commit keeps the capture and its write is refused superseded" {
+  writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
+  [ -x "$writer" ]
+
+  round_one_tree="$(head_tree)"
+  captured="$("$SCRIPT" --capture --dispatch-tree "$round_one_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  rotate_in_scope
+
+  carried="$("$SCRIPT" --capture --dispatch-tree "$round_one_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$carried" = "$captured" ]
+  run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
+    --base "$BASE" --scope-digest "$carried"
+  [ "$status" -eq 2 ]
+  printf '%s\n' "$output" | grep -qF "review scope superseded"
+  [ -z "$(find "$ROOT/.gaia/local/audit" -name '*.ok' 2>/dev/null)" ]
+}
+
+@test "a dispatch on an intermediate tree re-running after a later commit keeps the old capture rather than certifying the newer content" {
+  round_one_tree="$(head_tree)"
+  captured="$("$SCRIPT" --capture --dispatch-tree "$round_one_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  rotate_in_scope
+  intermediate_tree="$(head_tree)"
+  rotate_in_scope
+
+  carried="$("$SCRIPT" --capture --dispatch-tree "$intermediate_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$carried" = "$captured" ]
+  [ "$(jq -r '.dispatch_tree' "$(scope_file_for "$ROOT" "$BASE" "$MEMBER")")" = "$round_one_tree" ]
+}
+
+@test "a missing, malformed or non-tree --dispatch-tree keeps an unspent capture: no flag, empty, non-hex, a ref spelling, a commit name, an unknown 40-hex name" {
+  round_one_tree="$(head_tree)"
+  captured="$("$SCRIPT" --capture --dispatch-tree "$round_one_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
+  before="$(cat "$scope_file")"
+  rotate_in_scope
+  commit_name="$(git -C "$ROOT" rev-parse HEAD)"
+
+  kept="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$kept" = "$captured" ] || { echo "case failed: no flag" >&2; return 1; }
+  for value in "" "not-a-tree" 'HEAD^{tree}' "$commit_name" 0123456789abcdef0123456789abcdef01234567; do
+    kept="$("$SCRIPT" --capture --dispatch-tree "$value" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+    [ "$kept" = "$captured" ] || { echo "case failed: [$value]" >&2; return 1; }
+    [ "$(cat "$scope_file")" = "$before" ] || { echo "case failed: [$value] changed the scope file" >&2; return 1; }
+  done
+}
+
+@test "--dispatch-tree on --read or --release is rejected with exit 2" {
+  run "$SCRIPT" --read --dispatch-tree "$(head_tree)" --root "$ROOT" --member "$MEMBER" --base "$BASE"
+  [ "$status" -eq 2 ]
+  printf '%s\n' "$output" | grep -qF -- "--dispatch-tree is valid only with --capture"
+  run "$SCRIPT" --release --dispatch-tree "$(head_tree)" --root "$ROOT" --member "$MEMBER" --base "$BASE"
+  [ "$status" -eq 2 ]
+  printf '%s\n' "$output" | grep -qF -- "--dispatch-tree is valid only with --capture"
+}
