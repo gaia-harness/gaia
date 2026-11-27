@@ -59,5 +59,5 @@ not_excluded_ok() {
   section=$(awk '/^## Unattended/{f=1;next} /^## /{f=0} f' "$DOCTRINE")
   [ -n "$section" ]
   [[ "$section" != *'as a fresh session would'* ]]
-  [[ "$section" == *'A `/gaia-next` run at or past the red band takes no new job and hands off the loop (`.claude/commands/gaia-next.md`, `## 2. Pick the job`).'* ]]
+  [[ "$section" == *'In a `/loop` running `/gaia-next` the next iteration is at or past the red band, so it takes no new job and hands off the loop instead of resuming from the saved state (`.claude/commands/gaia-next.md`, `## 2. Pick the job`).'* ]]
 }

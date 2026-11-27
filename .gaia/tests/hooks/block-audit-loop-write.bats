@@ -612,6 +612,8 @@ assert_reaper_denied() {
     "exec .gaia/statusline/gaia-statusline.sh"
     "FOO=1 bash \".gaia/statusline/gaia-statusline.sh\""
     ". .gaia/scripts/context-checkpoint-lib.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
+    ". .gaia/scripts/context-any-age-lib.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
+    ". .gaia/scripts/gaia-next-handoff-lib.sh; gaia_context_write /x 0a1b2c3d-1111-4222-8333-444455556666 1 1 1 1"
     ". .gaia/statusline/context-reading.sh && gaia_statusline_write_context /x 1 1"
     "echo hi${nl}bash $MAIN/.gaia/statusline/gaia-statusline.sh"
   )
