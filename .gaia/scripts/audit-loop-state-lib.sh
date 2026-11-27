@@ -430,7 +430,7 @@ gaia_loop_pinned_question() {
           read_band=$(gaia_context_band "$context_tokens" "$context_window" "$line") || read_band=
           if gaia_context_band_at_or_past_line "$read_band"; then
             band=above
-          elif [ "$read_band" = green ] || [ "$read_band" = yellow ]; then
+          elif [ -n "$read_band" ]; then
             band=below
           fi
         fi

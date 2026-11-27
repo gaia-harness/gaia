@@ -690,9 +690,7 @@ assert_band() {
   band_reading "$session" 250000 1000000 10
   pick_as "$session"; refused || return 1
   band_reading "$session" 320000 1000000 10
-  env -u CLAUDE_CODE_SESSION_ID bash "$NEXT" pick --root "$WORK" > "$BATS_TEST_TMPDIR/unset.json" 2> "$BATS_TEST_TMPDIR/unset.err"
-  jq -e '.job == "plan" and (has("band") | not)' "$BATS_TEST_TMPDIR/unset.json" >/dev/null || return 1
-  [ ! -s "$BATS_TEST_TMPDIR/unset.err" ] || return 1
+  run --separate-stderr env -u CLAUDE_CODE_SESSION_ID bash "$NEXT" pick --root "$WORK"; refused || return 1
   for label in "" "not-a-uuid"; do
     pick_as "$label"; refused || return 1
   done
