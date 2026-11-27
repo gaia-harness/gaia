@@ -115,7 +115,7 @@ reset_case() { rm -rf "$ROOT/.gaia/local"; }
 @test "usage errors exit non-zero with a stderr diagnostic: neither --capture, --read nor --release, a missing --root, --member or --base, an unrecognized argument" {
   run "$SCRIPT" --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
-  grep -qF "one of --capture, --read, or --release" <<<"$output" || return 1
+  grep -qF "one of --capture, --read, --release, or --release-unspent" <<<"$output" || return 1
   reset_case # a missing --root, --member, or --base each exits non-zero
   run "$SCRIPT" --capture --member "$MEMBER" --base "$BASE"
   [ "$status" -ne 0 ]
@@ -663,8 +663,8 @@ rotate_machinery() {
 # The release. A round that ends having published nothing cannot be seen to end
 # by the spent test, and a repair commit rotates the member digest before the
 # next dispatch. Without --release that next round inherits the stale capture and
-# forfeits, and only the round after it clears. The member releases its own
-# capture on the way out.
+# forfeits, and only the round after it clears. The fix round's baseline
+# releases every unspent capture before the repair commit (--release-unspent).
 
 @test "--release removes this member's stored capture and exits 0" {
   "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE" >/dev/null
@@ -720,4 +720,80 @@ rotate_machinery() {
     --base "$BASE" --scope-digest "$fresh"
   [ "$status" -eq 0 ]
   [ -f "$ROOT/.gaia/local/audit/${fresh}.ok" ]
+}
+
+# --release-unspent: the fix round's baseline releases every capture no member
+# concluded on, so a no-conclusion round (a handed-only or re-check dispatch
+# writes no marker by design) cannot strand the post-repair round.
+
+# ignore_local_state: the baseline refuses a tree the wave left dirty, so the
+# audit state must be ignored as it is in a real checkout.
+ignore_local_state() {
+  printf '.gaia/local/\n' >"$ROOT/.gitignore"
+  git -C "$ROOT" add .gitignore
+  git -C "$ROOT" commit --quiet -m "ignore local state"
+}
+
+@test "--release-unspent removes an unspent capture and keeps a spent one and another branch's" {
+  local other="code-audit-maintainer-shell" other_digest foreign
+  "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE" >/dev/null
+  other_digest="$("$SCRIPT" --capture --root "$ROOT" --member "$other" --base "$BASE")"
+  # The spent test reads only the conclusion's presence, keyed to the capture.
+  : >"$ROOT/.gaia/local/audit/${other_digest}.${other}.ok"
+  foreign="$ROOT/.gaia/local/audit/${BASE}.another-branch.${MEMBER}.scope.json"
+  cp "$(scope_file_for "$ROOT" "$BASE" "$MEMBER")" "$foreign"
+
+  run "$SCRIPT" --release-unspent --root "$ROOT"
+  [ "$status" -eq 0 ]
+  [ ! -f "$(scope_file_for "$ROOT" "$BASE" "$MEMBER")" ]
+  [ -f "$(scope_file_for "$ROOT" "$BASE" "$other")" ]
+  [ -f "$foreign" ]
+}
+
+@test "--release-unspent takes only --root" {
+  run "$SCRIPT" --release-unspent --root "$ROOT" --member "$MEMBER"
+  [ "$status" -eq 2 ]
+  grep -qF -- "takes only --root" <<<"$output" || return 1
+  run "$SCRIPT" --release-unspent --root "$ROOT" --base "$BASE"
+  [ "$status" -eq 2 ]
+}
+
+@test "END TO END: a no-conclusion round, the fix baseline, the repair commit, and round 2 clears on its first try" {
+  local writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
+  local verifier="$THIS_DIRECTORY/../audit-fix-verify.sh"
+  local run_folder="$BATS_TEST_TMPDIR/run" captured fresh
+  [ -x "$writer" ]
+  [ -f "$verifier" ]
+  ignore_local_state
+
+  # --- round 1: a handed-only member captures and publishes nothing ---
+  captured="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ -z "$(find "$ROOT/.gaia/local/audit" -name '*.ok' -o -name '*.refused' 2>/dev/null)" ]
+
+  # --- the fix round: baseline, then the repair commit rotates the digest ---
+  mkdir -p "$run_folder"
+  run bash "$verifier" baseline --root "$ROOT" --round 1 --out "$run_folder/baseline-1.json"
+  [ "$status" -eq 0 ]
+  rotate_in_scope
+
+  # --- round 2: captures fresh, and its earned write clears first time ---
+  fresh="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$fresh" != "$captured" ]
+  run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
+    --base "$BASE" --scope-digest "$fresh"
+  [ "$status" -eq 0 ]
+  [ -f "$ROOT/.gaia/local/audit/${fresh}.ok" ]
+}
+
+@test "a baseline the member wave left dirty refuses before it releases any capture" {
+  local verifier="$THIS_DIRECTORY/../audit-fix-verify.sh"
+  local run_folder="$BATS_TEST_TMPDIR/run"
+  ignore_local_state
+  "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE" >/dev/null
+  printf 'member edit\n' >>"$ROOT/README.md"
+
+  mkdir -p "$run_folder"
+  run bash "$verifier" baseline --root "$ROOT" --round 1 --out "$run_folder/baseline-1.json"
+  [ "$status" -eq 4 ]
+  [ -f "$(scope_file_for "$ROOT" "$BASE" "$MEMBER")" ]
 }

@@ -19,6 +19,7 @@
 #                         --root <path> --member <name> --base <key-base> [--help|-h]
 #   audit-scope-digest.sh --read    --root <path> --member <name> --base <key-base>
 #   audit-scope-digest.sh --release --root <path> --member <name> --base <key-base>
+#   audit-scope-digest.sh --release-unspent --root <path>
 #
 #   --capture  Derives the member's branch-own digest, writes the scope file,
 #              prints the 64-hex digest on stdout, exits 0. The digest is
@@ -50,6 +51,12 @@
 #              writer's member-refusal accounting-failure recovery names it); see the SPENT-capture
 #              block below for why such a round cannot be seen to end any
 #              other way.
+#   --release-unspent  Removes every UNSPENT capture (see the SPENT-capture
+#              block) the current branch holds, any member and any key base,
+#              and exits 0; a spent one, or another branch's, is left alone.
+#              On a capture that cannot be removed: a diagnostic on stderr,
+#              exits non-zero. `audit-fix-verify.sh baseline` calls it once
+#              per fix round, before the repair commit rotates any digest.
 #
 # Scope file: <root>/.gaia/local/audit/<audit-key>.<member>.scope.json, where
 # <audit-key> is `gaia_audit_key "<key-base>" "<root>"`
@@ -125,10 +132,14 @@ usage() {
 usage: audit-scope-digest.sh --capture [--recapture] [--base-reason <token>] [--base-overridden] --root <path> --member <name> --base <key-base> [--help|-h]
        audit-scope-digest.sh --read    --root <path> --member <name> --base <key-base>
        audit-scope-digest.sh --release --root <path> --member <name> --base <key-base>
+       audit-scope-digest.sh --release-unspent --root <path>
 
   --release    remove this member's stored capture, so the next round recaptures
                fresh. For a round that ends publishing nothing while a repair
                commit rotates the digest.
+  --release-unspent  remove every capture on this branch whose member published
+               no marker or refusal keyed to it; only --root applies. Run
+               between rounds, while no member is reviewing.
   --recapture  valid only with --capture; replace an existing capture for this
                audit key and member instead of returning it unchanged. For a
                caller that legitimately changed the content its review ends on
@@ -166,6 +177,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --release)
       MODE="release"
+      shift
+      ;;
+    --release-unspent)
+      MODE="release-unspent"
       shift
       ;;
     --recapture)
@@ -207,9 +222,9 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$MODE" in
-  capture | read | release) ;;
+  capture | read | release | release-unspent) ;;
   "")
-    emit_error "exactly one of --capture, --read, or --release is required"
+    emit_error "exactly one of --capture, --read, --release, or --release-unspent is required"
     usage
     exit 2
     ;;
@@ -232,15 +247,23 @@ if [ -z "$ROOT" ]; then
   usage
   exit 2
 fi
-if [ -z "$MEMBER" ]; then
-  emit_error "--member is required"
-  usage
-  exit 2
-fi
-if [ -z "$BASE" ]; then
-  emit_error "--base is required"
-  usage
-  exit 2
+if [ "$MODE" = "release-unspent" ]; then
+  if [ -n "$MEMBER" ] || [ -n "$BASE" ]; then
+    emit_error "--release-unspent takes only --root"
+    usage
+    exit 2
+  fi
+else
+  if [ -z "$MEMBER" ]; then
+    emit_error "--member is required"
+    usage
+    exit 2
+  fi
+  if [ -z "$BASE" ]; then
+    emit_error "--base is required"
+    usage
+    exit 2
+  fi
 fi
 command -v jq >/dev/null 2>&1 || {
   emit_error "jq is required"
@@ -251,14 +274,15 @@ command -v gaia_audit_key >/dev/null 2>&1 || {
   emit_error "cannot load the audit key lib (.gaia/scripts/audit-key-lib.sh)"
   exit 1
 }
-AUDIT_KEY="$(gaia_audit_key "$BASE" "$ROOT" 2>/dev/null || true)"
-if [ -z "$AUDIT_KEY" ]; then
-  emit_error "cannot resolve the audit key for --root '$ROOT' --base '$BASE'"
-  exit 1
-fi
-
 audit_directory="${ROOT}/.gaia/local/audit"
-scope_file="${audit_directory}/${AUDIT_KEY}.${MEMBER}.scope.json"
+if [ "$MODE" != "release-unspent" ]; then
+  AUDIT_KEY="$(gaia_audit_key "$BASE" "$ROOT" 2>/dev/null || true)"
+  if [ -z "$AUDIT_KEY" ]; then
+    emit_error "cannot resolve the audit key for --root '$ROOT' --base '$BASE'"
+    exit 1
+  fi
+  scope_file="${audit_directory}/${AUDIT_KEY}.${MEMBER}.scope.json"
+fi
 
 if [ "$MODE" = "read" ]; then
   [ -f "$scope_file" ] || exit 1
@@ -332,11 +356,14 @@ fi
 # that refusal exits. The cost is the one forfeited round, not every round after
 # it.
 #
-# A member that knows its round ended without publishing, and that the repair
-# commit will rotate its digest, releases its own capture with --release on the
-# way out, and the post-repair round recaptures fresh and clears on its first
-# try. Releasing is safe there for the reason it is unsafe after a forfeiture: a
-# round that wrote no marker leaves no fresh capture that could attest anything.
+# The forfeiture is avoidable on the common path, a fix round. Its baseline
+# (`audit-fix-verify.sh baseline`) runs --release-unspent after the member wave
+# has returned and before the repair commit, so a round that ended without
+# publishing (a handed-only or re-check dispatch writes no marker by design)
+# leaves no capture behind, and the post-repair round recaptures fresh and clears
+# on its first try. Releasing is safe there for the reason it is unsafe after a
+# forfeiture: a round that wrote no marker leaves no fresh capture that could
+# attest anything.
 #
 # Keeping the second is what preserves the guarantee this arm was written for:
 # the fence a member re-runs on every handshake call must not overwrite the
@@ -370,6 +397,49 @@ _scope_capture_is_spent() {
   [ -f "${audit_directory}/${captured}${infix}.refused" ] && return 0
   return 1
 }
+
+# Safe only between rounds: a running review's capture is unspent too, and
+# releasing it would let a resolver re-run hand that member a digest it never
+# reviewed. The one caller, `audit-fix-verify.sh baseline`, runs after the
+# whole member wave has returned and before the fixer starts. Captures under
+# an older key base are released too: no resolver reads them again, so
+# removing one changes nothing.
+if [ "$MODE" = "release-unspent" ]; then
+  command -v gaia_branch_slug >/dev/null 2>&1 || {
+    emit_error "cannot load the audit key lib (.gaia/scripts/audit-key-lib.sh)"
+    exit 1
+  }
+  branch_slug="$(gaia_branch_slug "$ROOT" 2>/dev/null || true)"
+  if [ -z "$branch_slug" ]; then
+    emit_error "cannot resolve the branch for --root '$ROOT'"
+    exit 1
+  fi
+  [ -d "$audit_directory" ] || exit 0
+  release_status=0
+  for scope_file in "${audit_directory}"/*".${branch_slug}."*.scope.json; do
+    [ -f "$scope_file" ] || continue
+    MEMBER="$(jq -r '.member // empty' "$scope_file" 2>/dev/null)" || MEMBER=""
+    [ -n "$MEMBER" ] || continue
+    # The slug percent-encodes every dot, so whatever precedes it is the key
+    # base: a hex-only base proves the file is this branch's and not one whose
+    # slug merely ends in this one.
+    key_base="${scope_file##*/}"
+    key_base="${key_base%".${branch_slug}.${MEMBER}.scope.json"}"
+    case "$key_base" in
+      "" | *[!0-9a-f]*) continue ;;
+    esac
+    _existing="$(jq -r '.scope_digest // empty' "$scope_file" 2>/dev/null)" || _existing=""
+    if [ -n "$_existing" ] && _scope_capture_is_spent "$_existing"; then
+      continue
+    fi
+    rm -f "$scope_file" 2>/dev/null
+    if [ -e "$scope_file" ]; then
+      emit_error "cannot release the capture at '$scope_file'; the next round inherits it and forfeits"
+      release_status=1
+    fi
+  done
+  exit "$release_status"
+fi
 
 if [ "$RECAPTURE" -ne 1 ] && [ -f "$scope_file" ]; then
   _existing="$(jq -r '.scope_digest // empty' "$scope_file" 2>/dev/null)" || _existing=""
