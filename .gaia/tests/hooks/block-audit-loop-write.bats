@@ -913,7 +913,7 @@ assert_read_matrix() {
   done
 }
 
-@test "a quoted-alternation grep of a hook-only script is denied with the separator limit, and the spellings the message names are allowed" {
+@test "a quoted-alternation grep of a recorder, reaper or context writer script is denied with the separator limit, and the spellings the message names are allowed" {
   local cell expected_class script checked=0
   local -a cells=(
     "recorder|$GRANT_RECORDER"
@@ -926,7 +926,7 @@ assert_read_matrix() {
     run_bash "grep -nE 'a|b' $script"
     assert_pins_only_class "$expected_class"
     grep -qF -- 'reads as a command separator' <<<"$output"
-    grep -qF -- 'the Read tool, or grep -e <pattern> once per alternative' <<<"$output"
+    grep -qF -- 'the Read tool, or grep with one -e <pattern> per alternative' <<<"$output"
     run_bash "grep -n -e a -e b $script"
     cell_is_allowed "grep -e: $script"
     run_as Read "$script"
