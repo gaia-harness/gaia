@@ -279,8 +279,6 @@ prompt() {
     usage_error "no group $group in $manifest"
 }
 
-# A finding's shape. collect also accepts an `input-read` receipt; an
-# `input-unreadable` element, or any other element, makes the group a no-op.
 ELEMENT_SHAPE='(.judgment | IN("description-substance","trigger-overlap","rule-scope-fit","terminology","recommendation-authority")) and (.file | type == "string") and (.line | type == "number") and (.message | type == "string") and (.remediation | type == "string")'
 
 collect() {
