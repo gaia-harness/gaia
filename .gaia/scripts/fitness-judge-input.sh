@@ -220,11 +220,11 @@ build() {
   done < <(judged_paths "$check")
 
   # Greedy packing. Only the first digest row can open a group (later ones
-  # skip the file-boundary check), so every digest part shares group 1. A new
-  # group starts before a unit that would overflow the current one, or before
-  # a file of an oversized unit that would; a new part starts before a block
-  # that would overflow the current part, and between the digest and the
-  # content.
+  # share the unit `digest` and skip the file-boundary check), so every digest
+  # part shares group 1. A new group starts before a unit that would overflow
+  # the current one, or before a file of an oversized unit that would; a new
+  # part starts before a block that would overflow the current part, and
+  # between the digest and the content.
   local rows="$out_dir/.rows.tsv" group=0 group_size=0 part=0 part_size=0 part_file="" part_kind=""
   local previous_unit="" previous_file="" kind file unit_size file_size
   : >"$rows"
