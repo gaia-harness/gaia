@@ -758,7 +758,7 @@ head_tree() { git -C "$ROOT" rev-parse 'HEAD^{tree}'; }
   [ "$again" = "$fresh" ]
   [ "$(cat "$scope_file")" = "$before" ]
   run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
-    --base "$BASE" --scope-digest "$fresh"
+    --base "$BASE" --scope-digest "$fresh" --dispatch-tree "$round_two_tree"
   [ "$status" -eq 0 ]
   [ -f "$ROOT/.gaia/local/audit/${fresh}.ok" ]
 }
@@ -816,4 +816,62 @@ head_tree() { git -C "$ROOT" rev-parse 'HEAD^{tree}'; }
   run "$SCRIPT" --release --dispatch-tree "$(head_tree)" --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -eq 2 ]
   printf '%s\n' "$output" | grep -qF -- "--dispatch-tree is valid only with --capture"
+}
+
+# The writer's dispatch-tree gate. A round-1 member that wrote its sidecar but
+# not its marker counts as returned, so round 2 can replace its unspent capture;
+# its --read then returns round 2's digest, which the staleness gate passes.
+# Only the tree its dispatch named tells the two rounds apart.
+
+# bats test_tags=protected
+@test "an old-round write against the post-repair round's capture is refused and keeps the capture: the old tree, no tree, a garbage tree; round 2's own write then clears" {
+  writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
+  [ -x "$writer" ]
+  round_one_tree="$(head_tree)"
+  "$SCRIPT" --capture --dispatch-tree "$round_one_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE" >/dev/null
+  rotate_in_scope
+  round_two_tree="$(head_tree)"
+  fresh="$("$SCRIPT" --capture --dispatch-tree "$round_two_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
+  before="$(cat "$scope_file")"
+  carried="$("$SCRIPT" --read --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  [ "$carried" = "$fresh" ]
+
+  for tree_argument in "--dispatch-tree $round_one_tree" "" "--dispatch-tree not-a-tree"; do
+    # shellcheck disable=SC2086 # the flag and its value split on purpose
+    run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
+      --base "$BASE" --scope-digest "$carried" $tree_argument
+    [ "$status" -eq 2 ] || { echo "case [$tree_argument]: status $status" >&2; return 1; }
+    printf '%s\n' "$output" | grep -qF "the capture belongs to another dispatch" || { echo "case [$tree_argument]: $output" >&2; return 1; }
+    [ "$(cat "$scope_file")" = "$before" ] || { echo "case [$tree_argument]: capture changed" >&2; return 1; }
+    [ -z "$(find "$ROOT/.gaia/local/audit" -name '*.ok' 2>/dev/null)" ] || { echo "case [$tree_argument]: marker written" >&2; return 1; }
+  done
+
+  run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
+    --base "$BASE" --scope-digest "$fresh" --dispatch-tree "$round_two_tree"
+  [ "$status" -eq 0 ]
+  [ -f "$ROOT/.gaia/local/audit/${fresh}.ok" ]
+}
+
+@test "an earned write refuses when its capture cannot be parsed" {
+  writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
+  captured="$("$SCRIPT" --capture --dispatch-tree "$(head_tree)" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  printf 'not json\n' >"$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
+  run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
+    --base "$BASE" --scope-digest "$captured" --dispatch-tree "$(head_tree)"
+  [ "$status" -eq 2 ]
+  printf '%s\n' "$output" | grep -qF "cannot read the scope capture"
+  [ -z "$(find "$ROOT/.gaia/local/audit" -name '*.ok' 2>/dev/null)" ]
+}
+
+@test "a light write is not held to the capture's dispatch tree" {
+  writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
+  captured="$("$SCRIPT" --capture --dispatch-tree "$(head_tree)" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  route_record="$BATS_TEST_TMPDIR/route.json"
+  jq -cn --arg member "$MEMBER" --arg digest "$captured" --arg tree "$(head_tree)" \
+    '{route:"light", member:$member, digest:$digest, tree:$tree}' >"$route_record"
+  run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned --base "$BASE" \
+    --review light --route-record "$route_record" --scope-digest "$captured"
+  [ "$status" -eq 0 ]
+  [ -f "$ROOT/.gaia/local/audit/${captured}.ok" ]
 }
