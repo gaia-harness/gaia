@@ -881,6 +881,7 @@
     "wiki/decisions/Duplicate Value Set Check.md": "wiki-owned",
     "wiki/decisions/Flow Machinery For A Test-after Testing Layer.md": "wiki-owned",
     "wiki/decisions/Flow-based Test-after Pipeline.md": "wiki-owned",
+    "wiki/decisions/GAIA Next Red-Band Handoff.md": "wiki-owned",
     "wiki/decisions/Local Bundle Sync (Decision).md": "wiki-owned",
     "wiki/decisions/Naming Conventions.md": "wiki-owned",
     "wiki/decisions/per-call-bash-hook-cost-cut.md": "wiki-owned",
@@ -955,7 +956,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-27T04:28:38.423Z",
+  "generated": "2026-11-27T06:37:36.399Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
