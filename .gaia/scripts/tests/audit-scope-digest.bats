@@ -875,7 +875,7 @@ head_tree() { git -C "$ROOT" rev-parse 'HEAD^{tree}'; }
       --base "$BASE" --scope-digest "$stale" "${tree_flags[@]}"
     [ "$status" -eq 2 ] || { echo "case $straggler_tree_argument: status $status" >&2; return 1; }
     printf '%s\n' "$output" | grep -qF "review scope superseded" || { echo "case $straggler_tree_argument: $output" >&2; return 1; }
-    printf '%s\n' "$output" | grep -qF "belongs to a later dispatch" || { echo "case $straggler_tree_argument: $output" >&2; return 1; }
+    printf '%s\n' "$output" | grep -qF "belongs to another dispatch or cannot be parsed" || { echo "case $straggler_tree_argument: $output" >&2; return 1; }
     [ "$(cat "$scope_file" 2>/dev/null)" = "$before" ] || { echo "case $straggler_tree_argument: round 2's capture changed" >&2; return 1; }
 
     run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \

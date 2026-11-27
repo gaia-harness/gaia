@@ -200,7 +200,7 @@ _write_clearance_check_scope_digest() {
       case "$?" in
         0) error "this round is forfeited and its capture is released; the next dispatch captures fresh." ;;
         1) error "this round is forfeited; no stored capture was found to release, so nothing carries into the next dispatch." ;;
-        3) error "this round is forfeited; the stored capture was kept because it belongs to a later dispatch or cannot be parsed. Do not release it." ;;
+        3) error "this round is forfeited; the stored capture was kept because it belongs to another dispatch or cannot be parsed. Do not release it." ;;
         *) error "this round is forfeited, but the stored capture could not be located or removed (no --base, an unresolvable audit key, the key library not being loaded, or the removal itself failed). If one is present, the next dispatch inherits it and refuses identically; clear it with audit-scope-digest.sh --capture --recapture." ;;
       esac
       error "Do NOT re-run the scope fence to obtain a new capture in this round: you reviewed the superseded content, and a marker earned on a fresh capture would attest content you never read."
