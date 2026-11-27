@@ -43,9 +43,8 @@
 # context trigger (its answer is a new session), reintroduced, waiver-drift,
 # the hard cap, a member dispatch, and an accept, which only a human gives. A
 # deny at a lowered C that the hard cap would allow is answered as a fallback
-# spend, so the budget is bounded by the hard cap on every path. Every
-# spend is appended to the decision log (autonomy_log_decision) before the
-# unit is recorded; the unit carries `budget: true` and admitted_on `grant`,
+# spend. Every spend is appended to the decision log (autonomy_log_decision)
+# before the unit is recorded; the unit carries `budget: true` and admitted_on `grant`,
 # so its window lifts the same signals a human grant's does. Anything else
 # hands off or denies as an unanswered checkpoint, which an unattended run
 # parks on, and the deny names why no unit was spent.
@@ -900,8 +899,7 @@ run_decision() {
         finish_deny 'BLOCKED: the audit loop checkpoint could not compute its decision. Fail-loud, not fail-open: retry the dispatch.'
       read -r hard_verb budget_trigger _ budget_cap_field _ <<<"$hard_decision"
       # The hard cap would allow this dispatch, so C alone pinned the
-      # checkpoint: the budget answers it as a fallback spend, still bounded
-      # by the hard cap.
+      # checkpoint: the budget answers it as a fallback spend.
       [ "$hard_verb" = deny ] || { budget_trigger=fallback; budget_cap_field=false; }
     fi
     [ -z "$budget_trigger" ] || budget_answer "$budget_trigger" "$budget_cap_field" "$used"
