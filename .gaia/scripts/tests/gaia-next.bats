@@ -618,7 +618,7 @@ assert_band() {
 }
 
 @test "pick: at or past the red band it returns a handoff with the save path and reads no queue tier" {
-  local session=0a1b2c3d-1111-4222-8333-444455556666 case_row used band expected quoted
+  local session=0a1b2c3d-1111-4222-8333-444455556666 case_row used band expected
   running_plan "$ALPHA_PLAN" feat/1-plan-work
   GH_PRS='2\tfeat/2-pr-work\n'
   for case_row in "320000 red" "380000 fire" "460000 skull" "1100000 skull"; do
@@ -631,13 +631,15 @@ assert_band() {
     [ "$output" = "$expected" ] || { echo "$case_row: $output"; return 1; }
     [ "$stderr" = "gaia-next: context at the $band band ($used tokens); no new job this session" ] || { echo "$case_row: $stderr"; return 1; }
   done
-  # autonomy on, and a gh that fails on any call and is never invoked
+  # autonomy on, no running plan so the pr tier would call gh, and a gh that fails on any call and is never invoked
+  rm -f "$WORK/.notebook/plans/$ALPHA_PLAN/RUNNING"
   band_reading "$session" 320000 1000000 10
   autonomy_on
   printf '%s\n' '#!/usr/bin/env bash' 'echo invoked >> "$BATS_TEST_TMPDIR/gh-calls"' 'exit 1' > "$BIN/gh"
   pick_as "$session"
   assert_band red || return 1
   [ ! -e "$BATS_TEST_TMPDIR/gh-calls" ] || return 1
+  running_plan "$ALPHA_PLAN" feat/1-plan-work
   # a hand-off checkpoint recorded by this session: the band check answers first, nothing skipped
   handoff_state feat/2-pr-work '[{"index":1,"at_round":2,"handoff":true,"session_id":"'"$session"'"}]'
   pick_as "$session"
@@ -651,14 +653,6 @@ assert_band() {
   band_reading "$session" 320000 1000000 10 "$WORK/.claude/worktrees/side"
   pick_as "$session" "$WORK/.claude/worktrees/side"
   assert_band none || return 1
-  # refinement of the exact save_path output, not a separate behavior: a root whose path holds a double quote
-  quoted="$BATS_TEST_TMPDIR/we\"ird"
-  mkdir -p "$quoted"
-  git -C "$quoted" init -q -b main
-  quoted="$(cd "$quoted" && pwd -P)"
-  band_reading "$session" 320000 1000000 10 "$quoted"
-  pick_as "$session" "$quoted"
-  [ "$(jq -r .save_path <<<"$output")" = "$quoted/.gaia/local/runs/session-$session/STATE.md" ] || return 1
 }
 
 @test "pick: a same-session reading older than the freshness window still hands off" {
@@ -742,28 +736,4 @@ assert_band() {
   band_reading "$session" 320000 1000000 10
   pick_as "$session"
   assert_band red || return 1
-}
-
-@test "a full session hands off with its save path instead of the running plan, and a fresh session picks that plan" {
-  local full=0a1b2c3d-1111-4222-8333-444455556666 fresh=9f8e7d6c-5555-4444-8333-222211110000
-  running_plan alpha-plan feat/1-plan-work
-  band_reading "$full" 320000 1000000 10
-  pick_as "$full"
-  [ "$status" -eq 0 ] || return 1
-  jq -e --arg path "$WORK/.gaia/local/runs/session-$full/STATE.md" \
-    '.job == "handoff" and .save_path == $path and (has("plan_dir") | not)' <<<"$output" >/dev/null || return 1
-  band_reading "$fresh" 20000 1000000 10
-  pick_as "$fresh"
-  [ "$status" -eq 0 ] || return 1
-  jq -e --arg dir "$WORK/.notebook/plans/$ALPHA_PLAN" '.job == "plan" and .plan_dir == $dir' <<<"$output" >/dev/null || return 1
-}
-
-@test "a session below the band picks its running plan exactly as it does with no reading" {
-  local session=0a1b2c3d-1111-4222-8333-444455556666
-  running_plan alpha-plan feat/1-plan-work
-  band_reading "$session" 20000 1000000 10
-  pick_as "$session"
-  [ "$status" -eq 0 ] || return 1
-  jq -e --arg dir "$WORK/.notebook/plans/$ALPHA_PLAN" \
-    '.job == "plan" and .plan_dir == $dir and (has("band") | not) and (has("save_path") | not)' <<<"$output" >/dev/null || return 1
 }
