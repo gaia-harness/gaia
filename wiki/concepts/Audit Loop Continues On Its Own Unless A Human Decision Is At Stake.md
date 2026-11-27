@@ -4,7 +4,7 @@ status: active
 created: 2026-11-27
 updated: 2026-11-27
 promoted_at: 2026-11-26T18:13:03Z
-promoted_hash: sha256:16115f65c935144c20689c8995185ca049d546b2e03c3faf35944f2868c6539e
+promoted_hash: sha256:ecbc890b0d7d3af1a820b6d8e65f203fcf0a84c9c7bf3b61fe6c891bd8a449e3
 pr_number: 3876
 tags: [promoted, concepts]
 ---
@@ -29,7 +29,7 @@ The pre-merge audit loop's bound hook (`.claude/hooks/audit-loop-bound.sh`) answ
 ### Around the loop
 
 - `/gaia-next` (`gaia_next_handoff_skip` in `.gaia/scripts/gaia-next-handoff-lib.sh`) skips a plan or pull request whose latest checkpoint is an unanswered hand-off from this session ([[GAIA Next#Skips in every run]] owns the skip and its line). Nothing is parked.
-- The write guard's `context-writer` class (`block-audit-loop-write.sh`, matchers in `.claude/hooks/lib/hook-only-scripts-guard.sh`) denies Claude's Bash or Monitor run of the statusline context writers and sourcing the context lib or reader beside a writer function, while commands that only name them stay allowed. A reading minted through a spelling the match misses stays a residual, bounded by C.
+- The write guard's `context-writer` class (`block-audit-loop-write.sh`, matchers in `.claude/hooks/lib/hook-only-scripts-guard.sh`) denies Claude's Bash or Monitor run of the statusline context writers and sourcing the context lib or reader beside a writer function, while commands that only name them stay allowed, except that a quoted command separator in an argument can get one denied (`DENY_QUOTED_SEPARATOR_LIMIT` in that library states the limit). A reading minted through a spelling the match misses stays a residual, bounded by C.
 - `audit-loop-eval.sh record-values` adds `automatic_grants` (omitted at zero) and `audit-loop-record.sh` prints `; automatic grants: <n>` after `budget grants: <n>` in the `## Audit rounds` record.
 
 ## Divergence

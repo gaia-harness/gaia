@@ -913,6 +913,29 @@ assert_read_matrix() {
   done
 }
 
+@test "a quoted-alternation grep of a recorder, reaper or context writer script is denied with the separator limit, and the spellings the message names are allowed" {
+  local cell expected_class script checked=0
+  local -a cells=(
+    "recorder|$GRANT_RECORDER"
+    "reaper|$MAIN/.claude/hooks/state-reaper.sh"
+    "context-writer|$MAIN/.gaia/statusline/gaia-statusline.sh"
+  )
+  for cell in "${cells[@]}"; do
+    expected_class="${cell%%|*}"
+    script="${cell#*|}"
+    run_bash "grep -nE 'a|b' $script"
+    assert_pins_only_class "$expected_class"
+    grep -qF -- 'reads as a command separator' <<<"$output"
+    grep -qF -- 'the Read tool, or grep with one -e <pattern> per alternative' <<<"$output"
+    run_bash "grep -n -e a -e b $script"
+    cell_is_allowed "grep -e: $script"
+    run_as Read "$script"
+    cell_is_allowed "Read: $script"
+    checked=$((checked + 1))
+  done
+  [ "$checked" -eq 3 ]
+}
+
 # --- siblings and lookalikes ---
 
 @test "siblings that share a prefix with a protected path, and the old state locations, are allowed" {

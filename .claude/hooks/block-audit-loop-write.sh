@@ -97,7 +97,12 @@
 #     check excepted). A command that merely NAMES a recorder
 #     (`git add`, `git diff`, `git grep -l`, `git log`, `shellcheck`, `cat`,
 #     `grep`, `bash -n`) is allowed, because staging, gate discovery and commits
-#     name these paths. A heredoc body the verb-arming walker proves is data (a
+#     name these paths. The split ignores quotes, here and in the reaper and
+#     context writer readings below, so a quoted `;`, `&`, `|`, `(`, `)`,
+#     backtick or newline in an argument can deny a command that only names a
+#     recorder, reaper or context writer script; the Read tool, or one grep
+#     with a `-e <pattern>` per alternative and none of those characters, still
+#     reads one. A heredoc body the verb-arming walker proves is data (a
 #     `cat` or `tee` into a file) is not read as commands, so a line of it
 #     naming a recorder is allowed. A script a data heredoc writes and a later
 #     command in the same call runs is not caught: the body is data when the
