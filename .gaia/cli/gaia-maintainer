@@ -26437,7 +26437,7 @@ var JsonStripArrayElementSchema = external_exports.object({
   selectors: external_exports.array(
     external_exports.object({
       match: external_exports.record(external_exports.string(), external_exports.string()).refine((entries) => Object.keys(entries).length > 0, {
-        message: "match requires at least one key"
+        error: "match requires at least one key"
       }),
       path: external_exports.string().min(1)
     })
