@@ -52,8 +52,8 @@
 #              a diagnostic on stderr, exits non-zero. A round that ends
 #              without publishing a conclusion calls this (the clearance
 #              writer's member-refusal accounting-failure recovery names it); see the SPENT-capture
-#              block below for why such a round cannot be seen to end any
-#              other way.
+#              block below for when the dispatch-tree binding cannot replace
+#              the capture instead.
 #
 # Scope file: <root>/.gaia/local/audit/<audit-key>.<member>.scope.json, where
 # <audit-key> is `gaia_audit_key "<key-base>" "<root>"`
@@ -72,10 +72,10 @@
 # `--capture` is idempotent per audit key, member, AND REVIEW -- it returns an
 # existing capture unchanged, and `--recapture` is the one deliberate override.
 # The review term is load-bearing and is not a freshness check: age is never
-# consulted. A capture is replaced only when the member has already published a
-# marker or a refusal keyed to it, which is what makes it the artifact of a
-# round that ENDED rather than one still running, or when a new dispatch names
-# the current HEAD tree and the capture was taken under another. See the SPENT-capture block
+# consulted. A capture is replaced only when it is the artifact of a round that
+# ENDED rather than one still running: the member has published a marker or a
+# refusal keyed to it, or a new dispatch names the current HEAD tree and the
+# capture was taken under another. See the SPENT-capture block
 # beside the capture arm for why the audit key alone cannot carry this: a
 # refused round does not advance the key, so idempotence per key deadlocked the
 # gate permanently on the next round.
@@ -348,21 +348,22 @@ fi
 # that refusal exits. The cost is the one forfeited round, not every round after
 # it.
 #
-# The NEXT round can see it, though, because it arrives with a dispatch the old
-# one never had. Each capture stores the tree its dispatch named
-# (`--dispatch-tree`, the dispatch prompt's `Expected HEAD tree`, which the
-# member has already checked equals HEAD). A capture call whose dispatch tree is
+# The NEXT round can see that the last one ended, though, because it arrives
+# with a dispatch the old one never had. Each capture stores the tree its
+# dispatch named (`--dispatch-tree`, the dispatch prompt's `Expected HEAD
+# tree`). A capture call whose dispatch tree is
 # the current HEAD tree and differs from the stored one is a new dispatch on
 # post-repair content, so it replaces the unspent capture and the post-repair
 # round clears on its first try. A running review re-runs its fence with the
 # tree it was dispatched on, equal to the stored one, so it keeps. A straggler
 # from the old round re-running after the repair commit passes the old tree,
 # which no longer equals HEAD's, so it keeps too and the writer refuses it as
-# superseded. A missing, malformed or non-tree value keeps, as before.
-# A member that knows its round ended without publishing may still release its
-# own capture with --release on the way out; the binding makes that optional.
+# superseded. A missing, malformed or non-tree value keeps.
+# --release stays required where the same dispatch re-runs the resolver, as the
+# clearance writer's member-refusal accounting-failure recovery does: the
+# dispatch tree is unchanged there, so the binding cannot replace the capture.
 #
-# Keeping the second is what preserves the guarantee this arm was written for:
+# Keeping a running review's capture is what preserves the guarantee this arm was written for:
 # the fence a member re-runs on every handshake call must not overwrite the
 # capture with the write-time digest, or the writer would compare a value
 # against itself. A running review has published nothing, so it never looks
