@@ -35,6 +35,7 @@ _write_clearance_parse_arguments() {
   REVIEW="full"
   ROUTE_RECORD_SEEN=0
   ROUTE_RECORD=""
+  DISPATCH_TREE=""
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -57,6 +58,10 @@ _write_clearance_parse_arguments() {
       --scope-digest)
         SCOPE_DIGEST_SEEN=1
         SCOPE_DIGEST="${2:-}"
+        shift 2 2>/dev/null || shift
+        ;;
+      --dispatch-tree)
+        DISPATCH_TREE="${2:-}"
         shift 2 2>/dev/null || shift
         ;;
       --supersede-refusal)

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # audit-write-clearance-gates.sh: the clearance writer's pre-write gates, the
 # branch-own digest derivation, the light-review router check, and the
-# scope-digest staleness gate, each as a function, plus the capture release the
-# staleness gate calls. audit-write-clearance.sh sources it from its own
+# scope-digest staleness gate and the dispatch-tree gate, each as a function,
+# plus the capture release the staleness gate calls. audit-write-clearance.sh sources it from its own
 # directory and calls the gates in order; it is never run on its own. The
 # globals the gates set (digest among them) stay global for the later phases.
 #
@@ -199,5 +199,45 @@ _write_clearance_check_scope_digest() {
       error "Do NOT re-run the scope fence to obtain a new capture in this round: you reviewed the superseded content, and a marker earned on a fresh capture would attest content you never read."
       exit 2
     fi
+  fi
+}
+
+# Dispatch-tree gate, run after the audit key is derived. The staleness gate
+# above compares digests, and it cannot see one race: a member that wrote its
+# sidecar but not yet its marker counts as returned, so the next round can be
+# dispatched on a repaired tree and replace this member's unspent capture
+# (audit-scope-digest.sh, the dispatch-tree binding). The old member's --read
+# then returns the NEW round's digest, which equals the write-time digest, and
+# without this gate it would earn a marker for content it never read. The new
+# capture records the tree its own dispatch named, so the old member, passing
+# the tree ITS dispatch named, differs from it and is refused.
+#
+# Same writes as the staleness gate, minus a light review: a light clearance
+# takes no capture, and its route record already binds the digest and HEAD
+# tree. Refuses when the capture cannot be parsed, or records a tree and
+# --dispatch-tree is missing or differs. No capture, or one recording no tree,
+# is not checked, and that leaves the race covered: audit-scope-digest.sh
+# replaces an UNSPENT capture only for a call that passed a tree, so a capture
+# that replaced a still-running member's always records one, and a tree-less
+# capture is never the replacement. With no capture at all, --read is empty and
+# the staleness gate refuses first. The refusal releases nothing: the capture
+# belongs to the round that replaced this one.
+_write_clearance_check_dispatch_tree() {
+  local scope_file stored_tree
+  [ "$PROVENANCE" = "earned" ] || return 0
+  [ "$supersede_retires_refusal" -ne 1 ] || return 0
+  [ "$REVIEW" != "light" ] || return 0
+  [ -n "$audit_key" ] || return 0
+  scope_file="${ROOT}/.gaia/local/audit/${audit_key}.${MEMBER}.scope.json"
+  [ -f "$scope_file" ] || return 0
+  if ! stored_tree="$(jq -er 'if type == "object" then (.dispatch_tree // "") else error end' "$scope_file" 2>/dev/null)"; then
+    error "cannot read the scope capture at '$scope_file'; refusing rather than attest content no capture vouches for"
+    exit 2
+  fi
+  [ -n "$stored_tree" ] || return 0
+  if [ "$DISPATCH_TREE" != "$stored_tree" ]; then
+    error "review scope superseded: the capture belongs to another dispatch (dispatch=${DISPATCH_TREE:-none} capture=$stored_tree)"
+    error "This round is over and wrote no marker. Do NOT re-run the scope resolver or release the capture: it belongs to the round that replaced yours."
+    exit 2
   fi
 }

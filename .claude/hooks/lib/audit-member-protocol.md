@@ -130,15 +130,18 @@ bash <root>/.gaia/scripts/audit-write-clearance.sh \
   --member <member> \
   --provenance earned \
   --base '<KEY_BASE>' \
-  --scope-digest '<SCOPE_DIGEST>'
+  --scope-digest '<SCOPE_DIGEST>' \
+  --dispatch-tree '<expected-tree>'
 ```
+
+`<expected-tree>` is the value you gave the resolver; drop the flag here only when you dropped it there.
 
 The marker is keyed to your branch-own digest: a clean catch-up merge of the base rotates nothing, any change to the branch's own patch on your paths does, and you must re-audit. Never write a marker for content other than current HEAD, and never write another member's marker.
 <!-- gaia:maintainer-only:start -->
 Enforced by `.gaia/scripts/tests/audit-catchup-merge.bats`, test "a clean catch-up leaves every digest, every marker and the loop state alone".
 <!-- gaia:maintainer-only:end -->
 
-A `review scope superseded` refusal here means your scope digest no longer matched your branch-own digest at write time: no artifact was written and the round is forfeited. That refusal releases your stale capture as it exits, so the re-dispatch on the new HEAD clears normally. Do not re-run the resolver yourself after it: it would hand you a capture for content you did not review.
+A `review scope superseded` refusal here means your scope digest no longer matched your branch-own digest at write time: no artifact was written and the round is forfeited. That refusal releases your stale capture as it exits, so the re-dispatch on the new HEAD clears normally. Do not re-run the resolver yourself after it: it would hand you a capture for content you did not review. The form naming `the capture belongs to another dispatch` means a later round already took your capture; it releases nothing, and your round is over the same way.
 
 **1, withheld.** On any unresolved Critical, unaddressed Major, or unmet extra condition, record a **refusal** (a member's recorded verdict withholding clearance after a full review; proof the member ran; resolve the finding, never re-dispatch it as a no-op) with the same writer, and stop:
 

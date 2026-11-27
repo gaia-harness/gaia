@@ -349,17 +349,23 @@ fi
 # that refusal exits. The cost is the one forfeited round, not every round after
 # it.
 #
-# The NEXT round can see that the last one ended, though, because it arrives
-# with a dispatch the old one never had. Each capture stores the tree its
-# dispatch named (`--dispatch-tree`, the dispatch prompt's `Expected HEAD
-# tree`). A capture call whose dispatch tree is
-# the current HEAD tree and differs from the stored one is a new dispatch on
-# post-repair content, so it replaces the unspent capture and the post-repair
-# round clears on its first try. A running review re-runs its fence with the
-# tree it was dispatched on, equal to the stored one, so it keeps. A straggler
-# from the old round re-running after the repair commit passes the old tree,
-# which no longer equals HEAD's, so it keeps too and the writer refuses it as
-# superseded. A missing, malformed or non-tree value keeps.
+# The NEXT round need not see it, because it arrives with a dispatch the old
+# one never had. Each capture stores the tree its dispatch named
+# (`--dispatch-tree`, the dispatch prompt's `Expected HEAD tree`). A capture
+# call whose dispatch tree is the current HEAD tree and differs from the stored
+# one is a new dispatch on post-repair content, so it replaces the unspent
+# capture and the post-repair round clears on its first try. A running review
+# re-runs its fence with the tree it was dispatched on, equal to the stored
+# one, so it keeps. An old-round member re-running its fence after the repair
+# commit passes the old tree, which no longer equals HEAD's, so it keeps too. A
+# missing, malformed or non-tree value keeps.
+#
+# This file cannot tell an ended round from an old-round member still between
+# its sidecar and its marker, so the replacement can land under the latter.
+# That member's --read then returns the new digest, equal to the write-time
+# one; the writer's dispatch-tree gate (audit-write-clearance-gates.sh) is what
+# refuses it, because the tree its write names differs from the one the new
+# capture records.
 # --release stays required where the same dispatch re-runs the resolver, as the
 # clearance writer's member-refusal accounting-failure recovery does: the
 # dispatch tree is unchanged there, so the binding cannot replace the capture.
