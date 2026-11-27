@@ -365,7 +365,10 @@ fi
 # That member's --read then returns the new digest, equal to the write-time
 # one; the writer's dispatch-tree gate (audit-write-clearance-gates.sh) is what
 # refuses it, because the tree its write names differs from the one the new
-# capture records.
+# capture records. One that read its digest before the replacement is refused
+# stale instead, and the writer's forfeiture release keeps a capture recording
+# another dispatch's tree, so either way the replacing round clears on its
+# first try.
 # --release stays required where the same dispatch re-runs the resolver, as the
 # clearance writer's member-refusal accounting-failure recovery does: the
 # dispatch tree is unchanged there, so the binding cannot replace the capture.

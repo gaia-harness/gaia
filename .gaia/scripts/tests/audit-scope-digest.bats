@@ -853,6 +853,49 @@ head_tree() { git -C "$ROOT" rev-parse 'HEAD^{tree}'; }
   [ -f "$ROOT/.gaia/local/audit/${fresh}.ok" ]
 }
 
+# A straggler that read its digest BEFORE round 2 replaced the capture writes a
+# stale digest, so the staleness gate refuses it first; its forfeiture release
+# must keep round 2's capture, or round 2 forfeits in its place.
+# bats test_tags=protected
+@test "a stale straggler's forfeiture keeps the later round's capture, with its old tree or none, and that round's write then clears" {
+  writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
+  for straggler_tree_argument in old none; do
+    reset_case
+    round_one_tree="$(head_tree)"
+    stale="$("$SCRIPT" --capture --dispatch-tree "$round_one_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+    rotate_in_scope
+    round_two_tree="$(head_tree)"
+    fresh="$("$SCRIPT" --capture --dispatch-tree "$round_two_tree" --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+    scope_file="$(scope_file_for "$ROOT" "$BASE" "$MEMBER")"
+    before="$(cat "$scope_file")"
+
+    tree_flags=()
+    [ "$straggler_tree_argument" = none ] || tree_flags=(--dispatch-tree "$round_one_tree")
+    run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
+      --base "$BASE" --scope-digest "$stale" "${tree_flags[@]}"
+    [ "$status" -eq 2 ] || { echo "case $straggler_tree_argument: status $status" >&2; return 1; }
+    printf '%s\n' "$output" | grep -qF "review scope superseded" || { echo "case $straggler_tree_argument: $output" >&2; return 1; }
+    printf '%s\n' "$output" | grep -qF "belongs to a later dispatch" || { echo "case $straggler_tree_argument: $output" >&2; return 1; }
+    [ "$(cat "$scope_file" 2>/dev/null)" = "$before" ] || { echo "case $straggler_tree_argument: round 2's capture changed" >&2; return 1; }
+
+    run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
+      --base "$BASE" --scope-digest "$fresh" --dispatch-tree "$round_two_tree"
+    [ "$status" -eq 0 ] || { echo "case $straggler_tree_argument: round 2 write status $status" >&2; return 1; }
+    [ -f "$ROOT/.gaia/local/audit/${fresh}.ok" ] || { echo "case $straggler_tree_argument: no marker" >&2; return 1; }
+  done
+}
+
+@test "a forfeiture still releases a capture that records no dispatch tree" {
+  writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
+  stale="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
+  rotate_in_scope
+  run "$writer" --root "$ROOT" --member "$MEMBER" --provenance earned \
+    --base "$BASE" --scope-digest "$stale" --dispatch-tree "$(head_tree)"
+  [ "$status" -eq 2 ]
+  printf '%s\n' "$output" | grep -qF "its capture is released"
+  [ ! -f "$(scope_file_for "$ROOT" "$BASE" "$MEMBER")" ]
+}
+
 @test "an earned write refuses when its capture cannot be parsed" {
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
   captured="$("$SCRIPT" --capture --dispatch-tree "$(head_tree)" --root "$ROOT" --member "$MEMBER" --base "$BASE")"

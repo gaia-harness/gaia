@@ -102,14 +102,20 @@ EOF
 #      clearance call passes none), an unresolvable key, or the capture was
 #      located but could not be removed. A capture may or may not still be
 #      sitting there; this arm cannot always tell, and must not claim either.
+#   3  kept: the stored capture records a dispatch_tree other than this
+#      write's --dispatch-tree, or cannot be parsed. A straggler that read its
+#      digest before a later round replaced its capture lands here; that
+#      capture is the later round's, so removing it would forfeit that round.
 _release_forfeited_capture() {
-  local key="" scope_file
+  local key="" scope_file stored_tree
   command -v gaia_audit_key >/dev/null 2>&1 || return 2
   [ -n "$BASE" ] || return 2
   key="$(gaia_audit_key "$BASE" "$ROOT" 2>/dev/null || true)"
   [ -n "$key" ] || return 2
   scope_file="${ROOT}/.gaia/local/audit/${key}.${MEMBER}.scope.json"
   [ -f "$scope_file" ] || return 1
+  stored_tree="$(jq -er 'if type == "object" then (.dispatch_tree // "") else error end' "$scope_file" 2>/dev/null)" || return 3
+  [ -z "$stored_tree" ] || [ "$stored_tree" = "$DISPATCH_TREE" ] || return 3
   rm -f "$scope_file" || {
     error "warning: could not release the forfeited capture at '$scope_file'; the next round will refuse identically until it is removed"
     return 2
@@ -194,6 +200,7 @@ _write_clearance_check_scope_digest() {
       case "$?" in
         0) error "this round is forfeited and its capture is released; the next dispatch captures fresh." ;;
         1) error "this round is forfeited; no stored capture was found to release, so nothing carries into the next dispatch." ;;
+        3) error "this round is forfeited; the stored capture belongs to a later dispatch (or cannot be read) and was kept. Do not release it: it is not yours." ;;
         *) error "this round is forfeited, but the stored capture could not be located or removed (no --base, an unresolvable audit key, the key library not being loaded, or the removal itself failed). If one is present, the next dispatch inherits it and refuses identically; clear it with audit-scope-digest.sh --capture --recapture." ;;
       esac
       error "Do NOT re-run the scope fence to obtain a new capture in this round: you reviewed the superseded content, and a marker earned on a fresh capture would attest content you never read."
@@ -221,7 +228,10 @@ _write_clearance_check_scope_digest() {
 # that replaced a still-running member's always records one, and a tree-less
 # capture is never the replacement. With no capture at all, --read is empty and
 # the staleness gate refuses first. The refusal releases nothing: the capture
-# belongs to the round that replaced this one.
+# belongs to the round that replaced this one. A member whose digest was read
+# before the replacement meets the staleness gate first instead, and its
+# release keeps a capture recording another dispatch's tree, so that refusal
+# releases nothing either.
 _write_clearance_check_dispatch_tree() {
   local scope_file stored_tree
   [ "$PROVENANCE" = "earned" ] || return 0
