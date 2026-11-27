@@ -23,18 +23,18 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@gaia-harness/lint": "3.2.1",
+    "@gaia-harness/lint": "3.2.2",
     "@types/node": "26.6.6",
     "@types/picomatch": "4.0.3",
     "@types/semver": "7.8.0",
     "esbuild": "0.28.2",
     "eslint": "9.39.5",
-    "knip": "6.45.1",
+    "knip": "6.48.0",
     "prettier": "3.10.1",
     "prettier-plugin-tailwindcss": "0.8.1",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vite": "8.3.8",
-    "vitest": "5.1.0"
+    "vitest": "5.1.1"
   }
 }

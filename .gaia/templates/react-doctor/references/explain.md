@@ -34,6 +34,8 @@ npx -y react-doctor@{{REACT_DOCTOR_VERSION}} rules unignore-tag design
 
 A rule reference accepts the full key (`react-doctor/no-danger`), the bare id (`no-danger`) or a legacy key (`react/no-danger`).
 
+An unknown bundled rule id in the config's `rules` prints a warning on stderr, in JSON mode too, without changing the scan's blocking threshold or rewriting the config. Custom-plugin namespaces are not checked. After a version bump, verify a warned id with `rules list` or `rules explain <rule>`.
+
 ## Decision guide
 
 Prefer the narrowest control:
