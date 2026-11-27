@@ -1,5 +1,7 @@
 # Testing doctrine
 
+Contents: Scope; What to test; Layers; Guards and security rows; Components, pages and stories; Served HTML; Committed tests and generators.
+
 ## Scope
 
 This file owns which test to write and at which layer. Every test stage, executor, reviewer, evaluator, fixer and the tdd skills follow it, and every other source states only how to write a test at a layer, plus a pointer here. The reasons behind these rules live in `wiki/decisions/Test Layering.md`, `wiki/decisions/Testing Trophy Doctrine.md` and `wiki/decisions/Stories as Tests.md`.

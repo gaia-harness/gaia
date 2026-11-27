@@ -55,7 +55,7 @@ A plan or pull request whose branch's latest checkpoint is an unanswered audit h
 
 ## Permission mode for an unattended run
 
-The git classifier removes git prompts only. Test, lint and script commands outside the allow list in `.claude/settings.json` still prompt, and with nobody present a prompt stalls the run. Start an unattended session in auto mode:
+An unattended run ([[Autonomy Switch]]) still meets prompts: the git classifier removes git prompts only. Test, lint and script commands outside the allow list in `.claude/settings.json` still prompt, and with nobody present a prompt stalls the run. Start an unattended session in auto mode:
 
 ```
 claude --permission-mode auto
