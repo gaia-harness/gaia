@@ -59,7 +59,7 @@ case "$here" in */*) here="${here%/*}" ;; *) here=. ;; esac
 case "$here" in /*) ;; *) here="$PWD/$here" ;; esac
 scripts="$here/../../.gaia/scripts"
 doctrine_document="$here/../doctrine/context-checkpoint.md"
-maximum_doctrine_bytes=4608
+maximum_doctrine_bytes=5120
 
 # `cat`, not `read -d ''`: bash 3.2 reads a pipe one byte per read() call,
 # which costs tens of milliseconds on a large tool_response.
