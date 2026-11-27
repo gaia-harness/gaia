@@ -49,11 +49,11 @@
 #              captured.
 #   --release  Removes this member's stored capture and exits 0, or exits 0
 #              when none is stored. On a capture that cannot be removed:
-#              a diagnostic on stderr, exits non-zero. A round that ends
-#              without publishing a conclusion calls this (the clearance
-#              writer's member-refusal accounting-failure recovery names it); see the SPENT-capture
-#              block below for when the dispatch-tree binding cannot replace
-#              the capture instead.
+#              a diagnostic on stderr, exits non-zero. The clearance
+#              writer's member-refusal accounting-failure recovery calls
+#              this before re-running the resolver; see the SPENT-capture
+#              block below for why the dispatch-tree binding cannot replace
+#              the capture there.
 #
 # Scope file: <root>/.gaia/local/audit/<audit-key>.<member>.scope.json, where
 # <audit-key> is `gaia_audit_key "<key-base>" "<root>"`
@@ -133,8 +133,8 @@ usage: audit-scope-digest.sh --capture [--recapture] [--base-reason <token>] [--
        audit-scope-digest.sh --release --root <path> --member <name> --base <key-base>
 
   --release    remove this member's stored capture, so the next round recaptures
-               fresh. For a round that ends publishing nothing while a repair
-               commit rotates the digest.
+               fresh. For a dispatch that re-runs the resolver after the
+               writer's accounting-failure recovery names it.
   --recapture  valid only with --capture; replace an existing capture for this
                audit key and member instead of returning it unchanged. For a
                caller that legitimately changed the content its review ends on
