@@ -38,8 +38,8 @@
 #   1  collect: at least one group is a no-op, each named on stdout as
 #      `no-op group <g>: <reason>`; <judgment.json> is not written
 #   2  usage error
-#   3  build: nothing to judge (the dispatch filter matched no entry, or no
-#      listed path is a regular file)
+#   3  build: nothing to judge (the dispatch filter matched no entry, or
+#      no listed path is a regular file that is not a symlink)
 #
 # Limit: a single line longer than a part is kept whole, so its part
 # can exceed one Read. The receipt token still catches the partial read.
@@ -249,7 +249,7 @@ build() {
   close_part
   if [ ! -s "$rows" ]; then
     rm -rf "$work" "$rows"
-    echo "fitness-judge-input: nothing to judge (no listed path is a regular file)" >&2
+    echo "fitness-judge-input: nothing to judge (no listed path is a regular file that is not a symlink)" >&2
     exit 3
   fi
 
@@ -279,8 +279,8 @@ prompt() {
     usage_error "no group $group in $manifest"
 }
 
-# A finding's shape. collect also accepts a receipt or a could-not-read
-# element; anything else is a no-op.
+# A finding's shape. collect also accepts a receipt; a could-not-read
+# element, or any other shape, makes the group a no-op.
 ELEMENT_SHAPE='(.judgment | IN("description-substance","trigger-overlap","rule-scope-fit","terminology","recommendation-authority")) and (.file | type == "string") and (.line | type == "number") and (.message | type == "string") and (.remediation | type == "string")'
 
 collect() {
