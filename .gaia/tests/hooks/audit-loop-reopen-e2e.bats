@@ -16,6 +16,9 @@
 #
 # Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/audit-loop-reopen-e2e.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
+# Call a multi-step setup helper as a bare command: under `||`, bash suspends
+# errexit inside it and everything it calls, so a failed fixture step passes
+# unnoticed.
 
 bats_require_minimum_version 1.5.0
 
@@ -370,7 +373,7 @@ accepted_keys() {
 # then a recorded human accept and the closing round 6 on a new commit. Round 6
 # reports the findings given as $1; its dispositions are the caller's.
 closing_flow() {
-  veto_flow one || return 1
+  veto_flow one
   # The unit finishes round 5, dispositions included, before the stall stops it.
   alf_dispositions 5 "$(jq -n -c --arg member "$FRONTEND_MEMBER" '[{member: $member, finding_class: "rule/x", path: "f.txt", line: 5, disposition: "fix", reason: ""},
     {member: $member, finding_class: "rule/q", path: "base.txt", line: 3, disposition: "fix", reason: ""}]')"
@@ -401,7 +404,7 @@ run_check_all_snapshot() {
 }
 
 @test "closing round on a satisfied veto: the key needs no entry through the check, the snapshot call, the read-only call and a later round" {
-  closing_flow "[$X2_ROW]" || return 1
+  closing_flow "[$X2_ROW]"
   accept_x2
   run_check 6
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
@@ -429,7 +432,7 @@ run_check_all_snapshot() {
 
 @test "closing round on a satisfied veto: a member that reports the key in the closing round fails vetoed-not-fix or undisposed" {
   local key_line='violation: undisposed {"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1}'
-  closing_flow "[$X1_ROW, $X2_ROW]" || return 1
+  closing_flow "[$X1_ROW, $X2_ROW]"
   accept_x2
   run_check 6
   [ "$status" -eq 1 ] || return 1
@@ -452,7 +455,7 @@ fail_owed_gate() {
 @test "gate failure after a stop: the writer's record reopens a round, the repair carries no entries and the next wave can stop by default" {
   below
   stop_case all
-  fail_owed_gate || return 1
+  fail_owed_gate
   [ "$(jq -r '.after_round' "$RUN_FOLDER/gate-failure.json")" -eq 3 ] || return 1
   unit_dispatch
   assert_allowed || return 1
@@ -477,8 +480,8 @@ fail_owed_gate() {
 }
 
 @test "gate failure after a closing round reopens nothing and leaves the owed gate refusing the status post" {
-  closing_gate_case || return 1
-  fail_owed_gate || return 1
+  closing_gate_case
+  fail_owed_gate
   [ "$(jq -r '.after_round' "$RUN_FOLDER/gate-failure.json")" -eq 4 ] || return 1
   unit_dispatch
   [ "$(nrounds)" -eq 4 ] || return 1
@@ -507,7 +510,7 @@ closing_gate_case() {
   stop_case all
   alf_set_line other.txt 30 "quick clear"
   alf_commit "quick clear"
-  fail_owed_gate || return 1
+  fail_owed_gate
   unit_dispatch
   assert_allowed || return 1
   assert_reopened 4 || return 1
@@ -522,7 +525,7 @@ closing_gate_case() {
   alf_sidecar "$FRONTEND_MEMBER" '[]' 51
   alf_set_line other.txt 32 "late pass"
   alf_commit "late pass"
-  fail_owed_gate || return 1
+  fail_owed_gate
   [ "$(jq -r '.after_round' "$RUN_FOLDER/gate-failure.json")" -eq 5 ] || return 1
   unit_dispatch
   assert_allowed || return 1
