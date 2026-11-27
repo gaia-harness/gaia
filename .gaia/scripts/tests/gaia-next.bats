@@ -748,3 +748,27 @@ assert_band() {
   pick_as "$session"
   assert_band red || return 1
 }
+
+@test "a full session hands off with its save path instead of the running plan, and a fresh session picks that plan" {
+  local full=0a1b2c3d-1111-4222-8333-444455556666 fresh=9f8e7d6c-5555-4444-8333-222211110000
+  running_plan alpha-plan feat/1-plan-work
+  band_reading "$full" 320000 1000000 10
+  pick_as "$full"
+  [ "$status" -eq 0 ] || return 1
+  jq -e --arg path "$WORK/.gaia/local/runs/session-$full/STATE.md" \
+    '.job == "handoff" and .save_path == $path and (has("plan_dir") | not)' <<<"$output" >/dev/null || return 1
+  band_reading "$fresh" 20000 1000000 10
+  pick_as "$fresh"
+  [ "$status" -eq 0 ] || return 1
+  jq -e --arg dir "$WORK/.notebook/plans/alpha-plan" '.job == "plan" and .plan_dir == $dir' <<<"$output" >/dev/null || return 1
+}
+
+@test "a session below the band picks its running plan exactly as it does with no reading" {
+  local session=0a1b2c3d-1111-4222-8333-444455556666
+  running_plan alpha-plan feat/1-plan-work
+  band_reading "$session" 20000 1000000 10
+  pick_as "$session"
+  [ "$status" -eq 0 ] || return 1
+  jq -e --arg dir "$WORK/.notebook/plans/alpha-plan" \
+    '.job == "plan" and .plan_dir == $dir and (has("band") | not) and (has("save_path") | not)' <<<"$output" >/dev/null || return 1
+}
