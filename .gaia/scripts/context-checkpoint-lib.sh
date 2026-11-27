@@ -6,9 +6,10 @@
 # bar color and the checkpoint can never disagree.
 #
 # Owns: the checkpoint line (tokens capped by percent of the window), the
-# yellow/red/fire/skull bands, K (rounds per unit), the freshness window for a
+# yellow/red/fire/skull bands (and the at-or-past-red predicate), K (rounds per unit), the freshness window for a
 # context reading, the per-session context file (path, write, read), and the
-# per-session effort reading beside it (path, write, read).
+# per-session effort reading beside it (path, write, read). The any-age reader
+# and the session save target live in context-any-age-lib.sh, which sources this.
 # Does not own: the round count, the grant size or the rubric defaults; those
 # stay in audit-loop-eval.sh.
 #
@@ -161,32 +162,43 @@ gaia_context_write() {
   mv -f "$temporary_file" "$file" 2>/dev/null || { rm -f "$temporary_file"; return 1; }
 }
 
-# gaia_context_read <main-root> <session_id> <now-epoch>: one line, either
-# "fresh <used_tokens> <window_size>" (rc 0) or missing|stale|future|unparseable (rc 1).
-gaia_context_read() {
-  local file reading_fields used window written integer_pattern='^[0-9]{1,12}$'
-  file=$(gaia_context_file "${1:-}" "${2:-}") || { printf 'missing\n'; return 1; }
-  [[ ${3:-} =~ $integer_pattern ]] || { printf 'unparseable\n'; return 1; }
-  [ -f "$file" ] || { printf 'missing\n'; return 1; }
-  command -v jq >/dev/null 2>&1 || { printf 'unparseable\n'; return 1; }
+# _gaia_context_parse_reading <main-root> <session_id> <now-epoch>: the one
+# parse of a context reading (version, whole numbers, skew), shared by the
+# readers. Sets _gaia_context_reading_used, _gaia_context_reading_window and
+# _gaia_context_reading_written and returns 0, else returns 1 missing,
+# 2 unparseable or 3 future. It hands its fields back in variables because a
+# `$( )` around it would add a fork to the checkpoint injection's timed path.
+_gaia_context_parse_reading() {
+  local file reading_fields integer_pattern='^[0-9]{1,12}$'
+  file=$(gaia_context_file "${1:-}" "${2:-}") || return 1
+  [[ ${3:-} =~ $integer_pattern ]] || return 2
+  [ -f "$file" ] || return 1
+  command -v jq >/dev/null 2>&1 || return 2
   reading_fields=$(jq -r --argjson version "$GAIA_CONTEXT_FILE_VERSION" '
     def whole: type == "number" and . == floor and . >= 0;
     if type == "object" and .version == $version and (.used_tokens | whole) and (.context_window_size | whole) and (.written_at | whole)
     then "\(.used_tokens) \(.context_window_size) \(.written_at)" else empty end' "$file" 2>/dev/null) || reading_fields=""
-  if ! [[ $reading_fields =~ ^[0-9]{1,12}\ [0-9]{1,12}\ [0-9]{1,12}$ ]]; then
-    printf 'unparseable\n'
-    return 1
-  fi
-  read -r used window written <<<"$reading_fields"
-  if [ "$written" -gt $(($3 + _GAIA_CONTEXT_SKEW_SECONDS)) ]; then
-    printf 'future\n'
-    return 1
-  fi
-  if [ $(($3 - written)) -gt "$GAIA_CONTEXT_FRESH_SECONDS" ]; then
+  [[ $reading_fields =~ ^[0-9]{1,12}\ [0-9]{1,12}\ [0-9]{1,12}$ ]] || return 2
+  read -r _gaia_context_reading_used _gaia_context_reading_window _gaia_context_reading_written <<<"$reading_fields"
+  [ "$_gaia_context_reading_written" -gt $(($3 + _GAIA_CONTEXT_SKEW_SECONDS)) ] && return 3
+  return 0
+}
+
+# gaia_context_read <main-root> <session_id> <now-epoch>: one line, either
+# "fresh <used_tokens> <window_size>" (rc 0) or missing|stale|future|unparseable (rc 1).
+gaia_context_read() {
+  local parse_status=0
+  _gaia_context_parse_reading "${1:-}" "${2:-}" "${3:-}" || parse_status=$?
+  case $parse_status in
+    1) printf 'missing\n'; return 1 ;;
+    2) printf 'unparseable\n'; return 1 ;;
+    3) printf 'future\n'; return 1 ;;
+  esac
+  if [ $(($3 - _gaia_context_reading_written)) -gt "$GAIA_CONTEXT_FRESH_SECONDS" ]; then
     printf 'stale\n'
     return 1
   fi
-  printf 'fresh %s %s\n' "$used" "$window"
+  printf 'fresh %s %s\n' "$_gaia_context_reading_used" "$_gaia_context_reading_window"
 }
 
 # gaia_context_is_effort_level <level>: rc 0 for a level Claude Code reports.
@@ -265,6 +277,11 @@ gaia_context_band() {
   else
     printf 'green\n'
   fi
+}
+
+# gaia_context_band_at_or_past_line <band>: rc 0 for red, fire or skull, rc 1 otherwise.
+gaia_context_band_at_or_past_line() {
+  case "${1:-}" in red | fire | skull) return 0 ;; *) return 1 ;; esac
 }
 
 # gaia_context_summary <used_tokens> <window_size>: "Context P% (Uk of Wk)", or

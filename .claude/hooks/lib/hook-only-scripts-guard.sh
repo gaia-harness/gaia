@@ -15,7 +15,7 @@ DENY_QUOTED_SEPARATOR_LIMIT=", except that a quoted |, ;, &, (, ), backtick or n
 
 DENY_RECORDER_MESSAGE="BLOCKED: block-audit-loop-write.sh: audit-loop-grant.sh and audit-loop-ask-grant.sh run only as hooks. Claude never executes them from Bash or Monitor, because a piped payload would forge a checkpoint answer. A human answers a checkpoint through the pinned AskUserQuestion, or by typing a whole prompt that is exactly the audit-grant <n> or audit-accept line (see wiki/concepts/PR Merge Workflow.md, #### The branch checkpoint). Naming the files (git add, git diff, git grep -l, shellcheck, cat, bash -n) is allowed$DENY_QUOTED_SEPARATOR_LIMIT"
 DENY_REAPER_MESSAGE="BLOCKED: block-audit-loop-write.sh: the local-state reaper scripts (state-reaper.sh, state-reaper-lib.sh, state-reaper-classes.sh and state-reaper-session-start.sh) execute only as hooks. The reaper prunes <main>/.gaia/local/protected/, which Claude never writes or deletes, so Claude never executes them from Bash or Monitor. Naming the files (git add, git diff, git grep -l, shellcheck, cat, bash -n) and running a bats suite for them is allowed$DENY_QUOTED_SEPARATOR_LIMIT A line inside a heredoc body that begins with a reaper script name reads as running it, unless the heredoc is a cat or tee into a file (quote its delimiter): to write text that names the scripts, use the Write tool, or a one-line printf with a quoted string (newlines as \\n)."
-DENY_CONTEXT_WRITER_MESSAGE="BLOCKED: block-audit-loop-write.sh: running the statusline (gaia-statusline.sh) or a context writer (context-reading.sh, or context-checkpoint-lib.sh with gaia_context_write or gaia_statusline_write_context) mints the context reading the audit checkpoint trusts to continue on its own, so Claude never runs them from Bash or Monitor. The statusline renders as its own process. Naming the files (git add, git diff, grep, cat, shellcheck, bash -n) and running a bats suite for them is allowed$DENY_QUOTED_SEPARATOR_LIMIT"
+DENY_CONTEXT_WRITER_MESSAGE="BLOCKED: block-audit-loop-write.sh: running the statusline (gaia-statusline.sh) or a context writer (context-reading.sh, or context-checkpoint-lib.sh, context-any-age-lib.sh, gaia-next-handoff-lib.sh, audit-loop-eval.sh, rate-limits-lib.sh or usage.sh with gaia_context_write or gaia_statusline_write_context) mints the context reading the audit checkpoint trusts to continue on its own, so Claude never runs them from Bash or Monitor. The statusline renders as its own process. Naming the files (git add, git diff, grep, cat, shellcheck, bash -n) and running a bats suite for them is allowed$DENY_QUOTED_SEPARATOR_LIMIT"
 
 # guarded_script_kind <word>: rc 0 when the word's file name is one of the two
 # recorders or one of the four reaper scripts; sets SCRIPT_KIND to the deny
@@ -53,7 +53,7 @@ context_writer_execute_matcher() {
 # shellcheck disable=SC2329
 context_writer_source_matcher() {
   case "$1" in
-    context-checkpoint-lib.sh | */context-checkpoint-lib.sh | context-reading.sh | */context-reading.sh) return 0 ;;
+    context-checkpoint-lib.sh | */context-checkpoint-lib.sh | context-any-age-lib.sh | */context-any-age-lib.sh | gaia-next-handoff-lib.sh | */gaia-next-handoff-lib.sh | audit-loop-eval.sh | */audit-loop-eval.sh | rate-limits-lib.sh | */rate-limits-lib.sh | usage.sh | */usage.sh | context-reading.sh | */context-reading.sh) return 0 ;;
   esac
   return 1
 }

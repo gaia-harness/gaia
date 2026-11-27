@@ -36,8 +36,8 @@ At fire and skull, always recommend `Clear and resume`, whatever the remaining w
 
 ## Answers
 
-- `Continue here`: keep working until the next band.
-- `Clear and resume`: print one instruction line (run `/clear`, then paste the prompt below) and a continuation prompt naming the state file path, the goal and the next step. Then end the turn with no further tool calls.
+- `Continue here`: keep working until the next band. Inside a `/gaia-next` run it keeps the current job going but takes no new one: the next pick at or past the red band still hands off.
+- `Clear and resume`: print one instruction line (run `/clear`, then paste the prompt below) and a continuation prompt naming the state file path, the goal and the next step. Inside a `/loop` running `/gaia-next`, the prompt is the loop restart prompt that `.claude/commands/gaia-next.md` `## 2. Pick the job` gives for `handoff`, not the job's continuation prompt, because the next pick resumes the job in tier order. There, first end the old loop (`## 3. End the run`), then print both. Then end the turn with no further tool calls.
 
 ## Carry the run's cost across
 
@@ -45,4 +45,4 @@ Before printing any continuation prompt, run `bash .gaia/scripts/usage.sh handof
 
 ## Unattended
 
-With no human in the session, never ask. At red and fire, save and continue. At skull, save, print the continuation prompt in a bare fenced block, report, and stop; the next `/loop` iteration resumes from the saved state, as a fresh session would. An audit hand-off checkpoint saves and hands off with no question (`wiki/concepts/PR Merge Workflow.md`, `#### The branch checkpoint`), and a `/loop`'s next `/gaia-next` iteration in the same session skips that pull request (`wiki/concepts/GAIA Next.md`, `## Skips in every run`). Headless and scheduled runs render no statusline, so they have no reading and never fire.
+With no human in the session, never ask. At red and fire, save and continue. At skull, save, print the continuation prompt in a bare fenced block, report, and stop. In a `/loop` running `/gaia-next` the next iteration is at or past the red band, so it takes no new job and hands off the loop instead of resuming from the saved state (`.claude/commands/gaia-next.md`, `## 2. Pick the job`). An audit hand-off checkpoint saves and hands off with no question (`wiki/concepts/PR Merge Workflow.md`, `#### The branch checkpoint`), and a `/loop`'s next `/gaia-next` iteration in the same session skips that pull request whenever the red-band handoff does not answer first, such as a reading below the line after a compaction or no usable reading (`wiki/concepts/GAIA Next.md`, `## Skips in every run`). Headless and scheduled runs render no statusline, so they have no reading and never fire.

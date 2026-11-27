@@ -53,3 +53,11 @@ not_excluded_ok() {
   done
   [ "$checked_count" -eq 2 ]
 }
+
+@test "doctrine: Unattended states the gaia-next loop bound and no longer claims a same-session iteration is fresh" {
+  local section
+  section=$(awk '/^## Unattended/{f=1;next} /^## /{f=0} f' "$DOCTRINE")
+  [ -n "$section" ]
+  [[ "$section" != *'as a fresh session would'* ]]
+  [[ "$section" == *'In a `/loop` running `/gaia-next` the next iteration is at or past the red band, so it takes no new job and hands off the loop instead of resuming from the saved state (`.claude/commands/gaia-next.md`, `## 2. Pick the job`).'* ]]
+}

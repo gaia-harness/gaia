@@ -126,8 +126,9 @@
 #     two criteria. A command that EXECUTES gaia-statusline.sh or
 #     context-reading.sh (matched by exact base name, so gaia-statusline-left.sh,
 #     gaia-statusline-right.sh and a bats suite path never match), or that
-#     SOURCES context-checkpoint-lib.sh or context-reading.sh (`source` or `.`
-#     script argument) and names gaia_context_write or
+#     SOURCES context-checkpoint-lib.sh (directly, or through
+#     context-any-age-lib.sh, gaia-next-handoff-lib.sh, audit-loop-eval.sh, rate-limits-lib.sh or usage.sh, which load it) or
+#     context-reading.sh (`source` or `.` script argument) and names gaia_context_write or
 #     gaia_statusline_write_context as a whole word anywhere in the command, is
 #     denied: either mints the context reading the checkpoint trusts. Naming the
 #     files (`git add`, `git diff`, `grep`, `cat`, `shellcheck`, `bash -n`),
@@ -212,7 +213,7 @@ fi
 # a payload without any is outside the remit with no
 # jq read at all. This is the path every ordinary Bash call takes.
 case "$payload" in
-  *audit-loop* | *state-reaper* | *gaia-statusline.sh* | *context-reading.sh* | *context-checkpoint-lib.sh* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits* | *cache/rate-limit-checkpoint* | *organizationRateLimitTier* | *CLAUDE_CONFIG_DIR*rate-limits.sh* | *rate-limits-lib.sh* | *rate-limits.sh*write*) ;;
+  *audit-loop* | *state-reaper* | *gaia-statusline.sh* | *context-reading.sh* | *context-checkpoint-lib.sh* | *context-any-age-lib.sh* | *gaia-next-handoff-lib.sh* | *usage.sh* | *local/protected* | *cache/shared/context* | *cache/shared/rate-limits* | *cache/rate-limit-checkpoint* | *organizationRateLimitTier* | *CLAUDE_CONFIG_DIR*rate-limits.sh* | *rate-limits-lib.sh* | *rate-limits.sh*write*) ;;
   *) exit 0 ;;
 esac
 
@@ -225,7 +226,7 @@ if ! type gaia_require_jq >/dev/null 2>&1; then
   printf 'BLOCKED: block-audit-loop-write.sh cannot load lib/jq-availability.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' >&2
   exit 2
 fi
-gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'gaia-statusline.sh' 'context-reading.sh' 'context-checkpoint-lib.sh' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits' 'cache/rate-limit-checkpoint' 'organizationRateLimitTier' 'CLAUDE_CONFIG_DIR' 'rate-limits-lib.sh' 'rate-limits.sh write'
+gaia_require_jq 'the audit loop state guard' "$payload" tool_input 'audit-loop' 'state-reaper' 'gaia-statusline.sh' 'context-reading.sh' 'context-checkpoint-lib.sh' 'context-any-age-lib.sh' 'gaia-next-handoff-lib.sh' 'audit-loop-eval.sh' 'usage.sh' 'local/protected' 'cache/shared/context' 'cache/shared/rate-limits' 'cache/rate-limit-checkpoint' 'organizationRateLimitTier' 'CLAUDE_CONFIG_DIR' 'rate-limits-lib.sh' 'rate-limits.sh write'
 
 set +e
 # shellcheck source=lib/hook-payload.sh

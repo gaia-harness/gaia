@@ -314,7 +314,7 @@ runs_guarded_script() {
         ;;
       *)
         case "$command_line" in
-          *gaia-statusline.sh* | *context-reading.sh* | *context-checkpoint-lib.sh*) ;;
+          *gaia-statusline.sh* | *context-reading.sh* | *context-checkpoint-lib.sh* | *context-any-age-lib.sh* | *gaia-next-handoff-lib.sh* | *audit-loop-eval.sh* | *rate-limits-lib.sh* | *usage.sh*) ;;
           *) return 1 ;;
         esac
         ;;

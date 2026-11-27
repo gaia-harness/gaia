@@ -397,7 +397,7 @@ gaia_loop_recommended() {
 gaia_loop_pinned_question() {
   local branch="${1-}" nonce="${2-}" used="${3-}" unit_rounds="${4-}" eligible="${5-}" cap="${6-}" trigger="${7-}" reading="${8-}"
   local recommended="${9-}" line="${10-}" disputes="${11-}"
-  local LC_ALL=C typed_grant_note typed_accept_note context_tokens context_window question_context=", context unavailable" option_context="Context unavailable" band=none lead
+  local LC_ALL=C typed_grant_note typed_accept_note context_tokens context_window question_context=", context unavailable" option_context="Context unavailable" band=none read_band lead
   command -v jq >/dev/null 2>&1 || return 6
   declare -F gaia_context_summary >/dev/null && declare -F gaia_context_band >/dev/null || return 6
   _gaia_loop_keyable "$branch" || return 2
@@ -427,10 +427,12 @@ gaia_loop_pinned_question() {
           # Checkpoint off: no line to be over or under, so lead here without claiming room.
           band=off
         elif [ -n "$line" ]; then
-          case "$(gaia_context_band "$context_tokens" "$context_window" "$line")" in
-            green | yellow) band=below ;;
-            red | fire | skull) band=above ;;
-          esac
+          read_band=$(gaia_context_band "$context_tokens" "$context_window" "$line") || read_band=
+          if gaia_context_band_at_or_past_line "$read_band"; then
+            band=above
+          elif [ -n "$read_band" ]; then
+            band=below
+          fi
         fi
       fi
       ;;
