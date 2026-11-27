@@ -14,7 +14,7 @@
 # audit-loop-report-lib.sh, also sourced here.
 #
 # Dual-mode. Sourced (audit-loop-bound.sh), it defines functions only:
-#   gaia_loop_evaluate_round <main-root> <state-json> <r> [<audited-root>]   round r's snapshot
+#   gaia_loop_evaluate_round <main-root> <state-json> <r> [<audited-root> [<round-cap>]]   round r's snapshot
 #   gaia_loop_findings <main-root> <state-json> <r>     F(r)
 #   gaia_loop_allowed <state-json>                      the round-count allowance
 #   gaia_loop_decide <state-json> <r-snapshot-json>     `allow` or `deny <reason>`
@@ -159,7 +159,7 @@
 # stored snapshots, never recomputed: each snapshot keeps its own merge base.
 #
 # SIGNALS for round r, each independent, in this order:
-#   cap           r >= 10.
+#   cap           r >= C, the effective round cap (the hard cap 10 when none is set).
 #   quiet         the verdict is quiet. The one signal that never denies: the
 #                 loop ends on its own.
 #   enriching     the verdict is enriching.

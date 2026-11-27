@@ -27,7 +27,7 @@ unset _gaia_loop_reasons_jq
 
 # The signal block of the snapshot program. It runs inside
 # audit-loop-round-lib.sh's verdict program, after $counted, $authored_count, $previous_authored_count, $second_previous_authored_count, $verdict and
-# $round are bound, and reads $previous_snapshot and $second_previous_snapshot (the stored snapshots of rounds r-1 and
+# $round and $round_cap (the effective round cap C) are bound, and reads $previous_snapshot and $second_previous_snapshot (the stored snapshots of rounds r-1 and
 # r-2), $history_snapshots ([{round, members, counted_keys}] for rounds 1..r-1, counted_keys null when legacy),
 # $fixed_triples, $stop_inputs (null, or _gaia_loop_stop_inputs' object), $members, $is_maintainer_repo, $waivedkeys
 # and $findings. A legacy stored snapshot is one without
@@ -68,7 +68,7 @@ def honored_in($honored_keys): identity_key as $entry_key | any($honored_keys[];
      | ($previous_round_lines | length) > 0 and ($second_previous_round_lines | length) > 0
        and (($round_lines - $previous_round_lines) | length) > 0 and (($previous_round_lines - $second_previous_round_lines) | length) > 0)) as $moved
 | (any($round_triples[]; . as $triple | any($fixed_triples[]; . == $triple))) as $refixed
-| {cap: ($round >= 10),
+| {cap: ($round >= $round_cap),
    quiet: ($verdict == "quiet"),
    enriching: ($verdict == "enriching"),
    stalled: ($verdict == "stalled"),

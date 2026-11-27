@@ -1227,6 +1227,25 @@ drift_fixture() {
   [ "$(gaia_loop_decide_unit "$state" null "$HIGH" 300000 50)" = "deny context false false" ]
 }
 
+@test "signals: the cap signal and accept-eligibility fire at a lowered round cap C, not only at the hard cap" {
+  local settings snapshot
+  maintainer
+  authored_count_sequence major 4 3 2 1
+  echo "case: round 4 below the hard cap raises no cap signal with none set"
+  snapshot="$(evaluate_round 4)"
+  [ "$(read_json "$snapshot" '.signals.cap')" = false ]
+  echo "case: a human-set round cap of 4 raises the cap signal at round 4 and makes it accept-eligible"
+  settings="$(override_file)"
+  mkdir -p "${settings%/*}"
+  printf '{"version":1,"audit_loop":{"round_cap":4}}\n' >"$settings"
+  snapshot="$(evaluate_round 4)"
+  [ "$(read_json "$snapshot" '.signals.cap')" = true ]
+  [ "$(read_json "$snapshot" '.accept_reasons | tojson')" = '["cap"]' ]
+  [ "$(read_json "$snapshot" '.accept_eligible')" = true ]
+  echo "case: round 3 stays below the lowered cap"
+  [ "$(read_json "$(evaluate_round 3)" '.signals.cap')" = false ]
+}
+
 @test "decision: the effective line config is the frozen value lowered by the live override" {
   local settings state effective
   settings="$(override_file)"
