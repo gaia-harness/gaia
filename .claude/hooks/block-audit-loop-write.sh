@@ -126,9 +126,9 @@
 #     two criteria. A command that EXECUTES gaia-statusline.sh or
 #     context-reading.sh (matched by exact base name, so gaia-statusline-left.sh,
 #     gaia-statusline-right.sh and a bats suite path never match), or that
-#     SOURCES context-checkpoint-lib.sh, context-any-age-lib.sh,
-#     gaia-next-handoff-lib.sh (both source it) or context-reading.sh (`source` or `.`
-#     script argument) and names gaia_context_write or
+#     SOURCES context-checkpoint-lib.sh (directly, or through
+#     context-any-age-lib.sh or gaia-next-handoff-lib.sh, which load it) or
+#     context-reading.sh (`source` or `.` script argument) and names gaia_context_write or
 #     gaia_statusline_write_context as a whole word anywhere in the command, is
 #     denied: either mints the context reading the checkpoint trusts. Naming the
 #     files (`git add`, `git diff`, `grep`, `cat`, `shellcheck`, `bash -n`),
