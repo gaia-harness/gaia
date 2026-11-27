@@ -1,47 +1,24 @@
 #!/usr/bin/env bats
 #
-# Pins the two contracts the /gaia-fitness judgment step relies on:
-#   1. the no-op classification of the judge's reply once the main thread has
-#      written it to disk (audit-noop-detect.sh --shape agent-report-file), and
-#   2. the dispatch condition, a one-line jq filter extracted from the real
-#      playbook and run over hand-written check reports.
+# Pins the contracts the /gaia-fitness judgment step relies on, all owned by
+# .gaia/scripts/fitness-judge-input.sh:
+#   1. the dispatch condition (build exits 3 when there is nothing to judge),
+#   2. the input build: what enters it, per-file line numbers, parts that fit
+#      one Read, and groups that keep a file's slices together, and
+#   3. collect's classification: a reply that does not prove it read every
+#      part to its end is a no-op, never a clean pass.
 #
 # Run under bash 5: `.gaia/scripts/bats5.sh .gaia/scripts/tests/fitness-judge-dispatch.bats < /dev/null`
 # (.claude/rules/bats-assertions.md).
 
 setup() {
   SCRIPTS_DIR="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
-  REPO_ROOT="$(cd "$SCRIPTS_DIR/../.." && pwd)"
-  PLAYBOOK="$REPO_ROOT/.claude/skills/gaia/references/fitness.md"
-  REPLY="$BATS_TEST_TMPDIR/judgment.json"
-}
-
-classify() {
-  run bash "$SCRIPTS_DIR/audit-noop-detect.sh" --shape agent-report-file --path "$REPLY"
-}
-
-# extract_filter <playbook>: prints the dispatch filter, the text between the
-# single quotes of the playbook's first line that starts with `jq -er '[.inventory`.
-# Fails when no such line exists or the line holds no quoted filter.
-extract_filter() {
-  local line filter
-  line="$(grep -m1 -E "^jq -er '\[\.inventory" "$1")" || return 1
-  filter="${line#*\'}"
-  filter="${filter%\'*}"
-  [ -n "$filter" ] || return 1
-  printf '%s' "$filter"
-}
-
-# dispatch_exit <inventory-json>: runs the playbook's filter over a report whose
-# inventory is the argument; echoes the filter's exit status.
-dispatch_exit() {
-  local filter report status
-  filter="$(extract_filter "$PLAYBOOK")" || { echo "extract-failed"; return 0; }
-  report="$BATS_TEST_TMPDIR/check.json"
-  printf '{"scope":"adopter","findings":[],"inventory":%s}\n' "$1" >"$report"
-  status=0
-  jq -er "$filter" "$report" >/dev/null 2>&1 || status=$?
-  echo "$status"
+  SCRIPT="$SCRIPTS_DIR/fitness-judge-input.sh"
+  PROJECT="$BATS_TEST_TMPDIR/project"
+  OUT="$BATS_TEST_TMPDIR/judge"
+  REPORT="$BATS_TEST_TMPDIR/check.json"
+  mkdir -p "$PROJECT"
+  git -C "$PROJECT" init -q
 }
 
 entry() {
@@ -49,153 +26,342 @@ entry() {
   printf '{"path":"%s","kinds":["%s"],"words":10,"lines":3,"model":"unresolved","ownership":"%s","path_scoped":%s}' "$1" "$2" "$3" "$4"
 }
 
-@test "an empty reply is a no-op" {
-  : >"$REPLY"
-  classify
-  [ "$status" -eq 1 ]
+write_report() {
+  printf '{"scope":"adopter","findings":[],"inventory":[%s]}\n' "$1" >"$REPORT"
 }
 
-@test "the playbook's element-shape check passes a valid array and fails a malformed one" {
-  local shape_line shape_filter
-  shape_line="$(grep -m1 -E "^   jq -e 'all\(\.\[\]; \(\.judgment" "$PLAYBOOK" | sed 's/^ *//')" || return 1
-  shape_filter="${shape_line#*\'}"
-  shape_filter="${shape_filter%\'*}"
-  [ -n "$shape_filter" ]
-  printf '[{"judgment":"terminology","file":"a.md","line":3,"message":"m","remediation":"r"}]\n' >"$REPLY"
-  jq -e "$shape_filter" "$REPLY" >/dev/null
-  printf '[{"judgment":"vibes","file":"a.md","line":3,"message":"m","remediation":"r"}]\n' >"$REPLY"
-  run jq -e "$shape_filter" "$REPLY"
-  [ "$status" -ne 0 ]
-  printf '[{"judgment":"terminology","file":"a.md","line":"3","message":"m","remediation":"r"}]\n' >"$REPLY"
-  run jq -e "$shape_filter" "$REPLY"
-  [ "$status" -ne 0 ]
+build() {
+  cd "$PROJECT" || return 1
+  run bash "$SCRIPT" build --check "$REPORT" --out-dir "$OUT" "$@"
 }
 
-@test "dispatch is skipped for an inventory of only third-party and ignored skills" {
-  local inventory
-  inventory="[$(entry .claude/skills/vendored/SKILL.md skill third-party false),$(entry .claude/skills/local/SKILL.md skill ignored false)]"
-  [ "$(dispatch_exit "$inventory")" != "0" ]
-  [ "$(dispatch_exit "$inventory")" != "extract-failed" ]
+# receipts <group>: a reply holding a correct receipt for every part of the group.
+receipts() {
+  jq --argjson group "$1" '[.groups[] | select(.group == $group) | .parts[] | {judgment: "input-read", file: .path, token: .token}]' "$OUT/manifest.json"
 }
 
-@test "dispatch is skipped for a rule that is not path scoped" {
-  local inventory
-  inventory="[$(entry .claude/rules/always.md rule adopter false)]"
-  [ "$(dispatch_exit "$inventory")" != "0" ]
-  [ "$(dispatch_exit "$inventory")" != "extract-failed" ]
+collect() {
+  run bash "$SCRIPT" collect --manifest "$OUT/manifest.json" --out "$BATS_TEST_TMPDIR/judgment.json"
 }
 
-@test "dispatch is skipped for references and wiki pages alone" {
-  local inventory
-  inventory="[$(entry .claude/skills/example/references/a.md reference adopter false),$(entry wiki/page.md wiki adopter false)]"
-  [ "$(dispatch_exit "$inventory")" != "0" ]
-  [ "$(dispatch_exit "$inventory")" != "extract-failed" ]
+# small_project: two skills and a path-scoped rule, each a few lines, all
+# tracked, one judge group.
+small_project() {
+  mkdir -p "$PROJECT/.claude/skills/a" "$PROJECT/.claude/skills/b" "$PROJECT/.claude/rules"
+  printf -- '---\nname: a\ndescription: does a\n---\nfirst a\nsecond a\n' >"$PROJECT/.claude/skills/a/SKILL.md"
+  printf 'first b\nsecond b\nthird b' >"$PROJECT/.claude/skills/b/SKILL.md"
+  printf 'rule body\n' >"$PROJECT/.claude/rules/scoped.md"
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/skills/a/SKILL.md skill adopter false),$(entry .claude/skills/b/SKILL.md skill adopter false),$(entry .claude/rules/scoped.md rule adopter true)"
 }
 
-@test "dispatch is skipped for an empty inventory" {
-  [ "$(dispatch_exit '[]')" != "0" ]
-  [ "$(dispatch_exit '[]')" != "extract-failed" ]
+@test "nothing to judge: only third-party and ignored skills" {
+  write_report "$(entry .claude/skills/vendored/SKILL.md skill third-party false),$(entry .claude/skills/local/SKILL.md skill ignored false)"
+  build
+  [ "$status" -eq 3 ]
 }
 
-@test "dispatch runs for a gaia-shipped command" {
-  [ "$(dispatch_exit "[$(entry .claude/commands/example.md command gaia-shipped false)]")" = "0" ]
+@test "nothing to judge: a rule that is not path scoped" {
+  write_report "$(entry .claude/rules/always.md rule adopter false)"
+  build
+  [ "$status" -eq 3 ]
 }
 
-@test "dispatch runs for an unknown agent" {
-  [ "$(dispatch_exit "[$(entry .claude/agents/example.md agent unknown false)]")" = "0" ]
+@test "nothing to judge: references and wiki pages alone" {
+  write_report "$(entry .claude/skills/example/references/a.md reference adopter false),$(entry wiki/page.md wiki adopter false)"
+  build
+  [ "$status" -eq 3 ]
 }
 
-@test "dispatch runs for an adopter skill" {
-  [ "$(dispatch_exit "[$(entry .claude/skills/example/SKILL.md skill adopter false)]")" = "0" ]
+@test "nothing to judge: an empty inventory" {
+  write_report ""
+  build
+  [ "$status" -eq 3 ]
 }
 
-@test "dispatch runs for an adopter rule that is path scoped" {
-  [ "$(dispatch_exit "[$(entry .claude/rules/scoped.md rule adopter true)]")" = "0" ]
+@test "nothing to judge: a listed path that is not a regular file" {
+  write_report "$(entry .claude/agents/missing.md agent adopter false)"
+  build
+  [ "$status" -eq 3 ]
 }
 
-@test "the filter prints the paths to judge and only those" {
-  local filter report inventory
-  filter="$(extract_filter "$PLAYBOOK")"
-  inventory="[$(entry .claude/skills/a/SKILL.md skill adopter false),$(entry .claude/skills/b/SKILL.md skill third-party false),$(entry wiki/page.md wiki adopter false)]"
-  report="$BATS_TEST_TMPDIR/check.json"
-  printf '{"scope":"adopter","findings":[],"inventory":%s}\n' "$inventory" >"$report"
-  run jq -er "$filter" "$report"
+@test "dispatch runs for a gaia-shipped command, an unknown agent, an adopter skill and a scoped rule" {
+  local kind ownership path_scoped rows_run=0
+  while read -r kind ownership path_scoped; do
+    rm -rf "$OUT"
+    mkdir -p "$PROJECT/.claude/x"
+    printf 'body\n' >"$PROJECT/.claude/x/$kind.md"
+    write_report "$(entry ".claude/x/$kind.md" "$kind" "$ownership" "$path_scoped")"
+    build
+    [ "$status" -eq 0 ] || return 1
+    rows_run=$((rows_run + 1))
+  done <<'ROWS'
+command gaia-shipped false
+agent unknown false
+skill adopter false
+rule adopter true
+ROWS
+  [ "$rows_run" -eq 4 ]
+}
+
+@test "the input numbers each judged line within its own file" {
+  local tab=$'\t'
+  small_project
+  build
   [ "$status" -eq 0 ]
-  [ "$output" = ".claude/skills/a/SKILL.md" ]
-}
-
-# write_judge_input <playbook> <scratch>: runs the playbook's input-writer
-# block (the indented `{ ... } > <SCRATCH>/judge-input.md` group) with
-# <SCRATCH> bound to the second argument, from the current directory.
-write_judge_input() {
-  local block
-  block="$(awk '/^   \{$/ {on=1} on {line=$0; sub(/^   /, "", line); print line} /^   \} > <SCRATCH>\/judge-input\.md$/ {exit}' "$1")"
-  [ -n "$block" ] || return 1
-  block="${block//<SCRATCH>/$2}"
-  bash -c "$block"
-}
-
-@test "the input writer numbers each judged line within its own file" {
-  local project report tab=$'\t'
-  project="$BATS_TEST_TMPDIR/project"
-  mkdir -p "$project/.claude/skills/a" "$project/.claude/skills/b"
-  printf 'first a\nsecond a\n' >"$project/.claude/skills/a/SKILL.md"
-  printf 'first b\nsecond b\nthird b' >"$project/.claude/skills/b/SKILL.md"
-  report="$BATS_TEST_TMPDIR/check.json"
-  printf '{"scope":"adopter","findings":[],"inventory":[%s,%s]}\n' \
-    "$(entry .claude/skills/a/SKILL.md skill adopter false)" \
-    "$(entry .claude/skills/b/SKILL.md skill adopter false)" >"$report"
-  git -C "$project" init -q
-  git -C "$project" add .claude
-  cd "$project"
-  run write_judge_input "$PLAYBOOK" "$BATS_TEST_TMPDIR"
-  [ "$status" -eq 0 ]
-  run grep -E $'^ *[0-9]+\t' "$BATS_TEST_TMPDIR/judge-input.md"
+  run bash -c "cat '$OUT'/part-*.md | grep -E '^ *[0-9]+${tab}(first|second|third) '"
   [ "${#lines[@]}" -eq 5 ]
-  [[ "${lines[0]}" =~ ^\ *1${tab}first\ a$ ]]
+  [[ "${lines[0]}" =~ ^\ *5${tab}first\ a$ ]]
   [[ "${lines[2]}" =~ ^\ *1${tab}first\ b$ ]]
   [[ "${lines[4]}" =~ ^\ *3${tab}third\ b$ ]]
-  run grep -c '^<<<GAIA-FITNESS-FILE-END ' "$BATS_TEST_TMPDIR/judge-input.md"
-  [ "$output" = "2" ]
 }
 
-@test "the input writer also judges a Markdown file that names AskUserQuestion" {
-  local project report
-  project="$BATS_TEST_TMPDIR/project-ask"
-  mkdir -p "$project/.claude/skills/a" "$project/.claude/skills/b" "$project/wiki"
-  printf 'plain\n' >"$project/.claude/skills/a/SKILL.md"
-  printf 'asks via AskUserQuestion\n' >"$project/.claude/skills/b/SKILL.md"
-  printf 'wiki page using AskUserQuestion\n' >"$project/wiki/page.md"
-  printf 'unrelated\n' >"$project/wiki/other.md"
-  mkdir -p "$project/.claude/skills/vendored" "$project/.claude/worktrees/other/.claude/skills/c" "$project/apps/web/.claude/rules"
-  printf 'vendored AskUserQuestion\n' >"$project/.claude/skills/vendored/SKILL.md"
-  printf 'sibling worktree AskUserQuestion\n' >"$project/.claude/worktrees/other/.claude/skills/c/SKILL.md"
-  printf 'app rule AskUserQuestion\n' >"$project/apps/web/.claude/rules/r.md"
-  git -C "$project" init -q
-  git -C "$project" add .claude/skills/a .claude/skills/b .claude/skills/vendored apps wiki
-  report="$BATS_TEST_TMPDIR/check.json"
-  printf '{"scope":"adopter","findings":[],"inventory":[%s,%s]}\n' \
-    "$(entry .claude/skills/a/SKILL.md skill adopter false)" \
-    "$(entry .claude/skills/vendored/SKILL.md skill third-party false)" >"$report"
-  cd "$project"
-  run write_judge_input "$PLAYBOOK" "$BATS_TEST_TMPDIR"
+@test "the input also judges a Markdown file that names AskUserQuestion, never a vendored or worktree copy" {
+  mkdir -p "$PROJECT/.claude/skills/a" "$PROJECT/.claude/skills/b" "$PROJECT/wiki" "$PROJECT/.claude/skills/vendored" \
+    "$PROJECT/.claude/worktrees/other/.claude/skills/c" "$PROJECT/apps/web/.claude/rules"
+  printf 'plain\n' >"$PROJECT/.claude/skills/a/SKILL.md"
+  printf 'asks via AskUserQuestion\n' >"$PROJECT/.claude/skills/b/SKILL.md"
+  printf 'wiki page using AskUserQuestion\n' >"$PROJECT/wiki/page.md"
+  printf 'unrelated\n' >"$PROJECT/wiki/other.md"
+  printf 'vendored AskUserQuestion\n' >"$PROJECT/.claude/skills/vendored/SKILL.md"
+  printf 'sibling worktree AskUserQuestion\n' >"$PROJECT/.claude/worktrees/other/.claude/skills/c/SKILL.md"
+  printf 'app rule AskUserQuestion\n' >"$PROJECT/apps/web/.claude/rules/r.md"
+  git -C "$PROJECT" add .claude/skills/a .claude/skills/b .claude/skills/vendored apps wiki
+  write_report "$(entry .claude/skills/a/SKILL.md skill adopter false),$(entry .claude/skills/vendored/SKILL.md skill third-party false)"
+  build
   [ "$status" -eq 0 ]
-  run grep '^<<<GAIA-FITNESS-FILE-BEGIN ' "$BATS_TEST_TMPDIR/judge-input.md"
+  run bash -c "cat '$OUT'/part-*.md | grep '^<<<GAIA-FITNESS-FILE-BEGIN ' | sort -u"
   [ "${#lines[@]}" -eq 4 ]
-  grep -qF 'FILE-BEGIN apps/web/.claude/rules/r.md' "$BATS_TEST_TMPDIR/judge-input.md"
-  grep -qF 'vendored' "$BATS_TEST_TMPDIR/judge-input.md" && return 1
-  grep -qF 'worktrees/other' "$BATS_TEST_TMPDIR/judge-input.md" && return 1
-  grep -qF 'FILE-BEGIN wiki/page.md' "$BATS_TEST_TMPDIR/judge-input.md"
-  grep -qF 'FILE-BEGIN .claude/skills/b/SKILL.md' "$BATS_TEST_TMPDIR/judge-input.md"
-  grep -qF 'wiki/other.md' "$BATS_TEST_TMPDIR/judge-input.md" && return 1
+  [ "${lines[0]}" = "<<<GAIA-FITNESS-FILE-BEGIN .claude/skills/a/SKILL.md" ]
+  [ "${lines[1]}" = "<<<GAIA-FITNESS-FILE-BEGIN .claude/skills/b/SKILL.md" ]
+  [ "${lines[2]}" = "<<<GAIA-FITNESS-FILE-BEGIN apps/web/.claude/rules/r.md" ]
+  [ "${lines[3]}" = "<<<GAIA-FITNESS-FILE-BEGIN wiki/page.md" ]
+}
+
+@test "the first part is a digest of every skill's frontmatter, and only that" {
+  small_project
+  build
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.groups[0].parts[0].path' "$OUT/manifest.json")" = "$OUT/part-001.md" ]
+  grep -q '^This part is a skill-descriptions digest part' "$OUT/part-001.md"
+  run grep -c '^<<<GAIA-FITNESS-FILE-BEGIN ' "$OUT/part-001.md"
+  [ "$output" = "1" ]
+  grep -qF 'description: does a' "$OUT/part-001.md"
+  grep -qF 'first a' "$OUT/part-001.md" && return 1
+  grep -q '^This part is a skill-descriptions digest part' "$OUT/part-002.md" && return 1
   true
 }
 
-@test "the element-shape check accepts the recommendation-authority judgment" {
-  local shape_line shape_filter
-  shape_line="$(grep -m1 -E "^   jq -e 'all\(\.\[\]; \(\.judgment" "$PLAYBOOK" | sed 's/^ *//')" || return 1
-  shape_filter="${shape_line#*\'}"
-  shape_filter="${shape_filter%\'*}"
-  printf '[{"judgment":"recommendation-authority","file":"a.md","line":3,"message":"m","remediation":"r"}]\n' >"$REPLY"
-  jq -e "$shape_filter" "$REPLY" >/dev/null
+@test "a skill digest larger than one part keeps every digest part in one group, each carrying the digest declaration" {
+  local name
+  for name in a b c d; do
+    mkdir -p "$PROJECT/.claude/skills/$name"
+    printf -- '---\nname: %s\ndescription: %s\n---\nbody %s\n' "$name" "$(printf 'trigger words for %s ' "$name" | head -c 200)" "$name" >"$PROJECT/.claude/skills/$name/SKILL.md"
+  done
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/skills/a/SKILL.md skill adopter false),$(entry .claude/skills/b/SKILL.md skill adopter false),$(entry .claude/skills/c/SKILL.md skill adopter false),$(entry .claude/skills/d/SKILL.md skill adopter false)"
+  build --part-bytes 800 --group-bytes 600
+  [ "$status" -eq 0 ]
+  run bash -c "grep -l '^This part is a skill-descriptions digest part' '$OUT'/part-*.md"
+  [ "${#lines[@]}" -gt 1 ]
+  run bash -c "grep -h '^This part is a skill-descriptions digest part' '$OUT'/part-*.md | sort -u"
+  [ "${#lines[@]}" -eq 1 ]
+  [[ "$output" == *"across all digest parts together"* ]]
+  run bash -c "grep -l '^This part is a skill-descriptions digest part' '$OUT'/part-*.md | while read -r part; do jq -r --arg part \"\$part\" '.groups[] | select(any(.parts[]; .path == \$part)) | .group' '$OUT/manifest.json'; done | sort -u"
+  [ "${#lines[@]}" -eq 1 ]
+  [ "$(jq '.groups | length' "$OUT/manifest.json")" -gt 1 ]
+}
+
+@test "a skill's SKILL.md and reference file land in the same group when the pair straddles a group boundary" {
+  local line
+  mkdir -p "$PROJECT/.claude/agents" "$PROJECT/.claude/skills/s/references"
+  for line in $(seq 1 20); do printf 'agent line %s\n' "$line"; done >"$PROJECT/.claude/agents/x.md"
+  for line in $(seq 1 20); do printf 'skill line %s\n' "$line"; done >"$PROJECT/.claude/skills/s/SKILL.md"
+  for line in $(seq 1 20); do printf 'ref line %s\n' "$line"; done >"$PROJECT/.claude/skills/s/references/ref.md"
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/agents/x.md agent adopter false),$(entry .claude/skills/s/SKILL.md skill adopter false),$(entry .claude/skills/s/references/ref.md skill adopter false)"
+  build --group-bytes 1400
+  [ "$status" -eq 0 ]
+  [ "$(jq '.groups | length' "$OUT/manifest.json")" -eq 2 ]
+  run bash -c "grep -l '^<<<GAIA-FITNESS-FILE-BEGIN .claude/skills/s/' '$OUT'/part-*.md | while read -r part; do jq -r --arg part \"\$part\" '.groups[] | select(any(.parts[]; .path == \$part)) | .group' '$OUT/manifest.json'; done | sort -u"
+  [ "${#lines[@]}" -eq 1 ]
+  run bash -c "cat '$OUT'/part-*.md | grep -c '^<<<GAIA-FITNESS-FILE-BEGIN .claude/skills/s/'"
+  [ "$output" = "2" ]
+}
+
+@test "every part fits its budget, ends with its own token, and every judged line appears exactly once" {
+  local file line expected actual part budget=600
+  mkdir -p "$PROJECT/.claude/agents"
+  for file in one two three; do
+    for line in $(seq 1 40); do printf '%s line %s\n' "$file" "$line"; done >"$PROJECT/.claude/agents/$file.md"
+  done
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/agents/one.md agent adopter false),$(entry .claude/agents/two.md agent adopter false),$(entry .claude/agents/three.md agent adopter false)"
+  build --part-bytes "$budget" --group-bytes 100000
+  [ "$status" -eq 0 ]
+  [ "$(jq '[.groups[].parts[]] | length' "$OUT/manifest.json")" -gt 3 ]
+  while IFS=$'\t' read -r part token; do
+    [ "$(LC_ALL=C wc -c <"$part" | tr -d ' ')" -le "$budget" ] || return 1
+    [ "$(tail -n 1 "$part")" = "<<<GAIA-FITNESS-PART-END $token" ] || return 1
+  done < <(jq -r '.groups[].parts[] | "\(.path)\t\(.token)"' "$OUT/manifest.json")
+  [ "$(jq '[.groups[].parts[].token] | unique | length' "$OUT/manifest.json")" = "$(jq '[.groups[].parts[]] | length' "$OUT/manifest.json")" ]
+  expected="$(cat "$PROJECT"/.claude/agents/*.md | sort)"
+  actual="$(cat "$OUT"/part-*.md | grep -E $'^ *[0-9]+\t' | cut -f2- | sort)"
+  [ "$actual" = "$expected" ]
+}
+
+@test "a file larger than a part is sliced with its own line numbers, all in one group" {
+  local tab=$'\t'
+  mkdir -p "$PROJECT/.claude/agents"
+  seq 1 200 | sed 's/^/big line /' >"$PROJECT/.claude/agents/big.md"
+  printf 'small\n' >"$PROJECT/.claude/agents/small.md"
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/agents/big.md agent adopter false),$(entry .claude/agents/small.md agent adopter false)"
+  build --part-bytes 800 --group-bytes 3000
+  [ "$status" -eq 0 ]
+  run bash -c "grep -l '^<<<GAIA-FITNESS-FILE-BEGIN .claude/agents/big.md' '$OUT'/part-*.md"
+  [ "${#lines[@]}" -gt 1 ]
+  run jq -r --arg first "${lines[0]}" --arg last "${lines[${#lines[@]}-1]}" '[.groups[] | select(any(.parts[]; .path == $first or .path == $last)) | .group] | unique | length' "$OUT/manifest.json"
+  [ "$output" = "1" ]
+  run bash -c "cat '$OUT'/part-*.md | grep -E '^ *200${tab}big line 200$'"
+  [ "$status" -eq 0 ]
+  [ "$(jq '.groups | length' "$OUT/manifest.json")" -gt 1 ]
+}
+
+@test "build refuses a non-empty output folder" {
+  small_project
+  mkdir -p "$OUT"
+  : >"$OUT/stale"
+  build
+  [ "$status" -eq 2 ]
+}
+
+@test "prompt prints one Input line per part, then the Rule line" {
+  small_project
+  build
+  [ "$status" -eq 0 ]
+  run bash "$SCRIPT" prompt --manifest "$OUT/manifest.json" --group 1 --rule /abs/user-questions.md
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "Input: $OUT/part-001.md" ]
+  [ "${lines[${#lines[@]}-1]}" = "Rule: /abs/user-questions.md" ]
+  [ "${#lines[@]}" -eq "$(($(jq '.groups[0].parts | length' "$OUT/manifest.json") + 1))" ]
+}
+
+# bats test_tags=protected
+@test "collect: an empty array is a no-op, never a clean pass" {
+  small_project
+  build
+  printf '[]\n' >"$OUT/reply-1.json"
+  collect
+  [ "$status" -eq 1 ]
+  [[ "$output" == "no-op group 1: "* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/judgment.json" ]
+}
+
+@test "collect: an absent reply is a no-op" {
+  small_project
+  build
+  collect
+  [ "$status" -eq 1 ]
+}
+
+@test "collect: a reply missing one part's receipt is a no-op" {
+  small_project
+  build
+  receipts 1 | jq '.[1:] + [{"judgment":"terminology","file":"a.md","line":3,"message":"m","remediation":"r"}]' >"$OUT/reply-1.json"
+  collect
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"receipts do not match"* ]]
+}
+
+@test "collect: a receipt with a wrong token is a no-op" {
+  small_project
+  build
+  receipts 1 | jq '.[0].token = "guessed"' >"$OUT/reply-1.json"
+  collect
+  [ "$status" -eq 1 ]
+}
+
+@test "collect: a could-not-read element is a no-op" {
+  small_project
+  build
+  receipts 1 | jq '. + [{"judgment":"input-unreadable","file":"part","line":1,"message":"too large","remediation":"r"}]' >"$OUT/reply-1.json"
+  collect
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"could not read"* ]]
+}
+
+@test "collect: a finding of an unknown judgment or a string line is a no-op" {
+  small_project
+  build
+  receipts 1 | jq '. + [{"judgment":"vibes","file":"a.md","line":3,"message":"m","remediation":"r"}]' >"$OUT/reply-1.json"
+  collect
+  [ "$status" -eq 1 ]
+  receipts 1 | jq '. + [{"judgment":"terminology","file":"a.md","line":"3","message":"m","remediation":"r"}]' >"$OUT/reply-1.json"
+  collect
+  [ "$status" -eq 1 ]
+}
+
+@test "collect: full receipts merge every group's findings with receipts removed" {
+  mkdir -p "$PROJECT/.claude/agents"
+  seq 1 60 | sed 's/^/a line /' >"$PROJECT/.claude/agents/a.md"
+  seq 1 60 | sed 's/^/b line /' >"$PROJECT/.claude/agents/b.md"
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/agents/a.md agent adopter false),$(entry .claude/agents/b.md agent adopter false)"
+  build --part-bytes 1200 --group-bytes 1200
+  [ "$status" -eq 0 ]
+  [ "$(jq '.groups | length' "$OUT/manifest.json")" -eq 2 ]
+  receipts 1 | jq '. + [{"judgment":"recommendation-authority","file":"a.md","line":3,"message":"m","remediation":"r"}]' >"$OUT/reply-1.json"
+  receipts 2 >"$OUT/reply-2.json"
+  collect
+  [ "$status" -eq 0 ]
+  [ "$(jq -c 'map(.judgment)' "$BATS_TEST_TMPDIR/judgment.json")" = '["recommendation-authority"]' ]
+}
+
+@test "a content line over 1900 bytes is split into continuation lines that keep its line number" {
+  local tab=$'\t'
+  mkdir -p "$PROJECT/.claude/agents"
+  { printf 'short\n'; head -c 4500 /dev/zero | tr '\0' 'x'; printf '\n'; } >"$PROJECT/.claude/agents/long.md"
+  git -C "$PROJECT" add .claude
+  write_report "$(entry .claude/agents/long.md agent adopter false)"
+  build
+  [ "$status" -eq 0 ]
+  run bash -c "cat '$OUT'/part-*.md | grep -cE '^ *2${tab}x+\$'"
+  [ "$output" = "3" ]
+  [ "$(cat "$OUT"/part-*.md | LC_ALL=C awk '{ if (length($0) > 1999) bad = 1 } END { print bad + 0 }')" = "0" ]
+}
+
+@test "a listed path under a symlinked folder that points outside the project is skipped" {
+  mkdir -p "$PROJECT/.claude" "$BATS_TEST_TMPDIR/outside"
+  printf 'outside secret\n' >"$BATS_TEST_TMPDIR/outside/a.md"
+  ln -s "$BATS_TEST_TMPDIR/outside" "$PROJECT/.claude/agents"
+  write_report "$(entry .claude/agents/a.md agent adopter false)"
+  build
+  [ "$status" -eq 3 ]
+}
+
+@test "build never copies a file reached through a symlinked parent folder that points outside the project" {
+  small_project
+  sentinel="OUTSIDE-SENTINEL-7f3a9c1e"
+  mkdir -p "$BATS_TEST_TMPDIR/outside"
+  printf '%s\n' "$sentinel" >"$BATS_TEST_TMPDIR/outside/a.md"
+  ln -s "$BATS_TEST_TMPDIR/outside" "$PROJECT/.claude/agents"
+  write_report "$(entry .claude/skills/a/SKILL.md skill adopter false),$(entry .claude/agents/a.md agent adopter false)"
+  build
+  [ "$status" -eq 0 ]
+  ls "$OUT"/part-*.md >/dev/null
+  grep -rqF -- "$sentinel" "$OUT" && return 1
+  grep -qF -- "first a" "$OUT"/part-*.md
+}
+
+@test "a failed build leaves the output folder empty so a retry is not refused" {
+  small_project
+  mkdir -p "$BATS_TEST_TMPDIR/broken-bin"
+  printf '#!/bin/sh\nexit 1\n' >"$BATS_TEST_TMPDIR/broken-bin/od"
+  chmod +x "$BATS_TEST_TMPDIR/broken-bin/od"
+  PATH="$BATS_TEST_TMPDIR/broken-bin:$PATH" build
+  [ "$status" -ne 0 ]
+  [ -z "$(ls -A "$OUT")" ]
+  build
+  [ "$status" -eq 0 ]
 }
