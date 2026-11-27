@@ -35,8 +35,8 @@
 #
 # Skips apply under autonomy (autonomy_active in autonomy-lib.sh) only, except
 # a branch another live Claude session holds and a branch whose pending audit
-# checkpoint is a hand-off from this session once its reading has dropped below
-# the line (at or past it the band handoff answers first), which are skipped
+# checkpoint is a hand-off from this session once this session's reading has
+# dropped below the line (at or past it the band handoff answers first), which are skipped
 # always; the skip rules are in wiki/concepts/GAIA Next.md (## Skips under autonomy, ## Skips in every run).
 #
 # comments prints

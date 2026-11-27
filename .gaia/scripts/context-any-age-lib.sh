@@ -5,8 +5,8 @@
 #
 # Owns: gaia_context_read_any_age (the reading of a session whatever its age,
 # for a reader that treats an old reading from the same session as still
-# valid, since context only grows within a session) and
-# gaia_context_session_save_path (the one definition of a session's checkpoint
+# valid, since context only grows within a session, except after compaction)
+# and gaia_context_session_save_path (the one definition of a session's checkpoint
 # save target). The parse stays beside gaia_context_read in the checkpoint lib.
 #
 # Sourcing defines functions only and runs no external command. Bash 3.2

@@ -9,8 +9,8 @@
 # below answers first.
 #
 # The band handoff: before any queue tier, a session whose own context reading
-# (any age: context only grows within a session) is at the red band or past it
-# is handed a `handoff` object instead of a job.
+# (any age: context only grows within a session, except after compaction) is
+# at the red band or past it is handed a `handoff` object instead of a job.
 #
 # Reads only. Every unknown (no session id, an absent, corrupt or unkeyable
 # state) is no skip and no handoff: the picker never hides work it cannot
