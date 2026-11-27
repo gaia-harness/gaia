@@ -44,7 +44,7 @@
 # Read cuts a line over 2000 characters and the receipt token sits on its own
 # short line, so the receipt could not catch that cut. A content line over
 # 1900 bytes is therefore written as continuation lines that repeat its line
-# number, each under that limit.
+# number, each under 2000 characters.
 
 set -euo pipefail
 

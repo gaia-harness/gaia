@@ -70,7 +70,7 @@ One read-only pass makes the five judgments no script can: description substance
    bash .gaia/scripts/fitness-judge-input.sh build --check <SCRATCH>/check.json --out-dir <SCRATCH>/judge
    ```
 
-   Exit 3 is **nothing to judge**: dispatch nothing; the report (Step 5) says the judgment pass had nothing to judge. Any exit other than 0 and 3 stops Step 4 as could-not-run, reported with the stderr line, never as clean or skipped; the failed build leaves its output folder empty, so a retry into the same `--out-dir` runs. Exit 0 prints one `group <g> reply <path>` line per group. The script's header owns what enters the input and how it splits into groups of parts that each fit one Read.
+   Exit 3 is **nothing to judge**: dispatch nothing; the report (Step 5) says the judgment pass had nothing to judge. Any other non-zero exit stops Step 4, and Step 5 reports that the judgment pass could not run, with the stderr line. Exit 0 prints one `group <g> reply <path>` line per group. The script's header owns what enters the input and how it splits into groups of parts that each fit one Read.
 
 2. Dispatch one `Agent(subagent_type: "fitness-judge")` per group, all in one message. Each prompt is what this prints for its group:
 
@@ -107,7 +107,7 @@ Paste the card verbatim, every line as the CLI printed it. Do not summarize, reg
 Then, in this order:
 
 1. **Built-ins.** Each entry of `<SCRATCH>/builtins.json`: ran, or skipped with its reason. Quote a `claude doctor` result only as far as it names a problem.
-2. **Judgment.** The Step 4 findings grouped by judgment, each with file, line, message and remediation, labelled advisory and ungraded; or the sentence saying the judgment pass had nothing to judge.
+2. **Judgment.** The Step 4 findings grouped by judgment, each with file, line, message and remediation, labelled advisory and ungraded; the sentence saying the judgment pass had nothing to judge; or the sentence saying it could not run, with the build's stderr line.
 3. **Remediation.** Every finding's remediation (the card's FINDINGS block carries them); an `upstream` finding names `/update-gaia` as its fix.
 4. One line: run `/doctor` and `/doctor prompt-audit` interactively for the Claude Code diagnostics and the prompt review this command does not run.
 

@@ -1,6 +1,6 @@
 ---
 name: fitness-judge
-description: 'Dispatched only by /gaia-fitness: judges every input part named in the brief and replies with one JSON array of receipts and findings. Never invoked directly.'
+description: 'Dispatched only by /gaia-fitness: judges every input part named in the brief and replies with one JSON array. Never invoked directly.'
 model: sonnet
 tools: Read
 omitClaudeMd: true
