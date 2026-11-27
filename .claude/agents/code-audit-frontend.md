@@ -286,7 +286,7 @@ Rule-based line-level checks are done by specialist subagents in parallel with t
 This command is the file's ONE derivation of `BASE_REF`, `BASE_REASON`, `KEY_REF`, `ANCHOR_TREE`, `BASE_SHA`, `KEY_BASE`, `AUDIT_KEY`, `CHANGED`, `REVIEW_DIFF`, `ELIG_BASE`, `ELIG_CHANGED` and `DEFINITION`, and every later consumer takes the value it printed rather than deriving its own. **When the invoking context supplies a base** (`<base>...HEAD` in the prompt), add `--base-override <base>` to it: that overrides `BASE_REF` and `BASE_SHA` only, while `KEY_REF` and `KEY_BASE` still come from the resolver, which made the anchor decision; on that path leave `--review-base`, `--base-reason` and `--anchor-tree` off the sidecar writer call.
 
 ```bash
-<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-frontend --root <root> --skip-full-base --eligibility --review-path '*.ts' --review-path '*.tsx' --specialists
+<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-frontend --root <root> --dispatch-tree <expected-tree> --skip-full-base --eligibility --review-path '*.ts' --review-path '*.tsx' --specialists
 ```
 
 Read `<root>/.claude/agents/code-audit-frontend.md` only when the output carries `DEFINITION=reread <path>`, and follow that copy for the rest of the round; on `DEFINITION=unchanged` do not Read it, because the copy you were dispatched with is current.

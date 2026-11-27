@@ -30,7 +30,7 @@ Your definition owns three things here: the root fence, the scope resolver comma
 - `REVIEW_DIFF` is the absolute path of your review input: a diff of exactly your `CHANGED` paths holding the branch's own hunks since the anchor, with any merge-commit resolution shown as its own diff. An empty value with a stderr warning means it could not be produced.
 - A dispatch that carries `Handed review findings:` may name files outside your review increment and outside `CHANGED`. Those findings are yours to account for whatever the increment holds; `## Handed review findings` owns the duty.
 
-Capture your own branch-own digest at scope resolution with `.gaia/scripts/audit-scope-digest.sh --capture`, and at marker-write time read that captured value back with `--read` and pass it as `--scope-digest`; never re-derive it in the writing call, and a rotation between the two means the review was superseded and you must be re-dispatched on the new HEAD. The scope resolver takes that capture as its last step and prints it as `D_SCOPE`, so there is no separate `--capture` call to make. Re-running the resolver mid-review returns the same value until you publish a marker or a refusal keyed to it.
+Capture your own branch-own digest at scope resolution with `.gaia/scripts/audit-scope-digest.sh --capture`, and at marker-write time read that captured value back with `--read` and pass it as `--scope-digest`; never re-derive it in the writing call, and a rotation between the two means the review was superseded and you must be re-dispatched on the new HEAD. The scope resolver takes that capture as its last step and prints it as `D_SCOPE`, so there is no separate `--capture` call to make. Type your dispatch prompt's `Expected HEAD tree` value where the resolver line writes `<expected-tree>`, and drop `--dispatch-tree <expected-tree>` when the prompt names none: the capture records that tree, so the next round's dispatch on a new tree replaces a capture your round left unspent. Re-running the resolver mid-review returns the same value until you publish a marker or a refusal keyed to it.
 
 The one exception is a `review scope superseded` refusal from the writer: it releases your capture, so a resolver re-run would hand you a new value you never reviewed. Your round is over at that point; stop and ask to be re-dispatched.
 
@@ -130,15 +130,18 @@ bash <root>/.gaia/scripts/audit-write-clearance.sh \
   --member <member> \
   --provenance earned \
   --base '<KEY_BASE>' \
-  --scope-digest '<SCOPE_DIGEST>'
+  --scope-digest '<SCOPE_DIGEST>' \
+  --dispatch-tree '<expected-tree>'
 ```
+
+`<expected-tree>` is the value you gave the resolver; drop the flag here only when you dropped it there.
 
 The marker is keyed to your branch-own digest: a clean catch-up merge of the base rotates nothing, any change to the branch's own patch on your paths does, and you must re-audit. Never write a marker for content other than current HEAD, and never write another member's marker.
 <!-- gaia:maintainer-only:start -->
 Enforced by `.gaia/scripts/tests/audit-catchup-merge.bats`, test "a clean catch-up leaves every digest, every marker and the loop state alone".
 <!-- gaia:maintainer-only:end -->
 
-A `review scope superseded` refusal here means your scope digest no longer matched your branch-own digest at write time: no artifact was written and the round is forfeited. That refusal releases your stale capture as it exits, so the re-dispatch on the new HEAD clears normally. Do not re-run the resolver yourself after it: it would hand you a capture for content you did not review.
+A `review scope superseded` refusal here means your scope digest no longer matched your branch-own digest at write time: no artifact was written and the round is forfeited. That refusal releases your stale capture as it exits, so the re-dispatch on the new HEAD clears normally. Do not re-run the resolver yourself after it: it would hand you a capture for content you did not review. The form naming `the capture belongs to another dispatch` means a later round already took your capture; it releases nothing, and your round is over the same way.
 
 **1, withheld.** On any unresolved Critical, unaddressed Major, or unmet extra condition, record a **refusal** (a member's recorded verdict withholding clearance after a full review; proof the member ran; resolve the finding, never re-dispatch it as a no-op) with the same writer, and stop:
 

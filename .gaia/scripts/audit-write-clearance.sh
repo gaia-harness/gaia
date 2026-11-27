@@ -8,6 +8,7 @@
 #                            --provenance earned|refused \
 #                            [--base <sha>] \
 #                            [--scope-digest <64-hex>] \
+#                            [--dispatch-tree <tree>] \
 #                            [--supersede-refusal <reason>] \
 #                            [--review full|light] \
 #                            [--route-record <path>] \
@@ -66,6 +67,12 @@
 #                  publishing a marker keyed to unread content. A malformed
 #                  value (not exactly 64 lowercase hex) is a usage error, not a
 #                  staleness refusal.
+#   --dispatch-tree <tree>
+#                  The `Expected HEAD tree` the member's dispatch named, gated on
+#                  the same writes as --scope-digest except a light review. The
+#                  write refuses when this member's capture records a different
+#                  tree, or records one and this is missing; see the dispatch-tree
+#                  gate's header comment (gates sibling).
 #   --review full|light
 #                  OPTIONAL, valid ONLY with --provenance earned. Earned bodies
 #                  always carry `review`; absent the flag it is `full`, so every
@@ -149,6 +156,7 @@ usage: audit-write-clearance.sh --root <path> --member <name>
                                 --provenance earned|refused
                                 [--base <sha>]
                                 [--scope-digest <64-hex>]
+                                [--dispatch-tree <tree>]
                                 [--supersede-refusal <reason>]
                                 [--review full|light]
                                 [--route-record <path>]
@@ -162,6 +170,8 @@ usage: audit-write-clearance.sh --root <path> --member <name>
   --scope-digest <64-hex>       gated on a plain earned write; refuses when it
                                 differs from the write-time digest. See the
                                 header comment above.
+  --dispatch-tree <tree>        the tree the member's dispatch named; refuses
+                                when the capture records another.
   --supersede-refusal <reason>  valid only with --provenance earned; records a
                                 reasoned reversal of this member's own prior
                                 same-digest refusal and removes it.
@@ -324,6 +334,7 @@ else
 fi
 
 _write_clearance_derive_audit_key
+_write_clearance_check_dispatch_tree
 _write_clearance_account_open_findings
 
 # Every member files a FINDINGS sidecar, its report of record, so this flag

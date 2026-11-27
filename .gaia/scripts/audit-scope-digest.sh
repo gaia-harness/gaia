@@ -16,7 +16,7 @@
 #
 # Usage:
 #   audit-scope-digest.sh --capture [--recapture] [--base-reason <token>] [--base-overridden]
-#                         --root <path> --member <name> --base <key-base> [--help|-h]
+#                         [--dispatch-tree <tree>] --root <path> --member <name> --base <key-base> [--help|-h]
 #   audit-scope-digest.sh --read    --root <path> --member <name> --base <key-base>
 #   audit-scope-digest.sh --release --root <path> --member <name> --base <key-base>
 #
@@ -36,6 +36,10 @@
 #              `--base-overridden` records that the caller overrode the review
 #              base instead of taking the resolved one; both are valid only
 #              with --capture, and the clearance writer reads them back.
+#              `--dispatch-tree` is the tree the member's dispatch named
+#              (`Expected HEAD tree`), stored as `dispatch_tree`; it is what
+#              lets a new round replace an unspent capture (see the
+#              SPENT-capture block).
 #   --read     Prints the stored 64-hex digest and exits 0. Absent,
 #              unreadable, unparseable, or non-64-hex: prints nothing, exits
 #              non-zero. Fails closed to empty rather than to a placeholder,
@@ -45,11 +49,11 @@
 #              captured.
 #   --release  Removes this member's stored capture and exits 0, or exits 0
 #              when none is stored. On a capture that cannot be removed:
-#              a diagnostic on stderr, exits non-zero. A round that ends
-#              without publishing a conclusion calls this (the clearance
-#              writer's member-refusal accounting-failure recovery names it); see the SPENT-capture
-#              block below for why such a round cannot be seen to end any
-#              other way.
+#              a diagnostic on stderr, exits non-zero. The clearance
+#              writer's member-refusal accounting-failure recovery tells
+#              the member to run this before re-running the resolver; see the SPENT-capture
+#              block below for why the dispatch-tree binding cannot replace
+#              the capture there.
 #
 # Scope file: <root>/.gaia/local/audit/<audit-key>.<member>.scope.json, where
 # <audit-key> is `gaia_audit_key "<key-base>" "<root>"`
@@ -61,15 +65,17 @@
 # filename would collide across concurrent branches cut from the same base.
 #
 # Body: {"schema":1,"member":"...","scope_digest":"<64-hex>","head":"...",
-# "captured_at":"...","base_reason":"<token or empty>","base_overridden":false}. JSON rather than a bare digest so a truncated write
+# "captured_at":"...","base_reason":"<token or empty>","base_overridden":false,
+# "dispatch_tree":"<tree or empty>"}. JSON rather than a bare digest so a truncated write
 # fails to parse instead of silently reading as a short digest.
 #
 # `--capture` is idempotent per audit key, member, AND REVIEW -- it returns an
 # existing capture unchanged, and `--recapture` is the one deliberate override.
 # The review term is load-bearing and is not a freshness check: age is never
-# consulted. A capture is replaced only when the member has already published a
-# marker or a refusal keyed to it, which is what makes it the artifact of a
-# round that ENDED rather than one still running. See the SPENT-capture block
+# consulted. A capture is replaced only when it is the artifact of a round that
+# ENDED rather than one still running: the member has published a marker or a
+# refusal keyed to it, or a new dispatch names the current HEAD tree and the
+# capture was taken under another. See the SPENT-capture block
 # beside the capture arm for why the audit key alone cannot carry this: a
 # refused round does not advance the key, so idempotence per key deadlocked the
 # gate permanently on the next round.
@@ -122,13 +128,14 @@ fi
 
 usage() {
   cat >&2 <<'EOF'
-usage: audit-scope-digest.sh --capture [--recapture] [--base-reason <token>] [--base-overridden] --root <path> --member <name> --base <key-base> [--help|-h]
+usage: audit-scope-digest.sh --capture [--recapture] [--base-reason <token>] [--base-overridden] [--dispatch-tree <tree>] --root <path> --member <name> --base <key-base> [--help|-h]
        audit-scope-digest.sh --read    --root <path> --member <name> --base <key-base>
        audit-scope-digest.sh --release --root <path> --member <name> --base <key-base>
 
-  --release    remove this member's stored capture, so the next round recaptures
-               fresh. For a round that ends publishing nothing while a repair
-               commit rotates the digest.
+  --release    remove this member's stored capture, so the next resolver run
+               recaptures fresh. For a dispatch that re-runs the resolver
+               after the clearance writer's member-refusal accounting-failure
+               recovery names it.
   --recapture  valid only with --capture; replace an existing capture for this
                audit key and member instead of returning it unchanged. For a
                caller that legitimately changed the content its review ends on
@@ -138,6 +145,10 @@ usage: audit-scope-digest.sh --capture [--recapture] [--base-reason <token>] [--
                      the round, stored in the capture.
   --base-overridden  valid only with --capture; marks the round's review base as
                      caller-overridden, stored in the capture.
+  --dispatch-tree    valid only with --capture; the tree the member's dispatch
+                     named, stored in the capture. An unspent capture is
+                     replaced when this is the current HEAD tree and differs
+                     from the stored one.
 EOF
 }
 
@@ -152,6 +163,7 @@ BASE=""
 RECAPTURE=0
 BASE_REASON=""
 BASE_OVERRIDDEN=false
+DISPATCH_TREE=""
 CAPTURE_ONLY_OPTION=""
 
 while [ "$#" -gt 0 ]; do
@@ -181,6 +193,11 @@ while [ "$#" -gt 0 ]; do
       BASE_OVERRIDDEN=true
       CAPTURE_ONLY_OPTION="--base-overridden"
       shift
+      ;;
+    --dispatch-tree)
+      DISPATCH_TREE="${2:-}"
+      CAPTURE_ONLY_OPTION="--dispatch-tree"
+      shift 2 2>/dev/null || shift
       ;;
     --root)
       ROOT="${2:-}"
@@ -332,13 +349,31 @@ fi
 # that refusal exits. The cost is the one forfeited round, not every round after
 # it.
 #
-# A member that knows its round ended without publishing, and that the repair
-# commit will rotate its digest, releases its own capture with --release on the
-# way out, and the post-repair round recaptures fresh and clears on its first
-# try. Releasing is safe there for the reason it is unsafe after a forfeiture: a
-# round that wrote no marker leaves no fresh capture that could attest anything.
+# The NEXT round need not see it, because it arrives with a dispatch the old
+# one never had. Each capture stores the tree its dispatch named
+# (`--dispatch-tree`, the dispatch prompt's `Expected HEAD tree`). A capture
+# call whose dispatch tree is the current HEAD tree and differs from the stored
+# one is a new dispatch on post-repair content, so it replaces the unspent
+# capture and the post-repair round clears on its first try. A running review
+# re-runs its fence with the tree it was dispatched on, equal to the stored
+# one, so it keeps. An old-round member re-running its fence after the repair
+# commit passes the old tree, which no longer equals HEAD's, so it keeps too. A
+# missing, malformed or non-tree value keeps.
 #
-# Keeping the second is what preserves the guarantee this arm was written for:
+# This file cannot tell an ended round from an old-round member still between
+# its sidecar and its marker, so the replacement can land under the latter.
+# That member's --read then returns the new digest, equal to the write-time
+# one; the writer's dispatch-tree gate (audit-write-clearance-gates.sh) is what
+# refuses it, because the tree its write names differs from the one the new
+# capture records. One that read its digest before the replacement is refused
+# stale instead, and the writer's forfeiture release keeps a capture recording
+# another dispatch's tree, so either way the replacing round clears on its
+# first try.
+# --release stays required where the same dispatch re-runs the resolver, as the
+# clearance writer's member-refusal accounting-failure recovery does: the
+# dispatch tree is unchanged there, so the binding cannot replace the capture.
+#
+# Keeping a running review's capture is what preserves the guarantee this arm was written for:
 # the fence a member re-runs on every handshake call must not overwrite the
 # capture with the write-time digest, or the writer would compare a value
 # against itself. A running review has published nothing, so it never looks
@@ -353,7 +388,9 @@ fi
 # replacing it changes nothing either. It was dead weight, and a term no test can
 # justify is a term the next reader has to re-derive. The conclusion is the
 # signal because it is the thing that is actually true of a finished round and
-# false of a running one.
+# false of a running one. The dispatch-tree term above is not that head term:
+# it keys on the tree a DISPATCH named, so a commit under a running review
+# leaves that review's tree unequal to HEAD's and keeps its capture.
 SCOPE_DEFAULT_MEMBER="code-audit-frontend"
 
 _scope_capture_is_spent() {
@@ -371,13 +408,25 @@ _scope_capture_is_spent() {
   return 1
 }
 
+# A string comparison against the resolved tree name, never a rev-parse of the
+# value: a ref spelling such as HEAD^{tree} would always resolve to the current
+# tree and void the binding, and a malformed or non-tree value never equals it.
+_scope_dispatch_is_new() {
+  local head_tree stored_tree
+  head_tree="$(git -C "$ROOT" rev-parse 'HEAD^{tree}' 2>/dev/null)" || return 1
+  [ "$DISPATCH_TREE" = "$head_tree" ] || return 1
+  stored_tree="$(jq -r '.dispatch_tree // empty' "$scope_file" 2>/dev/null)" || return 1
+  [ "$DISPATCH_TREE" != "$stored_tree" ]
+}
+
 if [ "$RECAPTURE" -ne 1 ] && [ -f "$scope_file" ]; then
   _existing="$(jq -r '.scope_digest // empty' "$scope_file" 2>/dev/null)" || _existing=""
   case "$_existing" in
     *[!0-9a-f]*) _existing="" ;;
   esac
   [ "${#_existing}" -eq 64 ] || _existing=""
-  if [ -n "$_existing" ] && ! _scope_capture_is_spent "$_existing"; then
+  if [ -n "$_existing" ] && ! _scope_capture_is_spent "$_existing" \
+    && ! _scope_dispatch_is_new; then
     printf '%s\n' "$_existing"
     exit 0
   fi
@@ -446,9 +495,11 @@ jq -cn \
   --arg captured_at "$captured_at" \
   --arg base_reason "$BASE_REASON" \
   --argjson base_overridden "$BASE_OVERRIDDEN" \
+  --arg dispatch_tree "$DISPATCH_TREE" \
   '{schema: $schema, member: $member, scope_digest: $scope_digest,
     head: $head, captured_at: $captured_at,
-    base_reason: $base_reason, base_overridden: $base_overridden}' \
+    base_reason: $base_reason, base_overridden: $base_overridden,
+    dispatch_tree: $dispatch_tree}' \
   >"$temporary_file" || {
   rm -f "$temporary_file"
   emit_error "cannot build the scope body"

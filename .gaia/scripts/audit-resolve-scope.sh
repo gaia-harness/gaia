@@ -17,7 +17,7 @@
 # Usage:
 #   <root>/.gaia/scripts/audit-resolve-scope.sh --member <name> --root <root>
 #       [--review-path <pathspec>]... [--skip-full-base] [--base-override <ref>]
-#       [--eligibility] [--specialists]
+#       [--eligibility] [--specialists] [--dispatch-tree <tree>]
 #
 #   --member          The member resolving its scope. Passed to
 #                     resolve-audit-base.sh --member and to the capture.
@@ -45,6 +45,10 @@
 #                     GITHUB_REPOSITORY are both set, which is what the
 #                     suite's "gh is never called" probe depends on being
 #                     unset.
+#   --dispatch-tree   The `Expected HEAD tree` the member's dispatch named,
+#                     passed to the capture so a new round replaces an unspent
+#                     capture from the last one (audit-scope-digest.sh owns
+#                     the rule).
 #   --specialists     Also print which rule specialists the frontend member
 #                     dispatches, one SPECIALIST line each (see Output). The
 #                     frontend member passes it; without it the output is
@@ -131,7 +135,7 @@
 # of the right tree passes.
 
 _ars_usage() {
-  printf 'usage: audit-resolve-scope.sh --member <name> --root <root> [--review-path <pathspec>]... [--skip-full-base] [--base-override <ref>] [--eligibility] [--specialists]\n' >&2
+  printf 'usage: audit-resolve-scope.sh --member <name> --root <root> [--review-path <pathspec>]... [--skip-full-base] [--base-override <ref>] [--eligibility] [--specialists] [--dispatch-tree <tree>]\n' >&2
 }
 
 member=""
@@ -141,6 +145,7 @@ skip_full_base=0
 base_override=""
 eligibility=0
 specialists=0
+dispatch_tree=""
 review_paths=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -162,6 +167,9 @@ while [ "$#" -gt 0 ]; do
       eligibility=1; shift ;;
     --specialists)
       specialists=1; shift ;;
+    --dispatch-tree)
+      [ "$#" -ge 2 ] || { _ars_usage; exit 2; }
+      dispatch_tree="$2"; shift 2 ;;
     -h|--help)
       _ars_usage; exit 0 ;;
     *)
@@ -498,6 +506,7 @@ fi
 # so re-running this script mid-review changes nothing.
 capture_options=(--base-reason "$BASE_REASON")
 [ -z "$base_override" ] || capture_options+=(--base-overridden)
+[ -z "$dispatch_tree" ] || capture_options+=(--dispatch-tree "$dispatch_tree")
 D_SCOPE="$("$root/.gaia/scripts/audit-scope-digest.sh" --capture "${capture_options[@]}" --root "$root" --member "$member" --base "$KEY_BASE")" || D_SCOPE=""
 [ -n "$D_SCOPE" ] || printf 'could not capture a scope digest; a gating member'"'"'s earned clearance write will refuse without one\n' >&2
 printf 'D_SCOPE=%s\n' "$D_SCOPE"
