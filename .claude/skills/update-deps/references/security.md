@@ -21,7 +21,7 @@ Carry into the later phases the security plan: per advisory, its candidate order
 
 ### Security resolutions
 
-This recipe resolves the security advisories the run's Phase 1 plan still owes, after the waves and Phase 5b. The orchestrating session runs it itself, because acceptance asks the human with `AskUserQuestion`; the resolution steps may be delegated to an agent only while no question is pending. Operate on the root workspace and its `web` package (`apps/web`) only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C apps/web` is the one allowed path argument.
+This recipe resolves the security advisories the run's Phase 1 plan still owes, after the waves and Phase 5b. The orchestrating session runs it itself, because acceptance asks the human with `AskUserQuestion`; the resolution steps may be delegated to an agent only while no question is pending, and never its snapshots or reverts (`#### 3. Snapshots`). Operate on the root workspace and its `web` package (`apps/web`) only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C apps/web` is the one allowed path argument.
 
 Inputs from Phase 1: the opening advisories payload (`.gaia/local/cache/shared/update-deps-advisories.json`), the security plan (per advisory: the candidate order after the apply-set step, and each ask-first answer), the opening `dismissedGhsas`, whether alerts were read this run, and the run mode. Shell variables do not survive between Bash tool calls, and a worktree session refuses a shell variable inside a path, so every path below is a fixed literal: the batch snapshot is `.gaia/local/cache/shared/update-deps-security-batch`, the resolution snapshot is `.gaia/local/cache/shared/update-deps-security-resolution`, and a command takes the literal wherever this page writes `<snapshot>`. The untrusted-text rule in `### Security preview` binds this phase too.
 
@@ -50,6 +50,8 @@ A difference reverts that resolution (step 6) and reports the advisory still ope
 #### 3. Snapshots
 
 This phase keeps its own snapshot directories under `.gaia/local/cache/shared/` and never reuses the directory Phase 5b filled. Before the batch, take one batch snapshot; before each resolution, and before each individual re-apply in step 6, take a fresh resolution snapshot the same way.
+
+**The orchestrating session takes every snapshot and runs every revert**: both run git that changes state, which a sub-agent is refused. A delegated agent gets the baseline ids it needs as literals and runs only the steps between a snapshot and the next revert or snapshot. Where a step calls for a revert, it reports the revert needed, with its reason, and stops; a dispatch that ends with no report counts as a failure of what it ran, and gets that failure's revert. The orchestrating session reverts, and takes any snapshot the next dispatch needs.
 
 A snapshot is a git commit object holding the tracked files (its **baseline**), plus the direct dependencies' resolved versions in the snapshot directory. The files are never copied: the project's settings deny editing `pnpm-lock.yaml`, and Claude Code refuses a `cp` of the lockfile in either direction and a redirect that writes to it. git commands that read the lockfile or restore it are not refused.
 
