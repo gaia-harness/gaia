@@ -400,9 +400,8 @@ _scope_capture_is_spent() {
 
 # Safe only between rounds: a running review's capture is unspent too, and
 # releasing it would let a resolver re-run hand that member a digest it never
-# reviewed. Captures under
-# an older key base are released too: no resolver reads them again, so
-# removing one changes nothing.
+# reviewed. Captures under an older key base are released too: no resolver
+# reads them again, so removing one changes nothing.
 if [ "$MODE" = "release-unspent" ]; then
   command -v gaia_branch_slug >/dev/null 2>&1 || {
     emit_error "cannot load the audit key lib (.gaia/scripts/audit-key-lib.sh)"
@@ -422,7 +421,7 @@ if [ "$MODE" = "release-unspent" ]; then
     # The slug percent-encodes every dot, so a name that fits
     # <base>.<slug>.<member> leaves only the hex key base after the strip;
     # anything else (a recorded member that disagrees with the file name, a
-    # stray file) leaves dots and is skipped.
+    # stray file) leaves a non-hex remainder and is skipped.
     key_base="${scope_file##*/}"
     key_base="${key_base%".${branch_slug}.${MEMBER}.scope.json"}"
     case "$key_base" in
