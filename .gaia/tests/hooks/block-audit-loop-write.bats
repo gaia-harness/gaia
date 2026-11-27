@@ -1018,7 +1018,7 @@ assert_recorder_run_denied_and_staging_allowed() {
 }
 
 # bats test_tags=whole-tree
-@test "every .gaia/scripts script that sources context-checkpoint-lib.sh directly is named by every context-writer list" {
+@test "every .gaia/scripts script that sources context-checkpoint-lib.sh directly is named by each context-writer sourcer list" {
   local scripts_directory="$BATS_TEST_DIRNAME/../../scripts"
   local matcher_file="$HOOKS_SOURCE_DIRECTORY/lib/hook-only-scripts-guard.sh"
   local hook_file="$HOOKS_SOURCE_DIRECTORY/block-audit-loop-write.sh"
@@ -1030,7 +1030,7 @@ assert_recorder_run_denied_and_staging_allowed() {
     grep -qF -- "| $base_name |" "$matcher_file" || missing="$missing matcher:$base_name"
     grep -qF -- "'$base_name'" "$hook_file" || missing="$missing needle:$base_name"
     grep -qF -- "*$base_name*" "$scan_file" || missing="$missing scan:$base_name"
-    # The pre-filter case may rely on a broader literal such as *audit-loop*.
+    # The pre-filter's *audit-loop* literal covers audit-loop* names.
     case "$base_name" in
       audit-loop*) ;;
       *) grep -qF -- "*$base_name*" "$hook_file" || missing="$missing prefilter:$base_name" ;;
