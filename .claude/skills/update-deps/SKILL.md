@@ -441,7 +441,7 @@ Spawn one agent per group, on its model above (or sequentially if resource-const
 
 Waves A and B move direct specs only, and pnpm keeps a transitive dependency's locked version for as long as its parent's range still admits it, so a vulnerable transitive whose patched release is already in range survives every earlier phase. This phase asks pnpm for the newest in-range version of every transitive dependency. It runs before Phase 6 so the post-update override audit reads the refreshed tree.
 
-Skip it when the human skipped `transitive-refresh` in the preview (report `Declined in preview`), under `--scope` (report `Not run (--scope)`), or under `--security` (report `Not run (--security)`). An advisory this refresh clears (its `advisory-landed` check exits 0 afterwards) is resolved by `in-range refresh` and gets no further resolution. Otherwise spawn a **Haiku agent** (`model: "haiku"`). Its prompt tells it to read `.claude/skills/update-deps/references/transitive-refresh.md` and follow it exactly, with the frozen names as FROZEN_NAMES. The **frozen names** are every package in `skipped[]` with `reason: "held"`, plus every member of a group in the skip set (empty when nothing was held or skipped).
+Skip it when the human skipped `transitive-refresh` in the preview (report `Declined in preview`), under `--scope` (report `Not run (--scope)`), or under `--security` (report `Not run (--security)`). An advisory this refresh clears (its `advisory-landed` check exits 0 afterwards) is resolved by `in-range refresh` and gets no further resolution. Otherwise run step 1 (the snapshot) of `.claude/skills/update-deps/references/transitive-refresh.md` yourself, and when it passes spawn a **Haiku agent** (`model: "haiku"`). Its prompt tells it to read that file and run steps 2 to 5 exactly as written, with the frozen names as FROZEN_NAMES and the step 1 baseline id as BASELINE. Steps 1 and 6 (the revert) stay with this session, because a sub-agent is refused their git; run step 6 when that step says to. The **frozen names** are every package in `skipped[]` with `reason: "held"`, plus every member of a group in the skip set (empty when nothing was held or skipped).
 
 ## Phase 5c: Security resolutions
 
@@ -468,7 +468,7 @@ In this checkout `run --emit-updates` also lists `.gaia/cli` member entries carr
 
 ## Phase 7: Final report
 
-The orchestrating session builds and prints the report itself, from the agent reports, the Phase 1 decisions, the Phase 5c result, and a final-tree `pnpm audit` it runs inline: read `.claude/skills/update-deps/references/final-report.md` and follow it exactly. It never commits.
+The orchestrating session builds and prints the report itself, from the agent reports, the Phase 1 decisions, the Phase 5b and Phase 5c results, and a final-tree `pnpm audit` it runs inline: read `.claude/skills/update-deps/references/final-report.md` and follow it exactly. It never commits.
 
 ## Phase 8: Publish
 
