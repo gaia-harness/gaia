@@ -120,6 +120,7 @@ SCOPE_COMMAND="$(grep -m1 '^<root>/\.gaia/scripts/audit-resolve-scope\.sh ' "$ST
 [ -n "$SCOPE_COMMAND" ] \
   || { fail "the frontend agent file carries no literal scope command"; exit 1; }
 SCOPE_COMMAND="${SCOPE_COMMAND//<root>/$FIXTURE}"
+SCOPE_COMMAND="${SCOPE_COMMAND//<expected-tree>/$(git -C "$FIXTURE" rev-parse 'HEAD^{tree}')}"
 SCOPE_OUTPUT="$(cd "$FIXTURE" && bash -c "$SCOPE_COMMAND" </dev/null 2>"$WORK/scope.err")" \
   || { cat "$WORK/scope.err" >&2; fail "the agent file's scope command failed on the fixture"; exit 1; }
 

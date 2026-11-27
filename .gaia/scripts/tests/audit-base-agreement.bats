@@ -377,8 +377,9 @@ MOCK
 #
 # evaluate_scope <member> <repo>: runs that member's real resolver command against
 # <repo> and prints its stdout, returning its status. `<root>` is replaced by
-# the fixture path textually, the substitution a member makes when it types the
-# working root in; the result runs through `bash -c` so the definition's own
+# the fixture path and `<expected-tree>` by its HEAD tree textually, the
+# substitutions a member makes when it types in the working root and its
+# dispatch's `Expected HEAD tree`; the result runs through `bash -c` so the definition's own
 # quoting (the frontend's `'*.ts'` pathspecs) is parsed as a shell parses it.
 # stderr is left alone so a caller can read the resolver's diagnostics.
 #
@@ -399,6 +400,7 @@ evaluate_scope() {
     printf '%s: expected exactly one resolver command line in its definition\n' "$member" >&2
     return 1
   }
+  line="${line//<expected-tree>/$(git -C "$repo" rev-parse 'HEAD^{tree}')}"
   if [ -z "$memo_path" ]; then
     bash -c "${line//<root>/$repo}"
     return
@@ -948,7 +950,7 @@ probe_deadlock() {
       printf '%s does not send its member to the protocol scope section\n' "$member"
       return 1
     }
-    grep -qE "^<root>/\.gaia/scripts/audit-resolve-scope\.sh --member ${member} --root <root>$" "$member_file" || {
+    grep -qE "^<root>/\.gaia/scripts/audit-resolve-scope\.sh --member ${member} --root <root> --dispatch-tree <expected-tree>$" "$member_file" || {
       printf '%s does not run the resolver in the form that prints FULL_CHANGED\n' "$member"
       return 1
     }
@@ -1245,6 +1247,7 @@ make_stacked_repo() {
   grep -qF -- '--eligibility' <<<"$line"
   line="${line//--root <root>/--root $single_quote$single_quote}"
   line="${line//<root>/$repo}"
+  line="${line//<expected-tree>/$(git -C "$repo" rev-parse 'HEAD^{tree}')}"
   run --separate-stderr env -u GITHUB_ACTIONS bash -c "cd \"\$1\" && ${line}" _ "$ambient"
   [ "$status" -ne 0 ]
   grep -qF -- '--root is empty' <<<"$stderr"

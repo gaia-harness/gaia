@@ -401,6 +401,25 @@ EOF
   [ "$(jq -r '.base_overridden' "$scope_file")" = "false" ]
 }
 
+@test "--dispatch-tree reaches the capture: stored with the flag, empty without it" {
+  local repo tree key scope_file
+  repo="$(make_repo capture-dispatch-tree)"
+  start_branch "$repo" feat
+  commit_file "$repo" app/a.ts
+  tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
+  run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root "$repo" \
+    --dispatch-tree "$tree"
+  [ "$status" -eq 0 ]
+  key="$(value_of "$output" AUDIT_KEY)"
+  [ -n "$key" ]
+  scope_file="$repo/.gaia/local/audit/${key}.code-audit-maintainer-shell.scope.json"
+  [ "$(jq -r '.dispatch_tree' "$scope_file")" = "$tree" ]
+  rm -f "$scope_file"
+  run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-maintainer-shell --root "$repo"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.dispatch_tree' "$scope_file")" = "" ]
+}
+
 @test "--base-override stores base_overridden true and still stores the resolver's reason" {
   local repo first key scope_file
   repo="$(make_repo capture-override)"

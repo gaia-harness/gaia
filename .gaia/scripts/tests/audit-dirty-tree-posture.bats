@@ -166,13 +166,15 @@ make_repo() {
 }
 
 # run_member_resolver MEMBER REPO: runs MEMBER's own resolver invocation, as its
-# definition spells it, with <root> substituted by REPO. Output lands in bats'
+# definition spells it, with <root> substituted by REPO and <expected-tree> by
+# REPO's HEAD tree. Output lands in bats'
 # $output / $stderr / $status.
 run_member_resolver() {
   local member="$1" repo="$2" resolver_command
   resolver_command="$(resolver_invocation "$(member_path "$member")")"
   [ -n "$resolver_command" ] || { echo "no resolver invocation in $member" >&2; return 1; }
   resolver_command="${resolver_command//<root>/$repo}"
+  resolver_command="${resolver_command//<expected-tree>/$(git -C "$repo" rev-parse 'HEAD^{tree}')}"
   run --separate-stderr bash -c "$resolver_command"
 }
 
