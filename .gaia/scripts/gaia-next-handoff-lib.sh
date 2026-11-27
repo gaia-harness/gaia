@@ -3,10 +3,10 @@
 # The picker's hand-off skip. The bound hook records a checkpoint with
 # `handoff: true` and the session's id when the context line is reached, and
 # the job it ends is meant to continue in a fresh session. A /loop re-runs the
-# picker in the same session, so once that session's reading has dropped below
-# the line (a compaction) it skips the branch and takes other work; any other
-# session picks it up with no answer. At or past the line the band handoff
-# below answers first.
+# picker in the same session, so whenever the band handoff below does not
+# answer first (the reading dropped below the line after a compaction, or there
+# is no usable reading) it skips the branch and takes other work; any other
+# session picks it up with no answer.
 #
 # The band handoff: before any queue tier, a session whose own context reading
 # (any age: context only grows within a session, except after compaction) is
