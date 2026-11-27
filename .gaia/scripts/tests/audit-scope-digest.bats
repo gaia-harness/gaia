@@ -725,7 +725,7 @@ rotate_machinery() {
 # The dispatch-tree binding. Each round's dispatch names the tree it audits
 # (`Expected HEAD tree`), and the capture stores it. A capture call that names
 # the current HEAD tree under a different stored tree is a NEW dispatch, so a
-# capture the last round left unspent (it published nothing) is replaced
+# capture the last round left unspent (it wrote no marker or refusal) is replaced
 # instead of making the post-repair round forfeit once. A straggler from the old
 # dispatch names the old tree, which no longer equals HEAD's, so it keeps.
 
