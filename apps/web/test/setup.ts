@@ -1,5 +1,6 @@
 import {afterEach} from 'vitest';
 import path from 'node:path';
+import {DEFAULT_API_URL} from './default-api-url';
 import {resetTestData} from './mocks/database';
 // eslint-disable-next-line no-restricted-imports -- this is the global Vitest setupFile (vitest.config.ts setupFiles); the single sanctioned place to start the MSW server harness for the whole suite, not a consumer test reaching into server surface
 import './test.server';
@@ -19,7 +20,7 @@ import './test.server';
 // needs one too: pnpm sets it only for processes it launches from a
 // package.json script, so `pnpm exec vitest` and editor integrations, which
 // spawn the binary directly, have none.
-process.env.API_URL ??= 'http://localhost:3001';
+process.env.API_URL ??= DEFAULT_API_URL;
 process.env.npm_package_version ??= '0.0.0';
 process.env.SESSION_SECRET ??= 'test-secret';
 process.env.SITE_URL ??= 'http://localhost:3000';
