@@ -12,14 +12,18 @@
 // then the source text verbatim. Spec-derived order: the SPEC's `## Behaviors`
 // section (heading through the line before the next `## ` heading); the SPEC
 // frontmatter's `flows:` key (its line through the line before the next
-// top-level key); then, for each `task-*.md` of the plan folder in sorted
-// order, the whole doc when it carries a `- Flow test (` line, else its
-// `## Tests` section (a doc with no such heading gives none); then
-// ORCHESTRATOR.md's closing phase entry, the `**Phase <N>, ` entry with the
-// highest N outside code fences, through the line before the next `**Phase `
-// or `## ` line outside a fence (the extent `plan-verify-lib.sh` `phase_entry`
-// reads). Spec-less order: for each task doc, its `## Acceptance criteria`
-// section, then its `## Tests` section; no SPEC, flow or closing-phase section.
+// top-level key); README.md's task-graph rows, each line whose first cell is
+// `Phase <N>` (the rows `plan-verify-lib.sh` `readme_phase_stems` reads), so
+// the lens can place every task doc in its phase; then, for each `task-*.md`
+// of the plan folder in sorted order, the whole doc when it carries a
+// `- Flow test (` line, else its `## Tests` section (a doc with no such heading
+// gives none); then every ORCHESTRATOR.md phase entry in file order, each a
+// `**Phase <N>, ` line outside code fences through the line before the next
+// `**Phase ` or `## ` line outside a fence (the extent `plan-verify-lib.sh`
+// `phase_entry` reads), so the lens sees which tests each phase gate runs.
+// Spec-less order: the task-graph rows, then for each task doc its
+// `## Acceptance criteria` section and its `## Tests` section, then the phase
+// entries; no SPEC or flow section.
 //
 // Refusal: a source line that starts, after leading whitespace, with
 // `<!-- gaia:digest-section` would forge a delimiter, so the digest is refused,
@@ -98,34 +102,33 @@ function flowsKeyLines(specText) {
   return collected;
 }
 
-// The highest-numbered phase entry, fence-aware like `phase_entry`.
-function closingPhaseLines(orchestratorText) {
-  const lines = orchestratorText.split('\n');
+// Every phase entry, fence-aware like `phase_entry`, each through the line
+// before the next `**Phase ` or `## ` line outside a fence.
+function phaseEntryLines(orchestratorText) {
+  const collected = [];
   let inFence = false;
-  let closing = null;
-  lines.forEach((line, index) => {
+  let inEntry = false;
+  for (const line of orchestratorText.split('\n')) {
     const trimmed = line.trim();
     if (FENCE_LINE.test(trimmed)) {
       inFence = !inFence;
-      return;
+      if (inEntry) collected.push(line);
+      continue;
     }
-    const match = inFence ? null : /^\*\*Phase ([0-9]+), /.exec(trimmed);
-    if (match && (!closing || Number(match[1]) > closing.number)) {
-      closing = {index, number: Number(match[1])};
-    }
-  });
-  if (!closing) return [];
-  const collected = [lines[closing.index]];
-  inFence = false;
-  for (const line of lines.slice(closing.index + 1)) {
-    const trimmed = line.trim();
-    if (FENCE_LINE.test(trimmed)) inFence = !inFence;
+    if (!inFence && /^\*\*Phase [0-9]+, /.test(trimmed)) inEntry = true;
     else if (!inFence && (/^\*\*Phase /.test(trimmed) || /^## /.test(trimmed))) {
-      break;
+      inEntry = false;
     }
-    collected.push(line);
+    if (inEntry) collected.push(line);
   }
   return collected;
+}
+
+// The README task-graph rows: table lines whose first cell is `Phase <N>`.
+function taskGraphLines(readmeText) {
+  return readmeText
+    .split('\n')
+    .filter((line) => /^\|\s*Phase [0-9]+\s*\|/.test(line));
 }
 
 function readSource(file) {
@@ -161,6 +164,9 @@ export function writeDigest({planDir, spec, output}) {
     add(specFile, flowsKeyLines(specText));
   }
 
+  const readme = path.resolve(planDir, 'README.md');
+  if (existsSync(readme)) add(readme, taskGraphLines(readSource(readme)));
+
   const taskFiles = readdirSync(planDir)
     .filter((name) => /^task-.*\.md$/.test(name))
     .sort();
@@ -182,8 +188,8 @@ export function writeDigest({planDir, spec, output}) {
   }
 
   const orchestrator = path.resolve(planDir, 'ORCHESTRATOR.md');
-  if (specFile && existsSync(orchestrator)) {
-    add(orchestrator, closingPhaseLines(readSource(orchestrator)));
+  if (existsSync(orchestrator)) {
+    add(orchestrator, phaseEntryLines(readSource(orchestrator)));
   }
 
   const content = sections.join('');

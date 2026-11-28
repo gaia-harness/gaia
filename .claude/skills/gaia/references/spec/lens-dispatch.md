@@ -17,7 +17,7 @@ There is no tier below Minor: what is worth reporting is Minor, what is not is n
 | Slot | Spec audit | Plan audit | Test stage |
 | --- | --- | --- | --- |
 | Artifact under audit (`<ARTIFACT>`) | the working draft at `<DRAFT_PATH>` (spec `<spec_id>`) | the plan in `<PLAN_DIR>`: `<PLAN_DIR>/README.md` plus every `<PLAN_DIR>/task-*.md` | the digest of the plan's test lists at `<PLAN_DIR>/test-stage-findings/digest.md` |
-| First Read | `<DRAFT_PATH>` | `<PLAN_DIR>/README.md` (the task graph and frozen interface contracts), then every `<PLAN_DIR>/task-*.md` | `<PLAN_DIR>/test-stage-findings/digest.md`; it opens a task doc's other sections, by the path the digest gives, only when judging whether a test proves a case, and never writes the digest |
+| First Read | `<DRAFT_PATH>` | `<PLAN_DIR>/README.md` (the task graph and frozen interface contracts), then every `<PLAN_DIR>/task-*.md` | `<PLAN_DIR>/test-stage-findings/digest.md`; it opens a task doc's other sections, by the path the digest gives, only when judging whether a test proves a case or which phase delivers it, and never writes the digest |
 | Fallback artifact and First Read (digest unavailable) | n/a | n/a | the plan's task docs with their Test lines (every `<PLAN_DIR>/task-*.md`), first read the SPEC's `## Behaviors`, then every `<PLAN_DIR>/task-*.md` |
 | Defect target | a flawed plan or implementation downstream | a broken or conflicting orchestrator result | a test list that misses a stated behavior or tests one the SPEC does not state |
 | Evidence form | SPEC section or flow id, plus `file:line` | task doc plus `file:line` | behavior id or task doc plus `file:line` |

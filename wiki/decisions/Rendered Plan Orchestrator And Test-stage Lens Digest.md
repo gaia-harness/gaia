@@ -2,7 +2,7 @@
 type: decision
 status: active
 created: 2026-11-25
-updated: 2026-11-25
+updated: 2026-11-28
 promoted_at: 2026-11-24T17:31:01Z
 promoted_hash: sha256:bf786709cb90e6aa0cf9bd9f4b709abab5a16a7a8ff08e6344188101a3a0e576
 pr_number: 3821
@@ -22,7 +22,7 @@ The renderer is a bash script beside `plan-verify.sh`, not a CLI command: assemb
 
 The test stage is the only other writer of the parts file. It writes each closing phase entry, each `- Security writer:` line and one `## Kickoff outline` line into `orchestrator-parts.md`, replacing the previous closing entry on a re-run, then re-renders; it never edits `ORCHESTRATOR.md` or `KICKOFF.md`. A plan folder with no `orchestrator-parts.md`, saved before rendering existed, halts the test stage before any edit with a one-line pointer to re-plan with `/gaia-plan`.
 
-After clearing its findings folder, the test stage runs `test-stage-check.mjs --digest`, which writes `test-stage-findings/digest.md` and prints its sha256: for a spec-derived plan, the SPEC's behaviors and flows verbatim, each flow task doc whole and every other task doc's `## Tests` section, each under a line naming its source path, and the closing phase entry; for a spec-less plan, each task doc's acceptance criteria and tests. The model never writes digest content. The stage re-hashes the digest before every lens dispatch, a re-dispatch after a no-op included, and dispatches on the digest only when the file exists and the hash matches; otherwise it prints one line and gives the lens the whole plan as before. The lens's first read is the digest, and it opens other plan files by path only when a judgment needs them. A test-stage no-op re-clear removes only `TST.json`, so the digest survives a re-dispatch. The digest is an index of where the test lines live, never a replacement for the SPEC's behaviors as the source of expected outcomes.
+After clearing its findings folder, the test stage runs `test-stage-check.mjs --digest`, which writes `test-stage-findings/digest.md` and prints its sha256: the plan's test lines with the SPEC parts, task-graph rows and phase entries the lens judges them against, each under a line naming its source path, in the order the header of `.gaia/scripts/spec/test-stage-digest.mjs` owns. The task-graph rows and phase entries let the lens check that each test sits in a phase that delivers what it asserts. The model never writes digest content. The stage re-hashes the digest before every lens dispatch, a re-dispatch after a no-op included, and dispatches on the digest only when the file exists and the hash matches; otherwise it prints one line and gives the lens the whole plan as before. The lens's first read is the digest, and it opens other plan files by path only when a judgment needs them. A test-stage no-op re-clear removes only `TST.json`, so the digest survives a re-dispatch. The digest is an index of where the test lines live, never a replacement for the SPEC's behaviors as the source of expected outcomes.
 
 ## Divergence
 
