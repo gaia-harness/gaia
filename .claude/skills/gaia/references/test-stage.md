@@ -1,6 +1,6 @@
 # Test stage
 
-Contents: Trigger and inputs; Record first; Output; The cap; Security section; Checks; Recording; Re-run; Auto mode.
+Contents: Trigger and inputs; Record first; Output; The cap; Phase placement; Security section; Checks; Recording; Re-run; Auto mode.
 
 This page owns the test stage: the step that designs a plan's tests after the plan is written. `/gaia-plan` chains into it at its test-stage step, and `/gaia-test [auto] [<SPEC-ID> | <plan dir>]` runs it alone on a saved plan. It is on by default and skippable. The layers come from `.claude/doctrine/testing.md` (`## Layers`), which owns which test goes at which layer.
 
@@ -32,6 +32,10 @@ Before writing any Test or Flow test line, write `<PLAN_DIR>/TEST-STAGE` with tw
 
 At most one test per stated behavior, at the cheapest layer that proves it, picking the layer by the doctrine's `## Layers`. A case table is one test. A behavior with several cases is still one test that holds every case. Flow tests sit outside the cap and every SPEC flow gets one. The stage never lists a test of a behavior the SPEC does not state, and never a second test of one behavior to prove the same thing at a dearer layer.
 
+## Phase placement
+
+A test goes in the task doc of the latest phase that delivers something one of its cases needs (a route, a sign-in, a call the app makes), and no phase gate runs it before that phase. A gate that does is fixed in its phase entry in `<PLAN_DIR>/orchestrator-parts.md` by moving the run to the test's phase. When an earlier-phase test shares the moved test's file, the moved test takes a file of its own, declared by its new phase's task doc and owned by that task doc in the README; otherwise the file's declaration and README ownership move with it. Then each `- Security writer:` line of the old and new phase entries is rewritten to its new count (added, updated, or removed at zero), and the renderer is re-run as `## Output` says. The rule binds the first lists and every edit made while applying review findings.
+
 ## Security section
 
 This section owns the guard rule for the security writer; the doctrine and the `security-test-writer` agent point here.
@@ -44,7 +48,7 @@ This section owns the guard rule for the security writer; the doctrine and the `
 ## Checks
 
 1. Run `node .gaia/scripts/spec/test-stage-check.mjs --plan-dir <PLAN_DIR> [--spec <SPEC>]` and `bash .gaia/scripts/spec/plan-verify.sh <PLAN_DIR> [--spec <SPEC>]`, which owes the lines under `running`. Their refusals are listed in the script headers; this page lists none. A failure is fixed in the lists and both are re-run once, then the stage halts with the reason.
-2. Dispatch one review lens through `.claude/skills/gaia/references/spec/lens-dispatch.md`: read it whole, fill its shared preamble from the test-stage column (the row owns the `<CODE_MAP_PATH>` value), and write findings to `<PLAN_DIR>/test-stage-findings/`, pre-cleared and classified as that file says. After the folder's pre-clear and before the dispatch, run `node .gaia/scripts/spec/test-stage-check.mjs --plan-dir <PLAN_DIR> [--spec <SPEC>] --digest <PLAN_DIR>/test-stage-findings/digest.md` and keep the hash it prints on stdout; the script alone writes the digest, and the stage never writes digest content. Before each dispatch, the re-dispatch after a no-op included, recompute the file's hash (`shasum -a 256 <PLAN_PATH>/test-stage-findings/digest.md`, or `sha256sum` where that is absent), where `<PLAN_PATH>` is `<PLAN_DIR>` relative to the repo root, the form the `.claude/settings.json` allow entries match. Dispatch on the lens-dispatch digest cells only when the digest exists and its hash matches the kept one. When the script exited non-zero, or the digest is gone or its hash differs, print `Test-stage digest unavailable; the lens reads the whole plan this run.` once and dispatch on the `Fallback artifact and First Read (digest unavailable)` cells instead. The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states and that the cap above holds. When it has a code map, it uses it only to locate existing test files and never derives an expected behavior from it. Apply its findings to the lists and re-run both checks.
+2. Dispatch one review lens through `.claude/skills/gaia/references/spec/lens-dispatch.md`: read it whole, fill its shared preamble from the test-stage column (the row owns the `<CODE_MAP_PATH>` value), and write findings to `<PLAN_DIR>/test-stage-findings/`, pre-cleared and classified as that file says. After the folder's pre-clear and before the dispatch, run `node .gaia/scripts/spec/test-stage-check.mjs --plan-dir <PLAN_DIR> [--spec <SPEC>] --digest <PLAN_DIR>/test-stage-findings/digest.md` and keep the hash it prints on stdout; the script alone writes the digest, and the stage never writes digest content. Before each dispatch, the re-dispatch after a no-op included, recompute the file's hash (`shasum -a 256 <PLAN_PATH>/test-stage-findings/digest.md`, or `sha256sum` where that is absent), where `<PLAN_PATH>` is `<PLAN_DIR>` relative to the repo root, the form the `.claude/settings.json` allow entries match. Dispatch on the lens-dispatch digest cells only when the digest exists and its hash matches the kept one. When the script exited non-zero, or the digest is gone or its hash differs, print `Test-stage digest unavailable; the lens reads the whole plan this run.` once and dispatch on the `Fallback artifact and First Read (digest unavailable)` cells instead. The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states, that the cap above holds, and that every test and phase gate obeys `## Phase placement`, reading each task's phase from the task-graph rows and each gate from its phase entry. When it has a code map, it uses it only to locate existing test files and never derives an expected behavior from it. Apply its findings to the lists and re-run both checks. When applying them added, moved or widened a Test line, or changed which tests a phase gate runs, run this step once more on a fresh pre-clear and digest, apply that pass's findings and re-run both checks, with no third pass.
 3. Only after both checks pass, write `TEST-STAGE` with `status: ran` and the date.
 
 ## Recording
@@ -53,7 +57,7 @@ Close a `gaia-test` run on the plan's own ref, separate from the `gaia-plan` run
 
 ## Re-run
 
-Run on a saved plan, the stage writes `running` again and replaces the previous Test lines, the closing phase entry, each `- Security writer:` line and the closing phase's `## Kickoff outline` line in `orchestrator-parts.md`, then re-renders; it never leaves two sets.
+Run on a saved plan, the stage writes `running` again and replaces the previous Test lines, the closing phase entry, each `- Security writer:` line, the closing phase's `## Kickoff outline` line and any gate run moved by `## Phase placement` in `orchestrator-parts.md`, then re-renders; it never leaves two sets.
 
 ## Auto mode
 

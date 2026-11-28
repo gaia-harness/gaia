@@ -51,7 +51,7 @@ has() {
   grep -qF -- "$digest" <<<"$first" || return 1
   grep -qF -- 'only when judging whether a test proves a case' <<<"$first" || return 1
   has "$DISPATCH_MD" '| Fallback artifact and First Read (digest unavailable) | n/a | n/a |' || return 1
-  has "$STAGE_MD" 'The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states and that the cap above holds. When it has a code map, it uses it only to locate existing test files and never derives an expected behavior from it.' || return 1
+  has "$STAGE_MD" 'The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states, that the cap above holds, and that every test and phase gate obeys `## Phase placement`, reading each task'"'"'s phase from the task-graph rows and each gate from its phase entry. When it has a code map, it uses it only to locate existing test files and never derives an expected behavior from it.' || return 1
   has "$DISPATCH_MD" '| Code map (`<CODE_MAP_PATH>`) |' || return 1
   has "$DISPATCH_MD" 'When `<CODE_MAP_PATH>` is empty the caller drops the whole code-map bullet from the preamble.' || return 1
   has "$DISPATCH_MD" 'the re-clear is only `rm -rf <PLAN_DIR>/test-stage-findings/TST.json`' || return 1
@@ -63,5 +63,16 @@ has() {
   has "$STAGE_MD" 'Before each dispatch, the re-dispatch after a no-op included, recompute' || return 1
   has "$STAGE_MD" 'dispatch on the `Fallback artifact and First Read (digest unavailable)` cells' || return 1
   has "$DISPATCH_MD" '| Fallback artifact and First Read (digest unavailable) |' || return 1
+}
+
+@test "step 2 runs the lens once more on a fresh pre-clear and digest, with no third pass" {
+  has "$STAGE_MD" 'run this step once more on a fresh pre-clear and digest, apply that pass'"'"'s findings and re-run both checks, with no third pass.' || return 1
+}
+
+@test "the phase placement rule keeps its body: latest delivering phase, gate move, file split and scope" {
+  has "$STAGE_MD" 'A test goes in the task doc of the latest phase that delivers something one of its cases needs' || return 1
+  has "$STAGE_MD" 'A gate that does is fixed in its phase entry in `<PLAN_DIR>/orchestrator-parts.md` by moving the run to the test'"'"'s phase.' || return 1
+  has "$STAGE_MD" 'the moved test takes a file of its own, declared by its new phase'"'"'s task doc and owned by that task doc in the README' || return 1
+  has "$STAGE_MD" 'The rule binds the first lists and every edit made while applying review findings.' || return 1
 }
 
