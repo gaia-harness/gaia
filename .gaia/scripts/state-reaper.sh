@@ -22,8 +22,11 @@
 #    "stash_dropped":["<hash> <branch>",...]}
 # `removed` lists only rows that removed something; `skipped` carries every
 # liveness source or row the run declined to act on; `stash_dropped` names each
-# stash entry stash-reap-lib.sh dropped, so `git stash apply <hash>` recovers
-# it until gc.
+# stash entry stash-reap-lib.sh dropped. last-run.json is rewritten whole each
+# run, so each dropped entry is also appended to `cache/state-reaper/
+# stash-dropped.log` (`<time> <hash> <branch>`, newest last, bounded to the last
+# _STATE_REAPER_STASH_LOG_LINES lines), where `git stash apply <hash>` finds it
+# until gc.
 #
 # Always exits 0. A reaper error must never block the session that launched
 # it, so a missing tool, an unreadable registry or a failed git read removes
@@ -32,6 +35,7 @@
 # delete protected state offers no knob to widen what it deletes.
 
 _STATE_REAPER_LOCK_STALE_MINUTES=60
+_STATE_REAPER_STASH_LOG_LINES=200
 
 state_reaper_release_lock=""
 
@@ -80,10 +84,32 @@ state_reaper_write_record() {
       return 0
     }
   else
-    printf '{"schema":1,"started_at":"%s","finished_at":"%s","removed":{},"skipped":["jq is not available"]}\n' \
+    printf '{"schema":1,"started_at":"%s","finished_at":"%s","removed":{},"skipped":["jq is not available"],"stash_dropped":[]}\n' \
       "$started_at" "$finished_at" >"$temporary" 2>/dev/null || return 0
   fi
   mv -f "$temporary" "$state_directory/last-run.json" 2>/dev/null || rm -f "$temporary" 2>/dev/null
+  return 0
+}
+
+# state_reaper_log_stash_dropped <state-directory> <stash-dropped-lines>: append
+# each `<hash> <branch>` line to the bounded recovery log. Best effort.
+state_reaper_log_stash_dropped() {
+  local state_directory="$1" lines="$2" log temporary now line
+  [ -n "$lines" ] || return 0
+  log="$state_directory/stash-dropped.log"
+  [ ! -L "$log" ] || return 0
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  temporary="$log.tmp.$$"
+  {
+    [ ! -f "$log" ] || cat "$log"
+    while IFS= read -r line; do
+      [ -z "$line" ] || printf '%s %s\n' "$now" "$line"
+    done <<<"$lines"
+  } 2>/dev/null | tail -n "$_STATE_REAPER_STASH_LOG_LINES" >"$temporary" 2>/dev/null || {
+    rm -f "$temporary" 2>/dev/null
+    return 0
+  }
+  mv -f "$temporary" "$log" 2>/dev/null || rm -f "$temporary" 2>/dev/null
   return 0
 }
 
@@ -174,6 +200,7 @@ state_reaper_main() {
       esac
     done <<<"$output"
   fi
+  state_reaper_log_stash_dropped "$state_directory" "$stash_dropped_lines"
   state_reaper_write_record "$state_directory" "$started_at" "$removed_tsv" "$skipped_lines" "$stash_dropped_lines"
   return 0
 }

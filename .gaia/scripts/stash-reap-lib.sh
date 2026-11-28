@@ -32,6 +32,8 @@ if [ -n "$_gaia_stash_reap_directory" ]; then
   . "$_gaia_stash_reap_directory/../../.claude/hooks/lib/main-git-guard-stash.sh" 2>/dev/null || true
 fi
 
+_GAIA_STASH_REAP_GRACE_DAYS=7
+
 # _gaia_stash_branch_live <branch> <live-branches>: rc 0 when <branch> is live.
 _gaia_stash_branch_live() {
   local branch="$1" live normalized="$1"
@@ -46,10 +48,11 @@ _gaia_stash_branch_live() {
   return 1
 }
 
-# _gaia_stash_list <main-root>: one `<index>\t<hash>\t<subject>` line per entry.
+# _gaia_stash_list <main-root>: one `<index>\t<hash>\t<subject>\t<epoch>` line
+# per entry.
 _gaia_stash_list() {
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$1" rev-parse -q --verify refs/stash >/dev/null 2>&1 || return 0
-  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$1" log -g --format='%gd%x09%H%x09%s' refs/stash
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$1" log -g --format='%gd%x09%H%x09%s%x09%ct' refs/stash
 }
 
 # gaia_stash_reap <main-root> <live-branches> [<branch>]: drop every spent
@@ -58,7 +61,7 @@ _gaia_stash_list() {
 # drops nothing more.
 gaia_stash_reap() {
   local main_root="$1" live_branches="$2" only_branch="${3-}" listing line index hash subject branch
-  local targets="" target found
+  local targets="" target found epoch now tips parent
   declare -f stash_subject_branch >/dev/null 2>&1 || {
     printf 'skipped stash: the stash subject parser did not load\n'
     return 0
@@ -67,11 +70,28 @@ gaia_stash_reap() {
     printf 'skipped stash: the stash stack cannot be read\n'
     return 0
   }
-  while IFS=$'\t' read -r index hash subject; do
+  tips="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$main_root" for-each-ref --format='%(objectname)' refs/heads/ 2>/dev/null)" || {
+    printf 'skipped stash: the branch tips cannot be read\n'
+    return 0
+  }
+  now="$(date +%s)"
+  while IFS=$'\t' read -r index hash subject epoch; do
     [ -n "$hash" ] || continue
     branch="$(stash_subject_branch "$subject")" || continue
     [ -z "$only_branch" ] || [ "$branch" = "$only_branch" ] || continue
     _gaia_stash_branch_live "$branch" "$live_branches" && continue
+    parent="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$main_root" rev-parse -q --verify "$hash^1" 2>/dev/null)" || parent=""
+    if [ -n "$parent" ]; then
+      case "
+$tips
+" in *"
+$parent
+"*) continue ;; esac
+    fi
+    if [ -z "$only_branch" ]; then
+      case "$epoch" in '' | *[!0-9]*) continue ;; esac
+      [ $((now - epoch)) -ge $((_GAIA_STASH_REAP_GRACE_DAYS * 86400)) ] || continue
+    fi
     targets="$targets$hash $branch
 "
   done <<<"$listing"
@@ -84,7 +104,7 @@ gaia_stash_reap() {
       return 0
     }
     found=""
-    while IFS=$'\t' read -r index line subject; do
+    while IFS=$'\t' read -r index line subject epoch; do
       [ "$line" = "$hash" ] && { found="$index"; break; }
     done <<<"$listing"
     [ -n "$found" ] || continue

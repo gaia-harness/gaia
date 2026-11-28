@@ -32,6 +32,16 @@
 # the command themselves with the ! prefix, the same route the guard's other
 # user-decision denials name.
 #
+# One command, one stack. Every segment is checked against the stack as it is at
+# hook time, but a stash segment that pushes or removes an entry shifts the
+# indexes the next segment names, so `stash drop && stash drop` would check
+# `stash@{0}` twice and the second drop can land on a peer's entry. A pop,
+# apply, drop or branch segment that follows a segment which shifted the stack,
+# and names its entry by index or by default, is therefore denied while the stack
+# holds an entry made on another branch. Naming the entry by hash is not shifted
+# and still passes; running the verbs as separate commands re-reads the stack
+# between them.
+#
 # Honest limit: the stack is read at hook time, so an entry a peer pushes
 # between this read and the command's own run can still shift a bare
 # `stash@{0}`. Naming the entry by hash (`git stash apply <hash>`) closes that
@@ -86,11 +96,45 @@ _stash_deny() {
 
 _STASH_NAME_OWN="Find this branch's own entries with 'git stash list' and name one ('git stash pop stash@{n}' or its hash)."
 
+# _stash_shifted: 1 once an earlier stash segment of this command pushed or
+# removed an entry. Set by stash_rule_reason; the process is one command.
+_stash_shifted=0
+
 # stash_rule_reason <directory> <ambiguous>: set stash_reason to the deny reason
 # for the stash segment parse_git_globals just read, or to empty. <directory> is
 # the checkout the segment acts on (empty: this process's), <ambiguous> is 1
 # when the walk could not tell which checkout that is.
 stash_rule_reason() {
+  local directory="$1" ambiguous="$2" verb="${git_args[0]:-}" prior="$_stash_shifted" operand branch listing line entry_branch
+  _stash_rule_check "$directory" "$ambiguous"
+  case "$verb" in
+    '' | -* | push | save | store | pop | drop | branch | clear) _stash_shifted=1 ;;
+  esac
+  [ -z "$stash_reason" ] || return 0
+  [ "$prior" = 1 ] || return 0
+  case "$verb" in pop | apply | drop | branch) ;; *) return 0 ;; esac
+  operand=$(_stash_entry_operand)
+  case "$operand" in
+    *[!0-9a-f]* | '') ;;
+    *) [ "${#operand}" -ge 40 ] && return 0 ;;
+  esac
+  _stash_git "$directory" rev-parse -q --verify refs/stash >/dev/null 2>&1 || return 0
+  branch=$(_stash_git "$directory" symbolic-ref --short -q HEAD 2>/dev/null) || return 0
+  listing=$(_stash_git "$directory" log -g --format=%s refs/stash 2>/dev/null) || listing=""
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    entry_branch=$(stash_subject_branch "$line") || entry_branch=""
+    if [ "$entry_branch" != "$branch" ]; then
+      _stash_deny "'git stash $verb' follows another stash command in this one command, which shifts the indexes it was checked against, and the stack holds an entry made on '${entry_branch:-no branch}', not on this checkout's branch '$branch'. Run each stash command separately so the stack is re-read between them, or name the entry by its hash."
+      return 0
+    fi
+  done <<<"$listing"
+  return 0
+}
+
+# _stash_rule_check <directory> <ambiguous>: the per-segment rule, which reads
+# the stack as it is now.
+_stash_rule_check() {
   local directory="$1" ambiguous="$2" verb="${git_args[0]:-}" branch operand reference
   local entry_hash subject entry_branch listing line
   stash_reason=""

@@ -229,8 +229,10 @@ plant_git_failure_fixture() {
 stash_on() {
   "$REAL_GIT" -C "$MAIN" checkout -q -B "$1" main
   printf '%s\n' "$1" >>"$MAIN/.gaia/state-registry.json"
-  "$REAL_GIT" -C "$MAIN" stash push -q -m "$1 wip"
+  GIT_COMMITTER_DATE=2020-01-01T00:00:00Z "$REAL_GIT" -C "$MAIN" stash push -q -m "$1 wip"
   "$REAL_GIT" -C "$MAIN" checkout -q main
+  # move main on, so the entry's parent is no live branch's tip (the rename keep)
+  "$REAL_GIT" -C "$MAIN" commit -q --allow-empty -m "advance past $1"
 }
 
 # bats test_tags=whole-tree
@@ -253,6 +255,11 @@ stash_on() {
   grep -qF 'On fix/gone:' <<<"$output" && return 1
   grep -qF 'On fix/live: fix/live wip' <<<"$output"
   jq -e --arg entry "$spent_hash fix/gone" '.stash_dropped == [$entry]' "$LOCAL/cache/state-reaper/last-run.json" >/dev/null
+  # the next run rewrites last-run.json empty, but the recovery log keeps the hash
+  run_reaper
+  [ "$status" -eq 0 ]
+  jq -e '.stash_dropped == []' "$LOCAL/cache/state-reaper/last-run.json" >/dev/null
+  grep -qF "$spent_hash fix/gone" "$LOCAL/cache/state-reaper/stash-dropped.log"
 }
 
 # bats test_tags=whole-tree

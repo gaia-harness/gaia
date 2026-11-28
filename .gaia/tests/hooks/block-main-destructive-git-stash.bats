@@ -91,6 +91,28 @@ run_hook_from() {
   assert_allowed_by_json
 }
 
+@test "a stash write that follows a stack-shifting stash in one command is denied while a peer's entry is on the stack" {
+  stash_in "$TREE_B" "B wip"
+  stash_in "$TREE_A" "A wip"
+  echo more >>"$TREE_A/f.txt"
+  local command
+  for command in 'git stash drop && git stash drop' 'git stash drop stash@{0}; git stash drop stash@{0}' \
+    'git stash push -m x ; git stash drop stash@{1}' 'git stash pop && git stash pop stash@{0}'; do
+    run_hook_from "$command" "$TREE_A"
+    assert_denied_by_json || { echo "not denied: $command"; return 1; }
+  done
+  # one segment, a hash-named second segment, and a stack with no peer entry stay allowed
+  run_hook_from 'git stash drop' "$TREE_A"
+  assert_allowed_by_json
+  local own_hash
+  own_hash=$(git -C "$TREE_A" rev-parse 'stash@{0}')
+  run_hook_from "git stash drop && git stash drop $own_hash" "$TREE_A"
+  assert_allowed_by_json
+  git -C "$TREE_B" stash drop --quiet 'stash@{1}'
+  run_hook_from 'git stash drop && git stash drop' "$TREE_A"
+  assert_allowed_by_json
+}
+
 @test "clear is denied while any entry belongs to another branch" {
   stash_in "$TREE_A" "A wip"
   stash_in "$TREE_B" "B wip"

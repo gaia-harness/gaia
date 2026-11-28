@@ -29,8 +29,10 @@ setup() {
 stash_on() {
   git -C "$MAIN" checkout -q -B "$1" trunk
   echo "$1" >>"$MAIN/f.txt"
-  git -C "$MAIN" stash push -q -m "$1 wip"
+  GIT_COMMITTER_DATE="${STASH_DATE:-2020-01-01T00:00:00Z}" git -C "$MAIN" stash push -q -m "$1 wip"
   git -C "$MAIN" checkout -q trunk
+  # move trunk on, so the entry's parent is no live branch's tip (the rename keep)
+  git -C "$MAIN" commit -q --allow-empty -m "advance past $1"
 }
 
 live_branches() {
@@ -39,6 +41,34 @@ live_branches() {
 }
 
 stash_subjects() { git -C "$MAIN" log -g --format=%s refs/stash 2>/dev/null; }
+
+# bats test_tags=protected
+@test "a renamed branch's entry stays: its parent is a live branch tip" {
+  stash_on feat-old
+  git -C "$MAIN" branch -q -m feat-old feat-new
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run stash_subjects
+  grep -qF 'On feat-old:' <<<"$output"
+}
+
+# bats test_tags=protected
+@test "the backstop keeps a spent entry younger than the grace; a named branch's cleanup drops it at once" {
+  STASH_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" stash_on fresh
+  echo advance >>"$MAIN/f.txt"
+  git -C "$MAIN" commit -q -am advance
+  git -C "$MAIN" branch -q -D fresh
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ -z "$output" ]
+  run stash_subjects
+  grep -qF 'On fresh:' <<<"$output"
+  run gaia_stash_reap "$MAIN" "$(live_branches)" fresh
+  grep -qF ' fresh' <<<"$output"
+  run stash_subjects
+  grep -qF 'On fresh:' <<<"$output" && return 1
+  return 0
+}
 
 # bats test_tags=protected
 @test "a spent branch's entry is dropped; a live, a worktree-held and an unnamed entry are kept" {
