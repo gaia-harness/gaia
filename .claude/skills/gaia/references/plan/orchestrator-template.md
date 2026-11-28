@@ -263,7 +263,7 @@ Handoff: /abs/plan/handoffs/phase-2-task-helpers-yield-1.md
 
 A gate retry block is headed exactly `## Phase N, <title> (GATE RETRY k)`, its first content line is `Retry: k`, its second is `Kind: static` or `Kind: test`, it names the owning tasks and the failures, then a `Cause owner:` line when the in-phase arm sent the failure on, and it has no `Commit:` line. The gate-retry step writes it.
 
-A gate repair block is headed exactly `## Phase N, <title> (GATE REPAIR)`, its first content line is `Repair: 1`, it names the failures, the cause, the changed paths and the gate result, and it has no `Commit:` line. The unattended gate repair writes it, and `autonomy-gate-repair.sh` reads the heading, and the marker file its baseline writes in the plan folder, to allow one repair per phase.
+A gate repair block is headed exactly `## Phase N, <title> (GATE REPAIR)`, its first content line is `Repair: 1`, it names the failures, the cause, the changed paths and the gate result, and it has no `Commit:` line. The unattended gate repair writes it, and `autonomy-gate-repair.sh` reads the heading, and the `gate-repair-phase-<N>.spent` marker its baseline writes in the plan folder, to allow one repair per phase.
 
 `plan-resume-point.sh` reads a yield, gate retry or gate repair block as a `## Phase N` block whose first content line is not a `Commit:` anchor, so a phase whose last block is one of them resumes at that phase, and a later Commit block for the phase still marks it complete.
 
