@@ -761,6 +761,7 @@
     "apps/web/test/action-paths.test.ts": "owned",
     "apps/web/test/axe-tags.ts": "owned",
     "apps/web/test/contrast.ts": "owned",
+    "apps/web/test/default-api-url.ts": "owned",
     "apps/web/test/dev-ports-static.test.ts": "owned",
     "apps/web/test/entry-server-msw.test.ts": "owned",
     "apps/web/test/eslint/no-imperative-query-fetch.test.ts": "owned",
@@ -958,7 +959,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-28T05:15:14.786Z",
+  "generated": "2026-11-28T09:34:00.490Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
