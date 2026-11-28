@@ -65,3 +65,14 @@ has() {
   has "$DISPATCH_MD" '| Fallback artifact and First Read (digest unavailable) |' || return 1
 }
 
+@test "step 2 runs the lens once more after applied findings changed a test line, with no third pass" {
+  has "$STAGE_MD" 'run this step once more on a fresh pre-clear and digest, apply that pass'"'"'s findings and re-run both checks, with no third pass.' || return 1
+}
+
+@test "the phase placement rule keeps its body: latest delivering phase, gate move, file split and scope" {
+  has "$STAGE_MD" 'A test goes in the task doc of the latest phase that delivers something one of its cases needs' || return 1
+  has "$STAGE_MD" 'A gate that does is fixed in its phase entry in `<PLAN_DIR>/orchestrator-parts.md` by moving the run to the test'"'"'s phase.' || return 1
+  has "$STAGE_MD" 'the moved test takes a file of its own, declared by its new phase'"'"'s task doc and owned by that task doc in the README' || return 1
+  has "$STAGE_MD" 'The rule binds the first lists and every edit made while applying review findings.' || return 1
+}
+
