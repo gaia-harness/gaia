@@ -142,7 +142,7 @@ A failing security test is fixed in the code, never weakened; the security kinds
 
 ## Production start
 
-**Production start.** A test or check that starts the production server never reads the developer's `.env`: it sets `DOTENV_CONFIG_PATH=/dev/null` and passes every variable the start needs explicitly. The server entry loads `.env` through dotenv, which fills every variable the shell leaves unset, so `env -u NAME` hands `NAME` to `.env` rather than removing it, and the dev values `.env.example` ships (a `SESSION_SECRET` production refuses) fail the start on every developer machine while CI, which has no `.env`, passes.
+**Production start.** A test or check that starts the production server never reads the developer's `.env`: it sets `DOTENV_CONFIG_PATH=/dev/null` and passes every variable the start needs explicitly. The server entry loads `.env` through dotenv, which fills every variable the shell leaves unset, so `env -u NAME` hands `NAME` to `.env` rather than removing it, and a `.env` holding the dev values `.env.example` ships (a `SESSION_SECRET` production refuses) fails the start locally while CI, which has no `.env`, passes.
 
 ## Committed tests and generators
 
