@@ -79,6 +79,33 @@ check_repair() {
 }
 
 # bats test_tags=protected
+@test "a second baseline for one phase refuses even when no repair block was recorded" {
+  live_switch
+  take_baseline
+  [ "$status" -eq 0 ] || return 1
+  printf 'one, repaired\n' >"$MAIN/app/db.ts"
+  take_baseline
+  [ "$status" -eq 1 ] || return 1
+  [ "$output" = "already-repaired phase 2" ] || return 1
+  # Another phase's repair is still unspent.
+  run bash "$SCRIPT" baseline --root "$MAIN" --plan-dir "$PLAN" --phase 3 --out "$FIX/baseline-3.txt"
+  [ "$status" -eq 0 ]
+}
+
+@test "a task doc's path:N-M line-range hint declares the path" {
+  live_switch
+  # shellcheck disable=SC2016 # the backticks are the task doc's own markup
+  printf 'Files to touch: `app/db.ts:10-40`, app/other.ts:7.\n' >"$PLAN/task-db.md"
+  take_baseline
+  [ "$status" -eq 0 ] || return 1
+  printf 'one, repaired\n' >"$MAIN/app/db.ts"
+  printf 'two, repaired\n' >"$MAIN/app/other.ts"
+  check_repair
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$output" = "$(printf 'changed app/db.ts\nchanged app/other.ts')" ]
+}
+
+# bats test_tags=protected
 @test "a repair touching a path no task doc names is refused" {
   live_switch
   take_baseline

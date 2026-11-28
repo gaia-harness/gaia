@@ -80,7 +80,7 @@ The audit's PR-body sections (`audit-dispositions-check.sh pr-sections`) include
 
 ## The phase gate repair
 
-A plan run's phase gate failure that would halt gets one repair per phase under the switch, applied by the orchestrator before the `Halted` question, then a rerun of the whole gate; a second failure halts. `Stay halted` stays the `Halted` question's recommendation, so a refused or failed repair still ends the run. `.gaia/scripts/autonomy-gate-repair.sh` allows the repair only while the switch is live and the phase has no repair block in its progress file, and refuses one that touches a path the phase's task docs do not name, deletes a path, or edits a protected path or one of the audit fixer's enforcement paths. The steps and the progress record: `## Unattended gate repair` in `.claude/skills/gaia/references/plan/orchestrator-template.md`.
+A plan run's phase gate failure that would halt gets one repair per phase under the switch, applied by the orchestrator before the `Halted` question, then a rerun of the whole gate; a second failure halts. `Stay halted` stays the `Halted` question's recommendation, so a refused or failed repair still ends the run. `.gaia/scripts/autonomy-gate-repair.sh` allows the repair only while the switch is live and the phase has no repair block in its progress file and no spent marker from an earlier baseline, and refuses one that touches a path the phase's task docs do not name, deletes a path, or edits a protected path or one of the audit fixer's enforcement paths. The steps and the progress record: `## Unattended gate repair` in `.claude/skills/gaia/references/plan/orchestrator-template.md`.
 
 ## The audit budget
 

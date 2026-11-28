@@ -263,7 +263,7 @@ Handoff: /abs/plan/handoffs/phase-2-task-helpers-yield-1.md
 
 A gate retry block is headed exactly `## Phase N, <title> (GATE RETRY k)`, its first content line is `Retry: k`, its second is `Kind: static` or `Kind: test`, it names the owning tasks and the failures, then a `Cause owner:` line when the in-phase arm sent the failure on, and it has no `Commit:` line. The gate-retry step writes it.
 
-A gate repair block is headed exactly `## Phase N, <title> (GATE REPAIR)`, its first content line is `Repair: 1`, it names the failures, the cause, the changed paths and the gate result, and it has no `Commit:` line. The unattended gate repair writes it, and `autonomy-gate-repair.sh` reads the heading to allow one repair per phase.
+A gate repair block is headed exactly `## Phase N, <title> (GATE REPAIR)`, its first content line is `Repair: 1`, it names the failures, the cause, the changed paths and the gate result, and it has no `Commit:` line. The unattended gate repair writes it, and `autonomy-gate-repair.sh` reads the heading, and the marker file its baseline writes in the plan folder, to allow one repair per phase.
 
 `plan-resume-point.sh` reads a yield, gate retry or gate repair block as a `## Phase N` block whose first content line is not a `Commit:` anchor, so a phase whose last block is one of them resumes at that phase, and a later Commit block for the phase still marks it complete.
 
@@ -271,8 +271,8 @@ A gate repair block is headed exactly `## Phase N, <title> (GATE REPAIR)`, its f
 
 Only while the autonomy switch is live (`wiki/concepts/Autonomy Switch.md`); an attended run halts under Stop conditions as written. A phase gate failure that would halt there (the gate retry does not take it, its kind is spent, or its re-run failed) gets one repair you apply yourself when you have diagnosed its cause, before any halt question:
 
-1. **Baseline.** Run `bash .gaia/scripts/autonomy-gate-repair.sh baseline --root <RESOLVED_ROOT> --plan-dir {PLAN_DIR} --phase <N> --out <scratch file>`. A non-zero exit means no repair (`attended`, or `already-repaired` when this phase had its one): halt under Stop conditions.
-2. **Repair.** Fix the diagnosed cause by editing only files a `task-*.md` of this phase names. Never delete, skip or weaken a test, an assertion or a gate check, never edit a git-ignored file such as `.env` (the check cannot see one), and never edit the plan folder. No commit, stash, reset, checkout or discard.
+1. **Baseline.** Run `bash .gaia/scripts/autonomy-gate-repair.sh baseline --root <RESOLVED_ROOT> --plan-dir {PLAN_DIR} --phase <N> --out <scratch file>`. A non-zero exit means no repair (`attended`, or `already-repaired` when this phase had its one: the baseline marks the repair spent when it succeeds, so a run that dies before step 4 still has none left on resume): halt under Stop conditions.
+2. **Repair.** Fix the diagnosed cause by editing only files a `task-*.md` of this phase names. Never delete, skip or weaken a test, an assertion or a gate check, never edit a git-ignored file such as `.env` (the check cannot see one), and never edit the plan folder (the check reads the declared paths from the task docs as they stand when it runs, and they sit in that git-ignored folder). No commit, stash, reset, checkout or discard.
 3. **Check.** Run `bash .gaia/scripts/autonomy-gate-repair.sh check --root <RESOLVED_ROOT> --baseline <scratch file>` with one `--task {PLAN_DIR}/task-<T>.md` per task of this phase. Exit 0 prints one `changed <path>` line per path the repair touched; any other exit refuses the repair, and its stderr lines name why.
 4. **Record.** Append this block to `{PLAN_DIR}/PROGRESS.md`, written per the tool-choice contract in the pre-flight isolation section above:
 

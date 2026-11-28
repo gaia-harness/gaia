@@ -13,11 +13,14 @@
 #   autonomy-gate-repair.sh check    --root <R> --baseline <file> --task <task doc>...
 #
 # baseline refuses, writing nothing, when the switch is not live for <R>
-# (`attended`: the run halts as attended runs do) or when <P>/PROGRESS.md
-# already holds a `## Phase <N>, <title> (GATE REPAIR)` block
-# (`already-repaired`: one repair per phase, across resumes). Otherwise it
-# writes <file>: line 1 `head <sha>`, then one `<blob or -> TAB <path>` line
-# per path `git status` lists, so check can tell which paths the repair touched.
+# (`attended`: the run halts as attended runs do) or when the phase's repair is
+# already spent: <P>/PROGRESS.md holds a `## Phase <N>, <title> (GATE REPAIR)`
+# block, or <P>/gate-repair-phase-<N>.spent exists (`already-repaired`: one
+# repair per phase, across resumes). Otherwise it writes <file>: line 1
+# `head <sha>`, then one `<blob or -> TAB <path>` line per path `git status`
+# lists, so check can tell which paths the repair touched, and then writes the
+# .spent marker in the git-ignored plan folder, so a run that dies before the
+# orchestrator records the block still counts the repair as spent on resume.
 #
 # check judges the paths whose state differs from the baseline (a new, edited,
 # reverted or deleted path). Each must be named in one of the --task docs (a
@@ -29,7 +32,10 @@
 # per path on stdout.
 #
 # Honest limit: the snapshot is `git status`, so an edit to a git-ignored file
-# (`.env`) is invisible to check; the orchestrator's prose forbids one.
+# (`.env`) is invisible to check; the orchestrator's prose forbids one. Likewise
+# check reads the declared paths from the task docs as they stand when it runs,
+# and those docs sit in the git-ignored plan folder the snapshot cannot see; the
+# orchestrator's prose forbids editing the plan folder during the repair.
 #
 # Exit codes: 0 pass, 1 refused (each reason on stderr as `<kind> <detail>`;
 # kinds: attended, already-repaired, head-moved, no-change, undeclared,
@@ -67,14 +73,16 @@ snapshot() {
 }
 
 # declared_words <task doc>...: every backtick span and every
-# whitespace-separated word of the docs, leading `(` and quotes, a leading `./` and
-# trailing punctuation stripped, one per line.
+# whitespace-separated word of the docs, leading `(` and quotes, a leading `./`,
+# trailing punctuation and a trailing `:N` or `:N-M` line-range hint stripped,
+# one per line.
 declared_words() {
   awk '
     function emit(word) {
       sub(/^[("'"'"']+/, "", word)
       sub(/^\.\//, "", word)
       sub(/[.,;:)"'"'"']+$/, "", word)
+      sub(/:[0-9]+(-[0-9]+)?$/, "", word)
       if (word != "") print word
     }
     {
@@ -118,14 +126,16 @@ case "$command_name" in
       echo "attended the autonomy switch is not live" >&2
       exit 1
     fi
-    if [ -f "$plan_dir/PROGRESS.md" ] &&
-      grep -Eq "^## Phase $phase, .*\(GATE REPAIR\)[[:space:]]*\$" "$plan_dir/PROGRESS.md"; then
+    spent_marker="$plan_dir/gate-repair-phase-$phase.spent"
+    if [ -e "$spent_marker" ] || { [ -f "$plan_dir/PROGRESS.md" ] &&
+      grep -Eq "^## Phase $phase, .*\(GATE REPAIR\)[[:space:]]*\$" "$plan_dir/PROGRESS.md"; }; then
       echo "already-repaired phase $phase" >&2
       exit 1
     fi
     head_sha=$(git -C "$root" rev-parse HEAD) || exit 2
     lines=$(snapshot "$root") || exit 2
     { printf 'head %s\n' "$head_sha"; [ -z "$lines" ] || printf '%s\n' "$lines"; } >"$out"
+    printf 'phase %s repair started\n' "$phase" >"$spent_marker"
     ;;
   check)
     [ -n "$baseline" ] && [ -f "$baseline" ] && [ "${#tasks[@]}" -gt 0 ] || usage
