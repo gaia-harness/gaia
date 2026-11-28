@@ -65,7 +65,7 @@ has() {
   has "$DISPATCH_MD" '| Fallback artifact and First Read (digest unavailable) |' || return 1
 }
 
-@test "step 2 runs the lens once more after applied findings changed a test line, with no third pass" {
+@test "step 2 runs the lens once more after applied findings change a Test line or a phase gate, with no third pass" {
   has "$STAGE_MD" 'run this step once more on a fresh pre-clear and digest, apply that pass'"'"'s findings and re-run both checks, with no third pass.' || return 1
 }
 
