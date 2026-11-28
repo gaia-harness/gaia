@@ -243,7 +243,7 @@ apps/web/test/storybook-default-locale.test.tsx
 .gitattributes
 # Pins the template lint config's resolved unicorn/require-css-escape behavior (the app's nodeFiles wiring plus the preset's .server exemption), not adopter app behavior; GAIA CI catches a preset regression before release.
 apps/web/test/eslint/require-css-escape.test.ts
-# Guards the template mock harness wiring rather than the sample app; GAIA's CI runs it, adopters do not.
+# Pins the template mock url() helper's fallback when API_URL is unset, not adopter app behavior; GAIA CI catches a regression before release.
 apps/web/test/mock-url.test.ts
 
 # --- 4. CLI maintainer source + maintainer binary ---
