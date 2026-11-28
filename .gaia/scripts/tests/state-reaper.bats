@@ -228,11 +228,11 @@ plant_git_failure_fixture() {
 # on main with the branch in place.
 stash_on() {
   "$REAL_GIT" -C "$MAIN" checkout -q -B "$1" main
+  # a tip of its own, so the entry's parent is reachable from no other branch
+  "$REAL_GIT" -C "$MAIN" commit -q --allow-empty -m "tip of $1"
   printf '%s\n' "$1" >>"$MAIN/.gaia/state-registry.json"
   GIT_COMMITTER_DATE=2020-01-01T00:00:00Z "$REAL_GIT" -C "$MAIN" stash push -q -m "$1 wip"
   "$REAL_GIT" -C "$MAIN" checkout -q main
-  # move main on, so the entry's parent is no live branch's tip (the rename keep)
-  "$REAL_GIT" -C "$MAIN" commit -q --allow-empty -m "advance past $1"
 }
 
 # bats test_tags=whole-tree

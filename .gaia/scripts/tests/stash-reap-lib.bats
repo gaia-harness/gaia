@@ -28,11 +28,11 @@ setup() {
 # leaving the checkout back on trunk with the branch in place.
 stash_on() {
   git -C "$MAIN" checkout -q -B "$1" trunk
+  # a tip of its own, so the entry's parent is reachable from no other branch
+  git -C "$MAIN" commit -q --allow-empty -m "tip of $1"
   echo "$1" >>"$MAIN/f.txt"
   GIT_COMMITTER_DATE="${STASH_DATE:-2020-01-01T00:00:00Z}" git -C "$MAIN" stash push -q -m "$1 wip"
   git -C "$MAIN" checkout -q trunk
-  # move trunk on, so the entry's parent is no live branch's tip (the rename keep)
-  git -C "$MAIN" commit -q --allow-empty -m "advance past $1"
 }
 
 live_branches() {
@@ -51,6 +51,26 @@ stash_subjects() { git -C "$MAIN" log -g --format=%s refs/stash 2>/dev/null; }
   [ -z "$output" ]
   run stash_subjects
   grep -qF 'On feat-old:' <<<"$output"
+}
+
+# bats test_tags=protected
+@test "a renamed branch that gained commits keeps its entry; a merged and deleted one does not" {
+  stash_on feat-old
+  git -C "$MAIN" branch -q -m feat-old feat-new
+  git -C "$MAIN" checkout -q feat-new
+  git -C "$MAIN" commit -q --allow-empty -m "more work"
+  git -C "$MAIN" checkout -q trunk
+  stash_on merged
+  git -C "$MAIN" merge -q --no-ff -m "merge merged" merged
+  git -C "$MAIN" branch -q -D merged
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l <<<"$output" | tr -d ' ')" -eq 1 ]
+  grep -qF ' merged' <<<"$output"
+  run stash_subjects
+  grep -qF 'On feat-old:' <<<"$output"
+  grep -qF 'On merged:' <<<"$output" && return 1
+  return 0
 }
 
 # bats test_tags=protected

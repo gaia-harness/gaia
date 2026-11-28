@@ -56,11 +56,11 @@ stash_on() {
     "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com commit -q -m base
   }
   "$REAL_GIT" -C "$MAIN" checkout -q -B "$1" trunk
+  # a tip of its own, so the entry's parent is reachable from no other branch
+  "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com commit -q --allow-empty -m "tip of $1"
   echo "$1" >>"$MAIN/f.txt"
   "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com stash push -q -m "$1 wip"
   "$REAL_GIT" -C "$MAIN" checkout -q trunk
-  # move trunk on, so the entry's parent is no live branch's tip (the rename keep)
-  "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com commit -q --allow-empty -m "advance past $1"
 }
 
 branch() { "$REAL_GIT" -C "$MAIN" branch "$1"; }

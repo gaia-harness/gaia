@@ -21,9 +21,16 @@
 # (bare `git stash`, `push`, `save`, `create`, `store`) take nothing, so they
 # pass. An empty stack has nothing to take, so every verb passes.
 #
-# Fail closed. A detached HEAD, an unreadable stack, a reference that does not
-# resolve, a subject naming no branch (`(no branch)`, a hand-written `stash
-# store -m`) and a checkout the walk could not identify all deny.
+# Fail closed. A detached HEAD, a `clear` whose listing cannot be read, a
+# reference that does not resolve, a subject naming no branch (`(no branch)`, a
+# hand-written `stash store -m`) and a checkout the walk could not identify all
+# deny. A failed read of `refs/stash` itself is not one of them: it reads as an
+# empty stack and allows.
+#
+# One branch, two spellings. A new worktree starts on `worktree-<name>` and is
+# renamed to its canonical branch, so an entry and the checkout name the same
+# branch when gaia_branch_normalize (.gaia/scripts/branch-name-lib.sh) maps both
+# names to one; the reaper reads them the same way.
 #
 # The person's path. GAIA guards what Claude does on its own, never a person's
 # deliberate direction, but the hook cannot tell a request from Claude's own
@@ -49,6 +56,15 @@
 
 # shellcheck disable=SC2154,SC2034  # git_subcommand and git_args come from parse_git_globals; stash_reason goes to block-main-destructive-git.sh
 
+# The branch normalizer, from this file's own checkout; without it the names
+# compare exactly.
+_stash_guard_directory="$(cd "${BASH_SOURCE[0]%/*}" 2>/dev/null && pwd -P)" || _stash_guard_directory=""
+if ! declare -f gaia_branch_normalize >/dev/null 2>&1 && [ -n "$_stash_guard_directory" ] \
+   && [ -f "$_stash_guard_directory/../../../.gaia/scripts/branch-name-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$_stash_guard_directory/../../../.gaia/scripts/branch-name-lib.sh" 2>/dev/null || true
+fi
+
 # _stash_git <directory> <git arguments...>: git in <directory>, or in this
 # process's directory when it is empty.
 _stash_git() {
@@ -70,6 +86,14 @@ stash_subject_branch() {
   rest="${rest%%:*}"
   case "$rest" in '' | '(no branch)') return 1 ;; esac
   printf '%s' "$rest"
+}
+
+# _stash_same_branch <entry-branch> <checkout-branch>: rc 0 when both name one
+# branch, exactly or under gaia_branch_normalize.
+_stash_same_branch() {
+  [ "$1" = "$2" ] && return 0
+  declare -f gaia_branch_normalize >/dev/null 2>&1 || return 1
+  [ "$(gaia_branch_normalize "$1")" = "$(gaia_branch_normalize "$2")" ]
 }
 
 # _stash_entry_operand: print the entry the verb names, empty for the default
@@ -124,7 +148,7 @@ stash_rule_reason() {
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     entry_branch=$(stash_subject_branch "$line") || entry_branch=""
-    if [ "$entry_branch" != "$branch" ]; then
+    if ! _stash_same_branch "$entry_branch" "$branch"; then
       _stash_deny "'git stash $verb' follows another stash command in this one command, which shifts the indexes it was checked against, and the stack holds an entry made on '${entry_branch:-no branch}', not on this checkout's branch '$branch'. Run each stash command separately so the stack is re-read between them, or name the entry by its hash."
       return 0
     fi
@@ -160,7 +184,7 @@ _stash_rule_check() {
     fi
     while IFS= read -r line; do
       entry_branch=$(stash_subject_branch "$line") || entry_branch=""
-      if [ "$entry_branch" != "$branch" ]; then
+      if ! _stash_same_branch "$entry_branch" "$branch"; then
         _stash_deny "'git stash clear' deletes every entry, and the stack holds one made on '${entry_branch:-no branch}', not on this checkout's branch '$branch'. If the user asked to clear it, tell them so and ask them to run it themselves with the ! prefix."
         return 0
       fi
@@ -168,7 +192,8 @@ _stash_rule_check() {
     return 0
   fi
   operand=$(_stash_entry_operand)
-  reference="${operand:-stash@{0\}}"
+  reference="$operand"
+  [ -n "$reference" ] || reference='stash@{0}'
   case "$reference" in
     *[!0-9]*) ;;
     *) reference="stash@{$reference}" ;;
@@ -182,7 +207,7 @@ _stash_rule_check() {
     _stash_deny "'git stash $verb' would take $reference, whose subject names no branch, so the guard cannot tell whose entry it is. $_STASH_NAME_OWN If the user asked for this entry, ask them to run the command themselves with the ! prefix."
     return 0
   fi
-  if [ "$entry_branch" != "$branch" ]; then
+  if ! _stash_same_branch "$entry_branch" "$branch"; then
     _stash_deny "'git stash $verb' would take $reference, which was made on '$entry_branch', not on this checkout's branch '$branch'. $_STASH_NAME_OWN If the user asked for this entry by name, tell them it was made on '$entry_branch' and ask them to run the command themselves with the ! prefix."
   fi
   return 0

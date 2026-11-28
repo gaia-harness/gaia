@@ -10,10 +10,17 @@
 # An entry is spent when the branch its subject names (stash_subject_branch in
 # .claude/hooks/lib/main-git-guard-stash.sh) has no local ref and no worktree
 # holds it, read from the caller's live-branch set (gaia_reaper_snapshot's
-# GAIA_REAPER_LIVE_BRANCHES). A branch counts as live under its own name or its
-# normalized one (gaia_branch_normalize), so an entry made under a new
-# worktree's `worktree-<name>` spelling survives the rename to its canonical
-# branch. An entry naming no branch is never dropped. The caller refuses to call
+# GAIA_REAPER_LIVE_BRANCHES), and it is not kept by either of two further tests.
+# A branch counts as live under its own name or its normalized one
+# (gaia_branch_normalize), so an entry made under a new worktree's
+# `worktree-<name>` spelling survives the rename to its canonical branch. An
+# entry is kept when its parent commit (the branch's tip when it was made) is
+# reachable from a live local branch other than the default one: a branch
+# renamed and committed on since still holds it, while the default branch
+# reaches the parent of every merged branch and so would keep everything. The
+# default branch is origin's HEAD, else the main checkout's current branch.
+# Outside a named-branch cleanup, the backstop also keeps an entry younger than
+# _GAIA_STASH_REAP_GRACE_DAYS. An entry naming no branch is never dropped. The caller refuses to call
 # this on a failed ref or worktree read: an unread live set would make every
 # branch look gone.
 #
@@ -61,7 +68,7 @@ _gaia_stash_list() {
 # drops nothing more.
 gaia_stash_reap() {
   local main_root="$1" live_branches="$2" only_branch="${3-}" listing line index hash subject branch
-  local targets="" target found epoch now tips parent
+  local targets="" target found epoch now parent default_branch holders
   declare -f stash_subject_branch >/dev/null 2>&1 || {
     printf 'skipped stash: the stash subject parser did not load\n'
     return 0
@@ -70,10 +77,9 @@ gaia_stash_reap() {
     printf 'skipped stash: the stash stack cannot be read\n'
     return 0
   }
-  tips="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$main_root" for-each-ref --format='%(objectname)' refs/heads/ 2>/dev/null)" || {
-    printf 'skipped stash: the branch tips cannot be read\n'
-    return 0
-  }
+  default_branch="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$main_root" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)" || default_branch=""
+  default_branch="${default_branch#origin/}"
+  [ -n "$default_branch" ] || default_branch="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$main_root" symbolic-ref -q --short HEAD 2>/dev/null)" || default_branch=""
   now="$(date +%s)"
   while IFS=$'\t' read -r index hash subject epoch; do
     [ -n "$hash" ] || continue
@@ -82,11 +88,12 @@ gaia_stash_reap() {
     _gaia_stash_branch_live "$branch" "$live_branches" && continue
     parent="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$main_root" rev-parse -q --verify "$hash^1" 2>/dev/null)" || parent=""
     if [ -n "$parent" ]; then
-      case "
-$tips
-" in *"
-$parent
-"*) continue ;; esac
+      holders="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$main_root" for-each-ref --contains "$parent" --format='%(refname:lstrip=2)' refs/heads/ 2>/dev/null)" || {
+        printf 'skipped stash: the branch tips cannot be read\n'
+        return 0
+      }
+      holders="$(printf '%s\n' "$holders" | grep -vxF -e "$default_branch" -e '')" || holders=""
+      [ -z "$holders" ] || continue
     fi
     if [ -z "$only_branch" ]; then
       case "$epoch" in '' | *[!0-9]*) continue ;; esac

@@ -150,3 +150,17 @@ run_hook_from() {
   run_hook_from 'git stash drop' "$TREE_B"
   assert_denied_by_json
 }
+
+# bats test_tags=protected
+@test "an entry made under a worktree- spelling is this tree's own once the branch is renamed" {
+  local tree_c="$BATS_TEST_TMPDIR/wt-c"
+  git -C "$REPO" worktree add --quiet -b 'worktree-fix+12-thing' "$tree_c"
+  stash_in "$tree_c" "C wip"
+  run_hook_from 'git stash pop' "$TREE_B"
+  assert_denied_by_json
+  git -C "$tree_c" branch -m 'worktree-fix+12-thing' fix/12-thing
+  run_hook_from 'git stash pop' "$tree_c"
+  assert_allowed_by_json
+  run_hook_from 'git stash pop' "$TREE_B"
+  assert_denied_by_json
+}
