@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The destructive-git guard's stash rule. Sourced by block-main-destructive-git.sh
-# after lib/main-git-guard-parse.sh, where stash_rule_reason reads the globals
-# parse_git_globals sets for the segment the walk is on (git_subcommand,
+# after lib/main-git-guard-parse.sh, whose parse_git_globals sets the globals
+# stash_rule_reason reads for the segment the walk is on (git_subcommand,
 # git_args), and by .gaia/scripts/stash-reap-lib.sh for stash_subject_branch.
 # Defines functions and does no other work at source time.
 #
@@ -106,7 +106,7 @@ stash_rule_reason() {
   fi
   branch=$(_stash_git "$directory" symbolic-ref --short -q HEAD 2>/dev/null) || branch=""
   if [ -z "$branch" ]; then
-    _stash_deny "'git stash $verb' on a detached HEAD cannot be matched to a branch, so the guard cannot tell whether the entry is this session's. Check out the branch first."
+    _stash_deny "'git stash $verb' on a detached HEAD cannot be matched to a branch, so the guard cannot tell whether the entry is this session's. Check out this session's branch first."
     return 0
   fi
   if [ "$verb" = clear ]; then
