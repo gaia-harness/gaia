@@ -34,7 +34,7 @@ At most one test per stated behavior, at the cheapest layer that proves it, pick
 
 ## Phase placement
 
-A test goes in the task doc of the latest phase that delivers a behavior any of its cases needs (a route, a sign-in, a call the app makes), and no phase gate runs it before that phase. A gate that does is fixed in its phase entry in `<PLAN_DIR>/orchestrator-parts.md` by moving the run to the test's phase, then the renderer is re-run as `## Output` says. The rule binds the first lists and every edit made while applying review findings.
+A test goes in the task doc of the latest phase that delivers something one of its cases needs (a route, a sign-in, a call the app makes), and no phase gate runs it before that phase. A gate that does is fixed in its phase entry in `<PLAN_DIR>/orchestrator-parts.md` by moving the run to the test's phase, then the renderer is re-run as `## Output` says. The rule binds the first lists and every edit made while applying review findings.
 
 ## Security section
 
