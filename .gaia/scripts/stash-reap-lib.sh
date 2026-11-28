@@ -10,7 +10,7 @@
 # An entry is spent when the branch its subject names (stash_subject_branch in
 # .claude/hooks/lib/main-git-guard-stash.sh) has no local ref and no worktree
 # holds it, read from the caller's live-branch set (gaia_reaper_snapshot's
-# GAIA_REAPER_LIVE_BRANCHES), and it is not kept by either of two further tests.
+# GAIA_REAPER_LIVE_BRANCHES), unless a keep below applies.
 # A branch counts as live under its own name or its normalized one
 # (gaia_branch_normalize), so an entry made under a new worktree's
 # `worktree-<name>` spelling survives the rename to its canonical branch. An

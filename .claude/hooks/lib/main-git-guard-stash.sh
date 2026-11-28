@@ -44,8 +44,8 @@
 # indexes the next segment names, so `stash drop && stash drop` would check
 # `stash@{0}` twice and the second drop can land on a peer's entry. A pop,
 # apply, drop or branch segment that follows a segment which shifted the stack,
-# and names its entry by index or by default, is therefore denied while the stack
-# holds an entry made on another branch. Naming the entry by hash is not shifted
+# and names its entry by anything but a full 40-character hash, is therefore denied
+# while the stack holds an entry made on another branch. A full hash is not shifted
 # and still passes; running the verbs as separate commands re-reads the stack
 # between them.
 #
@@ -149,7 +149,7 @@ stash_rule_reason() {
     [ -n "$line" ] || continue
     entry_branch=$(stash_subject_branch "$line") || entry_branch=""
     if ! _stash_same_branch "$entry_branch" "$branch"; then
-      _stash_deny "'git stash $verb' follows another stash command in this one command, which shifts the indexes it was checked against, and the stack holds an entry made on '${entry_branch:-no branch}', not on this checkout's branch '$branch'. Run each stash command separately so the stack is re-read between them, or name the entry by its hash."
+      _stash_deny "'git stash $verb' follows another stash command in this one command, which shifts the indexes it was checked against, and the stack holds an entry made on '${entry_branch:-no branch}', not on this checkout's branch '$branch'. Run each stash command separately so the stack is re-read between them, or name the entry by its full hash."
       return 0
     fi
   done <<<"$listing"

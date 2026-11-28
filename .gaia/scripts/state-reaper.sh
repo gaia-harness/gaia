@@ -25,7 +25,7 @@
 # stash entry stash-reap-lib.sh dropped. last-run.json is rewritten whole each
 # run, so each dropped entry is also appended to `cache/state-reaper/
 # stash-dropped.log` (`<time> <hash> <branch>`, newest last, bounded to the last
-# _STATE_REAPER_STASH_LOG_LINES lines), where `git stash apply <hash>` finds it
+# _STATE_REAPER_STASH_LOG_LINES lines), so `git stash apply <hash>` recovers it
 # until gc.
 #
 # Always exits 0. A reaper error must never block the session that launched

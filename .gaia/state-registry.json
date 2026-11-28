@@ -95,7 +95,7 @@
       "kind": "dir",
       "scope": "main-only",
       "keyed_by": null,
-      "why": "The backstop reaper's launch stamp, launch lock, run lock, last-run report and the persistent stash-dropped.log recovery log of dropped stash hashes, anchored to the main root so every tree shares one launch gate.",
+      "why": "The backstop reaper's launch stamp, launch lock, run lock, last-run report and stash-dropped.log (the dropped stash hashes), anchored to the main root so every tree shares one launch gate.",
       "writer": "code",
       "retention": {
         "class": "owned",
