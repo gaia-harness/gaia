@@ -199,6 +199,8 @@ Nothing detects a person working in a tree outside Claude, so the block tells Cl
 
 The registry is the only list. Inside a linked worktree, `.claude/hooks/block-worktree-path-mismatch.sh` denies an Edit, Write, or MultiEdit to a `.gaia/local/` path that no registry entry recognizes, so drift written there surfaces rather than vanishing. Writes from the main checkout, or through Bash, are not checked. That is the defense an adopter clone carries.
 
+Git's stash stack is shared state outside the registry: every worktree reads and writes one `refs/stash`, so a bare `git stash pop` in one tree can take another tree's entry. The destructive-git guard lets the stash write verbs act only on the current branch's entries ([[Git Workflow]]), and both reapers drop a spent branch's entries ([[Local Working State#Pruning]]).
+
 Repo-root tooling is a separate hazard from anything the registry governs: a command with no notion of "tree" at all can still walk into one. The `format` script (`prettier --write` over a root-anchored glob) relies on Prettier's default ignore resolution, `.gitignore` plus `.prettierignore`, to stay off untracked and build-output paths, `.claude/worktrees/` included. Passing `--ignore-path` to that command replaces Prettier's ignore set rather than adding to it, which drops the implicit `.gitignore` read and lets the same glob descend into every live worktree; a `--write` there lands silently in another session's in-flight tree. The `format` script GAIA ships does not pass that flag; keep it that way when editing it.
 
 <!-- gaia:maintainer-only:start -->

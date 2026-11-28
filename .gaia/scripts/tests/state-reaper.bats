@@ -15,7 +15,7 @@
 # Run via: bash .gaia/scripts/bats5.sh .gaia/scripts/tests/state-reaper.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-SCRIPT_FILES="state-reaper.sh state-reaper-lib.sh state-reaper-classes.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh"
+SCRIPT_FILES="state-reaper.sh state-reaper-lib.sh state-reaper-classes.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh stash-reap-lib.sh"
 SHA="0123456789abcdef0123456789abcdef01234567"
 
 setup() {
@@ -48,6 +48,8 @@ make_fixture() {
   cp "$SCRIPTS_DIRECTORY"/notebook/*.sh "$MAIN/.gaia/scripts/notebook/"
   cp "$SCRIPTS_DIRECTORY/spec/with-ledger-lock.sh" "$MAIN/.gaia/scripts/spec/"
   cp "$SCRIPTS_DIRECTORY/exclusive-lock-lib.sh" "$MAIN/.gaia/scripts/"
+  mkdir -p "$MAIN/.claude/hooks/lib"
+  cp "$SCRIPTS_DIRECTORY/../../.claude/hooks/lib/main-git-guard-stash.sh" "$MAIN/.claude/hooks/lib/"
   cp "$REAL_REGISTRY" "$MAIN/.gaia/state-registry.json"
   "$REAL_GIT" -C "$MAIN" init -q
   "$REAL_GIT" -C "$MAIN" symbolic-ref HEAD refs/heads/main
@@ -220,6 +222,37 @@ plant_git_failure_fixture() {
   assert_each present "$RECENT"
   present runs/fix
   present runs/mixed/fresh
+}
+
+# stash_on <branch>: one stash entry made on <branch> in MAIN, which ends back
+# on main with the branch in place.
+stash_on() {
+  "$REAL_GIT" -C "$MAIN" checkout -q -B "$1" main
+  printf '%s\n' "$1" >>"$MAIN/.gaia/state-registry.json"
+  "$REAL_GIT" -C "$MAIN" stash push -q -m "$1 wip"
+  "$REAL_GIT" -C "$MAIN" checkout -q main
+}
+
+# bats test_tags=whole-tree
+@test "a spent branch's stash entry is dropped and recorded; a live one stays, and a failed ref read drops nothing" {
+  make_fixture
+  stash_on fix/gone
+  stash_on fix/live
+  "$REAL_GIT" -C "$MAIN" branch -q -D fix/gone
+  install_failing_git "for-each-ref"
+  run_reaper_with_failing_git
+  [ "$status" -eq 0 ]
+  "$REAL_GIT" -C "$MAIN" log -g --format=%s refs/stash | grep -qF 'On fix/gone: fix/gone wip'
+  jq -e '.skipped | index("stash: the branch refs or the worktree list could not be read")' "$LOCAL/cache/state-reaper/last-run.json" >/dev/null
+  local spent_hash
+  spent_hash="$("$REAL_GIT" -C "$MAIN" log -g --format='%H %s' refs/stash | sed -n 's/ On fix\/gone: fix\/gone wip$//p')"
+  [ -n "$spent_hash" ]
+  run_reaper
+  [ "$status" -eq 0 ]
+  run "$REAL_GIT" -C "$MAIN" log -g --format=%s refs/stash
+  grep -qF 'On fix/gone:' <<<"$output" && return 1
+  grep -qF 'On fix/live: fix/live wip' <<<"$output"
+  jq -e --arg entry "$spent_hash fix/gone" '.stash_dropped == [$entry]' "$LOCAL/cache/state-reaper/last-run.json" >/dev/null
 }
 
 # bats test_tags=whole-tree

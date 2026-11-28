@@ -2,7 +2,9 @@
 # PreToolUse Bash hook: block commits on main/master, force-push naming main/master,
 # any push from main/master or with a main/master/HEAD refspec source or destination,
 # a `git reset --hard` that moves HEAD to another commit on any branch,
-# the history rules lib/main-git-guard-history.sh owns,
+# the history rules lib/main-git-guard-history.sh owns, a stash pop, apply,
+# drop, branch or clear of an entry another branch made
+# (lib/main-git-guard-stash.sh),
 # a `-c`, `--config-env` or `git config` write of a key git runs as a command
 # (lib/git-command-config.sh), and block a peer session moving the main
 # checkout's HEAD off a branch another session holds there with an open pull
@@ -213,8 +215,10 @@ set +e
 [ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/main-git-guard-history.sh" ] && . "$_jq_library_directory/main-git-guard-history.sh" 2>/dev/null
 # shellcheck source=lib/git-command-config.sh
 [ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/git-command-config.sh" ] && . "$_jq_library_directory/git-command-config.sh" 2>/dev/null
+# shellcheck source=lib/main-git-guard-stash.sh
+[ -n "$_jq_library_directory" ] && [ -f "$_jq_library_directory/main-git-guard-stash.sh" ] && . "$_jq_library_directory/main-git-guard-stash.sh" 2>/dev/null
 set -e
-for _required in history_rule_reason:main-git-guard-history push_refspec_targets_main:main-git-guard-history gaia_git_config_key_class:git-command-config; do
+for _required in history_rule_reason:main-git-guard-history push_refspec_targets_main:main-git-guard-history gaia_git_config_key_class:git-command-config stash_rule_reason:main-git-guard-stash; do
   if ! type "${_required%%:*}" >/dev/null 2>&1; then
     printf 'BLOCKED: block-main-destructive-git.sh cannot load lib/%s.sh, so this call cannot be checked. Fail-loud, not fail-open -- restore the library.\n' "${_required#*:}" >&2
     exit 2
@@ -394,12 +398,12 @@ while IFS= read -r segment; do
   history_rule_reason
   [ -z "$history_reason" ] || deny "$history_reason"
 
-  # Only commit, push and reset have rules past this point. Every other
+  # Only commit, push, reset and stash have rules past this point. Every other
   # subcommand would pay the checkout resolution below, two `git rev-parse`
   # spawns per `-C` segment, for a verdict nothing reads. Nothing carried to the
   # next segment is set below: `lead_cd` and `cd_ambiguous` belong to the `cd` arm.
   case "$git_subcommand" in
-    commit | push | reset) ;; # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
+    commit | push | reset | stash) ;; # subset of .claude/hooks/lib/subagent-git-policy.sh#GAIA_SUBAGENT_DENIED_GIT_SUBCOMMANDS
     *) continue ;;
   esac
 
@@ -472,6 +476,14 @@ while IFS= read -r segment; do
   else
     branch_directory="$lead_cd"
     segment_ambiguous="$cd_ambiguous"
+  fi
+
+  # 0. A stash write verb acts only on this branch's own entries
+  #    (lib/main-git-guard-stash.sh).
+  if [ "$git_subcommand" = stash ]; then
+    stash_rule_reason "${branch_directory:-$(acting_directory)}" "$segment_ambiguous"
+    [ -z "$stash_reason" ] || deny "$stash_reason"
+    continue
   fi
 
   # The words after the subcommand, where a push's own refspec lives. The

@@ -23,10 +23,12 @@
 # table lacks) bind these rules too: such a spelling reads no subcommand and
 # allows.
 #
-# Not covered here, on purpose: `git checkout -- .`, `git restore .`,
-# `git stash clear` and `git stash drop` discard uncommitted work, but on the
-# agent's own branch that is ordinary, recoverable-by-redo work; the execution
-# doctrine already keeps executors off state-changing git. Force-pushing a
+# Not covered here, on purpose: `git checkout -- .` and `git restore .`
+# discard uncommitted work, but only in the acting tree, where it is ordinary,
+# recoverable-by-redo work; the execution doctrine already keeps executors off
+# state-changing git. The stash stack is not the acting tree's own (every
+# worktree shares it), so its write verbs have their own rule in
+# lib/main-git-guard-stash.sh. Force-pushing a
 # feature branch, deleting a tag, and `git worktree remove --force` are allowed:
 # none reaches main or another person's history.
 

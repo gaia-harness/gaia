@@ -75,7 +75,9 @@ Beyond rules 1 to 3 and its deny of a hard reset that moves HEAD, the guard deni
 
 `block-no-verify.sh` reads the inline `core.hooksPath` override from the parsed globals, so a quoted `-c 'core.hooksPath=x'` and `--config-env=core.hooksPath=X` are denied as the plain spelling is. See [[Claude Hooks#Bundled hooks]].
 
-Allowed on purpose: a force-push of a feature branch (the rebase repair), deleting a tag, `git worktree remove --force`, and the commands that discard uncommitted work on the session's own branch (`git checkout -- .`, `git restore .`, `git stash drop`/`clear`), which stay ordinary editing.
+Allowed on purpose: a force-push of a feature branch (the rebase repair), deleting a tag, `git worktree remove --force`, and the commands that discard uncommitted work in the session's own tree (`git checkout -- .`, `git restore .`), which stay ordinary editing.
+
+The stash stack is not the session's own: every worktree shares it, so `git stash pop`, `apply`, `drop`, `branch` and `clear` may act only on entries whose subject names the acting checkout's branch, and a person who wants another branch's entry runs the command with the `!` prefix. `.claude/hooks/lib/main-git-guard-stash.sh` owns the rule and its fail-closed cases.
 
 The rules read the parsed operands, never the raw text, so a flag quoted inside a commit message is not an invocation, and match a long option in any prefix git accepts (`--mirr`). They inherit the parser's honest limits (an unexpanded variable or an unlisted value-taking global option reads no subcommand and allows), which the classifier does not: it falls through on both, and reads a variable only when its latest assignment, in an earlier segment, is a literal outside a pipe and before any `&&`, `||` or pipe. Residuals: the env-prefixed config forms (`GIT_CONFIG_*`, `GIT_SSH_COMMAND`) are never approved, so they still prompt; an approved commit, push, merge or checkout runs the tracked hooks under `.githooks/` and whatever they call, which are the project's own reviewed code, so an edit to them is an ordinary file edit no rule here vouches for.
 
