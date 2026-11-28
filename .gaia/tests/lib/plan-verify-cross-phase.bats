@@ -16,7 +16,7 @@ setup() {
   TREE="$BATS_TEST_TMPDIR/tree"
   PLAN="$BATS_TEST_TMPDIR/plan"
   mkdir -p "$TREE/.gaia/scripts" "$PLAN"
-  # The copied scripts include plan-verify-lib.sh, so a case that uses it as the earlier-phase file never plants it.
+  # The script sources its libraries from this tree, so a case never plants over a copied script.
   cp -R "$REPO_ROOT_REAL/.gaia/scripts/spec" "$TREE/.gaia/scripts/spec"
   cp "$REPO_ROOT_REAL/.gaia/scripts/machine-local-ref-lib.sh" "$TREE/.gaia/scripts/"
   git -C "$TREE" init -q
