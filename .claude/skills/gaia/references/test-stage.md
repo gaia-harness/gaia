@@ -34,7 +34,7 @@ At most one test per stated behavior, at the cheapest layer that proves it, pick
 
 ## Phase placement
 
-A test goes in the task doc of the latest phase that delivers something one of its cases needs (a route, a sign-in, a call the app makes), and no phase gate runs it before that phase. A gate that does is fixed in its phase entry in `<PLAN_DIR>/orchestrator-parts.md` by moving the run to the test's phase, then the renderer is re-run as `## Output` says. The rule binds the first lists and every edit made while applying review findings.
+A test goes in the task doc of the latest phase that delivers something one of its cases needs (a route, a sign-in, a call the app makes), and no phase gate runs it before that phase. A gate that does is fixed in its phase entry in `<PLAN_DIR>/orchestrator-parts.md` by moving the run to the test's phase, the test file's declaration and README ownership move to the task doc of that phase, each `- Security writer:` line of the old and new phase entries is updated to its new count, then the renderer is re-run as `## Output` says. The rule binds the first lists and every edit made while applying review findings.
 
 ## Security section
 
@@ -57,7 +57,7 @@ Close a `gaia-test` run on the plan's own ref, separate from the `gaia-plan` run
 
 ## Re-run
 
-Run on a saved plan, the stage writes `running` again and replaces the previous Test lines, the closing phase entry, each `- Security writer:` line and the closing phase's `## Kickoff outline` line in `orchestrator-parts.md`, then re-renders; it never leaves two sets.
+Run on a saved plan, the stage writes `running` again and replaces the previous Test lines, the closing phase entry, each `- Security writer:` line, the closing phase's `## Kickoff outline` line and any gate run moved by `## Phase placement` in `orchestrator-parts.md`, then re-renders; it never leaves two sets.
 
 ## Auto mode
 
