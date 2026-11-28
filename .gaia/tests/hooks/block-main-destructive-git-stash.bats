@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 
 # The stash rule of .claude/hooks/block-main-destructive-git.sh. Every linked
-# worktree shares one stash stack, so a pop, apply, drop or clear run in one
-# tree can take an entry another tree made. The rule lets those verbs act only
+# worktree shares one stash stack, so a pop, apply, drop, branch or clear run in
+# one tree can take an entry another tree made. The rule lets those verbs act only
 # on entries whose subject names the acting checkout's branch; the rule's own
 # header in lib/main-git-guard-stash.sh owns the full contract.
 #

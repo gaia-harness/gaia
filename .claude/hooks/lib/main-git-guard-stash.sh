@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The destructive-git guard's stash rule. Sourced by block-main-destructive-git.sh
-# after lib/main-git-guard-parse.sh, and reads the globals parse_git_globals sets
-# for the segment the walk is on (git_subcommand, git_args). Defines functions
-# and does no other work at source time.
+# after lib/main-git-guard-parse.sh, where stash_rule_reason reads the globals
+# parse_git_globals sets for the segment the walk is on (git_subcommand,
+# git_args), and by .gaia/scripts/stash-reap-lib.sh for stash_subject_branch.
+# Defines functions and does no other work at source time.
 #
 # Why. Every linked worktree shares one stash stack: `refs/stash` and its reflog
 # live in the common git dir. A `git stash pop`, `apply`, `drop`, `branch` or
@@ -80,8 +81,10 @@ _stash_entry_operand() {
 
 # _stash_deny <message>: set stash_reason, with the shared tail.
 _stash_deny() {
-  stash_reason="$1 Every worktree shares one stash stack (wiki/concepts/Worktrees.md), so taking another branch's entry moves that session's uncommitted work into this tree or deletes it. Find this branch's own entries with 'git stash list' and name one ('git stash pop stash@{n}' or its hash), or set work aside with a WIP commit instead."
+  stash_reason="$1 Every worktree shares one stash stack (wiki/concepts/Worktrees.md), so taking another branch's entry moves that session's uncommitted work into this tree or deletes it. To set work aside, use a WIP commit instead."
 }
+
+_STASH_NAME_OWN="Find this branch's own entries with 'git stash list' and name one ('git stash pop stash@{n}' or its hash)."
 
 # stash_rule_reason <directory> <ambiguous>: set stash_reason to the deny reason
 # for the stash segment parse_git_globals just read, or to empty. <directory> is
@@ -103,7 +106,7 @@ stash_rule_reason() {
   fi
   branch=$(_stash_git "$directory" symbolic-ref --short -q HEAD 2>/dev/null) || branch=""
   if [ -z "$branch" ]; then
-    _stash_deny "'git stash $verb' on a detached HEAD cannot be matched to a branch, so the guard cannot tell whether the entry is this session's."
+    _stash_deny "'git stash $verb' on a detached HEAD cannot be matched to a branch, so the guard cannot tell whether the entry is this session's. Check out the branch first."
     return 0
   fi
   if [ "$verb" = clear ]; then
@@ -132,11 +135,11 @@ stash_rule_reason() {
     return 0
   fi
   if ! entry_branch=$(stash_subject_branch "$subject"); then
-    _stash_deny "'git stash $verb' would take $reference, whose subject names no branch, so the guard cannot tell whose entry it is. If the user asked for this entry, ask them to run the command themselves with the ! prefix."
+    _stash_deny "'git stash $verb' would take $reference, whose subject names no branch, so the guard cannot tell whose entry it is. $_STASH_NAME_OWN If the user asked for this entry, ask them to run the command themselves with the ! prefix."
     return 0
   fi
   if [ "$entry_branch" != "$branch" ]; then
-    _stash_deny "'git stash $verb' would take $reference, which was made on '$entry_branch', not on this checkout's branch '$branch'. If the user asked for this entry by name, tell them it was made on '$entry_branch' and ask them to run the command themselves with the ! prefix."
+    _stash_deny "'git stash $verb' would take $reference, which was made on '$entry_branch', not on this checkout's branch '$branch'. $_STASH_NAME_OWN If the user asked for this entry by name, tell them it was made on '$entry_branch' and ask them to run the command themselves with the ! prefix."
   fi
   return 0
 }
