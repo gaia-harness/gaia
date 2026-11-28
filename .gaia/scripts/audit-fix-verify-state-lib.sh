@@ -3,8 +3,9 @@
 # Repository-state helpers for audit-fix-verify.sh: the ENFORCEMENT_PATHS
 # list, the pin digest and its check, the snapshot of HEAD, index, dirty map
 # and untracked list, the delta of a snapshot from a baseline, and the judged
-# path map the check records and settled compares. Sourced only by audit-fix-verify.sh
-# from its own directory, so a pinned copy sources the pinned library; the
+# path map the check records and settled compares. Sourced by audit-fix-verify.sh
+# from its own directory, so a pinned copy sources the pinned library, and by
+# autonomy-gate-repair.sh, which reads ENFORCEMENT_PATHS alone; the
 # baseline-<r>.json shape these helpers read lives in that script's header.
 #
 # Reads the caller's ROOT, TEMPORARY_DIRECTORY and _here.

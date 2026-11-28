@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-11-24
-updated: 2026-11-27
+updated: 2026-11-28
 tags: [concepts, autonomy]
 ---
 
@@ -77,6 +77,10 @@ Under the switch, a write to a file that governs the harness itself parks too. A
 `<main checkout>/.gaia/local/protected/autonomy-log.jsonl` records every option the gate told Claude to take, every audit unit the budget spent (header `Audit budget`) and every merge the merge gate allowed (header `Unattended merge`), one JSON object per line: `time`, `session_id`, `branch`, `header`, `option`. Each hook writes its entry before it lets the action through, so the record never depends on Claude. A failed write parks or denies instead. The log is main-anchored, so every worktree's decisions land in one file, and it sits in the protected folder, so Claude cannot rewrite it.
 
 The audit's PR-body sections (`audit-dispositions-check.sh pr-sections`) include the branch's entries under `## Decided unattended`, one `header: option` line each (`.gaia/scripts/audit-decided-unattended-lib.sh`). An entry whose text fails the secret screen or the machine-local reference screen (`.gaia/scripts/machine-local-ref-lib.sh`) is withheld and counted. A branch with no entries gets no section. The backstop state reaper drops an entry once no local branch or worktree maps onto its branch and the entry is older than the `autonomy-decision-log` registry row's window.
+
+## The phase gate repair
+
+A plan run's phase gate failure that would halt gets one repair per phase under the switch, applied by the orchestrator before the `Halted` question, then a rerun of the whole gate; a second failure halts. `Stay halted` stays the recommended answer, so the switch never picks a repair. `.gaia/scripts/autonomy-gate-repair.sh` allows the repair only while the switch is live and the phase has no repair block in its progress file, and refuses one that touches a path the phase's task docs do not name, deletes a path, or edits a protected path or one of the audit fixer's enforcement paths. The steps and the progress record: `## Unattended gate repair` in `.claude/skills/gaia/references/plan/orchestrator-template.md`.
 
 ## The audit budget
 
