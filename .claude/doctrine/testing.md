@@ -1,6 +1,6 @@
 # Testing doctrine
 
-Contents: Scope; What to test; Layers; Guards and security rows; Components, pages and stories; Served HTML; Committed tests and generators.
+Contents: Scope; What to test; Layers; Guards and security rows; Components, pages and stories; Served HTML; Production start; Committed tests and generators.
 
 ## Scope
 
@@ -139,6 +139,10 @@ A failing security test is fixed in the code, never weakened; the security kinds
 - A real-server row for a served error status (a 404 for an unknown path or a missing record) asserts only the status and any `Location`, like a `**Served check.**`; the heading and other page content served with it stay on its story or route test. Which route answers a path is shown by its route test and, for a guarded route, its served check (a signed-out request its guard redirects), never by a served heading.
 - A refusal or error a direct `loader` or `action` call returns is a route test, even when a page or error boundary renders it.
 - A flow that must work without JavaScript checks its happy path's native form posts page-less in its flow test, never an error post, with the body built from the served form, never as a page with JavaScript disabled. A native post that belongs to no flow is a real-server check.
+
+## Production start
+
+**Production start.** A test or check that starts the production server never reads the developer's `.env`: it sets `DOTENV_CONFIG_PATH=/dev/null` and passes every variable the start needs explicitly. When the start's parent already loaded `.env` (Playwright's config does), the start inherits those dev values and `DOTENV_CONFIG_PATH` cannot undo that, so it gets an environment built from scratch: `env -i` with `PATH`, `HOME` and the start's variables, or a spawn `env` object that lists them without spreading `process.env`. The server entry loads `.env` through dotenv, which fills every variable the shell leaves unset, so `env -u NAME` hands `NAME` to `.env` rather than removing it, and a `.env` holding the dev values `.env.example` ships (a `SESSION_SECRET` production refuses) fails the start locally while CI, which has no `.env`, passes.
 
 ## Committed tests and generators
 
