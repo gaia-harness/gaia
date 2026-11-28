@@ -229,10 +229,22 @@ plant_git_failure_fixture() {
 stash_on() {
   "$REAL_GIT" -C "$MAIN" checkout -q -B "$1" main
   # a tip of its own, so the entry's parent is reachable from no other branch
-  "$REAL_GIT" -C "$MAIN" commit -q --allow-empty -m "tip of $1"
+  [ -n "${STASH_NO_TIP-}" ] || "$REAL_GIT" -C "$MAIN" commit -q --allow-empty -m "tip of $1"
   printf '%s\n' "$1" >>"$MAIN/.gaia/state-registry.json"
   GIT_COMMITTER_DATE=2020-01-01T00:00:00Z "$REAL_GIT" -C "$MAIN" stash push -q -m "$1 wip"
   "$REAL_GIT" -C "$MAIN" checkout -q main
+}
+
+@test "the backstop drops an entry stashed before the branch's first commit while a sibling live branch exists" {
+  make_fixture
+  STASH_NO_TIP=1 stash_on fix/early
+  "$REAL_GIT" -C "$MAIN" branch -q fix/sibling main
+  "$REAL_GIT" -C "$MAIN" branch -q -D fix/early
+  run_reaper
+  [ "$status" -eq 0 ]
+  run "$REAL_GIT" -C "$MAIN" log -g --format=%s refs/stash
+  grep -qF 'On fix/early:' <<<"$output" && return 1
+  return 0
 }
 
 # bats test_tags=whole-tree

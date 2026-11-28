@@ -29,7 +29,7 @@ setup() {
 stash_on() {
   git -C "$MAIN" checkout -q -B "$1" trunk
   # a tip of its own, so the entry's parent is reachable from no other branch
-  git -C "$MAIN" commit -q --allow-empty -m "tip of $1"
+  [ -n "${STASH_NO_TIP-}" ] || git -C "$MAIN" commit -q --allow-empty -m "tip of $1"
   echo "$1" >>"$MAIN/f.txt"
   GIT_COMMITTER_DATE="${STASH_DATE:-2020-01-01T00:00:00Z}" git -C "$MAIN" stash push -q -m "$1 wip"
   git -C "$MAIN" checkout -q trunk
@@ -151,4 +151,49 @@ stash_subjects() { git -C "$MAIN" log -g --format=%s refs/stash 2>/dev/null; }
   grep -qF 'skipped stash: the stash subject parser did not load' <<<"$output"
   run stash_subjects
   grep -qF 'On gone: gone wip' <<<"$output"
+}
+
+# bats test_tags=protected
+@test "an entry stashed before the branch's first commit is dropped while a sibling live branch exists, by the named cleanup and the backstop" {
+  STASH_NO_TIP=1 stash_on early-named
+  STASH_NO_TIP=1 stash_on early-backstop
+  git -C "$MAIN" branch -q sibling trunk
+  git -C "$MAIN" branch -q -D early-named early-backstop
+  run gaia_stash_reap "$MAIN" "$(live_branches)" early-named
+  [ "$status" -eq 0 ]
+  grep -qF ' early-named' <<<"$output"
+  run stash_subjects
+  grep -qF 'On early-named:' <<<"$output" && return 1
+  grep -qF 'On early-backstop:' <<<"$output" || return 1
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  grep -qF ' early-backstop' <<<"$output"
+  run stash_subjects
+  grep -qF 'On early-backstop:' <<<"$output" && return 1
+  return 0
+}
+
+@test "a named cleanup treats the worktree- spelling as the same branch" {
+  stash_on 'worktree-fix+12-thing'
+  git -C "$MAIN" branch -q -D 'worktree-fix+12-thing'
+  run gaia_stash_reap "$MAIN" "$(live_branches)" fix/12-thing
+  [ "$status" -eq 0 ]
+  grep -qF ' worktree-fix+12-thing' <<<"$output"
+  run stash_subjects
+  grep -qF 'On worktree-fix+12-thing:' <<<"$output" && return 1
+  return 0
+}
+
+@test "a detached-HEAD entry is kept by the named cleanup and the backstop" {
+  echo detached >>"$MAIN/f.txt"
+  git -C "$MAIN" checkout -q --detach
+  GIT_COMMITTER_DATE=2020-01-01T00:00:00Z git -C "$MAIN" stash push -q
+  git -C "$MAIN" checkout -q trunk
+  run stash_subjects
+  grep -qF 'WIP on (no branch):' <<<"$output" || return 1
+  run gaia_stash_reap "$MAIN" "$(live_branches)" '(no branch)'
+  [ -z "$output" ]
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ -z "$output" ]
+  run stash_subjects
+  grep -qF 'WIP on (no branch):' <<<"$output"
 }

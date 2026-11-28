@@ -15,9 +15,11 @@
 # (gaia_branch_normalize), so an entry made under a new worktree's
 # `worktree-<name>` spelling survives the rename to its canonical branch. An
 # entry is kept when its parent commit (the branch's tip when it was made) is
-# reachable from a live local branch other than the default one: a branch
-# renamed and committed on since still holds it, while the default branch
-# reaches the parent of every merged branch and so would keep everything. The
+# reachable from a live local branch other than the default one and not from
+# the default branch: a branch renamed and committed on since still holds it,
+# while a parent the default branch reaches (the parent of every merged branch,
+# or of a stash made before the branch's first commit) is shared with every
+# sibling lane and would keep the entry forever. The
 # default branch is origin's HEAD, else the main checkout's current branch.
 # Outside a named-branch cleanup, the backstop also keeps an entry younger than
 # _GAIA_STASH_REAP_GRACE_DAYS. An entry naming no branch is never dropped. The caller refuses to call
@@ -55,6 +57,20 @@ _gaia_stash_branch_live() {
   return 1
 }
 
+# _gaia_stash_branch_key <branch>: the branch's normalized spelling, else as is.
+_gaia_stash_branch_key() {
+  if declare -f gaia_branch_normalize >/dev/null 2>&1; then gaia_branch_normalize "$1"; else printf '%s\n' "$1"; fi
+}
+
+# _gaia_stash_parent_on_default <main-root> <parent> <default-branch>: rc 0 when
+# <parent> is reachable from the default branch. Such a parent is a shared
+# ancestor, held by every branch cut from it, so it says nothing about whether
+# the entry's own branch lives on under another name.
+_gaia_stash_parent_on_default() {
+  [ -n "$3" ] || return 1
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$1" merge-base --is-ancestor "$2" "refs/heads/$3" 2>/dev/null
+}
+
 # _gaia_stash_list <main-root>: one `<index>\t<hash>\t<subject>\t<epoch>` line
 # per entry.
 _gaia_stash_list() {
@@ -84,10 +100,10 @@ gaia_stash_reap() {
   while IFS=$'\t' read -r index hash subject epoch; do
     [ -n "$hash" ] || continue
     branch="$(stash_subject_branch "$subject")" || continue
-    [ -z "$only_branch" ] || [ "$branch" = "$only_branch" ] || continue
+    [ -z "$only_branch" ] || [ "$(_gaia_stash_branch_key "$branch")" = "$(_gaia_stash_branch_key "$only_branch")" ] || continue
     _gaia_stash_branch_live "$branch" "$live_branches" && continue
     parent="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$main_root" rev-parse -q --verify "$hash^1" 2>/dev/null)" || parent=""
-    if [ -n "$parent" ]; then
+    if [ -n "$parent" ] && ! _gaia_stash_parent_on_default "$main_root" "$parent" "$default_branch"; then
       holders="$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_COMMON_DIR git -C "$main_root" for-each-ref --contains "$parent" --format='%(refname:lstrip=2)' refs/heads/ 2>/dev/null)" || {
         printf 'skipped stash: the branch tips cannot be read\n'
         return 0

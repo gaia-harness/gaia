@@ -57,7 +57,7 @@ stash_on() {
   }
   "$REAL_GIT" -C "$MAIN" checkout -q -B "$1" trunk
   # a tip of its own, so the entry's parent is reachable from no other branch
-  "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com commit -q --allow-empty -m "tip of $1"
+  [ -n "${STASH_NO_TIP-}" ] || "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com commit -q --allow-empty -m "tip of $1"
   echo "$1" >>"$MAIN/f.txt"
   "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com stash push -q -m "$1 wip"
   "$REAL_GIT" -C "$MAIN" checkout -q trunk
@@ -172,6 +172,19 @@ check_refuses() {
   grep -qF 'On fix/a:' <<<"$output" && return 1
   grep -qF 'On fix/gone: fix/gone wip' <<<"$output"
   grep -qF 'On fix/b: fix/b wip' <<<"$output"
+}
+
+@test "an entry stashed before the branch's first commit is dropped while a sibling live branch exists" {
+  make_main
+  STASH_NO_TIP=1 stash_on fix/early
+  branch fix/sibling
+  "$REAL_GIT" -C "$MAIN" branch -q -D fix/early
+  run bash "$VERB" --branch fix/early
+  [ "$status" -eq 0 ] || return 1
+  printf '%s\n' "$output" | grep -Eq '^dropped [0-9a-f]{40} fix/early$' || { echo "no drop line: $output"; return 1; }
+  run "$REAL_GIT" -C "$MAIN" log -g --format=%s refs/stash
+  grep -qF 'On fix/early:' <<<"$output" && return 1
+  return 0
 }
 
 # ---------------------------------------------------------------------------
