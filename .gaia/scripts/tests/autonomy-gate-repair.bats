@@ -120,17 +120,22 @@ check_repair() {
 # bats test_tags=protected
 @test "an unreadable protected set refuses the check even for an otherwise passing repair" {
   live_switch
-  # The protected set is read beside the script, so a scratch copy owns a malformed one.
+  # The protected set and the libraries that read it sit beside the script, so a scratch copy owns a malformed one.
   local copy="$FIX/copy/.gaia/scripts" lib
-  mkdir -p "$copy"
+  mkdir -p "$copy" "$FIX/copy/.claude/hooks/lib"
   for lib in autonomy-gate-repair.sh autonomy-lib.sh main-root-lib.sh audit-fix-verify-state-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$lib" "$copy/"
   done
-  printf '{not json\n' >"$FIX/copy/.gaia/autonomy-protected-paths.json"
+  cp "$REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" "$FIX/copy/.claude/hooks/lib/"
+  cp "$REPO_ROOT/.gaia/autonomy-protected-paths.json" "$FIX/copy/.gaia/"
   SCRIPT="$copy/autonomy-gate-repair.sh"
   take_baseline
   [ "$status" -eq 0 ] || return 1
   printf 'one, repaired\n' >"$MAIN/app/db.ts"
+  # Control: the intact protected set lets the same repair pass, so only the malformed file drives the refusal below.
+  check_repair
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  printf '{not json\n' >"$FIX/copy/.gaia/autonomy-protected-paths.json"
   check_repair
   [ "$status" -eq 1 ] || return 1
   [[ $output == *"protected-unreadable .gaia/autonomy-protected-paths.json"* ]]

@@ -37,6 +37,10 @@
 # (`.env`) is invisible to check; the orchestrator's prose forbids one. The task
 # docs sit in the git-ignored plan folder the snapshot cannot see, so check
 # refuses a repair when any recorded doc's hash differs from the baseline's.
+# The --baseline file is itself an orchestrator-held input check trusts as
+# written: its declared words, task hashes and snapshot carry no integrity
+# check, so editing it between baseline and check widens the bound. The
+# orchestrator's prose forbids that edit; the script cannot see it.
 #
 # Exit codes: 0 pass, 1 refused (each reason on stderr as `<kind> <detail>`;
 # kinds: attended, already-repaired, head-moved, task-doc-changed, no-change,
