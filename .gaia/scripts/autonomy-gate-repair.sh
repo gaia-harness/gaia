@@ -26,8 +26,8 @@
 #
 # check judges the paths whose state differs from the baseline (a new, edited,
 # reverted or deleted path). Each must be named by a `declared` line of the
-# baseline (taken from the task docs when the baseline was written, so check
-# never reads a task doc live), must still exist, and must be in neither the
+# baseline (taken from the task docs when the baseline was written), must
+# still exist, and must be in neither the
 # autonomy protected set (autonomy_protected_globs) nor the audit fixer's
 # ENFORCEMENT_PATHS (audit-fix-verify-state-lib.sh). It also refuses a moved
 # HEAD and a repair that changed nothing. On a pass it prints `changed <path>`
