@@ -105,6 +105,121 @@ placeholder_check() {
   done
 }
 
+# Extensions of the data files a whole-tree check reads row by row, such as an
+# allowlist. A heuristic: the data arm of cross_phase_check fires only on these,
+# because a later task naming an earlier phase's file beside a source file is
+# usually a consumer, not a check.
+cross_phase_data_extensions=(tsv csv txt allowlist)
+
+# Prints <phase>\t<task doc>\t<line>\t<repo-relative path> for every file path
+# a task doc's `## Files to touch` section names, from the README phase rows in
+# $1. A path is a token ending in a file extension, with the repository root or
+# RESOLVED_ROOT/ prefix removed; a token outside the repository, or a bare name
+# no file at the repository root has, is dropped.
+files_to_touch_rows() {
+  local stems_text="$1" task_file task_name task_phase phase task line_number path
+  for task_file in ${task_files[@]+"${task_files[@]}"}; do
+    task_name="$(basename "$task_file")"
+    task_phase=$(awk -F'\t' -v stem="${task_name%.md}" '$2 == stem { print $1 }' <<<"$stems_text")
+    [ -n "$task_phase" ] && [ "$(grep -c . <<<"$task_phase")" -eq 1 ] || continue
+    while IFS=$'\t' read -r phase task line_number path; do
+      [ -n "$path" ] || continue
+      case "$path" in
+        */*) ;;
+        *) [ -e "$repository_root/$path" ] || continue ;;
+      esac
+      printf '%s\t%s\t%s\t%s\n' "$phase" "$task" "$line_number" "$path"
+    done < <(awk -v phase="$task_phase" -v task="$task_name" -v root="$repository_root" '
+      /^#+[ \t]+Files to touch/ { inside = 1; next }
+      inside && /^#+[ \t]/ { inside = 0 }
+      inside {
+        text = $0
+        while ((position = index(text, root "/")) > 0)
+          text = substr(text, 1, position - 1) substr(text, position + length(root) + 1)
+        gsub(/RESOLVED_ROOT\//, "", text)
+        gsub(/[^A-Za-z0-9_.\/@+-]+/, " ", text)
+        count = split(text, tokens, " ")
+        for (index_number = 1; index_number <= count; index_number++) {
+          token = tokens[index_number]
+          sub(/^\.\//, "", token)
+          sub(/\.+$/, "", token)
+          if (token ~ /^\// || token ~ /\/\// || token !~ /\.[A-Za-z0-9]+$/) continue
+          if (!seen[token "\t" NR]++) print phase "\t" task "\t" NR "\t" token
+        }
+      }' "$task_file")
+  done
+}
+
+# A phase gate retry re-dispatches only the tasks of its own phase that declare
+# a failing file, so a file only a later phase declares that catches an earlier
+# phase's change halts the earlier gate with no task to retry. "Catches" is one
+# of two arms:
+#   suite: the later file is a test file (a flow runner in flow-runners-lib.sh
+#     runs it) whose text names the earlier file by repo-relative path, or by
+#     basename when no other tracked file shares that basename;
+#   data: the later file has a cross_phase_data_extensions extension and the
+#     later task's Files to touch line naming it also names the earlier file.
+# A whole-tree check over any other kind of file is left to the decomposition
+# audit's dependency lens.
+cross_phase_check() {
+  local stems_text declared tracked_paths='' tracked_read=0 status data_extension
+  local later_phase later_task later_line later_path is_test is_data extension
+  local earlier_phase earlier_task earlier_path base_name reported=$'\n' key
+  [ -f "$readme" ] || return 0
+  stems_text=$(readme_phase_stems "$readme")
+  [ -n "$stems_text" ] || return 0
+  declared=$(files_to_touch_rows "$stems_text")
+  [ -n "$declared" ] || return 0
+  while IFS=$'\t' read -r later_phase later_task later_line later_path; do
+    [ -f "$repository_root/$later_path" ] || continue
+    awk -F'\t' -v phase="$later_phase" '$1 + 0 < phase + 0 { found = 1 } END { exit !found }' <<<"$declared" || continue
+    is_data=0
+    extension="${later_path##*.}"
+    for data_extension in ${cross_phase_data_extensions[@]+"${cross_phase_data_extensions[@]}"}; do
+      [ "$extension" = "$data_extension" ] && is_data=1
+    done
+    is_test=0
+    if [ "$is_data" -eq 0 ]; then
+      status=0
+      flow_runners_for_path "$repository_root" "$later_path" >/dev/null 2>&1 || status=$?
+      case "$status" in
+        0) is_test=1 ;;
+        1) continue ;;
+        *)
+          fail "cannot tell whether $later_path is a test file for the cross-phase check: the flow runner table is unreadable (is jq installed?)"
+          return 0
+          ;;
+      esac
+    fi
+    while IFS=$'\t' read -r earlier_phase earlier_task _ earlier_path; do
+      [ "$earlier_path" != "$later_path" ] || continue
+      # Phase N owns the later file too: its own gate retry can reach it.
+      awk -F'\t' -v phase="$earlier_phase" -v path="$later_path" '$1 == phase && $4 == path { found = 1 } END { exit !found }' <<<"$declared" && continue
+      key="$earlier_phase"$'\t'"$earlier_path"$'\t'"$later_path"
+      case "$reported" in *$'\n'"$key"$'\n'*) continue ;; esac
+      if [ "$is_test" -eq 1 ]; then
+        if ! grep -qF -- "$earlier_path" "$repository_root/$later_path"; then
+          if [ "$tracked_read" -eq 0 ]; then
+            tracked_paths=$(git -C "$repository_root" ls-files -z 2>/dev/null | tr '\0' '\n')
+            tracked_read=1
+          fi
+          # No tracked list means uniqueness is unknown: match by path only.
+          [ -n "$tracked_paths" ] || continue
+          base_name="${earlier_path##*/}"
+          awk -F/ -v base="$base_name" -v self="$earlier_path" \
+            '$NF == base && $0 != self { shared = 1 } END { exit shared }' <<<"$tracked_paths" || continue
+          grep -qF -- "$base_name" "$repository_root/$later_path" || continue
+        fi
+      else
+        awk -F'\t' -v task="$later_task" -v line="$later_line" -v path="$earlier_path" \
+          '$2 == task && $3 == line && $4 == path { found = 1 } END { exit !found }' <<<"$declared" || continue
+      fi
+      reported="$reported$key"$'\n'
+      fail "Phase $earlier_phase ($earlier_task) changes $earlier_path, which $later_path checks, but only Phase $later_phase ($later_task) declares $later_path, so Phase $earlier_phase's gate can fail on a file none of its tasks owns: declare $later_path in a Phase $earlier_phase task as well, or reorder the tasks"
+    done < <(awk -F'\t' -v phase="$later_phase" '$1 + 0 < phase + 0' <<<"$declared")
+  done <<<"$declared"
+}
+
 # With no test stage run (TEST-STAGE reads skipped or is absent), no Flow test
 # line is owed and none may appear, in a spec-derived or a spec-less plan.
 flow_test_refusal() {
