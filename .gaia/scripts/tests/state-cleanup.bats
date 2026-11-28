@@ -15,7 +15,7 @@
 
 bats_require_minimum_version 1.5.0
 
-VERB_FILES="state-cleanup.sh state-reaper-classes.sh state-reaper-lib.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh"
+VERB_FILES="state-cleanup.sh state-reaper-classes.sh state-reaper-lib.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh stash-reap-lib.sh"
 
 setup() {
   SCRIPT_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
@@ -43,6 +43,24 @@ make_main() {
     cp "$SCRIPT_DIRECTORY/$file" "$MAIN/.gaia/scripts/$file" || return 1
   done
   cp "$SCRIPT_DIRECTORY/../state-registry.json" "$MAIN/.gaia/state-registry.json" || return 1
+  mkdir -p "$MAIN/.claude/hooks/lib"
+  cp "$SCRIPT_DIRECTORY/../../.claude/hooks/lib/main-git-guard-stash.sh" "$MAIN/.claude/hooks/lib/" || return 1
+}
+
+# stash_on <branch>: one stash entry made on <branch> in MAIN, which ends back
+# on trunk with the branch in place.
+stash_on() {
+  "$REAL_GIT" -C "$MAIN" ls-files --error-unmatch f.txt >/dev/null 2>&1 || {
+    echo base >"$MAIN/f.txt"
+    "$REAL_GIT" -C "$MAIN" add f.txt
+    "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com commit -q -m base
+  }
+  "$REAL_GIT" -C "$MAIN" checkout -q -B "$1" trunk
+  # a tip of its own, so the entry's parent is reachable from no other branch
+  [ -n "${STASH_NO_TIP-}" ] || "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com commit -q --allow-empty -m "tip of $1"
+  echo "$1" >>"$MAIN/f.txt"
+  "$REAL_GIT" -C "$MAIN" -c user.name=fixture -c user.email=fixture@example.com stash push -q -m "$1 wip"
+  "$REAL_GIT" -C "$MAIN" checkout -q trunk
 }
 
 branch() { "$REAL_GIT" -C "$MAIN" branch "$1"; }
@@ -139,6 +157,34 @@ check_refuses() {
   [ -d "$LOCAL/runs/fix" ] || { echo "the shared runs/fix directory was removed"; return 1; }
   [ -e "$LOCAL/protected/audit-loop/fix/a.json" ] || { echo "protected state was removed"; return 1; }
   printf '%s\n' "$output" | grep -Fq 'removed runs/fix/a' || { echo "no removal line: $output"; return 1; }
+}
+
+@test "a merged branch's stash entries are dropped and named; another branch's stay" {
+  make_main
+  stash_on fix/a
+  stash_on fix/gone
+  stash_on fix/b
+  "$REAL_GIT" -C "$MAIN" branch -q -D fix/a fix/gone
+  run bash "$VERB" --branch fix/a
+  [ "$status" -eq 0 ] || return 1
+  printf '%s\n' "$output" | grep -Eq '^dropped [0-9a-f]{40} fix/a$' || { echo "no drop line: $output"; return 1; }
+  run "$REAL_GIT" -C "$MAIN" log -g --format=%s refs/stash
+  grep -qF 'On fix/a:' <<<"$output" && return 1
+  grep -qF 'On fix/gone: fix/gone wip' <<<"$output"
+  grep -qF 'On fix/b: fix/b wip' <<<"$output"
+}
+
+@test "an entry stashed before the branch's first commit is dropped while a sibling live branch exists" {
+  make_main
+  STASH_NO_TIP=1 stash_on fix/early
+  branch fix/sibling
+  "$REAL_GIT" -C "$MAIN" branch -q -D fix/early
+  run bash "$VERB" --branch fix/early
+  [ "$status" -eq 0 ] || return 1
+  printf '%s\n' "$output" | grep -Eq '^dropped [0-9a-f]{40} fix/early$' || { echo "no drop line: $output"; return 1; }
+  run "$REAL_GIT" -C "$MAIN" log -g --format=%s refs/stash
+  grep -qF 'On fix/early:' <<<"$output" && return 1
+  return 0
 }
 
 # ---------------------------------------------------------------------------

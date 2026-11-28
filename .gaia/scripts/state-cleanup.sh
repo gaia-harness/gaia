@@ -15,7 +15,8 @@
 # gaia_reaper_reap_key, which owns entry-key parsing, the live-key and nesting
 # checks and the symlink-safe removal. It parses no entry key itself and
 # applies no age check, because the branch has just merged. protected/ is the
-# backstop reaper's alone: Claude never deletes there.
+# backstop reaper's alone: Claude never deletes there. It then drops the
+# branch's entries from the shared stash stack (stash-reap-lib.sh).
 #
 # Fail closed. The verb refuses, and removes nothing, when the name cannot
 # key a state entry, when the branch still has a local ref or is checked out
@@ -23,7 +24,8 @@
 # live set would otherwise make every key look gone). A refused or stopped
 # cleanup is not an error: the backstop reaper removes the state once spent.
 #
-# Output: one `removed <path>` line per removal, one `refused` or `skipped`
+# Output: one `removed <path>` line per removal, one `dropped <hash> <branch>`
+# line per dropped stash entry, one `refused` or `skipped`
 # line per refusal, and a `kept state` line when the whole call is refused.
 # Always exits 0: cleanup trails a merge that already landed.
 
@@ -33,6 +35,8 @@ script_directory="$(cd "$script_directory" && pwd -P)" || exit 0
 
 # shellcheck source=/dev/null
 . "$script_directory/state-reaper-classes.sh"
+# shellcheck source=/dev/null
+. "$script_directory/stash-reap-lib.sh"
 
 branch_name=""
 branch_given=0
@@ -88,4 +92,5 @@ for row_json in "${GAIA_REAPER_ROW_JSONS[@]}"; do
   [ -n "$entry_key" ] || continue
   gaia_reaper_reap_key "$main_root" "$row_json" "$entry_key"
 done
+gaia_stash_reap "$main_root" "$GAIA_REAPER_LIVE_BRANCHES" "$branch_name"
 exit 0

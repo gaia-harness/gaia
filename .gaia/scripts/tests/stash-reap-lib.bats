@@ -1,0 +1,199 @@
+#!/usr/bin/env bats
+#
+# The stash reaper in .gaia/scripts/stash-reap-lib.sh: it drops the stash
+# entries of spent branches from the stack every worktree shares, and keeps an
+# entry whose branch is live, held by a worktree, or unnamed.
+#
+# Run under bash 5: `.gaia/scripts/bats5.sh .gaia/scripts/tests/stash-reap-lib.bats`.
+
+setup() {
+  SCRIPT_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
+  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_PREFIX
+  export GIT_CONFIG_GLOBAL=/dev/null
+  export GIT_CONFIG_NOSYSTEM=1
+  # shellcheck source=/dev/null
+  . "$SCRIPT_DIRECTORY/branch-name-lib.sh"
+  # shellcheck source=/dev/null
+  . "$SCRIPT_DIRECTORY/stash-reap-lib.sh"
+  MAIN="$BATS_TEST_TMPDIR/main"
+  git init -q -b trunk "$MAIN"
+  git -C "$MAIN" config user.name fixture
+  git -C "$MAIN" config user.email fixture@example.com
+  echo base >"$MAIN/f.txt"
+  git -C "$MAIN" add f.txt
+  git -C "$MAIN" commit -q -m base
+}
+
+# stash_on <branch>: push one entry made on <branch> from the main checkout,
+# leaving the checkout back on trunk with the branch in place.
+stash_on() {
+  git -C "$MAIN" checkout -q -B "$1" trunk
+  # a tip of its own, so the entry's parent is reachable from no other branch
+  [ -n "${STASH_NO_TIP-}" ] || git -C "$MAIN" commit -q --allow-empty -m "tip of $1"
+  echo "$1" >>"$MAIN/f.txt"
+  GIT_COMMITTER_DATE="${STASH_DATE:-2020-01-01T00:00:00Z}" git -C "$MAIN" stash push -q -m "$1 wip"
+  git -C "$MAIN" checkout -q trunk
+}
+
+live_branches() {
+  git -C "$MAIN" for-each-ref --format='%(refname:lstrip=2)' refs/heads/
+  git -C "$MAIN" worktree list --porcelain | sed -n 's|^branch refs/heads/||p'
+}
+
+stash_subjects() { git -C "$MAIN" log -g --format=%s refs/stash 2>/dev/null; }
+
+# bats test_tags=protected
+@test "a renamed branch's entry stays: its parent is a live branch tip" {
+  stash_on feat-old
+  git -C "$MAIN" branch -q -m feat-old feat-new
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run stash_subjects
+  grep -qF 'On feat-old:' <<<"$output"
+}
+
+# bats test_tags=protected
+@test "a renamed branch that gained commits keeps its entry; a merged and deleted one does not" {
+  stash_on feat-old
+  git -C "$MAIN" branch -q -m feat-old feat-new
+  git -C "$MAIN" checkout -q feat-new
+  git -C "$MAIN" commit -q --allow-empty -m "more work"
+  git -C "$MAIN" checkout -q trunk
+  stash_on merged
+  git -C "$MAIN" merge -q --no-ff -m "merge merged" merged
+  git -C "$MAIN" branch -q -D merged
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l <<<"$output" | tr -d ' ')" -eq 1 ]
+  grep -qF ' merged' <<<"$output"
+  run stash_subjects
+  grep -qF 'On feat-old:' <<<"$output"
+  grep -qF 'On merged:' <<<"$output" && return 1
+  return 0
+}
+
+# bats test_tags=protected
+@test "the backstop keeps a spent entry younger than the grace; a named branch's cleanup drops it at once" {
+  STASH_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" stash_on fresh
+  echo advance >>"$MAIN/f.txt"
+  git -C "$MAIN" commit -q -am advance
+  git -C "$MAIN" branch -q -D fresh
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ -z "$output" ]
+  run stash_subjects
+  grep -qF 'On fresh:' <<<"$output"
+  run gaia_stash_reap "$MAIN" "$(live_branches)" fresh
+  grep -qF ' fresh' <<<"$output"
+  run stash_subjects
+  grep -qF 'On fresh:' <<<"$output" && return 1
+  return 0
+}
+
+# bats test_tags=protected
+@test "a spent branch's entry is dropped; a live, a worktree-held and an unnamed entry are kept" {
+  stash_on gone
+  stash_on live
+  stash_on held
+  git -C "$MAIN" worktree add -q "$BATS_TEST_TMPDIR/held-tree" held
+  local spent_hash
+  spent_hash="$(git -C "$MAIN" log -g --format='%H %s' refs/stash | sed -n 's/ On gone: gone wip$//p')"
+  [ -n "$spent_hash" ]
+  git -C "$MAIN" branch -q -D gone
+  echo stray >>"$MAIN/f.txt"
+  local created_hash
+  created_hash="$(git -C "$MAIN" stash create)"
+  git -C "$MAIN" checkout -q -- f.txt
+  git -C "$MAIN" stash store -m autostash \
+    "$(git -C "$MAIN" commit-tree -p HEAD -p "$created_hash^2" -m autostash "$created_hash^{tree}")"
+
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ "$status" -eq 0 ]
+  [ "$output" = "dropped $spent_hash gone" ]
+  run stash_subjects
+  grep -qF 'On gone:' <<<"$output" && return 1
+  grep -qF 'On live: live wip' <<<"$output"
+  grep -qF 'On held: held wip' <<<"$output"
+  grep -qxF 'autostash' <<<"$output"
+}
+
+@test "with a branch named, only that spent branch's entries are dropped" {
+  stash_on first
+  stash_on second
+  git -C "$MAIN" branch -q -D first second
+  run gaia_stash_reap "$MAIN" "$(live_branches)" first
+  [ "$status" -eq 0 ]
+  grep -qF ' first' <<<"$output"
+  run stash_subjects
+  grep -qF 'On first:' <<<"$output" && return 1
+  grep -qF 'On second: second wip' <<<"$output"
+}
+
+@test "an entry made under a worktree- spelling is live under its canonical branch" {
+  stash_on 'worktree-fix+12-thing'
+  git -C "$MAIN" branch -q -m 'worktree-fix+12-thing' fix/12-thing
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run stash_subjects
+  grep -qF 'On worktree-fix+12-thing:' <<<"$output"
+}
+
+@test "an empty stack and an unloaded subject parser drop nothing" {
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  stash_on gone
+  git -C "$MAIN" branch -q -D gone
+  unset -f stash_subject_branch
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ "$status" -eq 0 ]
+  grep -qF 'skipped stash: the stash subject parser did not load' <<<"$output"
+  run stash_subjects
+  grep -qF 'On gone: gone wip' <<<"$output"
+}
+
+# bats test_tags=protected
+@test "an entry stashed before the branch's first commit is dropped while a sibling live branch exists, by the named cleanup and the backstop" {
+  STASH_NO_TIP=1 stash_on early-named
+  STASH_NO_TIP=1 stash_on early-backstop
+  git -C "$MAIN" branch -q sibling trunk
+  git -C "$MAIN" branch -q -D early-named early-backstop
+  run gaia_stash_reap "$MAIN" "$(live_branches)" early-named
+  [ "$status" -eq 0 ]
+  grep -qF ' early-named' <<<"$output"
+  run stash_subjects
+  grep -qF 'On early-named:' <<<"$output" && return 1
+  grep -qF 'On early-backstop:' <<<"$output" || return 1
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  grep -qF ' early-backstop' <<<"$output"
+  run stash_subjects
+  grep -qF 'On early-backstop:' <<<"$output" && return 1
+  return 0
+}
+
+@test "a named cleanup treats the worktree- spelling as the same branch" {
+  stash_on 'worktree-fix+12-thing'
+  git -C "$MAIN" branch -q -D 'worktree-fix+12-thing'
+  run gaia_stash_reap "$MAIN" "$(live_branches)" fix/12-thing
+  [ "$status" -eq 0 ]
+  grep -qF ' worktree-fix+12-thing' <<<"$output"
+  run stash_subjects
+  grep -qF 'On worktree-fix+12-thing:' <<<"$output" && return 1
+  return 0
+}
+
+@test "a detached-HEAD entry is kept by the named cleanup and the backstop" {
+  echo detached >>"$MAIN/f.txt"
+  git -C "$MAIN" checkout -q --detach
+  GIT_COMMITTER_DATE=2020-01-01T00:00:00Z git -C "$MAIN" stash push -q
+  git -C "$MAIN" checkout -q trunk
+  run stash_subjects
+  grep -qF 'WIP on (no branch):' <<<"$output" || return 1
+  run gaia_stash_reap "$MAIN" "$(live_branches)" '(no branch)'
+  [ -z "$output" ]
+  run gaia_stash_reap "$MAIN" "$(live_branches)"
+  [ -z "$output" ]
+  run stash_subjects
+  grep -qF 'WIP on (no branch):' <<<"$output"
+}

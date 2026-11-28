@@ -95,6 +95,7 @@
     ".claude/hooks/lib/main-checkout-hop-guard.sh": "owned",
     ".claude/hooks/lib/main-git-guard-history.sh": "owned",
     ".claude/hooks/lib/main-git-guard-parse.sh": "owned",
+    ".claude/hooks/lib/main-git-guard-stash.sh": "owned",
     ".claude/hooks/lib/message-heredoc.sh": "owned",
     ".claude/hooks/lib/payload-agent.sh": "owned",
     ".claude/hooks/lib/post-audit-status-gates.sh": "owned",
@@ -462,6 +463,7 @@
     ".gaia/scripts/spec/title-normalize.sh": "owned",
     ".gaia/scripts/spec/with-ledger-lock.sh": "owned",
     ".gaia/scripts/spec/working-doc-id-scan.sh": "owned",
+    ".gaia/scripts/stash-reap-lib.sh": "owned",
     ".gaia/scripts/state-cleanup.sh": "owned",
     ".gaia/scripts/state-reaper-classes.sh": "owned",
     ".gaia/scripts/state-reaper-lib.sh": "owned",
@@ -959,7 +961,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-28T09:34:00.490Z",
+  "generated": "2026-11-28T09:49:11.459Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

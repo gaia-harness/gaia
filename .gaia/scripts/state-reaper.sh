@@ -18,9 +18,15 @@
 #
 # Each run overwrites `cache/state-reaper/last-run.json` atomically:
 #   {"schema":1,"started_at":...,"finished_at":...,
-#    "removed":{"<row-id>":<count>},"skipped":["<reason>",...]}
+#    "removed":{"<row-id>":<count>},"skipped":["<reason>",...],
+#    "stash_dropped":["<hash> <branch>",...]}
 # `removed` lists only rows that removed something; `skipped` carries every
-# liveness source or row the run declined to act on.
+# liveness source or row the run declined to act on; `stash_dropped` names each
+# stash entry stash-reap-lib.sh dropped. last-run.json is rewritten whole each
+# run, so each dropped entry is also appended to `cache/state-reaper/
+# stash-dropped.log` (`<time> <hash> <branch>`, newest last, bounded to the last
+# _STATE_REAPER_STASH_LOG_LINES lines), so `git stash apply <hash>` recovers it
+# until gc.
 #
 # Always exits 0. A reaper error must never block the session that launched
 # it, so a missing tool, an unreadable registry or a failed git read removes
@@ -29,6 +35,7 @@
 # delete protected state offers no knob to widen what it deletes.
 
 _STATE_REAPER_LOCK_STALE_MINUTES=60
+_STATE_REAPER_STASH_LOG_LINES=200
 
 state_reaper_release_lock=""
 
@@ -62,30 +69,53 @@ state_reaper_take_lock() {
   return 0
 }
 
-# state_reaper_write_record <state-directory> <started-at> <removed-tsv> <skipped-lines>
+# state_reaper_write_record <state-directory> <started-at> <removed-tsv> <skipped-lines> [<stash-dropped-lines>]
 state_reaper_write_record() {
-  local state_directory="$1" started_at="$2" removed_tsv="$3" skipped_lines="$4" finished_at temporary
+  local state_directory="$1" started_at="$2" removed_tsv="$3" skipped_lines="$4" stash_dropped_lines="${5-}" finished_at temporary
   finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   temporary="$state_directory/last-run.json.tmp.$$"
   if command -v jq >/dev/null 2>&1; then
-    jq -n --arg started "$started_at" --arg finished "$finished_at" --arg removed "$removed_tsv" --arg skipped "$skipped_lines" '
+    jq -n --arg started "$started_at" --arg finished "$finished_at" --arg removed "$removed_tsv" --arg skipped "$skipped_lines" --arg stash_dropped "$stash_dropped_lines" '
       {schema: 1, started_at: $started, finished_at: $finished,
        removed: ($removed | split("\n") | map(select(length > 0) | split("\t")) | map({key: .[0], value: (.[1] | tonumber)}) | from_entries),
-       skipped: ($skipped | split("\n") | map(select(length > 0)))}' >"$temporary" 2>/dev/null || {
+       skipped: ($skipped | split("\n") | map(select(length > 0))),
+       stash_dropped: ($stash_dropped | split("\n") | map(select(length > 0)))}' >"$temporary" 2>/dev/null || {
       rm -f "$temporary" 2>/dev/null
       return 0
     }
   else
-    printf '{"schema":1,"started_at":"%s","finished_at":"%s","removed":{},"skipped":["jq is not available"]}\n' \
+    printf '{"schema":1,"started_at":"%s","finished_at":"%s","removed":{},"skipped":["jq is not available"],"stash_dropped":[]}\n' \
       "$started_at" "$finished_at" >"$temporary" 2>/dev/null || return 0
   fi
   mv -f "$temporary" "$state_directory/last-run.json" 2>/dev/null || rm -f "$temporary" 2>/dev/null
   return 0
 }
 
+# state_reaper_log_stash_dropped <state-directory> <stash-dropped-lines>: append
+# each `<hash> <branch>` line to the bounded recovery log. Best effort.
+state_reaper_log_stash_dropped() {
+  local state_directory="$1" lines="$2" log temporary now line
+  [ -n "$lines" ] || return 0
+  log="$state_directory/stash-dropped.log"
+  [ ! -L "$log" ] || return 0
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  temporary="$log.tmp.$$"
+  {
+    [ ! -f "$log" ] || cat "$log"
+    while IFS= read -r line; do
+      [ -z "$line" ] || printf '%s %s\n' "$now" "$line"
+    done <<<"$lines"
+  } 2>/dev/null | tail -n "$_STATE_REAPER_STASH_LOG_LINES" >"$temporary" 2>/dev/null || {
+    rm -f "$temporary" 2>/dev/null
+    return 0
+  }
+  mv -f "$temporary" "$log" 2>/dev/null || rm -f "$temporary" 2>/dev/null
+  return 0
+}
+
 state_reaper_main() {
   local script_directory main_root local_root state_directory started_at registry
-  local index row_id row_json row_class output line count removed_tsv="" skipped_lines="" disabled
+  local index row_id row_json row_class output line count removed_tsv="" skipped_lines="" disabled stash_dropped_lines=""
   if [ "$#" -gt 0 ]; then
     printf 'usage: state-reaper.sh (takes no arguments)\n' >&2
     return 0
@@ -96,6 +126,8 @@ state_reaper_main() {
   . "$script_directory/state-reaper-classes.sh" || return 0
   # shellcheck source=/dev/null
   . "$script_directory/exclusive-lock-lib.sh" || return 0
+  # shellcheck source=/dev/null
+  . "$script_directory/stash-reap-lib.sh" || return 0
   main_root="$(gaia_resolve_main_root "$script_directory" 2>/dev/null)" || return 0
   local_root="$main_root/.gaia/local"
   state_directory="$local_root/cache/state-reaper"
@@ -154,7 +186,22 @@ state_reaper_main() {
 }$row_id"$'\t'"$count"
     fi
   done
-  state_reaper_write_record "$state_directory" "$started_at" "$removed_tsv" "$skipped_lines"
+  if [ "$disabled" = 1 ]; then
+    skipped_lines="${skipped_lines:+$skipped_lines
+}stash: the branch refs or the worktree list could not be read"
+  else
+    output="$(gaia_stash_reap "$main_root" "$GAIA_REAPER_LIVE_BRANCHES")"
+    while IFS= read -r line; do
+      case "$line" in
+        "dropped "*) stash_dropped_lines="${stash_dropped_lines:+$stash_dropped_lines
+}${line#dropped }" ;;
+        "skipped "*) skipped_lines="${skipped_lines:+$skipped_lines
+}${line#skipped }" ;;
+      esac
+    done <<<"$output"
+  fi
+  state_reaper_log_stash_dropped "$state_directory" "$stash_dropped_lines"
+  state_reaper_write_record "$state_directory" "$started_at" "$removed_tsv" "$skipped_lines" "$stash_dropped_lines"
   return 0
 }
 
