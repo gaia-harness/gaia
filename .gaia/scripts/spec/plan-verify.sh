@@ -50,6 +50,11 @@
 #   flow-runners-lib.sh resolves it (for a web flow, any built-in runner's),
 #   plus the test path's basename unless that runner sets names_path false.
 #
+# Always, when the README has phase rows: a file only a later phase's task
+# declares under `## Files to touch` must not catch a file an earlier phase
+# declares (cross_phase_check in plan-verify-lib.sh owns what catches), since
+# the earlier phase's gate retry cannot reach it.
+#
 # Every failure is reported on stderr, one line each, in a single run. Exit
 # codes: 0 pass; 1 one or more failures; 2 usage error. Bash 3.2 compatible; BSD and GNU tools.
 set -uo pipefail
@@ -388,6 +393,7 @@ if [ -n "$spec_path" ]; then
 fi
 
 security_writer_check
+cross_phase_check
 
 [ "$failures" -eq 0 ] || exit 1
 exit 0
