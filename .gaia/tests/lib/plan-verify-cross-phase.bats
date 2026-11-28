@@ -60,7 +60,7 @@ cross_phase_lines() {
   refusals="$(cross_phase_lines)"
   [ "$(grep -c . <<<"$refusals")" -eq 1 ]
   [[ "$refusals" == *'Phase 1 (task-early.md) changes .gaia/scripts/spec/plan-verify-lib.sh, which .gaia/tests/lib/doc-code-map-plan.bats checks'* ]]
-  [[ "$refusals" == *'only Phase 2 (task-late.md) declares'* ]]
+  [[ "$refusals" == *'Phase 2 (task-late.md) declares .gaia/tests/lib/doc-code-map-plan.bats and Phase 1 does not'* ]]
   [[ "$refusals" == *'declare .gaia/tests/lib/doc-code-map-plan.bats in a Phase 1 task as well, or reorder the tasks'* ]]
 }
 
@@ -122,4 +122,45 @@ cross_phase_lines() {
   task task-late '.gaia/tests/lib/doc-code-map-plan.bats'
   verify
   [ -z "$(cross_phase_lines)" ]
+}
+
+@test "a suite naming a longer file that merely ends in the earlier name is not a catch" {
+  plant apps/web/app/utils/date.ts 'export const d = 1'
+  plant package.json '{}'
+  plant apps/web/package.json '{}'
+  plant apps/web/test/dates.test.ts 'import "./update.ts"; // see apps/web/package.json'
+  task task-early 'apps/web/app/utils/date.ts' 'package.json'
+  task task-late 'apps/web/test/dates.test.ts'
+  verify
+  [ -z "$(cross_phase_lines)" ]
+  # The same suite naming date.ts as its own token fires: the check is live.
+  plant apps/web/test/dates.test.ts 'import "./date.ts"'
+  verify
+  [ "$(cross_phase_lines | grep -c .)" -eq 1 ]
+}
+
+@test "a plain txt file linking an earlier phase file is not a whole-tree check" {
+  plant apps/web/app/routes/about.tsx 'route'
+  plant apps/web/public/llms.txt 'links'
+  task task-early 'apps/web/app/routes/about.tsx'
+  task task-late 'apps/web/public/llms.txt: link apps/web/app/routes/about.tsx'
+  verify
+  [ -z "$(cross_phase_lines)" ]
+}
+
+@test "only the leading path of a bullet is declared: a context mention neither catches nor exempts" {
+  plant apps/web/app/routes/new.tsx 'route'
+  plant apps/web/app/routes/_public.tsx 'layout'
+  plant apps/web/test/layout.test.tsx 'apps/web/app/routes/_public.tsx'
+  task task-early 'apps/web/app/routes/new.tsx (mirror the loader in apps/web/app/routes/_public.tsx)'
+  task task-late 'apps/web/test/layout.test.tsx'
+  verify
+  [ -z "$(cross_phase_lines)" ]
+  # A test cited as an example does not exempt the later phase declaration of it.
+  plant apps/web/app/routes/changed.tsx 'route'
+  plant apps/web/test/changed.test.tsx 'apps/web/app/routes/changed.tsx'
+  task task-early 'apps/web/app/routes/changed.tsx (see apps/web/test/changed.test.tsx for the shape)'
+  task task-late 'apps/web/test/changed.test.tsx'
+  verify
+  [ "$(cross_phase_lines | grep -c .)" -eq 1 ]
 }

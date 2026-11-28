@@ -106,18 +106,32 @@ placeholder_check() {
 }
 
 # Extensions of the data files a whole-tree check reads row by row, such as an
-# allowlist. A heuristic: the data arm of cross_phase_check fires only on these,
-# because a later task naming an earlier phase's file beside a source file is
-# usually a consumer, not a check.
-cross_phase_data_extensions=(tsv csv txt allowlist)
+# allowlist; a file whose name contains "allowlist" counts whatever its
+# extension. A heuristic: the data arm of cross_phase_check fires only on
+# these, because a later task naming an earlier phase's file beside a source
+# file, or beside a plain txt or csv nothing reads, is usually a consumer or
+# prose, not a check.
+cross_phase_data_extensions=(tsv allowlist)
 
-# Prints <phase>\t<task doc>\t<line>\t<repo-relative path> for every file path
-# a task doc's `## Files to touch` section names, from the README phase rows in
-# $1. A path is a token ending in a file extension, with the repository root or
+# Succeeds when file $1 names $2 as a whole path token: not as the tail of a
+# longer name (update.ts holds date.ts, vite.config.ts holds config.ts) and,
+# for a bare root name like package.json when $3 is strict, not as the tail of
+# a longer path (apps/web/package.json).
+names_path_token() {
+  local file="$1" needle="$2" strict="$3" escaped lead='[^A-Za-z0-9_.@+-]'
+  escaped=$(printf '%s' "$needle" | sed 's/[].[*^$+?(){}|\\]/\\&/g')
+  [ "$strict" = strict ] && lead='[^A-Za-z0-9_.@+/-]'
+  grep -qE -- "(^|$lead)$escaped(\$|[^A-Za-z0-9_@+-]|\.(\$|[^A-Za-z0-9_@+-]))" "$file"
+}
+
+# Prints <phase>\t<task doc>\t<line>\t<repo-relative path>\t<kind> for every
+# file path a task doc's `## Files to touch` section names, from the README
+# phase rows in $1. kind is "lead" for the first path on a line, the file the
+# bullet declares, and "mention" for any later path on it (context, an example). A path is a token ending in a file extension, with the repository root or
 # RESOLVED_ROOT/ prefix removed; a token outside the repository, or a bare name
 # no file at the repository root has, is dropped.
 files_to_touch_rows() {
-  local stems_text="$1" task_file task_name task_phase phase task line_number path
+  local stems_text="$1" task_file task_name task_phase phase task line_number path kind last_lead_key=''
   for task_file in ${task_files[@]+"${task_files[@]}"}; do
     task_name="$(basename "$task_file")"
     task_phase=$(awk -F'\t' -v stem="${task_name%.md}" '$2 == stem { print $1 }' <<<"$stems_text")
@@ -128,7 +142,12 @@ files_to_touch_rows() {
         */*) ;;
         *) [ -e "$repository_root/$path" ] || continue ;;
       esac
-      printf '%s\t%s\t%s\t%s\n' "$phase" "$task" "$line_number" "$path"
+      kind=mention
+      if [ "$last_lead_key" != "$task:$line_number" ]; then
+        kind=lead
+        last_lead_key="$task:$line_number"
+      fi
+      printf '%s\t%s\t%s\t%s\t%s\n' "$phase" "$task" "$line_number" "$path" "$kind"
     done < <(awk -v phase="$task_phase" -v task="$task_name" -v root="$repository_root" '
       /^#+[ \t]+Files to touch/ { inside = 1; next }
       inside && /^#+[ \t]/ { inside = 0 }
@@ -157,20 +176,23 @@ files_to_touch_rows() {
 #   suite: the later file is a test file (a flow runner in flow-runners-lib.sh
 #     runs it) whose text names the earlier file by repo-relative path, or by
 #     basename when no other tracked file shares that basename;
-#   data: the later file has a cross_phase_data_extensions extension and the
-#     later task's Files to touch line naming it also names the earlier file.
+#   data: the later file has a cross_phase_data_extensions extension or
+#     "allowlist" in its name, and the later task's Files to touch line naming
+#     it also names the earlier file.
+# A phase declares only the leading path of a Files to touch line.
 # A whole-tree check over any other kind of file is left to the decomposition
 # audit's dependency lens.
 cross_phase_check() {
-  local stems_text declared tracked_paths='' tracked_read=0 status data_extension
+  local stems_text declared mentioned tracked_paths='' tracked_read=0 status data_extension
   local later_phase later_task later_line later_path is_test is_data extension
-  local earlier_phase earlier_task earlier_path base_name reported=$'\n' key
+  local strictness earlier_phase earlier_task earlier_path base_name reported=$'\n' key
   [ -f "$readme" ] || return 0
   stems_text=$(readme_phase_stems "$readme")
   [ -n "$stems_text" ] || return 0
-  declared=$(files_to_touch_rows "$stems_text")
+  mentioned=$(files_to_touch_rows "$stems_text")
+  declared=$(awk -F'\t' '$5 == "lead"' <<<"$mentioned")
   [ -n "$declared" ] || return 0
-  while IFS=$'\t' read -r later_phase later_task later_line later_path; do
+  while IFS=$'\t' read -r later_phase later_task later_line later_path _; do
     [ -f "$repository_root/$later_path" ] || continue
     awk -F'\t' -v phase="$later_phase" '$1 + 0 < phase + 0 { found = 1 } END { exit !found }' <<<"$declared" || continue
     is_data=0
@@ -178,6 +200,7 @@ cross_phase_check() {
     for data_extension in ${cross_phase_data_extensions[@]+"${cross_phase_data_extensions[@]}"}; do
       [ "$extension" = "$data_extension" ] && is_data=1
     done
+    case "${later_path##*/}" in *allowlist*) is_data=1 ;; esac
     is_test=0
     if [ "$is_data" -eq 0 ]; then
       status=0
@@ -191,14 +214,16 @@ cross_phase_check() {
           ;;
       esac
     fi
-    while IFS=$'\t' read -r earlier_phase earlier_task _ earlier_path; do
+    while IFS=$'\t' read -r earlier_phase earlier_task _ earlier_path _; do
       [ "$earlier_path" != "$later_path" ] || continue
       # The earlier phase declares the later file too: its own gate retry can reach it.
       awk -F'\t' -v phase="$earlier_phase" -v path="$later_path" '$1 == phase && $4 == path { found = 1 } END { exit !found }' <<<"$declared" && continue
       key="$earlier_phase"$'\t'"$earlier_path"$'\t'"$later_path"
       case "$reported" in *$'\n'"$key"$'\n'*) continue ;; esac
       if [ "$is_test" -eq 1 ]; then
-        if ! grep -qF -- "$earlier_path" "$repository_root/$later_path"; then
+        strictness=loose
+        case "$earlier_path" in */*) ;; *) strictness=strict ;; esac
+        if ! names_path_token "$repository_root/$later_path" "$earlier_path" "$strictness"; then
           if [ "$tracked_read" -eq 0 ]; then
             tracked_paths=$(git -C "$repository_root" ls-files -z 2>/dev/null | tr '\0' '\n')
             tracked_read=1
@@ -208,14 +233,14 @@ cross_phase_check() {
           base_name="${earlier_path##*/}"
           awk -F/ -v base="$base_name" -v self="$earlier_path" \
             '$NF == base && $0 != self { shared = 1 } END { exit shared }' <<<"$tracked_paths" || continue
-          grep -qF -- "$base_name" "$repository_root/$later_path" || continue
+          names_path_token "$repository_root/$later_path" "$base_name" loose || continue
         fi
       else
         awk -F'\t' -v task="$later_task" -v line="$later_line" -v path="$earlier_path" \
-          '$2 == task && $3 == line && $4 == path { found = 1 } END { exit !found }' <<<"$declared" || continue
+          '$2 == task && $3 == line && $4 == path { found = 1 } END { exit !found }' <<<"$mentioned" || continue
       fi
       reported="$reported$key"$'\n'
-      fail "Phase $earlier_phase ($earlier_task) changes $earlier_path, which $later_path checks, but only Phase $later_phase ($later_task) declares $later_path, so Phase $earlier_phase's gate can fail on a file none of its tasks owns: declare $later_path in a Phase $earlier_phase task as well, or reorder the tasks"
+      fail "Phase $earlier_phase ($earlier_task) changes $earlier_path, which $later_path checks, but Phase $later_phase ($later_task) declares $later_path and Phase $earlier_phase does not, so Phase $earlier_phase's gate can fail on a file none of its tasks owns: declare $later_path in a Phase $earlier_phase task as well, or reorder the tasks"
     done < <(awk -F'\t' -v phase="$later_phase" '$1 + 0 < phase + 0' <<<"$declared")
   done <<<"$declared"
 }
