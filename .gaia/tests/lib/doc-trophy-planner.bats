@@ -178,16 +178,16 @@ check_page_heading_rows() {
   green check_page_heading_rows
 }
 
-# check_production_start_pointer <root>: the Phase loop bullet, which governs
-# the gate commands a planner writes, points a gate check that starts the
+# check_production_start_pointer <root>: the Phase order bullet, where per-phase
+# quality gates are authored, points a gate check that starts the
 # production server at the doctrine's production-start rule.
 check_production_start_pointer() {
   local bullet
-  bullet="$(range_of "$1/$PLANNER_REL" '- `## Phase loop`' '- `## Phase entries`' | tr '\n' ' ' | tr -s ' ')"
-  [ -n "$bullet" ] || { printf 'Phase loop bullet not found\n' >&2; return 1; }
+  bullet="$(range_of "$1/$PLANNER_REL" '- **Phase order**' '- **Model per phase.**' | tr '\n' ' ' | tr -s ' ')"
+  [ -n "$bullet" ] || { printf 'Phase order bullet not found\n' >&2; return 1; }
   need "$bullet" 'A gate check that starts the production server follows `.claude/doctrine/testing.md` (`## Production start`).' || return 1
 }
 
-@test "the Phase loop bullet points a production-start gate check at the doctrine" {
+@test "the Phase order bullet points a production-start gate check at the doctrine" {
   green check_production_start_pointer
 }
