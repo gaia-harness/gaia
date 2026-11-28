@@ -38,11 +38,11 @@ live_switch() {
 }
 
 take_baseline() {
-  run bash "$SCRIPT" baseline --root "$MAIN" --plan-dir "$PLAN" --phase 2 --out "$BASE"
+  run bash "$SCRIPT" baseline --root "$MAIN" --plan-dir "$PLAN" --phase 2 --out "$BASE" --task "$PLAN/task-db.md"
 }
 
 check_repair() {
-  run bash "$SCRIPT" check --root "$MAIN" --baseline "$BASE" --task "$PLAN/task-db.md"
+  run bash "$SCRIPT" check --root "$MAIN" --baseline "$BASE"
 }
 
 @test "an unattended first repair on declared paths passes and names what it changed" {
@@ -88,8 +88,52 @@ check_repair() {
   [ "$status" -eq 1 ] || return 1
   [ "$output" = "already-repaired phase 2" ] || return 1
   # Another phase's repair is still unspent.
-  run bash "$SCRIPT" baseline --root "$MAIN" --plan-dir "$PLAN" --phase 3 --out "$FIX/baseline-3.txt"
+  run bash "$SCRIPT" baseline --root "$MAIN" --plan-dir "$PLAN" --phase 3 --out "$FIX/baseline-3.txt" --task "$PLAN/task-db.md"
   [ "$status" -eq 0 ]
+}
+
+# bats test_tags=protected
+@test "a task doc edited after the baseline is refused even when the edit declares the touched path" {
+  live_switch
+  take_baseline
+  [ "$status" -eq 0 ] || return 1
+  printf 'two, repaired\n' >"$MAIN/app/other.ts"
+  printf 'app/other.ts\n' >>"$PLAN/task-db.md"
+  check_repair
+  [ "$status" -eq 1 ] || return 1
+  [[ $output == *"task-doc-changed $PLAN/task-db.md"* ]] || return 1
+  [[ $output == *"undeclared app/other.ts"* ]]
+}
+
+@test "a task doc outside the plan folder, or no task doc, is a usage error and writes nothing" {
+  live_switch
+  printf 'app/other.ts\n' >"$FIX/elsewhere.md"
+  run bash "$SCRIPT" baseline --root "$MAIN" --plan-dir "$PLAN" --phase 2 --out "$BASE" --task "$FIX/elsewhere.md"
+  [ "$status" -eq 2 ] || return 1
+  [ ! -e "$BASE" ] || return 1
+  [ ! -e "$PLAN/gate-repair-phase-2.spent" ] || return 1
+  run bash "$SCRIPT" baseline --root "$MAIN" --plan-dir "$PLAN" --phase 2 --out "$BASE"
+  [ "$status" -eq 2 ] || return 1
+  [ ! -e "$BASE" ]
+}
+
+# bats test_tags=protected
+@test "an unreadable protected set refuses the check even for an otherwise passing repair" {
+  live_switch
+  # The protected set is read beside the script, so a scratch copy owns a malformed one.
+  local copy="$FIX/copy/.gaia/scripts" lib
+  mkdir -p "$copy"
+  for lib in autonomy-gate-repair.sh autonomy-lib.sh main-root-lib.sh audit-fix-verify-state-lib.sh; do
+    cp "$REPO_ROOT/.gaia/scripts/$lib" "$copy/"
+  done
+  printf '{not json\n' >"$FIX/copy/.gaia/autonomy-protected-paths.json"
+  SCRIPT="$copy/autonomy-gate-repair.sh"
+  take_baseline
+  [ "$status" -eq 0 ] || return 1
+  printf 'one, repaired\n' >"$MAIN/app/db.ts"
+  check_repair
+  [ "$status" -eq 1 ] || return 1
+  [[ $output == *"protected-unreadable .gaia/autonomy-protected-paths.json"* ]]
 }
 
 @test "a task doc's path:N-M line-range hint declares the path" {
