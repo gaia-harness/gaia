@@ -156,7 +156,8 @@ cross_phase_lines() {
   task task-late 'apps/web/test/layout.test.tsx'
   verify
   [ -z "$(cross_phase_lines)" ]
-  # A test cited as an example does not exempt the later phase declaration of it.
+  # A test the earlier phase cites as an example does not exempt the later
+  # phase's declaration of it.
   plant apps/web/app/routes/changed.tsx 'route'
   plant apps/web/test/changed.test.tsx 'apps/web/app/routes/changed.tsx'
   task task-early 'apps/web/app/routes/changed.tsx (see apps/web/test/changed.test.tsx for the shape)'

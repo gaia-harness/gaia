@@ -127,9 +127,10 @@ names_path_token() {
 # Prints <phase>\t<task doc>\t<line>\t<repo-relative path>\t<kind> for every
 # file path a task doc's `## Files to touch` section names, from the README
 # phase rows in $1. kind is "lead" for the first path on a line, the file the
-# bullet declares, and "mention" for any later path on it (context, an example). A path is a token ending in a file extension, with the repository root or
-# RESOLVED_ROOT/ prefix removed; a token outside the repository, or a bare name
-# no file at the repository root has, is dropped.
+# bullet declares, and "mention" for any later path on it (context, an
+# example). A path is a token ending in a file extension, with the repository
+# root or RESOLVED_ROOT/ prefix removed; a token outside the repository, or a
+# bare name no file at the repository root has, is dropped.
 files_to_touch_rows() {
   local stems_text="$1" task_file task_name task_phase phase task line_number path kind last_lead_key=''
   for task_file in ${task_files[@]+"${task_files[@]}"}; do
