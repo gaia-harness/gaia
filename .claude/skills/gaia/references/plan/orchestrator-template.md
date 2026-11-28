@@ -474,7 +474,7 @@ Hard rules:
 
 - Dispatch each task sub-agent as `general-purpose` with `model: "sonnet"` unless ORCHESTRATOR.md's phase list escalates that phase to Opus, and with no `effort` parameter.
 - Sub-agents only edit files; they never commit, push, touch the PR, or run a git command that rewrites the working tree, the index or HEAD.
-- Never fix a failure inline on the main thread: a gate failure goes through ORCHESTRATOR.md's phase gate retry or halts under its Stop conditions.
+- Never fix a failure inline on the main thread: a gate failure goes through ORCHESTRATOR.md's phase gate retry or halts under its Stop conditions, except that under a live autonomy switch ORCHESTRATOR.md's Unattended gate repair applies its one bounded repair per phase.
 - No commit message, PR title or PR body cites the SPEC or plan id or the plan folder's path.
 - Never hand-write an audit marker.
 - Before any `gh pr merge`, resolve the dispatched Code Audit Team members with `bash .gaia/scripts/resolve-audit-members.sh` and spawn each one through the audit loop unit; see ORCHESTRATOR.md's Code Audit Team audit section.
