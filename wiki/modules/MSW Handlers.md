@@ -6,7 +6,7 @@ language: typescript
 purpose: API mocking layer shared across Vitest, Storybook, and dev
 depends_on: [[MSW]]
 created: 2026-04-20
-updated: 2026-11-10
+updated: 2026-11-28
 tags: [module, msw, testing, mocking]
 ---
 
@@ -29,7 +29,7 @@ This means tests exercise the full request path: route loader → service functi
 
 **MSW handler URLs must exactly match the URLs the service layer constructs at runtime.**
 
-A request URL is built by joining `API_URL` (env, e.g. `http://localhost:3001/api/`) with a path token from the domain's `{NAME}_URLS` constant (e.g. `'resources/:id'`). `ky` does the join in the service layer. The handler must use the same logic; the `url()` helper in `apps/web/test/mocks/url.ts` mirrors ky's prefix-join (strips trailing slash from prefix, leading slash from path, joins with exactly one `/`).
+A request URL is built by joining `API_URL` (env, e.g. `http://localhost:3001/api/`) with a path token from the domain's `{NAME}_URLS` constant (e.g. `'resources/:id'`). `ky` does the join in the service layer. The handler must use the same logic; the `url()` helper in `apps/web/test/mocks/url.ts` mirrors ky's prefix-join (strips trailing slash from prefix, leading slash from path, joins with exactly one `/`). With `API_URL` unset or empty, `url()` falls back in Node to the shared default in `apps/web/test/default-api-url.ts`, which `apps/web/test/setup.ts` also applies, and stays origin-relative in a browser.
 
 ```ts
 import {http} from 'msw/http';
