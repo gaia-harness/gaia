@@ -9,15 +9,30 @@ afterEach(() => {
 
 test.each([
   {
+    apiUrl: undefined,
+    apiUrlState: 'unset',
     browserWindow: undefined,
     expected: `${DEFAULT_API_URL}/things`,
     runtime: 'Node',
   },
-  {browserWindow: {}, expected: '/things', runtime: 'a browser'},
+  {
+    apiUrl: '',
+    apiUrlState: 'empty',
+    browserWindow: undefined,
+    expected: `${DEFAULT_API_URL}/things`,
+    runtime: 'Node',
+  },
+  {
+    apiUrl: undefined,
+    apiUrlState: 'unset',
+    browserWindow: {},
+    expected: '/things',
+    runtime: 'a browser',
+  },
 ])(
-  'a handler URL built in $runtime with no API_URL is $expected',
-  ({browserWindow, expected}) => {
-    vi.stubEnv('API_URL', undefined);
+  'a handler URL built in $runtime with API_URL $apiUrlState is $expected',
+  ({apiUrl, browserWindow, expected}) => {
+    vi.stubEnv('API_URL', apiUrl);
     vi.stubGlobal('window', browserWindow);
 
     expect(url('things')).toBe(expected);
