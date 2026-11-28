@@ -193,7 +193,7 @@ cross_phase_check() {
     fi
     while IFS=$'\t' read -r earlier_phase earlier_task _ earlier_path; do
       [ "$earlier_path" != "$later_path" ] || continue
-      # Phase N owns the later file too: its own gate retry can reach it.
+      # The earlier phase declares the later file too: its own gate retry can reach it.
       awk -F'\t' -v phase="$earlier_phase" -v path="$later_path" '$1 == phase && $4 == path { found = 1 } END { exit !found }' <<<"$declared" && continue
       key="$earlier_phase"$'\t'"$earlier_path"$'\t'"$later_path"
       case "$reported" in *$'\n'"$key"$'\n'*) continue ;; esac
