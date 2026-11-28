@@ -248,7 +248,7 @@ check() {
   [ "$status" -eq 0 ]
 }
 
-@test "--digest writes behaviors and flows byte for byte and every Test and Flow test line under its doc in the frozen order, writes the spec-less digest, rewrites it on a re-run, refuses a source line that starts a delimiter, and the test-stage re-clear removes only TST.json" {
+@test "--digest writes behaviors and flows byte for byte, the task-graph rows, every Test and Flow test line under its doc and every phase entry in the frozen order, writes the spec-less digest, rewrites it on a re-run, refuses a source line that starts a delimiter, and the test-stage re-clear removes only TST.json" {
   write_spec
   local stem
   for stem in task-a task-b task-c; do
@@ -258,6 +258,7 @@ check() {
     printf '# %s\n\nBody.\n\n- Flow test (FLOW-001): %s.spec.ts\n' "$stem" "$stem" >"$PLAN/$stem.md"
   done
   printf '# Orch\n\n**Phase 1, one**\n\nfirst\n\n**Phase 2, two**\n\nclosing text\n\n## After\n\nlater\n' >"$PLAN/ORCHESTRATOR.md"
+  printf '# Plan\n\nintro prose\n\n| Phase | Tasks |\n|---|---|\n| Phase 1 | `task-a`, `task-b`, `task-c` |\n| Phase 2 | `task-d`, `task-e` |\n' >"$PLAN/README.md"
   local out="$PLAN/test-stage-findings/digest.md"
   mkdir -p "$PLAN/test-stage-findings"
   printf '[]' >"$PLAN/test-stage-findings/TST.json"
@@ -273,6 +274,7 @@ check() {
   expected="$(printf '%s\n' \
     "<!-- gaia:digest-section $SPEC -->" \
     "<!-- gaia:digest-section $SPEC -->" \
+    "<!-- gaia:digest-section $PLAN/README.md -->" \
     "<!-- gaia:digest-section $PLAN/task-a.md -->" \
     "<!-- gaia:digest-section $PLAN/task-b.md -->" \
     "<!-- gaia:digest-section $PLAN/task-c.md -->" \
@@ -294,8 +296,12 @@ check() {
   for stem in task-d task-e; do
     grep -qF -- "- Flow test (FLOW-001): $stem.spec.ts" "$out" || return 1
   done
+  grep -qF -- '| Phase 1 | `task-a`, `task-b`, `task-c` |' "$out" || return 1
+  grep -qF -- '| Phase 2 | `task-d`, `task-e` |' "$out" || return 1
+  grep -qF -- 'intro prose' "$out" && return 1
+  grep -qF -- '**Phase 1, one**' "$out" || return 1
+  grep -qF -- 'first' "$out" || return 1
   grep -qF -- 'closing text' "$out" || return 1
-  grep -qF -- 'first' "$out" && return 1
   grep -qF -- 'later' "$out" && return 1
 
   # A re-run with nothing changed gives the same hash; a changed doc a new one.
@@ -308,13 +314,15 @@ check() {
   [ "$output" != "$first_hash" ]
   grep -qF -- 'changed title' "$out" || return 1
 
-  # The spec-less digest holds each doc's criteria and tests, nothing else.
+  # The spec-less digest holds the task-graph rows, each doc's criteria and
+  # tests and the phase entries; no SPEC or flow section.
   local plain="$BATS_TEST_TMPDIR/plain.md"
   run node "$CLI" --plan-dir "$PLAN" --digest "$plain"
   [ "$status" -eq 0 ]
   grep -qF -- '## Acceptance criteria' "$plain" || return 1
   grep -qF -- "gaia:digest-section $SPEC" "$plain" && return 1
-  grep -qF -- 'ORCHESTRATOR.md' "$plain" && return 1
+  grep -qF -- '| Phase 1 | `task-a`' "$plain" || return 1
+  grep -qF -- 'first' "$plain" || return 1
   grep -qF -- 'task-d.spec.ts' "$plain" && return 1
 
   # A source line that starts a delimiter refuses the digest and leaves no file.
