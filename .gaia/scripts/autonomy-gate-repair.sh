@@ -129,7 +129,7 @@ case "$command_name" in
     ;;
   check)
     [ -n "$baseline" ] && [ -f "$baseline" ] && [ "${#tasks[@]}" -gt 0 ] || usage
-    for task in "${tasks[@]}"; do [ -f "$task" ] || usage; done
+    for task in ${tasks[@]+"${tasks[@]}"}; do [ -f "$task" ] || usage; done
     # shellcheck source=autonomy-lib.sh
     . "$_here/autonomy-lib.sh"
     # shellcheck source=audit-fix-verify-state-lib.sh
@@ -149,7 +149,7 @@ case "$command_name" in
       refuse protected-unreadable ".gaia/autonomy-protected-paths.json"
       globs=""
     }
-    declared=$(declared_words "${tasks[@]}")
+    declared=$(declared_words ${tasks[@]+"${tasks[@]}"})
     while IFS= read -r path; do
       [ -n "$path" ] || continue
       grep -Fxq -- "$path" <<<"$declared" || refuse undeclared "$path"
@@ -157,7 +157,7 @@ case "$command_name" in
       if [ -n "$globs" ] && autonomy_protected_match "$path" "$globs"; then
         refuse protected "$path"
       fi
-      for enforcement_path in "${ENFORCEMENT_PATHS[@]}"; do
+      for enforcement_path in ${ENFORCEMENT_PATHS[@]+"${ENFORCEMENT_PATHS[@]}"}; do
         [ "$path" = "$enforcement_path" ] && refuse enforcement "$path"
       done
     done <<<"$changed"
