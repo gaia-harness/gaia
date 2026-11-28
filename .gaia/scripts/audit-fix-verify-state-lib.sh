@@ -10,7 +10,7 @@
 #
 # Reads the caller's ROOT, TEMPORARY_DIRECTORY and _here.
 
-# shellcheck disable=SC2154  # _here is set by audit-fix-verify.sh, which sources this file
+# shellcheck disable=SC2154  # _here is set by the script that sources this file
 
 # Paths a fixer may touch only when the dispositions file lists them in
 # enforcement_paths_allowed (and a fix entry names them): the code that bounds
@@ -18,7 +18,7 @@
 # this verifier through its pinned copy (see the header of audit-fix-verify.sh):
 # the working-tree file is protected here, and the copy that judges the round is
 # out of the tree.
-# shellcheck disable=SC2034 # read by audit-fix-verify-check-lib.sh
+# shellcheck disable=SC2034 # read by audit-fix-verify-check-lib.sh and autonomy-gate-repair.sh
 ENFORCEMENT_PATHS=(
   '.claude/hooks/audit-loop-bound.sh'         # denies a dispatch past the allowance
   '.claude/hooks/audit-loop-grant.sh'         # records the human's grant or accept line

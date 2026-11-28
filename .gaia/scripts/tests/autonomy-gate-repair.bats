@@ -89,7 +89,7 @@ check_repair() {
   [ "$output" = "undeclared app/other.ts" ]
 }
 
-@test "a declared path that matches a longer word only is still undeclared" {
+@test "a path that only a longer declared word contains is undeclared" {
   live_switch
   printf 'Files to touch: app/db.tsx\n' >"$PLAN/task-db.md"
   take_baseline

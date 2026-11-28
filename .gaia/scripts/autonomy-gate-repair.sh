@@ -21,9 +21,9 @@
 #
 # check judges the paths whose state differs from the baseline (a new, edited,
 # reverted or deleted path). Each must be named in one of the --task docs (a
-# whole backtick span or a whitespace-separated word, with `./` and trailing
-# punctuation stripped), must still exist, and must be in neither the autonomy
-# protected set (autonomy_protected_globs) nor the audit fixer's
+# whole backtick span or a whitespace-separated word, with `./`, leading brackets
+# or quotes, and trailing punctuation stripped), must still exist, and must be
+# in neither the autonomy protected set (autonomy_protected_globs) nor the audit fixer's
 # ENFORCEMENT_PATHS (audit-fix-verify-state-lib.sh). It also refuses a moved
 # HEAD and a repair that changed nothing. On a pass it prints `changed <path>`
 # per path on stdout.
@@ -67,8 +67,8 @@ snapshot() {
 }
 
 # declared_words <task doc>...: every backtick span and every
-# whitespace-separated word of the docs, `./` and trailing punctuation
-# stripped, one per line.
+# whitespace-separated word of the docs, `./`, leading brackets or quotes and
+# trailing punctuation stripped, one per line.
 declared_words() {
   awk '
     function emit(word) {
