@@ -51,7 +51,7 @@ has() {
   grep -qF -- "$digest" <<<"$first" || return 1
   grep -qF -- 'only when judging whether a test proves a case' <<<"$first" || return 1
   has "$DISPATCH_MD" '| Fallback artifact and First Read (digest unavailable) | n/a | n/a |' || return 1
-  has "$STAGE_MD" 'The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states, that the cap above holds, and that every test and phase gate obeys `## Phase placement`, reading each task'"'"'s phase from the digest'"'"'s task-graph rows and each gate from its phase entry. When it has a code map, it uses it only to locate existing test files and never derives an expected behavior from it.' || return 1
+  has "$STAGE_MD" 'The lens, id prefix `TST`, confirms every listed test proves a behavior the SPEC states, that the cap above holds, and that every test and phase gate obeys `## Phase placement`, reading each task'"'"'s phase from the task-graph rows and each gate from its phase entry. When it has a code map, it uses it only to locate existing test files and never derives an expected behavior from it.' || return 1
   has "$DISPATCH_MD" '| Code map (`<CODE_MAP_PATH>`) |' || return 1
   has "$DISPATCH_MD" 'When `<CODE_MAP_PATH>` is empty the caller drops the whole code-map bullet from the preamble.' || return 1
   has "$DISPATCH_MD" 'the re-clear is only `rm -rf <PLAN_DIR>/test-stage-findings/TST.json`' || return 1
