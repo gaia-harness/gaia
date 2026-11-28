@@ -26,7 +26,7 @@ setup() {
   git -C "$MAIN" add -A
   git -C "$MAIN" -c user.email=t@example.com -c user.name=t commit -q -m init
   # shellcheck disable=SC2016 # the backticks are the task doc's own markup
-  printf 'Files to touch: `app/db.ts`, app/new.ts, .claude/hooks/autonomy-gate.sh.\n' >"$PLAN/task-db.md"
+  printf 'Files to touch: `app/db.ts` (./app/new.ts), .claude/hooks/autonomy-gate.sh.\n' >"$PLAN/task-db.md"
   # The phase's own edit, already in the tree before the gate fails.
   printf 'one, edited\n' >"$MAIN/app/db.ts"
   BASE="$FIX/baseline.txt"
