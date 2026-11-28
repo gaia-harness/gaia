@@ -56,6 +56,8 @@ setup() {
     'A real-server row for a served error status (a 404 for an unknown path or a missing record) asserts only the status and any `Location`'
     'Which route answers a path is shown by its route test and, for a guarded route, its served check (a signed-out request its guard redirects), never by a served heading.'
     'with no success-path route test of its own; an effect the flow cannot observe keeps its route test'
+    "A test or check that starts the production server never reads the developer's \`.env\`: it sets \`DOTENV_CONFIG_PATH=/dev/null\` and passes every variable the start needs explicitly."
+    "the start inherits those dev values and \`DOTENV_CONFIG_PATH\` cannot undo that, so it gets an environment built from scratch: \`env -i\` with \`PATH\`, \`HOME\` and the start's variables"
   )
 
   # The conflict sources that still state a test rule: each points at the
