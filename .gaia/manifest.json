@@ -338,6 +338,7 @@
     ".gaia/scripts/audit-write-clearance-publish.sh": "owned",
     ".gaia/scripts/audit-write-clearance.sh": "owned",
     ".gaia/scripts/audit-write-findings.sh": "owned",
+    ".gaia/scripts/autonomy-gate-repair.sh": "owned",
     ".gaia/scripts/autonomy-lib.sh": "owned",
     ".gaia/scripts/autonomy-park.sh": "owned",
     ".gaia/scripts/branch-authorship-lib.sh": "owned",
@@ -957,7 +958,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-11-27T10:59:42.720Z",
+  "generated": "2026-11-28T05:15:14.786Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
