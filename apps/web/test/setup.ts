@@ -20,7 +20,8 @@ import './test.server';
 // needs one too: pnpm sets it only for processes it launches from a
 // package.json script, so `pnpm exec vitest` and editor integrations, which
 // spawn the binary directly, have none.
-process.env.API_URL ??= DEFAULT_API_URL;
+// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- an exported but empty API_URL must take the default too: it leaves a Node request with no origin
+process.env.API_URL ||= DEFAULT_API_URL;
 process.env.npm_package_version ??= '0.0.0';
 process.env.SESSION_SECRET ??= 'test-secret';
 process.env.SITE_URL ??= 'http://localhost:3000';

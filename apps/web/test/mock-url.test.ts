@@ -15,7 +15,7 @@ test.each([
   },
   {browserWindow: {}, expected: '/things', runtime: 'a browser'},
 ])(
-  'a handler URL built in $runtime with no API_URL matches what the request will use',
+  'a handler URL built in $runtime with no API_URL is $expected',
   ({browserWindow, expected}) => {
     vi.stubEnv('API_URL', undefined);
     vi.stubGlobal('window', browserWindow);
