@@ -4,7 +4,7 @@ status: active
 created: 2026-11-25
 updated: 2026-11-28
 promoted_at: 2026-11-24T17:31:01Z
-promoted_hash: sha256:902cfa2598450d0653549a7d8b48466b46ec037c213d0dade68950e2f788006f
+promoted_hash: sha256:2faf6a10ead9c9e6ddc9d5a128364a920f99c252d468bba01edc7068de0c838c
 pr_number: 3821
 tags: [promoted, decisions]
 ---
@@ -20,7 +20,7 @@ The fixed orchestrator blocks and the generic sections that are identical in eve
 
 The renderer is a bash script beside `plan-verify.sh`, not a CLI command: assembling text needs no TypeScript, test runner or bundle rebuild, and `plan-verify.sh` already extracts these fences with awk.
 
-The test stage is the only other writer of the parts file. It writes each closing phase entry, each `- Security writer:` line and one `## Kickoff outline` line into `orchestrator-parts.md`, and edits any phase gate that runs a test before its placed phase, replacing the previous closing entry on a re-run, then re-renders; it never edits `ORCHESTRATOR.md` or `KICKOFF.md`. A plan folder with no `orchestrator-parts.md`, saved before rendering existed, halts the test stage before any edit with a one-line pointer to re-plan with `/gaia-plan`.
+The test stage is the only other writer of the parts file. It writes each closing phase entry, each `- Security writer:` line and one `## Kickoff outline` line into `orchestrator-parts.md`, replacing the previous closing entry on a re-run, and edits any phase gate that runs a test before its placed phase, then re-renders; it never edits `ORCHESTRATOR.md` or `KICKOFF.md`. A plan folder with no `orchestrator-parts.md`, saved before rendering existed, halts the test stage before any edit with a one-line pointer to re-plan with `/gaia-plan`.
 
 After clearing its findings folder, the test stage runs `test-stage-check.mjs --digest`, which writes `test-stage-findings/digest.md` and prints its sha256: the plan's test lines, what they must prove (the SPEC's behaviors and flows, or a spec-less plan's acceptance criteria), the task-graph rows and the phase entries, each under a line naming its source path, in the order the header of `.gaia/scripts/spec/test-stage-digest.mjs` owns. The task-graph rows and phase entries let the lens check that each test sits in a phase that delivers what it asserts. The model never writes digest content. The stage re-hashes the digest before every lens dispatch, a re-dispatch after a no-op included, and dispatches on the digest only when the file exists and the hash matches; otherwise it prints one line and gives the lens the whole plan as before. The lens's first read is the digest, and it opens other plan files by path only when a judgment needs them. A test-stage no-op re-clear removes only `TST.json`, so the digest survives a re-dispatch. The digest is an index of where the test lines live, never a replacement for the SPEC's behaviors as the source of expected outcomes.
 
