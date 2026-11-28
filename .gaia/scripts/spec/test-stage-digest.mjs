@@ -13,8 +13,8 @@
 // section (heading through the line before the next `## ` heading); the SPEC
 // frontmatter's `flows:` key (its line through the line before the next
 // top-level key); README.md's task-graph rows, each line that opens with a
-// `| Phase <N> |` cell, so the lens can place every task doc in its phase; then, for each `task-*.md`
-// of the plan folder in sorted order, the whole doc when it carries a
+// `| Phase <N> |` cell, so the lens can place every task doc in its phase;
+// then, for each `task-*.md` of the plan folder in sorted order, the whole doc when it carries a
 // `- Flow test (` line, else its `## Tests` section (a doc with no such heading
 // gives none); then every ORCHESTRATOR.md phase entry in file order, each a
 // `**Phase <N>, ` line outside code fences through the line before the next
